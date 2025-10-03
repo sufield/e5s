@@ -1,14 +1,14 @@
 # In-Memory SPIRE System with Hexagonal Architecture
 
-A complete in-memory implementation of SPIRE (SPIFFE Runtime Environment) demonstrating hexagonal architecture principles. This application runs entirely in a single process without requiring external servers, network connections, or actual SPIRE infrastructure.
+A complete in-memory implementation of SPIRE (SPIFFE Runtime Environment) demonstrating hexagonal architecture. This application runs entirely in a single process without requiring external servers, network connections, or actual SPIRE infrastructure.
 
 ## Overview
 
-This project demonstrates how to build identity-based authentication systems using hexagonal architecture, where the core business logic is completely isolated from infrastructure concerns through well-defined ports (interfaces). All SPIRE server and agent functionality is implemented as in-memory adapters.
+This project demonstrates how to build a walking skeleton for identity-based authentication system using hexagonal architecture. The business logic is isolated from infrastructure concerns through well-defined ports (interfaces). All SPIRE server and agent functionality is implemented as in-memory adapters.
 
 ## Architecture
 
-### Hexagonal Architecture Principles
+### Hexagonal Architecture
 
 The application follows hexagonal (ports and adapters) architecture:
 
@@ -571,7 +571,7 @@ func main() {
 }
 ```
 
-**Key Benefits:**
+**Benefits:**
 
 - ✅ **Zero changes to ports** - All `ports.Agent`, `ports.Server` interfaces remain unchanged
 - ✅ **Zero changes to domain** - Business logic is completely isolated
@@ -645,20 +645,20 @@ Unique identifier for workloads in the format:
 spiffe://<trust-domain>/<workload-path>
 ```
 
-**In this codebase**, SPIFFE IDs are represented by the `IdentityNamespace` domain type. This name emphasizes the structured, namespaced nature of the identifier (scheme + trust domain + path).
+In this codebase, SPIFFE IDs are represented by the `IdentityNamespace` domain type. This name emphasizes the structured, namespaced nature of the unique identifier (scheme + trust domain + path).
 
 Examples:
 - Agent: `spiffe://example.org/host`
 - Server workload: `spiffe://example.org/server-workload`
 - Client workload: `spiffe://example.org/client-workload`
 
-### Identity Document (formerly SVID)
+### Identity Document
 X.509 certificate or JWT token containing:
 - SPIFFE ID (IdentityNamespace) in URI SAN field
 - Certificate chain to trust root
 - Private key for signing/encryption
 
-**In this codebase**, identity documents are represented by the `IdentityDocument` domain type, which encompasses both X.509 and JWT formats.
+In this codebase, identity documents are represented by the `IdentityDocument` domain type, which encompasses both X.509 and JWT formats.
 
 ### Trust Domain
 Administrative boundary for identities:
