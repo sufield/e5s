@@ -1,4 +1,4 @@
-# In-Memory SPIRE System with Hexagonal Architecture
+# Identity Based Authentication using Hexagonal Architecture
 
 A complete in-memory implementation of SPIRE (SPIFFE Runtime Environment) demonstrating hexagonal architecture. This application runs entirely in a single process without requiring external servers, network connections, or actual SPIRE infrastructure.
 
