@@ -47,6 +47,11 @@ func (d *InMemoryDeps) CreateTrustBundleProvider(server ports.Server) ports.Trus
 	return inmemory.NewInMemoryTrustBundleProvider([]*x509.Certificate{caCert})
 }
 
+func (d *InMemoryDeps) CreateIdentityDocumentValidator(bundleProvider ports.TrustBundleProvider) ports.IdentityDocumentValidator {
+	// Create validator with optional bundle provider for chain verification
+	return inmemory.NewIdentityDocumentValidator(bundleProvider)
+}
+
 func (d *InMemoryDeps) CreateServer(ctx context.Context, trustDomain string, trustDomainParser ports.TrustDomainParser, docProvider ports.IdentityDocumentProvider) (ports.Server, error) {
 	return inmemory.NewInMemoryServer(ctx, trustDomain, trustDomainParser, docProvider)
 }

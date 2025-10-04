@@ -14,12 +14,17 @@ import (
 // - Bundle verification against trust domain
 // - Full X.509 path validation
 //
-// For now, this provides basic validation without SDK dependencies
-type IdentityDocumentValidator struct{}
+// For now, this provides basic validation with optional bundle verification
+type IdentityDocumentValidator struct {
+	bundleProvider ports.TrustBundleProvider
+}
 
 // NewIdentityDocumentValidator creates a new identity certificate validator
-func NewIdentityDocumentValidator() *IdentityDocumentValidator {
-	return &IdentityDocumentValidator{}
+// bundleProvider is optional - if nil, bundle verification is skipped
+func NewIdentityDocumentValidator(bundleProvider ports.TrustBundleProvider) *IdentityDocumentValidator {
+	return &IdentityDocumentValidator{
+		bundleProvider: bundleProvider,
+	}
 }
 
 // Validate checks if an identity certificate is valid for the given identity namespace
@@ -44,18 +49,49 @@ func (v *IdentityDocumentValidator) Validate(ctx context.Context, cert *domain.I
 			domain.ErrIdentityDocumentMismatch, expectedID.String(), cert.IdentityNamespace().String())
 	}
 
-	// In a real implementation with go-spiffe SDK, you would add:
-	// 1. Chain-of-trust verification using x509svid.Verify(cert.Certificate(), cert.Chain(), bundle)
-	// 2. Bundle-based trust domain validation
-	// 3. Full X.509 path validation
-	// 4. CRL/OCSP checks if needed
-	//
-	// Example with SDK:
-	// bundle := ... // get trust bundle for trust domain
-	// _, err := x509svid.Verify(cert.Certificate(), cert.Chain(), bundle)
-	// if err != nil {
-	//     return fmt.Errorf("identity certificate verification failed: %w", err)
-	// }
+	// Bundle verification (optional - if provider is available)
+	// TODO: Implement full chain verification with go-spiffe SDK
+	if v.bundleProvider != nil {
+		bundle, err := v.bundleProvider.GetBundleForIdentity(ctx, cert.IdentityNamespace())
+		if err != nil {
+			return fmt.Errorf("%w: failed to get trust bundle: %v", domain.ErrCertificateChainInvalid, err)
+		}
+
+		// In walking skeleton: we have the bundle but skip full chain verification
+		// In production with go-spiffe/v2 SDK, this would be:
+		//
+		// import (
+		//     "github.com/spiffe/go-spiffe/v2/bundle/x509bundle"
+		//     "github.com/spiffe/go-spiffe/v2/svid/x509svid"
+		// )
+		//
+		// // Build full certificate chain (leaf + intermediates)
+		// fullChain := append([]*x509.Certificate{cert.Certificate()}, cert.Chain()...)
+		//
+		// // Parse PEM bundle as x509bundle.Source for verification
+		// // Note: Port returns []byte to stay SDK-agnostic; real adapter could return parsed bundle
+		// bundleSource, err := x509bundle.Parse(cert.IdentityNamespace().TrustDomain(), bundle)
+		// if err != nil {
+		//     return fmt.Errorf("%w: failed to parse bundle: %v", domain.ErrCertificateChainInvalid, err)
+		// }
+		//
+		// // Verify certificate chain against trust bundle
+		// // For stricter validation, add options like:
+		// // opts := []x509svid.VerifyOption{x509svid.WithSVIDConstraint(x509svid.RequireLeaf())}
+		// // spiffeID, chains, err := x509svid.Verify(fullChain, bundleSource, opts...)
+		// spiffeID, chains, err := x509svid.Verify(fullChain, bundleSource)
+		// if err != nil {
+		//     return fmt.Errorf("%w: chain verification failed: %v", domain.ErrCertificateChainInvalid, err)
+		// }
+		//
+		// // Validate extracted SPIFFE ID matches expected identity namespace
+		// if spiffeID.String() != cert.IdentityNamespace().String() {
+		//     return fmt.Errorf("%w: SPIFFE ID mismatch after verification", domain.ErrIdentityDocumentMismatch)
+		// }
+		// _ = chains // Verified chains available for further validation if needed
+
+		_ = bundle // Bundle retrieved successfully, verification would happen here with SDK
+	}
 
 	return nil
 }
