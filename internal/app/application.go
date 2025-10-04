@@ -11,10 +11,11 @@ import (
 // Application is the composition root that wires all dependencies
 // This is NOT an adapter - it's infrastructure/bootstrap logic
 type Application struct {
-	Config   *ports.Config
-	Service  ports.Service
-	Agent    ports.Agent
-	Registry ports.IdentityMapperRegistry
+	Config                *ports.Config
+	Service               ports.Service
+	IdentityClientService *IdentityClientService
+	Agent                 ports.Agent
+	Registry              ports.IdentityMapperRegistry
 }
 
 // Bootstrap creates and wires all application components
@@ -92,14 +93,18 @@ func Bootstrap(ctx context.Context, configLoader ports.ConfigLoader, deps Applic
 		return nil, fmt.Errorf("failed to create SPIRE agent: %w", err)
 	}
 
-	// Step 12: Initialize core service
+	// Step 12: Initialize Identity Client service (server-side SVID issuance)
+	identityClientService := NewIdentityClientService(agent)
+
+	// Step 13: Initialize core service (demonstration use case)
 	service := NewIdentityService(agent, registry)
 
 	return &Application{
-		Config:   config,
-		Service:  service,
-		Agent:    agent,
-		Registry: registry,
+		Config:                config,
+		Service:               service,
+		IdentityClientService: identityClientService,
+		Agent:                 agent,
+		Registry:              registry,
 	}, nil
 }
 

@@ -29,6 +29,11 @@ func NewInMemoryConfig() *InMemoryConfig {
 					Selector: "unix:user:client-workload",
 					UID:      1002,
 				},
+				{
+					SpiffeID: "spiffe://example.org/test-workload",
+					Selector: "unix:uid:1000",
+					UID:      1000,
+				},
 			},
 		},
 	}
