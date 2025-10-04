@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/pocket/hexagon/spire/internal/app/ports"
+	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
 // UnixWorkloadAttestor is an in-memory implementation of Unix workload attestation

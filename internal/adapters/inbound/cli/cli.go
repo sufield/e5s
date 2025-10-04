@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/pocket/hexagon/spire/internal/app"
-	"github.com/pocket/hexagon/spire/internal/app/ports"
+	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
 // CLI is an inbound adapter that drives the application via command-line interface

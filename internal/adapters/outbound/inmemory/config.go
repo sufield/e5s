@@ -3,7 +3,7 @@ package inmemory
 import (
 	"context"
 
-	"github.com/pocket/hexagon/spire/internal/app/ports"
+	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
 // InMemoryConfig is an outbound adapter that provides hardcoded configuration

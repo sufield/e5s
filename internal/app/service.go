@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/pocket/hexagon/spire/internal/app/ports"
+	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
 // IdentityService implements identity-based message exchange

@@ -15,8 +15,8 @@
 go.work
 
 # Build artifacts
+/bin/
 /console
-/cmd/console/console
 
 # IDE/Editor files
 .vscode/
