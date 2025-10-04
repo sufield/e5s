@@ -52,8 +52,22 @@ func (s *InMemoryServer) IssueIdentity(ctx context.Context, identityNamespace *d
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// Validate inputs
+	if identityNamespace == nil {
+		return nil, fmt.Errorf("%w: identity namespace cannot be nil", domain.ErrIdentityDocumentInvalid)
+	}
+
+	if s.caCert == nil || s.caKey == nil {
+		return nil, fmt.Errorf("%w: CA certificate or key not initialized", domain.ErrCANotInitialized)
+	}
+
 	// Use IdentityDocumentProvider port to create identity certificate (delegates certificate generation)
-	return s.certificateProvider.CreateX509IdentityDocument(ctx, identityNamespace, s.caCert, s.caKey)
+	doc, err := s.certificateProvider.CreateX509IdentityDocument(ctx, identityNamespace, s.caCert, s.caKey)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", domain.ErrServerUnavailable, err)
+	}
+
+	return doc, nil
 }
 
 // GetTrustDomain returns the trust domain

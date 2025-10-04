@@ -2,6 +2,7 @@ package ports
 
 import (
 	"context"
+	"crypto/tls"
 )
 
 // IdentityClient is the main entrypoint for workloads to fetch their SVID
@@ -17,6 +18,12 @@ type IdentityClient interface {
 	// Returns the workload's identity document (SVID) after attestation
 	// Matches: (*workloadapi.Client).FetchX509SVID(ctx) (*x509svid.SVID, error)
 	FetchX509SVID(ctx context.Context) (*Identity, error)
+
+	// FetchX509SVIDWithConfig fetches an X.509 SVID with custom TLS configuration
+	// Enables mTLS authentication when connecting to the Workload API server
+	// The tlsConfig parameter allows specifying client certificates for mutual authentication
+	// If tlsConfig is nil, behaves the same as FetchX509SVID (backward compatible)
+	FetchX509SVIDWithConfig(ctx context.Context, tlsConfig *tls.Config) (*Identity, error)
 }
 
 // Service represents application use cases (business logic)

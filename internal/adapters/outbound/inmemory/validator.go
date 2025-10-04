@@ -26,18 +26,22 @@ func NewIdentityDocumentValidator() *IdentityDocumentValidator {
 // This is the anti-corruption layer between domain and SDK validation logic
 func (v *IdentityDocumentValidator) Validate(ctx context.Context, cert *domain.IdentityDocument, expectedID *domain.IdentityNamespace) error {
 	if cert == nil {
-		return fmt.Errorf("identity certificate cannot be nil")
+		return fmt.Errorf("%w: identity document cannot be nil", domain.ErrIdentityDocumentInvalid)
+	}
+
+	if expectedID == nil {
+		return fmt.Errorf("%w: expected identity namespace cannot be nil", domain.ErrInvalidIdentityNamespace)
 	}
 
 	// Check time validity (using domain method that wraps x509)
 	if !cert.IsValid() {
-		return fmt.Errorf("identity certificate is expired or not yet valid")
+		return fmt.Errorf("%w: certificate expired or not yet valid", domain.ErrIdentityDocumentExpired)
 	}
 
 	// Check identity namespace matches expected
 	if !cert.IdentityNamespace().Equals(expectedID) {
-		return fmt.Errorf("identity certificate identity namespace mismatch: expected %s, got %s",
-			expectedID.String(), cert.IdentityNamespace().String())
+		return fmt.Errorf("%w: expected %s, got %s",
+			domain.ErrIdentityDocumentMismatch, expectedID.String(), cert.IdentityNamespace().String())
 	}
 
 	// In a real implementation with go-spiffe SDK, you would add:

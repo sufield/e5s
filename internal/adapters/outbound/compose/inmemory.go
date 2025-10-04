@@ -2,12 +2,13 @@ package compose
 
 import (
 	"context"
+	"crypto/x509"
 	"fmt"
 
 	"github.com/pocket/hexagon/spire/internal/adapters/outbound/inmemory"
 	"github.com/pocket/hexagon/spire/internal/adapters/outbound/inmemory/attestor"
-	"github.com/pocket/hexagon/spire/internal/ports"
 	"github.com/pocket/hexagon/spire/internal/domain"
+	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
 // InMemoryDeps provides in-memory implementations of all adapters
@@ -33,6 +34,17 @@ func (d *InMemoryDeps) CreateIdentityNamespaceParser() ports.IdentityNamespacePa
 
 func (d *InMemoryDeps) CreateIdentityDocumentProvider() ports.IdentityDocumentProvider {
 	return inmemory.NewInMemoryIdentityDocumentProvider()
+}
+
+func (d *InMemoryDeps) CreateTrustBundleProvider(server ports.Server) ports.TrustBundleProvider {
+	// Extract CA certificate from server for bundle
+	caCert := server.GetCA()
+	if caCert == nil {
+		// Return empty provider if CA not initialized
+		return inmemory.NewInMemoryTrustBundleProvider(nil)
+	}
+	// Support multi-CA by wrapping single CA in slice (aligned with SDK bundle format)
+	return inmemory.NewInMemoryTrustBundleProvider([]*x509.Certificate{caCert})
 }
 
 func (d *InMemoryDeps) CreateServer(ctx context.Context, trustDomain string, trustDomainParser ports.TrustDomainParser, docProvider ports.IdentityDocumentProvider) (ports.Server, error) {

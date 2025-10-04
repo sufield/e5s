@@ -2,6 +2,7 @@ package workloadapi
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -60,6 +61,62 @@ func (c *Client) FetchX509SVID(ctx context.Context) (*X509SVIDResponse, error) {
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("server returned error %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Parse response
+	var svidResp X509SVIDResponse
+	if err := json.NewDecoder(resp.Body).Decode(&svidResp); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &svidResp, nil
+}
+
+// FetchX509SVIDWithConfig fetches an X.509 SVID with custom TLS configuration
+// Enables mTLS authentication when connecting to the Workload API server
+// If tlsConfig is nil, falls back to FetchX509SVID (backward compatible)
+func (c *Client) FetchX509SVIDWithConfig(ctx context.Context, tlsConfig *tls.Config) (*X509SVIDResponse, error) {
+	// If no TLS config provided, use regular fetch
+	if tlsConfig == nil {
+		return c.FetchX509SVID(ctx)
+	}
+
+	// Create HTTP client with custom TLS config for mTLS
+	httpClient := &http.Client{
+		Transport: &http.Transport{
+			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+				var d net.Dialer
+				return d.DialContext(ctx, "unix", c.socketPath)
+			},
+			TLSClientConfig: tlsConfig,
+		},
+		Timeout: 30 * time.Second,
+	}
+
+	// Create request to Workload API
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://unix/svid/x509", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Send caller credentials in headers
+	req.Header.Set("X-Spire-Caller-UID", fmt.Sprintf("%d", os.Getuid()))
+	req.Header.Set("X-Spire-Caller-PID", fmt.Sprintf("%d", os.Getpid()))
+	req.Header.Set("X-Spire-Caller-GID", fmt.Sprintf("%d", os.Getgid()))
+
+	exePath, _ := os.Executable()
+	req.Header.Set("X-Spire-Caller-Path", exePath)
+
+	// Send request with mTLS
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request with mTLS: %w", err)
 	}
 	defer resp.Body.Close()
 

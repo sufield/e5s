@@ -35,7 +35,7 @@ func (r *InMemoryRegistry) Seed(ctx context.Context, mapper *domain.IdentityMapp
 	defer r.mu.Unlock()
 
 	if r.sealed {
-		return fmt.Errorf("registry is sealed, cannot seed after bootstrap")
+		return fmt.Errorf("%w", domain.ErrRegistrySealed)
 	}
 
 	idStr := mapper.IdentityNamespace().String()
@@ -62,6 +62,11 @@ func (r *InMemoryRegistry) FindBySelectors(ctx context.Context, selectors *domai
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
+	// Validate input
+	if selectors == nil || len(selectors.All()) == 0 {
+		return nil, fmt.Errorf("%w: selectors are nil or empty", domain.ErrInvalidSelectors)
+	}
+
 	// Match selectors against all mappers
 	for _, mapper := range r.mappers {
 		if mapper.MatchesSelectors(selectors) {
@@ -69,13 +74,17 @@ func (r *InMemoryRegistry) FindBySelectors(ctx context.Context, selectors *domai
 		}
 	}
 
-	return nil, domain.ErrNoMatchingMapper
+	return nil, fmt.Errorf("%w: no mapper matches selectors %v", domain.ErrNoMatchingMapper, selectors)
 }
 
 // ListAll returns all seeded identity mappers (READ-ONLY, for debugging/admin)
 func (r *InMemoryRegistry) ListAll(ctx context.Context) ([]*domain.IdentityMapper, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+
+	if len(r.mappers) == 0 {
+		return nil, fmt.Errorf("%w: no mappers have been seeded", domain.ErrRegistryEmpty)
+	}
 
 	mappers := make([]*domain.IdentityMapper, 0, len(r.mappers))
 	for _, mapper := range r.mappers {

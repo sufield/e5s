@@ -15,9 +15,15 @@ type ConfigLoader interface {
 // IdentityMapperRegistry provides read-only access to the identity mapper registry seeded at startup
 // This is the runtime interface - seeding happens via internal methods during bootstrap
 // No mutations allowed after seeding - registry is immutable
+//
+// Error Contract:
+// - FindBySelectors returns domain.ErrNoMatchingMapper if no mapper matches
+// - FindBySelectors returns domain.ErrInvalidSelectors if selectors are nil/empty
+// - ListAll returns domain.ErrRegistryEmpty if no mappers seeded
 type IdentityMapperRegistry interface {
 	// FindBySelectors finds an identity mapper matching the given selectors (AND logic)
 	// This is the core runtime operation: selectors → identity namespace mapping
+	// All mapper selectors must be present in discovered selectors for a match
 	FindBySelectors(ctx context.Context, selectors *domain.SelectorSet) (*domain.IdentityMapper, error)
 
 	// ListAll returns all seeded identity mappers (for debugging/admin)
@@ -25,8 +31,14 @@ type IdentityMapperRegistry interface {
 }
 
 // WorkloadAttestor verifies workload identity based on platform-specific attributes
+//
+// Error Contract:
+// - Returns domain.ErrWorkloadAttestationFailed if attestation fails
+// - Returns domain.ErrInvalidProcessIdentity if workload info is invalid
+// - Returns domain.ErrNoAttestationData if no selectors can be generated
 type WorkloadAttestor interface {
 	// Attest verifies a workload and returns its selectors
+	// Selectors format: "type:value" (e.g., "unix:uid:1000", "k8s:namespace:prod")
 	Attest(ctx context.Context, workload ProcessIdentity) ([]string, error)
 }
 
@@ -40,20 +52,40 @@ type NodeAttestor interface {
 }
 
 // Server represents the identity server functionality
+//
+// Error Contract:
+// - IssueIdentity returns domain.ErrIdentityDocumentInvalid if identity namespace invalid
+// - IssueIdentity returns domain.ErrServerUnavailable if server unavailable
+// - IssueIdentity returns domain.ErrCANotInitialized if CA not initialized
+// - GetTrustDomain never returns error (returns nil if not initialized)
+// - GetCA returns nil if CA not initialized (check before use)
 type Server interface {
 	// IssueIdentity issues an identity document for an identity namespace
+	// Generates X.509 certificate signed by CA with identity namespace in URI SAN
 	IssueIdentity(ctx context.Context, identityNamespace *domain.IdentityNamespace) (*domain.IdentityDocument, error)
-	// GetTrustDomain returns the trust domain
+
+	// GetTrustDomain returns the trust domain this server manages
 	GetTrustDomain() *domain.TrustDomain
-	// GetCA returns the CA certificate
+
+	// GetCA returns the CA certificate (root of trust)
+	// Returns nil if CA not initialized - caller must check
 	GetCA() *x509.Certificate
 }
 
 // Agent represents the identity agent functionality
+//
+// Error Contract:
+// - GetIdentity returns domain.ErrAgentUnavailable if agent not initialized
+// - FetchIdentityDocument returns domain.ErrWorkloadAttestationFailed if attestation fails
+// - FetchIdentityDocument returns domain.ErrNoMatchingMapper if no registration matches
+// - FetchIdentityDocument returns domain.ErrServerUnavailable if cannot reach server
 type Agent interface {
 	// GetIdentity returns the agent's own identity
+	// Agent must bootstrap its identity before serving workloads
 	GetIdentity(ctx context.Context) (*Identity, error)
+
 	// FetchIdentityDocument fetches an identity document for a workload
+	// Flow: Attest → Match selectors in registry → Issue SVID → Return
 	FetchIdentityDocument(ctx context.Context, workload ProcessIdentity) (*Identity, error)
 }
 
@@ -92,13 +124,42 @@ type TrustDomainParser interface {
 // - Real implementation can use SDK for proper validation (scheme, host format, path normalization)
 // - In-memory implementation can use simple string parsing for walking skeleton
 // - Domain remains SDK-agnostic (only holds parsed data, doesn't parse)
+//
+// Error Contract:
+// - ParseFromString returns domain.ErrInvalidIdentityNamespace if URI is empty or invalid format
+// - ParseFromString returns domain.ErrInvalidIdentityNamespace if scheme is not "spiffe"
+// - ParseFromString returns domain.ErrInvalidIdentityNamespace if trust domain is empty
+// - ParseFromPath returns domain.ErrInvalidIdentityNamespace if trust domain is nil
 type IdentityNamespaceParser interface {
 	// ParseFromString parses an identity namespace from a URI string (e.g., "spiffe://example.org/host")
 	// Validates scheme, extracts trust domain and path, returns domain.IdentityNamespace
 	ParseFromString(ctx context.Context, id string) (*domain.IdentityNamespace, error)
+
 	// ParseFromPath creates an identity namespace from trust domain and path components
 	// Ensures path starts with "/", formats as spiffe://<td><path>
 	ParseFromPath(ctx context.Context, trustDomain *domain.TrustDomain, path string) (*domain.IdentityNamespace, error)
+}
+
+// TrustBundleProvider provides trust bundles for X.509 certificate chain validation
+// Trust bundles contain root CA certificates used to verify identity document chains
+//
+// Design Note: In real SPIRE with go-spiffe SDK:
+// - Bundle contains root CAs for trust domain(s)
+// - Used by x509svid.Verify(cert, chain, bundle) for chain-of-trust validation
+// - Bundles can be federated (multiple trust domains)
+//
+// Error Contract:
+// - Returns domain.ErrTrustBundleNotFound if trust domain has no bundle
+// - Returns domain.ErrInvalidTrustDomain if trust domain is nil
+type TrustBundleProvider interface {
+	// GetBundle returns the trust bundle (root CA certificates) for a trust domain
+	// Returns map of trust domain string → PEM-encoded CA certificate(s)
+	// In production, would use go-spiffe's bundle.Source
+	GetBundle(ctx context.Context, trustDomain *domain.TrustDomain) ([]byte, error)
+
+	// GetBundleForIdentity returns the trust bundle for an identity's trust domain
+	// Convenience method that extracts trust domain from identity namespace
+	GetBundleForIdentity(ctx context.Context, identityNamespace *domain.IdentityNamespace) ([]byte, error)
 }
 
 // IdentityDocumentProvider creates and manages identity documents
@@ -112,6 +173,12 @@ type IdentityNamespaceParser interface {
 // By using this port:
 // - Real implementation can use SDK for proper document handling
 // - In-memory implementation can generate simple test documents
+//
+// Error Contract:
+// - CreateX509IdentityDocument returns domain.ErrIdentityDocumentInvalid for invalid inputs
+// - ValidateIdentityDocument returns domain.ErrIdentityDocumentExpired for expired documents
+// - ValidateIdentityDocument returns domain.ErrIdentityDocumentMismatch for namespace mismatch
+// - ValidateIdentityDocument returns domain.ErrCertificateChainInvalid for chain validation failure
 // - Domain remains crypto-agnostic (only holds result data)
 //
 // Naming: "IdentityDocumentProvider" is more inclusive than "CertificateProvider" (encompasses
