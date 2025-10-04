@@ -11,15 +11,15 @@ import (
 // Pure core logic: No HTTP, no TLS, no network here
 // Dependencies are injected via ports (hexagonal architecture)
 type IdentityService struct {
-	agent ports.Agent
-	store ports.IdentityStore
+	agent    ports.Agent
+	registry ports.IdentityMapperRegistry
 }
 
 // NewIdentityService creates a new identity-based service
-func NewIdentityService(agent ports.Agent, store ports.IdentityStore) *IdentityService {
+func NewIdentityService(agent ports.Agent, registry ports.IdentityMapperRegistry) *IdentityService {
 	return &IdentityService{
-		agent: agent,
-		store: store,
+		agent:    agent,
+		registry: registry,
 	}
 }
 
@@ -32,14 +32,6 @@ func (s *IdentityService) ExchangeMessage(ctx context.Context, from ports.Identi
 	}
 	if to.IdentityNamespace == nil {
 		return nil, fmt.Errorf("receiver identity namespace required")
-	}
-
-	// Verify identities exist in the store
-	if _, err := s.store.GetIdentity(ctx, from.IdentityNamespace); err != nil {
-		return nil, fmt.Errorf("sender identity verification failed: %w", err)
-	}
-	if _, err := s.store.GetIdentity(ctx, to.IdentityNamespace); err != nil {
-		return nil, fmt.Errorf("receiver identity verification failed: %w", err)
 	}
 
 	// Verify identity documents are valid

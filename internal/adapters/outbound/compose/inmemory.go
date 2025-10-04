@@ -2,10 +2,12 @@ package compose
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/pocket/hexagon/spire/internal/adapters/outbound/inmemory"
 	"github.com/pocket/hexagon/spire/internal/adapters/outbound/inmemory/attestor"
 	"github.com/pocket/hexagon/spire/internal/app/ports"
+	"github.com/pocket/hexagon/spire/internal/domain"
 )
 
 // InMemoryDeps provides in-memory implementations of all adapters
@@ -17,8 +19,8 @@ func NewInMemoryDeps() *InMemoryDeps {
 	return &InMemoryDeps{}
 }
 
-func (d *InMemoryDeps) CreateStore() ports.IdentityStore {
-	return inmemory.NewInMemoryStore()
+func (d *InMemoryDeps) CreateRegistry() ports.IdentityMapperRegistry {
+	return inmemory.NewInMemoryRegistry()
 }
 
 func (d *InMemoryDeps) CreateTrustDomainParser() ports.TrustDomainParser {
@@ -33,8 +35,8 @@ func (d *InMemoryDeps) CreateIdentityDocumentProvider() ports.IdentityDocumentPr
 	return inmemory.NewInMemoryIdentityDocumentProvider()
 }
 
-func (d *InMemoryDeps) CreateServer(ctx context.Context, trustDomain string, store ports.IdentityStore, trustDomainParser ports.TrustDomainParser, docProvider ports.IdentityDocumentProvider) (ports.Server, error) {
-	return inmemory.NewInMemoryServer(ctx, trustDomain, store, trustDomainParser, docProvider)
+func (d *InMemoryDeps) CreateServer(ctx context.Context, trustDomain string, trustDomainParser ports.TrustDomainParser, docProvider ports.IdentityDocumentProvider) (ports.Server, error) {
+	return inmemory.NewInMemoryServer(ctx, trustDomain, trustDomainParser, docProvider)
 }
 
 func (d *InMemoryDeps) CreateAttestor() ports.WorkloadAttestor {
@@ -52,7 +54,7 @@ func (d *InMemoryDeps) CreateAgent(
 	ctx context.Context,
 	spiffeID string,
 	server ports.Server,
-	store ports.IdentityStore,
+	registry ports.IdentityMapperRegistry,
 	attestorInterface ports.WorkloadAttestor,
 	parser ports.IdentityNamespaceParser,
 	docProvider ports.IdentityDocumentProvider,
@@ -62,10 +64,25 @@ func (d *InMemoryDeps) CreateAgent(
 	if !ok {
 		panic("expected InMemoryServer")
 	}
-	concreteStore, ok := store.(*inmemory.InMemoryStore)
-	if !ok {
-		panic("expected InMemoryStore")
-	}
 
-	return inmemory.NewInMemoryAgent(ctx, spiffeID, concreteServer, concreteStore, attestorInterface, parser, docProvider)
+	return inmemory.NewInMemoryAgent(ctx, spiffeID, concreteServer, registry, attestorInterface, parser, docProvider)
+}
+
+// SeedRegistry seeds the registry with an identity mapper (configuration, not runtime)
+// This is called only during bootstrap - uses Seed() method on concrete type
+func (d *InMemoryDeps) SeedRegistry(registry ports.IdentityMapperRegistry, ctx context.Context, mapper *domain.IdentityMapper) error {
+	concreteRegistry, ok := registry.(*inmemory.InMemoryRegistry)
+	if !ok {
+		return fmt.Errorf("expected InMemoryRegistry for seeding")
+	}
+	return concreteRegistry.Seed(ctx, mapper)
+}
+
+// SealRegistry marks the registry as immutable after seeding
+// This prevents any further mutations - registry becomes read-only
+func (d *InMemoryDeps) SealRegistry(registry ports.IdentityMapperRegistry) {
+	concreteRegistry, ok := registry.(*inmemory.InMemoryRegistry)
+	if ok {
+		concreteRegistry.Seal()
+	}
 }

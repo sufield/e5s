@@ -2,6 +2,7 @@ package ports
 
 import (
 	"context"
+	"crypto/x509"
 
 	"github.com/pocket/hexagon/spire/internal/domain"
 )
@@ -11,29 +12,16 @@ type ConfigLoader interface {
 	Load(ctx context.Context) (*Config, error)
 }
 
-// IdentityStore manages identities and their registration
-type IdentityStore interface {
-	// Register registers a new workload identity
-	Register(ctx context.Context, identityNamespace *domain.IdentityNamespace, selector *domain.Selector) error
-	// GetIdentity retrieves an identity by identity namespace
-	GetIdentity(ctx context.Context, identityNamespace *domain.IdentityNamespace) (*Identity, error)
-	// ListIdentities lists all registered identities
-	ListIdentities(ctx context.Context) ([]*Identity, error)
-}
+// IdentityMapperRegistry provides read-only access to the identity mapper registry seeded at startup
+// This is the runtime interface - seeding happens via internal methods during bootstrap
+// No mutations allowed after seeding - registry is immutable
+type IdentityMapperRegistry interface {
+	// FindBySelectors finds an identity mapper matching the given selectors (AND logic)
+	// This is the core runtime operation: selectors → identity namespace mapping
+	FindBySelectors(ctx context.Context, selectors *domain.SelectorSet) (*domain.IdentityMapper, error)
 
-// IdentityMapperRepository manages identity mappers (identity namespace to selector mappings)
-// Identity mappers define authorization policies: which workloads qualify for which identities
-// In real SPIRE, this is the server-side registration API
-type IdentityMapperRepository interface {
-	// CreateMapper creates a new identity mapper
-	CreateMapper(ctx context.Context, mapper *domain.IdentityMapper) error
-	// FindMatchingMapper finds an identity mapper that matches the given selectors
-	// Used during workload attestation to determine which identity namespace to issue
-	FindMatchingMapper(ctx context.Context, selectors *domain.SelectorSet) (*domain.IdentityMapper, error)
-	// ListMappers lists all identity mappers (for debugging/admin)
-	ListMappers(ctx context.Context) ([]*domain.IdentityMapper, error)
-	// DeleteMapper deletes an identity mapper by identity namespace
-	DeleteMapper(ctx context.Context, identityNamespace *domain.IdentityNamespace) error
+	// ListAll returns all seeded identity mappers (for debugging/admin)
+	ListAll(ctx context.Context) ([]*domain.IdentityMapper, error)
 }
 
 // WorkloadAttestor verifies workload identity based on platform-specific attributes
@@ -53,10 +41,12 @@ type NodeAttestor interface {
 
 // Server represents the identity server functionality
 type Server interface {
-	// IssueIdentity issues an identity document for a registered workload
+	// IssueIdentity issues an identity document for an identity namespace
 	IssueIdentity(ctx context.Context, identityNamespace *domain.IdentityNamespace) (*domain.IdentityDocument, error)
 	// GetTrustDomain returns the trust domain
 	GetTrustDomain() *domain.TrustDomain
+	// GetCA returns the CA certificate
+	GetCA() *x509.Certificate
 }
 
 // Agent represents the identity agent functionality

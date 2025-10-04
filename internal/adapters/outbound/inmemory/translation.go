@@ -11,18 +11,7 @@ import (
 func domainToIdentity(identityNamespace *domain.IdentityNamespace, cert *domain.IdentityDocument) *ports.Identity {
 	return &ports.Identity{
 		IdentityNamespace:      identityNamespace,
-		Name:                extractNameFromIdentityNamespace(identityNamespace.String()),
+		Name:                extractNameFromIdentityNamespace(identityNamespace),
 		IdentityDocument: cert,
 	}
-}
-
-// extractNameFromIdentityNamespace extracts workload name from identity namespace
-func extractNameFromIdentityNamespace(identityNamespaceStr string) string {
-	// Extract name from spiffe://example.org/workload-name
-	for i := len(identityNamespaceStr) - 1; i >= 0; i-- {
-		if identityNamespaceStr[i] == '/' {
-			return identityNamespaceStr[i+1:]
-		}
-	}
-	return identityNamespaceStr
 }

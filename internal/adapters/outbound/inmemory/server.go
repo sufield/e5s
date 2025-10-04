@@ -20,13 +20,12 @@ type InMemoryServer struct {
 	trustDomain          *domain.TrustDomain
 	caCert               *x509.Certificate
 	caKey                *rsa.PrivateKey
-	store                ports.IdentityStore
 	certificateProvider  ports.IdentityDocumentProvider
 	mu                   sync.RWMutex
 }
 
 // NewInMemoryServer creates a new in-memory SPIRE server
-func NewInMemoryServer(ctx context.Context, trustDomainStr string, store ports.IdentityStore, trustDomainParser ports.TrustDomainParser, certProvider ports.IdentityDocumentProvider) (*InMemoryServer, error) {
+func NewInMemoryServer(ctx context.Context, trustDomainStr string, trustDomainParser ports.TrustDomainParser, certProvider ports.IdentityDocumentProvider) (*InMemoryServer, error) {
 	// Use TrustDomainParser port to validate and create trust domain
 	trustDomain, err := trustDomainParser.FromString(ctx, trustDomainStr)
 	if err != nil {
@@ -43,21 +42,15 @@ func NewInMemoryServer(ctx context.Context, trustDomainStr string, store ports.I
 		trustDomain:         trustDomain,
 		caCert:              caCert,
 		caKey:               caKey,
-		store:               store,
 		certificateProvider: certProvider,
 	}, nil
 }
 
-// IssueIdentity issues an X.509 identity certificate for a registered workload
+// IssueIdentity issues an X.509 identity document for an identity namespace
+// No verification of registration - that's done by the agent during attestation/matching
 func (s *InMemoryServer) IssueIdentity(ctx context.Context, identityNamespace *domain.IdentityNamespace) (*domain.IdentityDocument, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
-	// Verify the identity is registered
-	_, err := s.store.GetIdentity(ctx, identityNamespace)
-	if err != nil {
-		return nil, fmt.Errorf("identity not registered: %w", err)
-	}
 
 	// Use IdentityDocumentProvider port to create identity certificate (delegates certificate generation)
 	return s.certificateProvider.CreateX509IdentityDocument(ctx, identityNamespace, s.caCert, s.caKey)
