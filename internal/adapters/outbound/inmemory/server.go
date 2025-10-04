@@ -49,18 +49,18 @@ func NewInMemoryServer(ctx context.Context, trustDomainStr string, store ports.I
 }
 
 // IssueIdentity issues an X.509 identity certificate for a registered workload
-func (s *InMemoryServer) IssueIdentity(ctx context.Context, identityFormat *domain.IdentityNamespace) (*domain.IdentityDocument, error) {
+func (s *InMemoryServer) IssueIdentity(ctx context.Context, identityNamespace *domain.IdentityNamespace) (*domain.IdentityDocument, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	// Verify the identity is registered
-	_, err := s.store.GetIdentity(ctx, identityFormat)
+	_, err := s.store.GetIdentity(ctx, identityNamespace)
 	if err != nil {
 		return nil, fmt.Errorf("identity not registered: %w", err)
 	}
 
 	// Use IdentityDocumentProvider port to create identity certificate (delegates certificate generation)
-	return s.certificateProvider.CreateX509IdentityDocument(ctx, identityFormat, s.caCert, s.caKey)
+	return s.certificateProvider.CreateX509IdentityDocument(ctx, identityNamespace, s.caCert, s.caKey)
 }
 
 // GetTrustDomain returns the trust domain

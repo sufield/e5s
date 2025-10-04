@@ -1,19 +1,19 @@
 package domain
 
-// IdentityMapper represents a mapping that associates an identity format with selectors
+// IdentityMapper represents a mapping that associates an identity namespace with selectors
 // It defines the conditions under which a workload qualifies for that identity
 // This shifts focus to the "mapping" intent—clearly expressing how selectors map to identities.
 type IdentityMapper struct {
-	identityFormat *IdentityNamespace
+	identityNamespace *IdentityNamespace
 	selectors      *SelectorSet
-	parentID       *IdentityNamespace // Parent identity format (e.g., agent ID)
+	parentID       *IdentityNamespace // Parent identity namespace (e.g., agent ID)
 }
 
 // NewIdentityMapper creates a new identity mapper
-// Returns ErrInvalidIdentityNamespace if identityFormat is nil
+// Returns ErrInvalidIdentityNamespace if identityNamespace is nil
 // Returns ErrInvalidSelectors if selectors are nil or empty
-func NewIdentityMapper(identityFormat *IdentityNamespace, selectors *SelectorSet) (*IdentityMapper, error) {
-	if identityFormat == nil {
+func NewIdentityMapper(identityNamespace *IdentityNamespace, selectors *SelectorSet) (*IdentityMapper, error) {
+	if identityNamespace == nil {
 		return nil, ErrInvalidIdentityNamespace
 	}
 	if selectors == nil || len(selectors.All()) == 0 {
@@ -21,19 +21,19 @@ func NewIdentityMapper(identityFormat *IdentityNamespace, selectors *SelectorSet
 	}
 
 	return &IdentityMapper{
-		identityFormat: identityFormat,
+		identityNamespace: identityNamespace,
 		selectors:      selectors,
 	}, nil
 }
 
-// SetParentID sets the parent identity format (agent ID)
+// SetParentID sets the parent identity namespace (agent ID)
 func (im *IdentityMapper) SetParentID(parentID *IdentityNamespace) {
 	im.parentID = parentID
 }
 
-// IdentityNamespace returns the identity format
+// IdentityNamespace returns the identity namespace
 func (im *IdentityMapper) IdentityNamespace() *IdentityNamespace {
-	return im.identityFormat
+	return im.identityNamespace
 }
 
 // Selectors returns the selector set
@@ -41,7 +41,7 @@ func (im *IdentityMapper) Selectors() *SelectorSet {
 	return im.selectors
 }
 
-// ParentID returns the parent identity format
+// ParentID returns the parent identity namespace
 func (im *IdentityMapper) ParentID() *IdentityNamespace {
 	return im.parentID
 }

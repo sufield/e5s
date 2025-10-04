@@ -12,12 +12,12 @@ import (
 // InMemoryStore is an in-memory implementation of IdentityStore
 type InMemoryStore struct {
 	mu         sync.RWMutex
-	identities map[string]*registeredIdentity // identity format string -> identity
-	selectors  map[string]string               // selector string -> identity format string
+	identities map[string]*registeredIdentity // identity namespace string -> identity
+	selectors  map[string]string               // selector string -> identity namespace string
 }
 
 type registeredIdentity struct {
-	identityFormat *domain.IdentityNamespace
+	identityNamespace *domain.IdentityNamespace
 	selector       *domain.Selector
 }
 
@@ -30,17 +30,17 @@ func NewInMemoryStore() *InMemoryStore {
 }
 
 // Register registers a new workload identity with a selector
-func (s *InMemoryStore) Register(ctx context.Context, identityFormat *domain.IdentityNamespace, selector *domain.Selector) error {
+func (s *InMemoryStore) Register(ctx context.Context, identityNamespace *domain.IdentityNamespace, selector *domain.Selector) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	idStr := identityFormat.String()
+	idStr := identityNamespace.String()
 	if _, exists := s.identities[idStr]; exists {
 		return fmt.Errorf("identity %s already registered", idStr)
 	}
 
 	s.identities[idStr] = &registeredIdentity{
-		identityFormat: identityFormat,
+		identityNamespace: identityNamespace,
 		selector:       selector,
 	}
 	s.selectors[selector.String()] = idStr
@@ -48,18 +48,18 @@ func (s *InMemoryStore) Register(ctx context.Context, identityFormat *domain.Ide
 	return nil
 }
 
-// GetIdentity retrieves an identity by identity format
-func (s *InMemoryStore) GetIdentity(ctx context.Context, identityFormat *domain.IdentityNamespace) (*ports.Identity, error) {
+// GetIdentity retrieves an identity by identity namespace
+func (s *InMemoryStore) GetIdentity(ctx context.Context, identityNamespace *domain.IdentityNamespace) (*ports.Identity, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	idStr := identityFormat.String()
+	idStr := identityNamespace.String()
 	reg, exists := s.identities[idStr]
 	if !exists {
 		return nil, fmt.Errorf("identity %s not found", idStr)
 	}
 
-	return domainToIdentity(reg.identityFormat, nil), nil
+	return domainToIdentity(reg.identityNamespace, nil), nil
 }
 
 // GetIdentityBySelector retrieves an identity by selector (internal helper)
@@ -67,17 +67,17 @@ func (s *InMemoryStore) GetIdentityBySelector(ctx context.Context, selectorStr s
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	identityFormatStr, exists := s.selectors[selectorStr]
+	identityNamespaceStr, exists := s.selectors[selectorStr]
 	if !exists {
 		return nil, fmt.Errorf("no identity found for selector %s", selectorStr)
 	}
 
-	reg, exists := s.identities[identityFormatStr]
+	reg, exists := s.identities[identityNamespaceStr]
 	if !exists {
-		return nil, fmt.Errorf("identity %s not found", identityFormatStr)
+		return nil, fmt.Errorf("identity %s not found", identityNamespaceStr)
 	}
 
-	return domainToIdentity(reg.identityFormat, nil), nil
+	return domainToIdentity(reg.identityNamespace, nil), nil
 }
 
 // ListIdentities lists all registered identities
@@ -87,7 +87,7 @@ func (s *InMemoryStore) ListIdentities(ctx context.Context) ([]*ports.Identity, 
 
 	identities := make([]*ports.Identity, 0, len(s.identities))
 	for _, reg := range s.identities {
-		identities = append(identities, domainToIdentity(reg.identityFormat, nil))
+		identities = append(identities, domainToIdentity(reg.identityNamespace, nil))
 	}
 
 	return identities, nil

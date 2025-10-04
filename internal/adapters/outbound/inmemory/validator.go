@@ -22,7 +22,7 @@ func NewIdentityDocumentValidator() *IdentityDocumentValidator {
 	return &IdentityDocumentValidator{}
 }
 
-// Validate checks if an identity certificate is valid for the given identity format
+// Validate checks if an identity certificate is valid for the given identity namespace
 // This is the anti-corruption layer between domain and SDK validation logic
 func (v *IdentityDocumentValidator) Validate(ctx context.Context, cert *domain.IdentityDocument, expectedID *domain.IdentityNamespace) error {
 	if cert == nil {
@@ -34,9 +34,9 @@ func (v *IdentityDocumentValidator) Validate(ctx context.Context, cert *domain.I
 		return fmt.Errorf("identity certificate is expired or not yet valid")
 	}
 
-	// Check identity format matches expected
+	// Check identity namespace matches expected
 	if !cert.IdentityNamespace().Equals(expectedID) {
-		return fmt.Errorf("identity certificate identity format mismatch: expected %s, got %s",
+		return fmt.Errorf("identity certificate identity namespace mismatch: expected %s, got %s",
 			expectedID.String(), cert.IdentityNamespace().String())
 	}
 

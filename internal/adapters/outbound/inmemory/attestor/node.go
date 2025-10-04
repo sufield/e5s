@@ -40,19 +40,19 @@ func (a *InMemoryNodeAttestor) RegisterNodeSelectors(spiffeID string, selectors 
 
 // AttestNode performs in-memory node attestation
 // Returns a domain.Node with selectors populated and marked as attested
-func (a *InMemoryNodeAttestor) AttestNode(ctx context.Context, identityFormat *domain.IdentityNamespace) (*domain.Node, error) {
-	if identityFormat == nil {
-		return nil, fmt.Errorf("node identity format cannot be nil")
+func (a *InMemoryNodeAttestor) AttestNode(ctx context.Context, identityNamespace *domain.IdentityNamespace) (*domain.Node, error) {
+	if identityNamespace == nil {
+		return nil, fmt.Errorf("node identity namespace cannot be nil")
 	}
 
 	// Verify the node belongs to the correct trust domain
-	if identityFormat.TrustDomain().String() != a.trustDomain {
+	if identityNamespace.TrustDomain().String() != a.trustDomain {
 		return nil, fmt.Errorf("node trust domain mismatch: expected %s, got %s",
-			a.trustDomain, identityFormat.TrustDomain().String())
+			a.trustDomain, identityNamespace.TrustDomain().String())
 	}
 
 	// Create unattested node
-	node := domain.NewNode(identityFormat)
+	node := domain.NewNode(identityNamespace)
 
 	// In real SPIRE, this is where platform-specific attestation happens:
 	// 1. Agent provides attestation data (e.g., AWS IID signature)
@@ -60,7 +60,7 @@ func (a *InMemoryNodeAttestor) AttestNode(ctx context.Context, identityFormat *d
 	// 3. Server extracts platform selectors (e.g., aws:instance-id:i-1234, aws:region:us-east-1)
 
 	// For in-memory walking skeleton, use pre-registered selectors or defaults
-	selectors := a.nodeSelectors[identityFormat.String()]
+	selectors := a.nodeSelectors[identityNamespace.String()]
 	if len(selectors) == 0 {
 		// Default selectors for demonstration (node-level selectors)
 		defaultSelector, _ := domain.NewSelector(

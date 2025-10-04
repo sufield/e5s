@@ -8,21 +8,21 @@ import (
 // Anti-corruption layer: translates between domain types and adapter internal types
 
 // domainToIdentity converts domain types to ports.Identity
-func domainToIdentity(identityFormat *domain.IdentityNamespace, cert *domain.IdentityDocument) *ports.Identity {
+func domainToIdentity(identityNamespace *domain.IdentityNamespace, cert *domain.IdentityDocument) *ports.Identity {
 	return &ports.Identity{
-		IdentityNamespace:      identityFormat,
-		Name:                extractNameFromIdentityNamespace(identityFormat.String()),
+		IdentityNamespace:      identityNamespace,
+		Name:                extractNameFromIdentityNamespace(identityNamespace.String()),
 		IdentityDocument: cert,
 	}
 }
 
-// extractNameFromIdentityNamespace extracts workload name from identity format
-func extractNameFromIdentityNamespace(identityFormatStr string) string {
+// extractNameFromIdentityNamespace extracts workload name from identity namespace
+func extractNameFromIdentityNamespace(identityNamespaceStr string) string {
 	// Extract name from spiffe://example.org/workload-name
-	for i := len(identityFormatStr) - 1; i >= 0; i-- {
-		if identityFormatStr[i] == '/' {
-			return identityFormatStr[i+1:]
+	for i := len(identityNamespaceStr) - 1; i >= 0; i-- {
+		if identityNamespaceStr[i] == '/' {
+			return identityNamespaceStr[i+1:]
 		}
 	}
-	return identityFormatStr
+	return identityNamespaceStr
 }

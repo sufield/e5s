@@ -32,7 +32,7 @@ func Bootstrap(ctx context.Context, configLoader ports.ConfigLoader, deps Applic
 	// Step 3: Initialize trust domain parser (abstracts SDK trust domain validation)
 	trustDomainParser := deps.CreateTrustDomainParser()
 
-	// Step 4: Initialize identity format parser (abstracts SDK parsing logic)
+	// Step 4: Initialize identity namespace parser (abstracts SDK parsing logic)
 	parser := deps.CreateIdentityNamespaceParser()
 
 	// Step 5: Initialize identity document provider (abstracts SDK document creation/validation)
@@ -55,15 +55,15 @@ func Bootstrap(ctx context.Context, configLoader ports.ConfigLoader, deps Applic
 	// Step 8: Register workload identities
 	for _, workload := range config.Workloads {
 		// Use parser port instead of domain constructor
-		identityFormat, err := parser.ParseFromString(ctx, workload.SpiffeID)
+		identityNamespace, err := parser.ParseFromString(ctx, workload.SpiffeID)
 		if err != nil {
-			return nil, fmt.Errorf("invalid identity format %s: %w", workload.SpiffeID, err)
+			return nil, fmt.Errorf("invalid identity namespace %s: %w", workload.SpiffeID, err)
 		}
 		selector, err := domain.ParseSelectorFromString(workload.Selector)
 		if err != nil {
 			return nil, fmt.Errorf("invalid selector %s: %w", workload.Selector, err)
 		}
-		if err := store.Register(ctx, identityFormat, selector); err != nil {
+		if err := store.Register(ctx, identityNamespace, selector); err != nil {
 			return nil, fmt.Errorf("failed to register workload %s: %w", workload.SpiffeID, err)
 		}
 	}

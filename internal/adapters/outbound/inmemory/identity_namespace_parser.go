@@ -15,17 +15,17 @@ import (
 // For a real implementation, this would use go-spiffe SDK's spiffeid.FromString/FromPath.
 type InMemoryIdentityNamespaceParser struct{}
 
-// NewInMemoryIdentityNamespaceParser creates a new in-memory identity format parser
+// NewInMemoryIdentityNamespaceParser creates a new in-memory identity namespace parser
 func NewInMemoryIdentityNamespaceParser() ports.IdentityNamespaceParser {
 	return &InMemoryIdentityNamespaceParser{}
 }
 
-// ParseFromString parses an identity format from a URI string
+// ParseFromString parses an identity namespace from a URI string
 // Format: spiffe://<trust-domain>/<path>
 // Example: spiffe://example.org/host
 func (p *InMemoryIdentityNamespaceParser) ParseFromString(ctx context.Context, id string) (*domain.IdentityNamespace, error) {
 	if id == "" {
-		return nil, fmt.Errorf("%w: identity format cannot be empty", domain.ErrInvalidIdentityNamespace)
+		return nil, fmt.Errorf("%w: identity namespace cannot be empty", domain.ErrInvalidIdentityNamespace)
 	}
 
 	// Parse as URI
@@ -57,7 +57,7 @@ func (p *InMemoryIdentityNamespaceParser) ParseFromString(ctx context.Context, i
 	return domain.NewIdentityNamespaceFromComponents(trustDomain, path), nil
 }
 
-// ParseFromPath creates an identity format from trust domain and path components
+// ParseFromPath creates an identity namespace from trust domain and path components
 func (p *InMemoryIdentityNamespaceParser) ParseFromPath(ctx context.Context, trustDomain *domain.TrustDomain, path string) (*domain.IdentityNamespace, error) {
 	if trustDomain == nil {
 		return nil, fmt.Errorf("%w: trust domain cannot be nil", domain.ErrInvalidIdentityNamespace)

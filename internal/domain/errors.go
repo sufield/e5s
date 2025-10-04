@@ -14,8 +14,8 @@ var (
 	// ErrInvalidSelectors indicates selectors are nil or empty
 	ErrInvalidSelectors = errors.New("selectors cannot be nil or empty")
 
-	// ErrInvalidIdentityNamespace indicates identity format is nil or malformed
-	ErrInvalidIdentityNamespace = errors.New("identity format cannot be nil")
+	// ErrInvalidIdentityNamespace indicates identity namespace is nil or malformed
+	ErrInvalidIdentityNamespace = errors.New("identity namespace cannot be nil")
 
 	// ErrInvalidTrustDomain indicates trust domain is nil or empty
 	ErrInvalidTrustDomain = errors.New("trust domain cannot be nil or empty")
@@ -32,8 +32,8 @@ var (
 	// ErrIdentityDocumentInvalid indicates identity document is nil or invalid
 	ErrIdentityDocumentInvalid = errors.New("identity document is invalid")
 
-	// ErrIdentityDocumentMismatch indicates identity document identity format doesn't match expected ID
-	ErrIdentityDocumentMismatch = errors.New("identity document identity format mismatch")
+	// ErrIdentityDocumentMismatch indicates identity document identity namespace doesn't match expected ID
+	ErrIdentityDocumentMismatch = errors.New("identity document identity namespace mismatch")
 )
 
 // Validation errors for specific entities

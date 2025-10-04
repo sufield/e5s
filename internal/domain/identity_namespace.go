@@ -9,7 +9,7 @@ package domain
 //
 // Design Note: We avoid duplicating go-spiffe SDK's spiffeid.ID parsing/validation
 // logic by moving that to an adapter. The domain only models the concept of an
-// identity format as a value object with trust domain and path components.
+// identity namespace as a value object with trust domain and path components.
 //
 // Naming: "IdentityNamespace" emphasizes the structured, formatted nature of the identity
 // (scheme + domain + path) representing what is commonly known as a SPIFFE ID in SPIFFE terminology.

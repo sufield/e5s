@@ -10,7 +10,7 @@ import (
 
 // InMemoryAgent is an in-memory implementation of SPIRE agent
 type InMemoryAgent struct {
-	identityFormat      *domain.IdentityNamespace
+	identityNamespace      *domain.IdentityNamespace
 	trustDomain         *domain.TrustDomain
 	server              *InMemoryServer
 	store               *InMemoryStore
@@ -31,13 +31,13 @@ func NewInMemoryAgent(
 	certProvider ports.IdentityDocumentProvider,
 ) (*InMemoryAgent, error) {
 	// Use parser port instead of domain constructor
-	identityFormat, err := parser.ParseFromString(ctx, agentSpiffeIDStr)
+	identityNamespace, err := parser.ParseFromString(ctx, agentSpiffeIDStr)
 	if err != nil {
-		return nil, fmt.Errorf("invalid agent identity format: %w", err)
+		return nil, fmt.Errorf("invalid agent identity namespace: %w", err)
 	}
 
 	agent := &InMemoryAgent{
-		identityFormat:      identityFormat,
+		identityNamespace:      identityNamespace,
 		trustDomain:         server.GetTrustDomain(),
 		server:              server,
 		store:               store,
@@ -60,13 +60,13 @@ func (a *InMemoryAgent) initializeAgentIdentity(ctx context.Context) error {
 	caCert := a.server.GetCA()
 	caKey := a.server.caKey
 
-	agentDoc, err := a.certificateProvider.CreateX509IdentityDocument(ctx, a.identityFormat, caCert, caKey)
+	agentDoc, err := a.certificateProvider.CreateX509IdentityDocument(ctx, a.identityNamespace, caCert, caKey)
 	if err != nil {
 		return fmt.Errorf("failed to create agent identity document: %w", err)
 	}
 
 	a.agentIdentity = &ports.Identity{
-		IdentityNamespace:   a.identityFormat,
+		IdentityNamespace:   a.identityNamespace,
 		Name:             "agent",
 		IdentityDocument: agentDoc,
 	}
@@ -97,7 +97,7 @@ func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload port
 		return nil, fmt.Errorf("failed to find identity for selector %s: %w", selectors[0], err)
 	}
 
-	// Step 3: Request identity document from server using domain identity format
+	// Step 3: Request identity document from server using domain identity namespace
 	doc, err := a.server.IssueIdentity(ctx, identity.IdentityNamespace)
 	if err != nil {
 		return nil, fmt.Errorf("failed to issue identity document: %w", err)

@@ -28,10 +28,10 @@ func NewIdentityService(agent ports.Agent, store ports.IdentityStore) *IdentityS
 func (s *IdentityService) ExchangeMessage(ctx context.Context, from ports.Identity, to ports.Identity, content string) (*ports.Message, error) {
 	// Core business logic: validate identities
 	if from.IdentityNamespace == nil {
-		return nil, fmt.Errorf("sender identity format required")
+		return nil, fmt.Errorf("sender identity namespace required")
 	}
 	if to.IdentityNamespace == nil {
-		return nil, fmt.Errorf("receiver identity format required")
+		return nil, fmt.Errorf("receiver identity namespace required")
 	}
 
 	// Verify identities exist in the store

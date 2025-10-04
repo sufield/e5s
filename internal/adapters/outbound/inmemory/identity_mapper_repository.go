@@ -14,7 +14,7 @@ import (
 // For walking skeleton, uses simple map-based storage
 type InMemoryIdentityMapperRepository struct {
 	mu      sync.RWMutex
-	mappers map[string]*domain.IdentityMapper // identity format string -> mapper
+	mappers map[string]*domain.IdentityMapper // identity namespace string -> mapper
 }
 
 // NewInMemoryIdentityMapperRepository creates a new in-memory identity mapper repository
@@ -33,17 +33,17 @@ func (r *InMemoryIdentityMapperRepository) CreateMapper(ctx context.Context, map
 		return fmt.Errorf("identity mapper cannot be nil")
 	}
 
-	identityFormatStr := mapper.IdentityNamespace().String()
-	if _, exists := r.mappers[identityFormatStr]; exists {
-		return fmt.Errorf("identity mapper already exists for identity format: %s", identityFormatStr)
+	identityNamespaceStr := mapper.IdentityNamespace().String()
+	if _, exists := r.mappers[identityNamespaceStr]; exists {
+		return fmt.Errorf("identity mapper already exists for identity namespace: %s", identityNamespaceStr)
 	}
 
-	r.mappers[identityFormatStr] = mapper
+	r.mappers[identityNamespaceStr] = mapper
 	return nil
 }
 
 // FindMatchingMapper finds an identity mapper that matches the given selectors
-// This is the core authorization logic: given workload selectors, which identity format should be issued?
+// This is the core authorization logic: given workload selectors, which identity namespace should be issued?
 func (r *InMemoryIdentityMapperRepository) FindMatchingMapper(ctx context.Context, selectors *domain.SelectorSet) (*domain.IdentityMapper, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -77,21 +77,21 @@ func (r *InMemoryIdentityMapperRepository) ListMappers(ctx context.Context) ([]*
 	return mappers, nil
 }
 
-// DeleteMapper deletes an identity mapper by identity format
-func (r *InMemoryIdentityMapperRepository) DeleteMapper(ctx context.Context, identityFormat *domain.IdentityNamespace) error {
+// DeleteMapper deletes an identity mapper by identity namespace
+func (r *InMemoryIdentityMapperRepository) DeleteMapper(ctx context.Context, identityNamespace *domain.IdentityNamespace) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if identityFormat == nil {
-		return fmt.Errorf("identity format cannot be nil")
+	if identityNamespace == nil {
+		return fmt.Errorf("identity namespace cannot be nil")
 	}
 
-	identityFormatStr := identityFormat.String()
-	if _, exists := r.mappers[identityFormatStr]; !exists {
-		return fmt.Errorf("identity mapper not found for identity format: %s", identityFormatStr)
+	identityNamespaceStr := identityNamespace.String()
+	if _, exists := r.mappers[identityNamespaceStr]; !exists {
+		return fmt.Errorf("identity mapper not found for identity namespace: %s", identityNamespaceStr)
 	}
 
-	delete(r.mappers, identityFormatStr)
+	delete(r.mappers, identityNamespaceStr)
 	return nil
 }
 

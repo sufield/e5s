@@ -28,7 +28,7 @@ const (
 // X.509 bias) - it encompasses both X.509 and JWT formats while remaining self-explanatory
 // and domain-focused, especially for collaborators unfamiliar with SPIFFE terminology.
 type IdentityDocument struct {
-	identityFormat       *IdentityNamespace
+	identityNamespace       *IdentityNamespace
 	identityDocumentType IdentityDocumentType
 	cert                 *x509.Certificate // X.509 only - stored for adapter use
 	privateKey           interface{}       // X.509 only - crypto.Signer or crypto.PrivateKey
@@ -41,7 +41,7 @@ type IdentityDocument struct {
 // For X.509: cert, privateKey, chain must be provided; expiresAt extracted from cert
 // For JWT: cert/privateKey/chain are nil; expiresAt from JWT claims
 func NewIdentityDocumentFromComponents(
-	identityFormat *IdentityNamespace,
+	identityNamespace *IdentityNamespace,
 	identityDocumentType IdentityDocumentType,
 	cert *x509.Certificate,
 	privateKey interface{},
@@ -49,7 +49,7 @@ func NewIdentityDocumentFromComponents(
 	expiresAt time.Time,
 ) *IdentityDocument {
 	return &IdentityDocument{
-		identityFormat:       identityFormat,
+		identityNamespace:       identityNamespace,
 		identityDocumentType: identityDocumentType,
 		cert:                 cert,
 		privateKey:           privateKey,
@@ -58,9 +58,9 @@ func NewIdentityDocumentFromComponents(
 	}
 }
 
-// IdentityNamespace returns the identity format
+// IdentityNamespace returns the identity namespace
 func (id *IdentityDocument) IdentityNamespace() *IdentityNamespace {
-	return id.identityFormat
+	return id.identityNamespace
 }
 
 // Type returns the identity document type (X.509 or JWT)
