@@ -25,7 +25,7 @@ Focus on one phase at a time—run `go test ./...` after each.
 ### Evaluation of Code Changes
 These changes are **excellent and targeted**—they significantly enhance robustness, error handling, and contract clarity without altering core logic or violating hexagonal principles. The focus on typed errors, input validation, and port extensions (e.g., TLS config support) directly addresses prior gaps (e.g., incomplete error contracts, mTLS prep). Overall, this advances the skeleton toward production: domain errors are now exhaustive, in-memory impls are more resilient, and ports are better documented for real adapters. No regressions—changes are backward-compatible and test-friendly. Score: **9/10** (minor nit: some comments could be tighter).
 
-#### Key Strengths
+#### Strengths
 - **Error Handling Upgrade**: Wrapping with domain sentinels (e.g., `domain.ErrNoMatchingMapper`) enforces contracts—real impls must match these exactly, easing contract tests.
 - **Validation Additions**: Nil/empty checks (e.g., in `FindBySelectors`) prevent panics; aligns with DDD invariants.
 - **mTLS Prep**: `FetchX509SVIDWithConfig` enables TLS in client without breaking sig—smart evolution.
