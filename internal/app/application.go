@@ -9,7 +9,7 @@ import (
 )
 
 // Application is the composition root that wires all dependencies
-// This is NOT an adapter - it's infrastructure/bootstrap logic
+// This is an infrastructure/bootstrap logic
 type Application struct {
 	Config                *ports.Config
 	Service               ports.Service
@@ -19,7 +19,7 @@ type Application struct {
 }
 
 // Bootstrap creates and wires all application components
-// This is where dependency injection and SEEDING happens
+// This is where dependency injection and Seeding happens
 // Seeding is configuration, not runtime behavior - happens once at startup
 func Bootstrap(ctx context.Context, configLoader ports.ConfigLoader, factory ports.AdapterFactory) (*Application, error) {
 	// Step 1: Load configuration (fixtures)
@@ -107,4 +107,3 @@ func Bootstrap(ctx context.Context, configLoader ports.ConfigLoader, factory por
 		Registry:              registry,
 	}, nil
 }
-
