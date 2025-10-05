@@ -44,3 +44,4 @@ func (p *InMemoryTrustDomainParser) FromString(ctx context.Context, name string)
 	// For walking skeleton: simple validation
 	return domain.NewTrustDomainFromName(name), nil
 }
+var _ ports.TrustDomainParser = (*InMemoryTrustDomainParser)(nil)

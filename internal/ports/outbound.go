@@ -193,3 +193,20 @@ type IdentityDocumentProvider interface {
 	// Returns domain sentinel errors (ErrIdentityDocumentExpired, ErrIdentityDocumentInvalid, ErrIdentityDocumentMismatch)
 	ValidateIdentityDocument(ctx context.Context, doc *domain.IdentityDocument, expectedID *domain.IdentityNamespace) error
 }
+
+// AdapterFactory is the outbound port for creating concrete adapters.
+// This allows swapping implementations (in-memory, real SPIRE, etc.) at bootstrap.
+// Includes seeding methods for registry (configuration only, called during startup).
+type AdapterFactory interface {
+	CreateRegistry() IdentityMapperRegistry
+	CreateTrustDomainParser() TrustDomainParser
+	CreateIdentityNamespaceParser() IdentityNamespaceParser
+	CreateIdentityDocumentProvider() IdentityDocumentProvider
+	CreateServer(ctx context.Context, trustDomain string, trustDomainParser TrustDomainParser, docProvider IdentityDocumentProvider) (Server, error)
+	CreateAttestor() WorkloadAttestor
+	RegisterWorkloadUID(attestor WorkloadAttestor, uid int, selector string)
+	CreateAgent(ctx context.Context, spiffeID string, server Server, registry IdentityMapperRegistry, attestor WorkloadAttestor, parser IdentityNamespaceParser, docProvider IdentityDocumentProvider) (Agent, error)
+	// Seeding operations (configuration, not runtime - called only during bootstrap)
+	SeedRegistry(registry IdentityMapperRegistry, ctx context.Context, mapper *domain.IdentityMapper) error
+	SealRegistry(registry IdentityMapperRegistry)
+}

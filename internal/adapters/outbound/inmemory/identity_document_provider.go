@@ -141,3 +141,4 @@ func (p *InMemoryIdentityDocumentProvider) ValidateIdentityDocument(
 
 	return nil
 }
+var _ ports.IdentityDocumentProvider = (*InMemoryIdentityDocumentProvider)(nil)

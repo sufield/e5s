@@ -99,3 +99,4 @@ func (c *CLI) Run(ctx context.Context) error {
 	return nil
 }
 
+var _ ports.CLI = (*CLI)(nil)

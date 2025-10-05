@@ -135,3 +135,4 @@ func extractNameFromIdentityNamespace(id *domain.IdentityNamespace) string {
 	// Remove leading slash and return
 	return path[1:]
 }
+var _ ports.Agent = (*InMemoryAgent)(nil)

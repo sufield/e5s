@@ -52,3 +52,4 @@ func (s *IdentityService) ExchangeMessage(ctx context.Context, from ports.Identi
 	return msg, nil
 }
 
+var _ ports.Service = (*IdentityService)(nil)

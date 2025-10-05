@@ -43,3 +43,4 @@ func NewInMemoryConfig() *InMemoryConfig {
 func (c *InMemoryConfig) Load(ctx context.Context) (*ports.Config, error) {
 	return c.config, nil
 }
+var _ ports.ConfigLoader = (*InMemoryConfig)(nil)

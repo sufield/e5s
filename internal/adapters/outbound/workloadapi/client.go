@@ -1,6 +1,7 @@
 package workloadapi
 
 import (
+	"github.com/pocket/hexagon/spire/internal/ports"
 	"context"
 	"crypto/tls"
 	"encoding/json"
@@ -40,7 +41,7 @@ func NewClient(socketPath string) *Client {
 
 // FetchX509SVID fetches an X.509 SVID for the calling workload
 // The client sends its process credentials, and the server attests it
-func (c *Client) FetchX509SVID(ctx context.Context) (*X509SVIDResponse, error) {
+func (c *Client) FetchX509SVID(ctx context.Context) (ports.X509SVIDResponse, error) {
 	// Create request to Workload API
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://unix/svid/x509", nil)
 	if err != nil {
@@ -81,7 +82,7 @@ func (c *Client) FetchX509SVID(ctx context.Context) (*X509SVIDResponse, error) {
 // FetchX509SVIDWithConfig fetches an X.509 SVID with custom TLS configuration
 // Enables mTLS authentication when connecting to the Workload API server
 // If tlsConfig is nil, falls back to FetchX509SVID (backward compatible)
-func (c *Client) FetchX509SVIDWithConfig(ctx context.Context, tlsConfig *tls.Config) (*X509SVIDResponse, error) {
+func (c *Client) FetchX509SVIDWithConfig(ctx context.Context, tlsConfig *tls.Config) (ports.X509SVIDResponse, error) {
 	// If no TLS config provided, use regular fetch
 	if tlsConfig == nil {
 		return c.FetchX509SVID(ctx)
@@ -141,7 +142,37 @@ type X509SVIDResponse struct {
 	ExpiresAt int64  `json:"expires_at"`
 }
 
-// ToIdentity converts the response to a ports.Identity (for internal use)
+// ToIdentity converts the response to a SPIFFE ID string (for internal conversion to ports.Identity)
 func (r *X509SVIDResponse) ToIdentity() string {
+	if r == nil {
+		return ""
+	}
 	return r.SPIFFEID
 }
+
+// GetSPIFFEID returns the SPIFFE ID
+func (r *X509SVIDResponse) GetSPIFFEID() string {
+	if r == nil {
+		return ""
+	}
+	return r.SPIFFEID
+}
+
+// GetX509SVID returns the X.509 SVID certificate (PEM-encoded)
+func (r *X509SVIDResponse) GetX509SVID() string {
+	if r == nil {
+		return ""
+	}
+	return r.X509SVID
+}
+
+// GetExpiresAt returns the expiration timestamp (Unix time)
+func (r *X509SVIDResponse) GetExpiresAt() int64 {
+	if r == nil {
+		return 0
+	}
+	return r.ExpiresAt
+}
+
+var _ ports.X509SVIDResponse = (*X509SVIDResponse)(nil)
+var _ ports.WorkloadAPIClient = (*Client)(nil)

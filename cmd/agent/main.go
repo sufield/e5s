@@ -27,11 +27,11 @@ func main() {
 	// Step 1: Create configuration loader (outbound adapter)
 	configLoader := inmemory.NewInMemoryConfig()
 
-	// Step 2: Create dependency factory (infrastructure)
-	deps := compose.NewInMemoryDeps()
+	// Step 2: Create adapter factory (infrastructure)
+	factory := compose.NewInMemoryAdapterFactory()
 
 	// Step 3: Bootstrap the application (composition root)
-	application, err := app.Bootstrap(ctx, configLoader, deps)
+	application, err := app.Bootstrap(ctx, configLoader, factory)
 	if err != nil {
 		log.Fatalf("Failed to bootstrap application: %v", err)
 	}

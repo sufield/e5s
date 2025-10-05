@@ -112,3 +112,4 @@ func generateCA(trustDomain string) (*x509.Certificate, *rsa.PrivateKey, error) 
 
 	return cert, privateKey, nil
 }
+var _ ports.Server = (*InMemoryServer)(nil)

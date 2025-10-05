@@ -40,9 +40,9 @@ func main() {
 	// Display SVID details
 	fmt.Println("✓ SVID fetched successfully!")
 	fmt.Println()
-	fmt.Printf("SPIFFE ID: %s\n", svid.SPIFFEID)
-	fmt.Printf("Certificate: %s\n", svid.X509SVID)
-	fmt.Printf("Expires At: %s\n", time.Unix(svid.ExpiresAt, 0).Format("2006-01-02 15:04:05"))
+	fmt.Printf("SPIFFE ID: %s\n", svid.GetSPIFFEID())
+	fmt.Printf("Certificate: %s\n", svid.GetX509SVID())
+	fmt.Printf("Expires At: %s\n", time.Unix(svid.GetExpiresAt(), 0).Format("2006-01-02 15:04:05"))
 	fmt.Println()
 	fmt.Println("✓ Workload successfully authenticated!")
 }

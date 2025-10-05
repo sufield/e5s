@@ -74,3 +74,4 @@ func (p *InMemoryIdentityNamespaceParser) ParseFromPath(ctx context.Context, tru
 	// Create domain IdentityNamespace from components
 	return domain.NewIdentityNamespaceFromComponents(trustDomain, path), nil
 }
+var _ ports.IdentityNamespaceParser = (*InMemoryIdentityNamespaceParser)(nil)

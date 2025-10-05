@@ -207,3 +207,4 @@ func formatCertificate(doc *domain.IdentityDocument) string {
 		doc.IdentityNamespace().String(),
 		doc.ExpiresAt().Format("2006-01-02 15:04:05"))
 }
+var _ ports.WorkloadAPIServer = (*Server)(nil)

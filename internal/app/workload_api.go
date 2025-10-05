@@ -33,3 +33,4 @@ func (s *IdentityClientService) FetchX509SVIDForCaller(ctx context.Context, call
 
 	return identity, nil
 }
+var _ ports.IdentityClientService = (*IdentityClientService)(nil)
