@@ -4,7 +4,7 @@ A production-ready implementation of SPIRE's Workload API using hexagonal archit
 
 ## Overview
 
-This project implements the SPIRE Workload API pattern:
+This project implements the SPIRE Workload API:
 - **Agent Server**: Runs on each host, provides Workload API on Unix socket
 - **Workload Clients**: Applications fetch their SVIDs from the local agent
 - **Attestation Flow**: Agent attests workload identity → matches selectors → issues SVID
@@ -34,7 +34,7 @@ cmd/
 └── main.go              # CLI demonstration tool
 ```
 
-### Hexagonal Architecture Layers
+### Hexagonal Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -366,12 +366,12 @@ Workloads: []ports.WorkloadEntry{
 1. Load configuration (workload entries)
 2. Parse each entry into `IdentityMapper` (domain entity)
 3. Seed registry with mappers
-4. **Seal registry** (prevent mutations)
+4. Seal registry (prevent mutations)
 5. Start Workload API server
 
 After sealing, registry is **immutable** - read-only at runtime.
 
-## Key Design Decisions
+## Design Decisions
 
 ### 1. IdentityClient (Not WorkloadAPI)
 
@@ -481,3 +481,122 @@ func TestWorkloadAttestation(t *testing.T) {
 - [SPIRE Documentation](https://spiffe.io/docs/latest/spire/)
 - [go-spiffe SDK](https://github.com/spiffe/go-spiffe)
 - [Hexagonal Architecture](https://alistair.cockburn.us/hexagonal-architecture/)
+
+### Identifying and Expressing Invariants for Better Code Quality
+
+Invariants are core properties or conditions in your code that must **always hold true** at specific points (e.g., after a method call or in a struct's state). Examples: In a bank account, "balance >= 0" is an invariant; in your auth system, "IdentityDocument.IsValid() == true" before exchange. Expressing them explicitly (via code, docs, or tests) catches bugs early, improves maintainability, and enforces design intent—directly boosting quality.
+
+#### Step 1: Identifying Invariants
+Scan your code for:
+- **State Assumptions**: What must be true post-operation? (e.g., in `ExchangeMessage`, post-validation: `msg.From.IdentityDocument != nil`).
+- **Pre/Post Conditions**: Entry (pre): "from/to namespaces non-nil"; Exit (post): "msg created only if valid".
+- **Business Rules**: Domain-specific (e.g., "SelectorSet size <= 10" to prevent DoS).
+- **Tools for Discovery**: 
+  - Code review/static analysis (e.g., `go vet`, SonarQube).
+  - Property-based testing (e.g., Go's `github.com/leanovate/gopter` for random inputs).
+  - Ask: "What breaks if this flips?" (e.g., nil doc → auth failure).
+
+Focus on high-impact areas like your auth flow: `IdentityService`, `InMemoryAgent.FetchIdentityDocument`.
+
+#### Step 2: Expressing Invariants
+Don't just identify—make them **executable**:
+- **Documentation**: Javadoc-style comments (e.g., `// Invariant: Balance >= 0 after Deposit/Withdraw`).
+- **Runtime Assertions**: Enforce dynamically (cheap in debug; strip in prod).
+  - Go: Use `if !invariant { panic("invariant violated") }` or `debug.Assert` from `runtime/debug`.
+- **Design by Contract**: Pre/post via funcs (e.g., `RequireNonNil(fromDoc)`).
+- **Static Tools**: Types (e.g., non-nil structs) or linters.
+
+| Method | Pros | Cons | When to Use |
+|--------|------|------|-------------|
+| **Docs/Comments** | Zero cost, readable. | Not enforced. | Quick prototypes. |
+| **Assertions** | Catches at runtime. | Panics in prod (if not stripped). | Debug builds, critical paths. |
+| **Tests** | Verifies across scenarios. | No runtime guard. | Always—your main tool. |
+
+#### Step 3: Write Tests for Invariants
+
+**write tests for invariants**. They're a natural fit for unit/integration tests, verifying the "always true" guarantee without runtime overhead. But combine them with **runtime checks** (e.g., assertions) for enforcement. Below, I'll break it down: identification, expression, testing strategy, and Go-specific tips.
+
+tests are the best way to *verify* invariants hold under varied inputs, ensuring quality without runtime cost. They're "executable specs" that fail on regressions. Focus on:
+- **Unit Tests**: Isolate core (mock ports); assert invariant post-call.
+- **Property Tests**: Random data to stress invariants (e.g., 1k runs with fuzzed UIDs).
+- **Integration**: With in-memory adapters to check end-flow invariants (e.g., full auth succeeds only if docs valid).
+
+- **At Your Stage (In-Memory Only)**: Perfect—tests core + adapters without real SPIRE setup. Later, parametrize for real vs. mock.
+
+**Pros/Cons of Invariant Tests**
+| Pros | Cons |
+|------|------|
+| Fast/isolated; high coverage. | Can feel repetitive (e.g., many expiry cases). |
+| Enforces DbC mindset. | Over-testing trivia (e.g., skip trivial "non-nil"). |
+| Fuzz-friendly for robustness. | Mocks add setup boilerplate (mitigate with helpers). |
+
+#### Go-Specific Testing Example
+Extend your `app_test.go` with invariant-focused tests. Use `testify`
+
+```go
+// In app_test.go (add after existing ExchangeMessage tests)
+
+func TestIdentityService_Invariants_PostExchange(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		setup    func(service *app.IdentityService, from, to *ports.Identity)
+		assertFn func(msg *ports.Message)
+	}{
+		{
+			name: "msg from/to namespaces match inputs",
+			setup: func(s *app.IdentityService, from, to *ports.Identity) {
+				// Act in setup
+				msg, _ := s.ExchangeMessage(context.Background(), *from, *to, "test")
+				// But assert in assertFn
+			},
+			assertFn: func(msg *ports.Message) {
+				assert.NotNil(t, msg.From.IdentityNamespace)
+				assert.NotNil(t, msg.To.IdentityNamespace)
+				assert.True(t, msg.From.IdentityDocument.IsValid())
+				assert.True(t, msg.To.IdentityDocument.IsValid())
+			},
+		},
+		{
+			name: "msg content preserved (immutability invariant)",
+			setup: func(s *app.IdentityService, from, to *ports.Identity) {
+				msg, _ := s.ExchangeMessage(context.Background(), *from, *to, "immutable content")
+			},
+			assertFn: func(msg *ports.Message) {
+				assert.Equal(t, "immutable content", msg.Content)  // No truncation/mutation
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockAgent := new(MockAgent)
+			mockRegistry := new(MockRegistry)
+			service := app.NewIdentityService(mockAgent, mockRegistry)
+			from := createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(1*time.Hour))
+			to := createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(1*time.Hour))
+
+			tt.setup(service, from, to)  // Act
+
+			// Re-act to get msg for assert (or capture in setup)
+			msg, err := service.ExchangeMessage(context.Background(), *from, *to, "test")
+			require.NoError(t, err)
+			tt.assertFn(msg)
+		})
+	}
+}
+
+// Property test example (add "github.com/leanovate/gopter" for fuzz)
+func TestIdentityService_Property_ValidDocsAlwaysProduceValidMsg(t *testing.T) {
+	// Use gopter for 100 random valid identities
+	// Assert: ExchangeMessage always succeeds with valid msg invariant
+	// (Omitted for brevity; focus on unit first)
+}
+```
+
+- **Start Small**: Add 2-3 invariant tests to `app/service_test.go` (post-call checks). Run `go test -cover ./internal/app`—aim for 90%+.
+- **Evolve**: Once core is solid, add integration (wire in-memory factory, test full flow).
+- **Tools**: `go test -race` for concurrency invariants; `golangci-lint` for static invariant hints.
+
+This approach ensures invariants are not just identified but *enforced*, improving quality iteratively. 
