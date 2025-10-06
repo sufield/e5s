@@ -17,6 +17,22 @@ go.work
 # Build artifacts
 /bin/
 /console
+/tmp/
+coverage.out
+coverage.html
+inmem.out
+inmem_coverage.html
+
+# Dev infrastructure secrets (DO NOT COMMIT)
+infra/dev/minikube/values-minikube-secrets.yaml
+infra/dev/minikube/values-minikube-secrets.enc.yaml
+*-secrets.yaml
+*.enc.yaml
+
+# Helm/Kubernetes artifacts
+infra/dev/minikube/charts/
+*.tgz
+helmfile.lock
 
 # IDE/Editor files
 .vscode/

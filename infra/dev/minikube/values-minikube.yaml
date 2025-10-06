@@ -1,0 +1,24 @@
+# Minimal dev values for SPIRE on Minikube
+# Using chart defaults with minimal overrides
+
+global:
+  spiffe:
+    trustDomain: example.org
+    clusterName: minikube
+
+# SPIRE Server Configuration
+spire-server:
+  # Disable controller manager (no CRDs required for simple setup)
+  controllerManager:
+    enabled: false
+
+  # Log level for debugging
+  logLevel: DEBUG
+
+# SPIRE Agent Configuration
+spire-agent:
+  # Log level for debugging
+  logLevel: DEBUG
+
+  # Socket path for workload API
+  socketPath: /tmp/spire-agent/public/api.sock

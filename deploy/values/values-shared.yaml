@@ -1,0 +1,78 @@
+# Shared values across all environments
+# Common configuration used by dev, staging, and prod
+
+global:
+  spire:
+    # Trust domain (immutable - set once)
+    trustDomain: example.org
+
+    # Common labels
+    labels:
+      app: spire
+      managed-by: helm
+
+    # Common annotations
+    annotations:
+      app.kubernetes.io/part-of: spire
+
+# Common SPIRE server config
+spire-server:
+  # Image (version controlled here)
+  image:
+    registry: ghcr.io
+    repository: spiffe/spire-server
+    # Version pinned for stability
+    tag: 1.9.0
+
+  # Common plugins (production-ready)
+  config:
+    plugins:
+      DataStore:
+        sql:
+          plugin_data:
+            database_type: "postgres"  # Override in dev to use sqlite3
+
+      KeyManager:
+        disk:
+          plugin_data:
+            keys_path: "/run/spire/server-data/keys.json"
+
+      NodeAttestor:
+        k8s_psat:
+          plugin_data: {}
+
+      Notifier:
+        k8sbundle:
+          plugin_data:
+            namespace: "spire-system"
+            config_map: "spire-bundle"
+
+# Common SPIRE agent config
+spire-agent:
+  image:
+    registry: ghcr.io
+    repository: spiffe/spire-agent
+    tag: 1.9.0
+
+  # Common socket path
+  socketPath: /tmp/spire-agent/public/api.sock
+
+  config:
+    plugins:
+      KeyManager:
+        disk:
+          plugin_data:
+            directory: "/run/spire/agent-data"
+
+      NodeAttestor:
+        k8s_psat:
+          plugin_data: {}
+
+      WorkloadAttestor:
+        k8s:
+          plugin_data:
+            node_name_env: "MY_NODE_NAME"
+
+        unix:
+          plugin_data:
+            discover_workload_path: true

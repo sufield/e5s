@@ -1,0 +1,81 @@
+# Docker ignore - Exclude dev infrastructure from production builds
+
+# Dev infrastructure (DO NOT include in production)
+infra/**
+hack/**
+deploy/**
+
+# Dev-only code
+cmd/cp-minikube/**
+internal/controlplane/**
+
+# Build artifacts
+bin/
+*.test
+*.out
+coverage.out
+coverage.html
+*.prof
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Version control
+.git/
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+docs/
+LICENSE
+NOTICE
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.circleci/
+
+# Test files
+*_test.go
+testdata/
+
+# Kubernetes and Helm
+*.yaml
+*.yml
+Chart.yaml
+values*.yaml
+templates/
+
+# Scripts
+*.sh
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+
+# Logs
+*.log
+logs/
+
+# Dependencies (use multi-stage builds instead)
+vendor/ # Only if not using Go modules properly
+
+# Environment files
+.env
+.env.*
+*.env
+
+# Secrets
+secrets/
+*.key
+*.pem
+*.crt
+*-secrets.yaml

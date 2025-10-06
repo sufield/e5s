@@ -1,0 +1,79 @@
+# Helm ignore - Exclude unnecessary files from Helm charts
+
+# Documentation
+*.md
+README.md
+CHANGELOG.md
+LICENSE
+NOTICE
+
+# Scripts
+*.sh
+scripts/
+
+# Dev infrastructure
+infra/
+hack/
+
+# IDE and editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Version control
+.git/
+.gitignore
+.gitattributes
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.circleci/
+Jenkinsfile
+
+# Go source (if packaging charts separately)
+*.go
+go.mod
+go.sum
+cmd/
+internal/
+pkg/
+
+# Build artifacts
+bin/
+*.test
+*.out
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+
+# Test files
+*_test.yaml
+test/
+tests/
+
+# Local development
+.env
+.env.*
+*.local
+
+# Logs
+*.log
+
+# Secrets (should be in separate repo/vault)
+*-secrets.yaml
+secrets/
+
+# Helmfile (if packaging individual charts)
+helmfile.yaml
+helmfile.d/
+
+# Chart dependencies
+charts/*.tgz
+requirements.lock

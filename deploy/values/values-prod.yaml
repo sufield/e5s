@@ -1,0 +1,132 @@
+# Production values for SPIRE
+# DO NOT use for Minikube - use infra/dev/minikube/values-minikube.yaml instead
+# Security: High, Resources: Production-sized, Service: ClusterIP
+
+global:
+  spire:
+    trustDomain: example.org
+    clusterName: production
+    bundleTTL: 24h
+    svidTTL: 12h
+
+spire-server:
+  enabled: true
+
+  image:
+    registry: ghcr.io
+    repository: spiffe/spire-server
+    tag: 1.9.0
+    pullPolicy: IfNotPresent
+
+  # Production resource limits
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+
+  # Security - production hardened
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+    capabilities:
+      drop:
+        - ALL
+    readOnlyRootFilesystem: true
+    allowPrivilegeEscalation: false
+
+  # Service - ClusterIP only (no external access)
+  service:
+    type: ClusterIP
+    port: 8081
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "8081"
+
+  # Production persistence
+  persistence:
+    enabled: true
+    storageClass: fast-ssd
+    size: 10Gi
+    accessMode: ReadWriteOnce
+
+  # High availability
+  replicaCount: 3
+
+  # Production affinity
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - spire-server
+          topologyKey: kubernetes.io/hostname
+
+  # Production tolerations
+  tolerations:
+    - key: "spire"
+      operator: "Equal"
+      value: "true"
+      effect: "NoSchedule"
+
+  # Node selector for dedicated nodes
+  nodeSelector:
+    workload-type: spire
+
+  # Production logging
+  config:
+    server:
+      log_level: "INFO"
+      ca_ttl: "720h"  # 30 days
+      default_x509_svid_ttl: "12h"
+
+spire-agent:
+  enabled: true
+
+  image:
+    registry: ghcr.io
+    repository: spiffe/spire-agent
+    tag: 1.9.0
+    pullPolicy: IfNotPresent
+
+  # Production resource limits
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+  # Security hardened
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+    capabilities:
+      drop:
+        - ALL
+    readOnlyRootFilesystem: true
+    allowPrivilegeEscalation: false
+
+  # Production logging
+  config:
+    agent:
+      log_level: "INFO"
+      insecure_bootstrap: false
+
+  # Node selector
+  nodeSelector: {}
+
+  tolerations: []
