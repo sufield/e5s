@@ -774,7 +774,3 @@ func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload port
 - `docs/TESTING.md` - Test strategies for validating invariants
 - `docs/CONTROL_PLANE.md` - Registry sealing and control plane invariants
 
-
-
-
-

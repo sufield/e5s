@@ -1,0 +1,64 @@
+# Helmfile for SPIRE dev environment on Minikube
+# This orchestrates SPIRE server and agent deployment
+# Usage: helmfile -e dev apply
+
+repositories:
+  - name: spiffe
+    url: https://spiffe.github.io/helm-charts-hardened/
+
+releases:
+  # SPIRE Server
+  - name: spire-server
+    namespace: spire-system
+    createNamespace: true
+    chart: spiffe/spire-server
+    version: 0.1.0
+    values:
+      - values-minikube.yaml
+      - values-minikube-secrets.yaml
+    wait: true
+    timeout: 300
+    hooks:
+      - events: ["presync"]
+        showlogs: true
+        command: "sh"
+        args:
+          - "-c"
+          - |
+            echo "→ Pre-sync: Checking namespace..."
+            kubectl get namespace spire-system 2>/dev/null || kubectl create namespace spire-system
+            echo "→ Pre-sync: Namespace ready"
+
+  # SPIRE Agent
+  - name: spire-agent
+    namespace: spire-system
+    chart: spiffe/spire-agent
+    version: 0.1.0
+    values:
+      - values-minikube.yaml
+      - values-minikube-secrets.yaml
+    needs:
+      - spire-system/spire-server
+    wait: true
+    timeout: 300
+
+environments:
+  dev:
+    values:
+      - environment: dev
+      - cluster: minikube
+
+helmDefaults:
+  atomic: true
+  cleanupOnFail: true
+  createNamespace: true
+  force: false
+  timeout: 600
+  verify: false
+  wait: true
+  waitForJobs: true
+
+# Diff configuration
+diff:
+  context: 3
+  includeTests: false
