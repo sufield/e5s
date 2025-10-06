@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/pocket/hexagon/spire/internal/domain"
+	"github.com/spiffe/go-spiffe/v2/svid/jwtsvid"
 )
 
 // FetchX509SVID fetches an X.509 SVID from SPIRE and converts it to an IdentityDocument
@@ -30,10 +31,11 @@ func (c *SPIREClient) FetchX509SVID(ctx context.Context) (*domain.IdentityDocume
 	svid := x509Ctx.SVIDs[0]
 
 	// Parse SPIFFE ID to get identity namespace
-	identityNamespace, err := domain.NewIdentityNamespaceFromString(svid.ID.String())
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse SPIFFE ID: %w", err)
-	}
+	// Extract trust domain and path from SPIFFE ID
+	spiffeID := svid.ID
+	trustDomain := domain.NewTrustDomainFromName(spiffeID.TrustDomain().String())
+	path := spiffeID.Path()
+	identityNamespace := domain.NewIdentityNamespaceFromComponents(trustDomain, path)
 
 	// Create identity document
 	return domain.NewIdentityDocumentFromComponents(
@@ -59,8 +61,16 @@ func (c *SPIREClient) FetchJWTSVID(ctx context.Context, audiences []string) (str
 		defer cancel()
 	}
 
+	// Prepare JWT SVID parameters
+	params := jwtsvid.Params{
+		Audience: audiences[0],
+	}
+	if len(audiences) > 1 {
+		params.ExtraAudiences = audiences[1:]
+	}
+
 	// Fetch JWT SVID from SPIRE
-	svid, err := c.client.FetchJWTSVID(ctx, audiences...)
+	svid, err := c.client.FetchJWTSVID(ctx, params)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch JWT SVID: %w", err)
 	}
@@ -84,8 +94,8 @@ func (c *SPIREClient) ValidateJWTSVID(ctx context.Context, token string, audienc
 		return fmt.Errorf("failed to fetch JWT bundles for validation: %w", err)
 	}
 
-	// Parse and validate the JWT SVID
-	_, err = jwtBundles.ParseAndValidate(token, audience)
+	// Parse and validate the JWT SVID using the bundle source
+	_, err = jwtsvid.ParseAndValidate(token, jwtBundles, []string{audience})
 	if err != nil {
 		return fmt.Errorf("JWT SVID validation failed: %w", err)
 	}

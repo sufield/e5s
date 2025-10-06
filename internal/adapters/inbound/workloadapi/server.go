@@ -21,10 +21,10 @@ import (
 // Architecture note: This server extracts calling process credentials
 // and delegates to IdentityClientService for SVID issuance
 type Server struct {
-	service      *app.IdentityClientService
-	socketPath   string
-	httpServer   *http.Server
-	listener     net.Listener
+	service    *app.IdentityClientService
+	socketPath string
+	httpServer *http.Server
+	listener   net.Listener
 }
 
 // NewServer creates a new Workload API server
@@ -113,9 +113,9 @@ func (s *Server) handleFetchX509SVID(w http.ResponseWriter, r *http.Request) {
 
 	// Serialize and return identity document
 	response := &X509SVIDResponse{
-		SPIFFEID:    identity.IdentityNamespace.String(),
-		X509SVID:    formatCertificate(identity.IdentityDocument),
-		ExpiresAt:   identity.IdentityDocument.ExpiresAt().Unix(),
+		SPIFFEID:  identity.IdentityNamespace.String(),
+		X509SVID:  formatCertificate(identity.IdentityDocument),
+		ExpiresAt: identity.IdentityDocument.ExpiresAt().Unix(),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -192,9 +192,9 @@ func extractCallerCredentials(conn net.Conn) (*syscall.Ucred, error) {
 
 // X509SVIDResponse is the response format for X.509 SVID requests
 type X509SVIDResponse struct {
-	SPIFFEID    string `json:"spiffe_id"`
-	X509SVID    string `json:"x509_svid"`
-	ExpiresAt   int64  `json:"expires_at"`
+	SPIFFEID  string `json:"spiffe_id"`
+	X509SVID  string `json:"x509_svid"`
+	ExpiresAt int64  `json:"expires_at"`
 }
 
 // formatCertificate formats a certificate for response
@@ -207,4 +207,5 @@ func formatCertificate(doc *domain.IdentityDocument) string {
 		doc.IdentityNamespace().String(),
 		doc.ExpiresAt().Format("2006-01-02 15:04:05"))
 }
+
 var _ ports.WorkloadAPIServer = (*Server)(nil)

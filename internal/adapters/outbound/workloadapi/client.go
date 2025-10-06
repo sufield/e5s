@@ -1,11 +1,11 @@
 package workloadapi
 
 import (
-	"github.com/pocket/hexagon/spire/internal/ports"
 	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"github.com/pocket/hexagon/spire/internal/ports"
 	"io"
 	"net"
 	"net/http"

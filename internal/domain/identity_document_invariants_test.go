@@ -83,9 +83,9 @@ func TestIdentityDocument_Invariant_IsValidEqualsNotExpired(t *testing.T) {
 		name      string
 		expiresAt time.Time
 	}{
-		{"valid document", time.Unix(2000000000, 0)}, // May 18, 2033 - future
-		{"expired document", time.Unix(1000000000, 0)}, // January 9, 2001 - past
-		{"just expired", time.Unix(1500000000, 0)}, // July 14, 2017 - past
+		{"valid document", time.Unix(2000000000, 0)},     // May 18, 2033 - future
+		{"expired document", time.Unix(1000000000, 0)},   // January 9, 2001 - past
+		{"just expired", time.Unix(1500000000, 0)},       // July 14, 2017 - past
 		{"expires far future", time.Unix(2500000000, 0)}, // March 3, 2049 - far future
 	}
 
@@ -116,8 +116,8 @@ func TestIdentityDocument_Invariant_ExpirationTimeCheck(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name           string
-		expiresAt      time.Time
+		name            string
+		expiresAt       time.Time
 		expectedExpired bool
 	}{
 		{"future expiration", time.Unix(2000000000, 0), false}, // May 18, 2033
@@ -155,8 +155,8 @@ func TestIdentityDocument_Invariant_TypePreservation(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name     string
-		docType  domain.IdentityDocumentType
+		name    string
+		docType domain.IdentityDocumentType
 	}{
 		{"X509 type", domain.IdentityDocumentTypeX509},
 		{"JWT type", domain.IdentityDocumentTypeJWT},

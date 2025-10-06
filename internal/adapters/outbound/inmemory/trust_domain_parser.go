@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/pocket/hexagon/spire/internal/ports"
 	"github.com/pocket/hexagon/spire/internal/domain"
+	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
 // InMemoryTrustDomainParser implements the TrustDomainParser port for in-memory walking skeleton
@@ -44,4 +44,5 @@ func (p *InMemoryTrustDomainParser) FromString(ctx context.Context, name string)
 	// For walking skeleton: simple validation
 	return domain.NewTrustDomainFromName(name), nil
 }
+
 var _ ports.TrustDomainParser = (*InMemoryTrustDomainParser)(nil)

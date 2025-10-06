@@ -150,13 +150,13 @@ func TestRegistry_Invariant_FindBySelectorsValidatesInput(t *testing.T) {
 		expectError bool
 	}{
 		{
-			name: "nil selectors - invalid",
-			selectors: nil,
+			name:        "nil selectors - invalid",
+			selectors:   nil,
 			expectError: true,
 		},
 		{
-			name: "empty selectors - invalid",
-			selectors: domain.NewSelectorSet(),
+			name:        "empty selectors - invalid",
+			selectors:   domain.NewSelectorSet(),
 			expectError: true,
 		},
 		{

@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/pocket/hexagon/spire/internal/ports"
 	"github.com/pocket/hexagon/spire/internal/domain"
+	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
 // InMemoryAgent is an in-memory implementation of SPIRE agent
 type InMemoryAgent struct {
-	identityNamespace      *domain.IdentityNamespace
+	identityNamespace   *domain.IdentityNamespace
 	trustDomain         *domain.TrustDomain
 	server              *InMemoryServer
 	registry            ports.IdentityMapperRegistry
@@ -37,7 +37,7 @@ func NewInMemoryAgent(
 	}
 
 	agent := &InMemoryAgent{
-		identityNamespace:      identityNamespace,
+		identityNamespace:   identityNamespace,
 		trustDomain:         server.GetTrustDomain(),
 		server:              server,
 		registry:            registry,
@@ -66,9 +66,9 @@ func (a *InMemoryAgent) initializeAgentIdentity(ctx context.Context) error {
 	}
 
 	a.agentIdentity = &ports.Identity{
-		IdentityNamespace:   a.identityNamespace,
-		Name:             "agent",
-		IdentityDocument: agentDoc,
+		IdentityNamespace: a.identityNamespace,
+		Name:              "agent",
+		IdentityDocument:  agentDoc,
 	}
 
 	return nil
@@ -119,9 +119,9 @@ func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload port
 
 	// Step 5: Return identity with document
 	return &ports.Identity{
-		IdentityNamespace:   mapper.IdentityNamespace(),
-		Name:             extractNameFromIdentityNamespace(mapper.IdentityNamespace()),
-		IdentityDocument: doc,
+		IdentityNamespace: mapper.IdentityNamespace(),
+		Name:              extractNameFromIdentityNamespace(mapper.IdentityNamespace()),
+		IdentityDocument:  doc,
 	}, nil
 }
 
@@ -135,4 +135,5 @@ func extractNameFromIdentityNamespace(id *domain.IdentityNamespace) string {
 	// Remove leading slash and return
 	return path[1:]
 }
+
 var _ ports.Agent = (*InMemoryAgent)(nil)

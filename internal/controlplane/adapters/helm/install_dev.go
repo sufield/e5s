@@ -14,13 +14,13 @@ import (
 
 // Installer provides Helm installation functionality for dev environments
 type Installer struct {
-	helmPath      string
-	helmfilePath  string
-	kubectlPath   string
-	infraDir      string
-	timeout       time.Duration
-	dryRun        bool
-	debug         bool
+	helmPath     string
+	helmfilePath string
+	kubectlPath  string
+	infraDir     string
+	timeout      time.Duration
+	dryRun       bool
+	debug        bool
 }
 
 // NewInstaller creates a new Helm installer

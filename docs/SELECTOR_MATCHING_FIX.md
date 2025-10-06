@@ -103,8 +103,8 @@ This is **AND logic**:
 - **Enforces strong attestation as intended by SPIRE**
 
 ### Documentation Updated
-- `docs/DOMAIN.md` - Added AND semantics explanation with examples
-- `docs/REGISTRATION_ENTRY_VERIFICATION.md` - Updated authorization logic documentation
+- [DOMAIN.md](DOMAIN.md) - Added AND semantics explanation with examples
+- [REGISTRATION_ENTRY_VERIFICATION.md](REGISTRATION_ENTRY_VERIFICATION.md) - Updated authorization logic documentation
 
 ## Testing
 

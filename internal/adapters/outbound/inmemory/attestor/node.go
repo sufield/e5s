@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/pocket/hexagon/spire/internal/ports"
 	"github.com/pocket/hexagon/spire/internal/domain"
+	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
 // InMemoryNodeAttestor is an in-memory implementation of node attestation

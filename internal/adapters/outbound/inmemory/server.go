@@ -11,17 +11,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pocket/hexagon/spire/internal/ports"
 	"github.com/pocket/hexagon/spire/internal/domain"
+	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
 // InMemoryServer is an in-memory implementation of SPIRE server
 type InMemoryServer struct {
-	trustDomain          *domain.TrustDomain
-	caCert               *x509.Certificate
-	caKey                *rsa.PrivateKey
-	certificateProvider  ports.IdentityDocumentProvider
-	mu                   sync.RWMutex
+	trustDomain         *domain.TrustDomain
+	caCert              *x509.Certificate
+	caKey               *rsa.PrivateKey
+	certificateProvider ports.IdentityDocumentProvider
+	mu                  sync.RWMutex
 }
 
 // NewInMemoryServer creates a new in-memory SPIRE server
@@ -112,4 +112,5 @@ func generateCA(trustDomain string) (*x509.Certificate, *rsa.PrivateKey, error) 
 
 	return cert, privateKey, nil
 }
+
 var _ ports.Server = (*InMemoryServer)(nil)

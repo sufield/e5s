@@ -55,9 +55,9 @@ func TestIdentityMapper_Invariant_SelectorsNeverNilOrEmpty(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name         string
+		name           string
 		setupSelectors func() *domain.SelectorSet
-		expectError  bool
+		expectError    bool
 	}{
 		{
 			name: "valid selectors",
@@ -133,39 +133,39 @@ func TestIdentityMapper_Invariant_MatchesSelectorsANDLogic(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
-		name            string
+		name              string
 		workloadSelectors []string
-		shouldMatch     bool
+		shouldMatch       bool
 	}{
 		{
-			name:            "has both required selectors - matches",
+			name:              "has both required selectors - matches",
 			workloadSelectors: []string{"unix:uid:1000", "k8s:namespace:prod"},
-			shouldMatch:     true,
+			shouldMatch:       true,
 		},
 		{
-			name:            "has both + extra selectors - matches",
+			name:              "has both + extra selectors - matches",
 			workloadSelectors: []string{"unix:uid:1000", "k8s:namespace:prod", "k8s:pod:web"},
-			shouldMatch:     true,
+			shouldMatch:       true,
 		},
 		{
-			name:            "missing one required selector - no match",
+			name:              "missing one required selector - no match",
 			workloadSelectors: []string{"unix:uid:1000"}, // Missing k8s:namespace:prod
-			shouldMatch:     false,
+			shouldMatch:       false,
 		},
 		{
-			name:            "missing other required selector - no match",
+			name:              "missing other required selector - no match",
 			workloadSelectors: []string{"k8s:namespace:prod"}, // Missing unix:uid:1000
-			shouldMatch:     false,
+			shouldMatch:       false,
 		},
 		{
-			name:            "has neither required selector - no match",
+			name:              "has neither required selector - no match",
 			workloadSelectors: []string{"unix:gid:2000"},
-			shouldMatch:     false,
+			shouldMatch:       false,
 		},
 		{
-			name:            "empty selectors - no match",
+			name:              "empty selectors - no match",
 			workloadSelectors: []string{},
-			shouldMatch:     false,
+			shouldMatch:       false,
 		},
 	}
 

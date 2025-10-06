@@ -6,8 +6,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/pocket/hexagon/spire/internal/ports"
 	"github.com/pocket/hexagon/spire/internal/domain"
+	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
 // InMemoryIdentityNamespaceParser implements the IdentityNamespaceParser port for in-memory walking skeleton
@@ -74,4 +74,5 @@ func (p *InMemoryIdentityNamespaceParser) ParseFromPath(ctx context.Context, tru
 	// Create domain IdentityNamespace from components
 	return domain.NewIdentityNamespaceFromComponents(trustDomain, path), nil
 }
+
 var _ ports.IdentityNamespaceParser = (*InMemoryIdentityNamespaceParser)(nil)

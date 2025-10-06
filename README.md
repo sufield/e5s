@@ -343,7 +343,7 @@ type IdentityMapper struct {
 
 ### Seeding the Registry
 
-Registration is **configuration**, not runtime behavior. Workload mappings are seeded at agent startup:
+Registration is configuration, not runtime behavior. Workload mappings are seeded at agent startup:
 
 **Location**: `internal/adapters/outbound/inmemory/config.go`
 
@@ -369,7 +369,7 @@ Workloads: []ports.WorkloadEntry{
 4. Seal registry (prevent mutations)
 5. Start Workload API server
 
-After sealing, registry is **immutable** - read-only at runtime.
+After sealing, registry is immutable - read-only at runtime.
 
 ## Design Decisions
 
@@ -391,7 +391,7 @@ Server extracts credentials from Unix socket connection, not from client-provide
 
 ### 3. Immutable Registry
 
-Registration is **seeded data**, not runtime mutations:
+Registration is seeded data, not runtime mutations:
 - ✅ Seed at startup (composition root)
 - ✅ Seal before serving requests
 - ✅ Read-only at runtime
@@ -413,7 +413,7 @@ See `docs/SDK_MIGRATION.md` for complete guide.
 2. Create SDK adapter implementing `IdentityClient`
 3. Wire SDK client in workload command
 4. Deploy real SPIRE server + agents
-5. **No changes to domain or application layer**
+5. No changes to domain or application layer
 
 ```go
 // SDK adapter (future)
@@ -484,9 +484,10 @@ func TestWorkloadAttestation(t *testing.T) {
 
 ### Identifying and Expressing Invariants for Better Code Quality
 
-Invariants are core properties or conditions in your code that must **always hold true** at specific points (e.g., after a method call or in a struct's state). Examples: In a bank account, "balance >= 0" is an invariant; in your auth system, "IdentityDocument.IsValid() == true" before exchange. Expressing them explicitly (via code, docs, or tests) catches bugs early, improves maintainability, and enforces design intent—directly boosting quality.
+Invariants are properties in your code that must always hold true at specific points (e.g., after a method call or in a struct's state). Examples: In a bank account, "balance >= 0" is an invariant; in your auth system, "IdentityDocument.IsValid() == true" before exchange. Expressing them explicitly (via code, docs, or tests) catches bugs early, improves maintainability, and enforces design intent—directly boosting quality.
 
 #### Step 1: Identifying Invariants
+
 Scan your code for:
 - **State Assumptions**: What must be true post-operation? (e.g., in `ExchangeMessage`, post-validation: `msg.From.IdentityDocument != nil`).
 - **Pre/Post Conditions**: Entry (pre): "from/to namespaces non-nil"; Exit (post): "msg created only if valid".
@@ -499,6 +500,7 @@ Scan your code for:
 Focus on high-impact areas like your auth flow: `IdentityService`, `InMemoryAgent.FetchIdentityDocument`.
 
 #### Step 2: Expressing Invariants
+
 Don't just identify—make them **executable**:
 - **Documentation**: Javadoc-style comments (e.g., `// Invariant: Balance >= 0 after Deposit/Withdraw`).
 - **Runtime Assertions**: Enforce dynamically (cheap in debug; strip in prod).
@@ -514,7 +516,7 @@ Don't just identify—make them **executable**:
 
 #### Step 3: Write Tests for Invariants
 
-**write tests for invariants**. They're a natural fit for unit/integration tests, verifying the "always true" guarantee without runtime overhead. But combine them with **runtime checks** (e.g., assertions) for enforcement. Below, I'll break it down: identification, expression, testing strategy, and Go-specific tips.
+**write tests for invariants**. They're a natural fit for unit/integration tests, verifying the "always true" guarantee without runtime overhead. But combine them with runtime checks (e.g., assertions) for enforcement. Below, I'll break it down: identification, expression, testing strategy, and Go-specific tips.
 
 tests are the best way to *verify* invariants hold under varied inputs, ensuring quality without runtime cost. They're "executable specs" that fail on regressions. Focus on:
 - **Unit Tests**: Isolate core (mock ports); assert invariant post-call.
@@ -599,4 +601,4 @@ func TestIdentityService_Property_ValidDocsAlwaysProduceValidMsg(t *testing.T) {
 - **Evolve**: Once core is solid, add integration (wire in-memory factory, test full flow).
 - **Tools**: `go test -race` for concurrency invariants; `golangci-lint` for static invariant hints.
 
-This approach ensures invariants are not just identified but *enforced*, improving quality iteratively. 
+This approach ensures invariants are not just identified but enforced, improving quality iteratively. 

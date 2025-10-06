@@ -1,7 +1,7 @@
 .PHONY: test test-verbose test-race test-coverage test-coverage-html test-short \
 	clean help prereqs check-prereqs build prod-build dev-build test-prod-build \
 	helm-lint helm-template minikube-up minikube-down minikube-status \
-	minikube-delete ci-test ci-build
+	minikube-delete ci-test ci-build verify verify-spire test-integration test-prod-binary
 
 # Default target
 .DEFAULT_GOAL := help
@@ -135,6 +135,29 @@ test-prod-build:
 		echo "  (Binary not built, skipping string check)"; \
 	fi
 	@echo "✓ Production build check passed"
+
+## verify: Run comprehensive verification (alias for verify-spire)
+verify: verify-spire
+
+## verify-spire: Run comprehensive SPIRE adapter verification
+verify-spire:
+	@echo "Running comprehensive SPIRE adapter verification..."
+	@bash scripts/verify-implementation.sh
+
+## register-test-workload: Register test workload in SPIRE (required before test-integration)
+register-test-workload:
+	@bash scripts/register-test-workload.sh
+
+## test-integration: Run integration tests against live SPIRE (requires minikube-up and register-test-workload)
+test-integration:
+	@echo "Running integration tests against SPIRE in Kubernetes..."
+	@echo "Note: This creates a test pod with socket access"
+	@echo "Note: Run 'make register-test-workload' first if tests fail with 'no identity issued'"
+	@bash scripts/run-integration-tests.sh
+
+## test-prod-binary: Test production binary against live SPIRE in Minikube
+test-prod-binary:
+	@bash scripts/test-prod-binary-minikube.sh
 
 ## helm-lint: Lint Helm values files
 helm-lint:

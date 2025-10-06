@@ -1,476 +1,253 @@
 # Testing Strategy
 
-## Overview
+This document explains the different testing layers and what each one verifies.
 
-This document outlines the testing strategy for the hexagonal SPIRE implementation, focusing on **unit tests** for core domain/application logic and **integration tests** for adapters at the early in-memory stage.
+## TL;DR
 
----
+```bash
+# Unit tests (fast, in-memory, no SPIRE needed)
+make test              # or: go test ./...
 
-## Testing Philosophy
+# Full verification (includes coverage, race detection)
+make verify
 
-### Priorities at In-Memory Stage
-
-1. **Unit Tests (80% coverage target)**: Pure domain and application logic with mocked ports
-2. **Integration Tests**: Adapter + core with in-memory implementations as "production-like"
-3. **Contract Tests**: Port interface satisfaction (build-time checks + runtime assertions)
-4. **E2E Tests (Minimal)**: Defer heavy end-to-end testing until real SPIRE adapters
-
-### What NOT to Test
-
-- ❌ **Bootstrap/Control Plane**: `Bootstrap()` is infrastructure, not public API
-- ❌ **Composition Root**: Treat as configuration/wiring, not business logic
-- ❌ **In-Memory Fixtures**: Configuration data is not testable behavior
-
----
-
-## Test Types by Layer
-
-| Test Type          | Focus | What to Test | Implementation | Coverage Goal |
-|--------------------|-------|--------------|----------------|---------------|
-| **Unit Tests** | Core Domain/App | - Pure logic: Auth validation<br>- Error paths: Invalid/expired docs<br>- Domain entities: `IdentityNamespace.Equals`, `SelectorSet.Add` | Mock ports with testify/mock | 80%+ |
-| **Integration Tests** | Adapters + Core | - Adapter-port contracts<br>- Flow: Attest → Match → Issue<br>- Public methods: `CLI.Run`, `Agent.FetchIdentityDocument` | Use in-memory impls | 60%+ |
-| **Contract Tests** | Port Boundaries | - Interface satisfaction (build-time via `var _`)<br>- Mock impls verify core doesn't break | testify/mock for runtime checks | Build-time |
-| **E2E Tests** | Full Wiring | - Happy path: Bootstrap → Auth<br>- Limit to 1-2 scenarios until real adapters | Test full application flow | Minimal |
-
----
-
-## Current Test Coverage
-
-### Unit Tests
-
-#### Domain Layer (`internal/domain/`)
-
-**Files**:
-- `identity_namespace_test.go` - Tests for `IdentityNamespace` value object
-- `selector_test.go` - Tests for `Selector` and `SelectorSet`
-
-**Coverage**:
-```
-identity_namespace.go    - 100% (all methods tested)
-selector.go             - 90%+ (core parsing and set operations)
+# Integration tests (requires live SPIRE in Minikube)
+make minikube-up
+make register-test-workload    # Register test pod in SPIRE
+make test-integration          # All 8 tests pass ✅
 ```
 
-**Test Cases**:
-1. **`IdentityNamespace`**:
-   - ✅ Create from components with various paths
-   - ✅ Equality comparison (same/different trust domains/paths)
-   - ✅ Trust domain membership check
-   - ✅ String representation
-   - ✅ Nil handling
+## Testing Layers
 
-2. **`Selector`**:
-   - ✅ Parse from string (valid/invalid formats)
-   - ✅ Type, Key, Value extraction
-   - ✅ Equality comparison
-   - ✅ Error cases (missing colons, empty fields)
+### 1. Unit Tests (In-Memory) ✅
 
-3. **`SelectorSet`**:
-   - ✅ Add selectors (uniqueness enforcement)
-   - ✅ Contains check
-   - ✅ Multiple selector handling
-   - ✅ Duplicate prevention
+**Command**: `go test ./...` or `make test`
 
-#### Application Layer (`internal/app/`)
+**What it tests**:
+- Domain layer business logic
+- In-memory adapter implementations
+- Application layer with mock backends
+- No external dependencies
 
-**Files**:
-- `service_test.go` - Tests for `IdentityService` (core business logic)
+**What it does NOT test**:
+- ❌ SPIRE production adapters
+- ❌ Live SPIRE connectivity
+- ❌ Actual SVID fetching from SPIRE
 
-**Coverage**:
+**Output**:
 ```
-service.go              - 100% (all validation paths covered)
+ok    github.com/pocket/hexagon/spire/internal/domain           (cached)
+ok    github.com/pocket/hexagon/spire/internal/adapters/outbound/inmemory  1.001s
+?     github.com/pocket/hexagon/spire/internal/adapters/outbound/spire  [no test files]
 ```
 
-**Test Cases**:
-1. **`IdentityService.ExchangeMessage`**:
-   - ✅ Success case with valid identities
-   - ✅ Nil sender namespace
-   - ✅ Nil receiver namespace
-   - ✅ Expired sender document
-   - ✅ Expired receiver document
-   - ✅ Nil sender document
-   - ✅ Nil receiver document
-   - ✅ Empty content (allowed)
-   - ✅ Table-driven tests for all scenarios
+Note the `[no test files]` for the SPIRE adapter - this is expected! Unit tests use in-memory implementations.
 
-**Mocking**:
-- `MockAgent` - Implements `ports.Agent` using testify/mock
-- `MockRegistry` - Implements `ports.IdentityMapperRegistry` using testify/mock
+**Coverage**: ~45.8% (domain + in-memory adapters)
 
 ---
 
-## Integration Tests (TODO)
+### 2. Integration Tests (Live SPIRE) 🚀
 
-### Adapter Tests
+**Command**:
+```bash
+make minikube-up              # Start SPIRE
+make register-test-workload   # Register test pod
+make test-integration         # Run tests
+```
 
-**Target Files** (next phase):
-- `internal/adapters/outbound/inmemory/agent_test.go`
-- `internal/adapters/outbound/inmemory/registry_test.go`
-- `internal/adapters/inbound/cli/cli_test.go`
+**What it tests**:
+- ✅ **Actual SPIRE production adapters**
+- ✅ Live connectivity to SPIRE Agent
+- ✅ Real X.509/JWT SVID fetching
+- ✅ Trust bundle retrieval
+- ✅ Workload attestation
+- ✅ Token validation
 
-**Test Scenarios**:
-1. **`InMemoryAgent`**:
-   - Seed registry, call `FetchIdentityDocument`
-   - Assert returned `IdentityDocument.IsValid() == true`
-   - Test attestation → matching → issuance flow
+**Requirements**:
+- SPIRE running in Minikube (`make minikube-up`)
+- Test workload registered (`make register-test-workload`)
 
-2. **`InMemoryRegistry`**:
-   - Seed with mappers
-   - Seal registry
-   - Find by selectors (matching/non-matching)
-   - Verify immutability after sealing
+**Test file**: `internal/adapters/outbound/spire/integration_test.go`
 
-3. **`CLI`**:
-   - Mock `Application`
-   - Assert `Run()` calls `Service.ExchangeMessage` once
-   - Verify output formatting
+**Tests included** (all passing ✅):
+- `TestSPIREClientConnection` - Basic connectivity
+- `TestFetchX509SVID` - Fetch X.509 identity document
+- `TestFetchX509Bundle` - Fetch CA certificates
+- `TestFetchJWTSVID` - Fetch JWT tokens
+- `TestValidateJWTSVID` - Validate JWT tokens
+- `TestAttestation` - Workload attestation
+- `TestSPIREClientReconnect` - Connection resilience
+- `TestSPIREClientTimeout` - Timeout handling
+
+**Actual output**:
+```bash
+$ make test-integration
+
+=== RUN   TestSPIREClientConnection
+--- PASS: TestSPIREClientConnection (0.00s)
+=== RUN   TestFetchX509SVID
+    integration_test.go:69: Fetched SVID for identity: spiffe://example.org/test/integration-test
+    integration_test.go:70: Certificate expires: 2025-10-06T21:48:38Z
+--- PASS: TestFetchX509SVID (0.01s)
+=== RUN   TestFetchX509Bundle
+    integration_test.go:90: CA 1: example.org (expires: 2025-10-07T18:40:19Z)
+--- PASS: TestFetchX509Bundle (0.00s)
+=== RUN   TestFetchJWTSVID
+    integration_test.go:109: Fetched JWT SVID (length: 658 bytes)
+--- PASS: TestFetchJWTSVID (0.00s)
+=== RUN   TestValidateJWTSVID
+--- PASS: TestValidateJWTSVID (0.01s)
+=== RUN   TestAttestation
+    integration_test.go:154: Attestation selectors for PID 32351:
+    integration_test.go:156:   - workload:spiffe_id:spiffe://example.org/test/integration-test
+--- PASS: TestAttestation (0.00s)
+=== RUN   TestSPIREClientReconnect
+--- PASS: TestSPIREClientReconnect (0.00s)
+=== RUN   TestSPIREClientTimeout
+--- PASS: TestSPIREClientTimeout (0.00s)
+PASS
+ok  	github.com/pocket/hexagon/spire/internal/adapters/outbound/spire	0.033s
+
+✅ Integration tests passed!
+```
 
 ---
 
-## Contract Tests (Already Implemented)
+### 3. Comprehensive Verification
 
-All port implementations have compile-time checks:
+**Command**: `make verify`
 
+**What it does**:
+- Builds production and dev binaries
+- Verifies binary separation (prod excludes dev code)
+- Runs unit tests with coverage
+- Runs race detector
+- Checks code formatting
+- Runs go vet
+- Verifies dependencies
+- Checks file structure
+
+**Output**: See [VERIFICATION.md](docs/VERIFICATION.md) for details
+
+---
+
+## Test Matrix
+
+| Test Type | Command | SPIRE Required? | Tests What | Speed | Coverage |
+|-----------|---------|-----------------|------------|-------|----------|
+| **Unit** | `go test ./...` | No | In-memory adapters | Fast (~2s) | 45.8% |
+| **Integration** | `make test-integration` | Yes | SPIRE adapters | Medium (~0.5s) | SPIRE adapters |
+| **Verification** | `make verify` | No | Everything + quality | Slow (~30s) | Full |
+
+---
+
+## When to Run Each Test
+
+### During Development
+```bash
+# Quick feedback loop
+go test ./internal/domain/...           # Test specific package
+go test -run TestSpecificTest ./...     # Test specific function
+```
+
+### Before Committing
+```bash
+make verify                              # Full verification
+```
+
+### Before Deploying
+```bash
+make verify                              # Verify everything
+make minikube-up                         # Start SPIRE
+make test-integration                    # Test against live SPIRE
+```
+
+### In CI/CD
+```bash
+# Unit tests (always)
+go test -race -cover ./...
+
+# Integration tests (if SPIRE available)
+if [ "$SPIRE_AVAILABLE" = "true" ]; then
+  make test-integration
+fi
+```
+
+---
+
+## Understanding Test Output
+
+### Unit Tests (In-Memory)
+```
+?     github.com/pocket/hexagon/spire/internal/adapters/outbound/spire  [no test files]
+```
+**This is EXPECTED!** The SPIRE adapter has no unit tests because it requires live SPIRE.
+
+### Integration Tests (Live SPIRE)
+```
+--- PASS: TestFetchX509SVID (0.12s)
+    integration_test.go:68: Fetched SVID for identity: spiffe://example.org/agent
+```
+**This confirms** the SPIRE adapter works with real SPIRE infrastructure!
+
+---
+
+## Troubleshooting
+
+### "no test files" for SPIRE adapter
+**This is normal** for unit tests. The SPIRE adapter only has integration tests (with `-tags=integration`).
+
+### Integration tests fail with "connection refused"
+```bash
+# Ensure SPIRE is running
+kubectl get pods -n spire-system
+
+# Check agent socket exists
+kubectl exec -n spire-system spire-agent-xxx -- ls -la /tmp/spire-agent/public/api.sock
+```
+
+### "Failed to fetch X.509 SVID"
+```bash
+# Check agent logs
+kubectl logs -n spire-system spire-agent-xxx
+
+# Verify workload registration
+kubectl exec -n spire-system spire-server-0 -- \
+  spire-server entry show
+```
+
+---
+
+## Adding New Tests
+
+### Unit Test (In-Memory)
 ```go
-// Domain layer
-var _ ports.Service = (*IdentityService)(nil)
-
-// Adapter layer
-var _ ports.Agent = (*InMemoryAgent)(nil)
-var _ ports.Server = (*InMemoryServer)(nil)
-var _ ports.IdentityMapperRegistry = (*InMemoryRegistry)(nil)
-var _ ports.AdapterFactory = (*InMemoryAdapterFactory)(nil)
-var _ ports.CLI = (*CLI)(nil)
-var _ ports.WorkloadAPIServer = (*Server)(nil)
-var _ ports.WorkloadAPIClient = (*Client)(nil)
-```
-
-**Benefits**:
-- ✅ Catch interface mismatches at build time
-- ✅ Enforce hexagonal inversion of dependency
-- ✅ No runtime overhead
-- ✅ Refactor-safe (breaks build if port signature changes)
-
----
-
-## Running Tests
-
-### Run All Unit Tests
-
-```bash
-# Run with verbose output
-go test -v ./internal/domain/... ./internal/app/...
-
-# Check coverage
-go test -cover ./internal/domain/... ./internal/app/...
-
-# Generate coverage report
-go test -coverprofile=coverage.out ./internal/domain/... ./internal/app/...
-go tool cover -html=coverage.out -o coverage.html
-```
-
-### Run Specific Test
-
-```bash
-# Run domain tests only
-go test -v ./internal/domain/...
-
-# Run specific test function
-go test -v ./internal/app -run TestIdentityService_ExchangeMessage_Success
-
-# Run table-driven test subset
-go test -v ./internal/domain -run TestParseSelector/valid
-```
-
-### Coverage Goals
-
-```bash
-# Aim for 80%+ on core/domain
-go test -cover ./internal/domain/... | grep coverage
-
-# Aim for 80%+ on app/services
-go test -cover ./internal/app/... | grep coverage
-```
-
----
-
-## Testing Tools
-
-### Dependencies
-
-```bash
-# Install testify for assertions and mocking
-go get github.com/stretchr/testify
-```
-
-### Testify Features Used
-
-1. **Assertions** (`assert`/`require`):
-   ```go
-   assert.Equal(t, expected, actual)
-   require.NoError(t, err) // Fails fast if error
-   assert.True(t, condition)
-   assert.Contains(t, str, substring)
-   ```
-
-2. **Mocking** (`mock`):
-   ```go
-   type MockAgent struct {
-       mock.Mock
-   }
-
-   func (m *MockAgent) GetIdentity(ctx context.Context) (*ports.Identity, error) {
-       args := m.Called(ctx)
-       return args.Get(0).(*ports.Identity), args.Error(1)
-   }
-   ```
-
-3. **Table-Driven Tests**:
-   ```go
-   tests := []struct {
-       name    string
-       input   string
-       wantErr bool
-   }{
-       {name: "valid", input: "unix:uid:1000", wantErr: false},
-       {name: "invalid", input: "bad", wantErr: true},
-   }
-
-   for _, tt := range tests {
-       t.Run(tt.name, func(t *testing.T) {
-           // Test logic
-       })
-   }
-   ```
-
----
-
-## Test Organization
-
-### File Naming Convention
-
-```
-internal/
-├── domain/
-│   ├── identity_namespace.go
-│   ├── identity_namespace_test.go  ← Unit tests for IdentityNamespace
-│   ├── selector.go
-│   └── selector_test.go            ← Unit tests for Selector/SelectorSet
-├── app/
-│   ├── service.go
-│   └── service_test.go             ← Unit tests for IdentityService
-└── adapters/
-    └── outbound/inmemory/
-        ├── agent.go
-        └── agent_test.go           ← Integration tests (TODO)
-```
-
-### Test Package Naming
-
-- **Unit tests**: Use `package <pkg>_test` for black-box testing (tests external API only)
-- **Integration tests**: Use `package <pkg>` for white-box testing (can access internal methods)
-
-**Example**:
-```go
-// internal/domain/selector_test.go
-package domain_test  // Black-box: tests public API only
-
-import (
-    "testing"
-    "github.com/pocket/hexagon/spire/internal/domain"
-)
-```
-
----
-
-## Test Patterns
-
-### 1. Table-Driven Tests
-
-**Use for**: Multiple scenarios with similar structure (selectors, identity namespaces)
-
-```go
-func TestParseSelector(t *testing.T) {
-    tests := []struct {
-        name      string
-        input     string
-        wantType  domain.SelectorType
-        wantKey   string
-        wantValue string
-        wantErr   bool
-    }{
-        {
-            name:      "valid unix uid selector",
-            input:     "unix:uid:1000",
-            wantType:  domain.SelectorType("unix"),
-            wantKey:   "uid",
-            wantValue: "1000",
-            wantErr:   false,
-        },
-        // More test cases...
-    }
-
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            selector, err := domain.ParseSelectorFromString(tt.input)
-            if tt.wantErr {
-                assert.Error(t, err)
-            } else {
-                require.NoError(t, err)
-                assert.Equal(t, tt.wantType, selector.Type())
-            }
-        })
-    }
+// internal/domain/example_test.go
+func TestExample(t *testing.T) {
+    // Test domain logic with no external dependencies
 }
 ```
 
-### 2. Mock-Based Unit Tests
-
-**Use for**: Testing core logic with mocked ports
-
+### Integration Test (Live SPIRE)
 ```go
-func TestIdentityService_ExchangeMessage_Success(t *testing.T) {
-    // Arrange
-    mockAgent := new(MockAgent)
-    mockRegistry := new(MockRegistry)
-    service := app.NewIdentityService(mockAgent, mockRegistry)
+//go:build integration
 
-    fromID := createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(1*time.Hour))
-    toID := createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(1*time.Hour))
-
-    // Act
-    msg, err := service.ExchangeMessage(ctx, *fromID, *toID, "Hello")
-
-    // Assert
+// internal/adapters/outbound/spire/example_test.go
+func TestExample(t *testing.T) {
+    client, err := spire.NewSPIREClient(ctx, config)
     require.NoError(t, err)
-    assert.Equal(t, "Hello", msg.Content)
-    mockAgent.AssertExpectations(t)
-}
-```
-
-### 3. Helper Functions
-
-**Use for**: Reducing test boilerplate
-
-```go
-// Helper function to create valid identity for testing
-func createValidIdentity(t *testing.T, spiffeID string, expiresAt time.Time) *ports.Identity {
-    t.Helper() // Marks this as a helper for better error reporting
-    // ...creation logic...
-}
-
-// Helper to parse selector or fail test
-func mustParseSelector(t *testing.T, s string) *domain.Selector {
-    t.Helper()
-    sel, err := domain.ParseSelectorFromString(s)
-    require.NoError(t, err)
-    return sel
+    // Test against real SPIRE
 }
 ```
 
 ---
 
-## Evolution Strategy
+## Summary
 
-### Phase 1: In-Memory (Current)
+- **`go test ./...`** = Fast unit tests with in-memory adapters (NO live SPIRE)
+- **`make test-integration`** = Integration tests with live SPIRE (YES live SPIRE)
+- **`make verify`** = Comprehensive verification (builds, tests, quality checks)
 
-- ✅ Unit tests for domain entities
-- ✅ Unit tests for application services
-- ⏳ Integration tests for in-memory adapters
-- ⏳ Contract tests for port interfaces
-
-### Phase 2: Real SPIRE Integration
-
-- Integration tests comparing in-memory vs. real SPIRE
-- E2E tests with full SPIRE deployment
-- Performance/load tests
-- Contract tests with go-spiffe SDK
-
-### Phase 3: Production
-
-- Smoke tests in CI/CD
-- Canary deployment tests
-- Chaos/failure injection tests
-- Security/penetration tests
-
----
-
-## Best Practices
-
-### DO
-
-- ✅ Test **public API behavior**, not internal implementation
-- ✅ Use **table-driven tests** for multiple similar scenarios
-- ✅ Mock **ports** in unit tests, use **real in-memory adapters** in integration tests
-- ✅ Write **descriptive test names** (`TestX_Scenario_ExpectedBehavior`)
-- ✅ Use **`t.Helper()`** in test utility functions
-- ✅ Assert **specific error messages** when testing error paths
-- ✅ Test **edge cases**: nil, empty, expired, invalid inputs
-
-### DON'T
-
-- ❌ Test **infrastructure code** (Bootstrap, composition root)
-- ❌ Test **configuration loading** (fixtures are data, not behavior)
-- ❌ Mock **domain entities** (use real instances)
-- ❌ Write **brittle tests** tied to implementation details
-- ❌ Skip **error cases** (they're as important as happy paths)
-- ❌ Use **magic values** (define constants or use descriptive variables)
-- ❌ Leave **failing tests** commented out
-
----
-
-## Current Test Summary
-
-### ✅ Implemented
-
-#### Unit Tests (Existing)
-
-| Package | File | Tests | Coverage |
-|---------|------|-------|----------|
-| `internal/domain` | `identity_namespace_test.go` | 6 test functions, 22 subtests | 100% |
-| `internal/domain` | `selector_test.go` | 4 test functions, 15 subtests | 90%+ |
-| `internal/app` | `service_test.go` | 10 test functions, 14 subtests | 100% |
-
-**Subtotal**: 20 test functions, 51+ test cases
-
-#### Invariant Tests (New)
-
-| Package | File | Tests | Focus |
-|---------|------|-------|-------|
-| `internal/domain` | `trust_domain_invariants_test.go` | 6 test functions | Name non-empty, Equals properties, nil safety |
-| `internal/domain` | `identity_namespace_invariants_test.go` | 8 test functions | TrustDomain non-nil, path defaults, URI format, Equals properties |
-| `internal/domain` | `selector_invariants_test.go` | 11 test functions | Key/value non-empty, formatted matches, parse validation, set semantics |
-| `internal/domain` | `identity_document_invariants_test.go` | 6 test functions | Namespace non-nil, expiration monotonicity, IsValid==!IsExpired, immutability |
-| `internal/domain` | `identity_mapper_invariants_test.go` | 6 test functions | Namespace/selectors non-nil, AND logic matching, consistency |
-| `internal/app` | `service_invariants_test.go` | 6 test functions | Pre/post conditions, no partial results, data preservation, idempotency |
-| `internal/adapters/outbound/inmemory` | `registry_invariants_test.go` | 7 test functions | Immutability after sealing, no duplicates, read-only ops, AND logic |
-| `internal/adapters/outbound/inmemory` | `server_invariants_test.go` | 6 test functions | TrustDomain/CA non-nil, input validation, namespace matching, read-only getters |
-
-**Subtotal**: 56 test functions, 156+ test cases
-
-#### Combined Coverage
-
-```bash
-go test -cover ./internal/domain/... ./internal/app/... ./internal/adapters/outbound/inmemory/...
-```
-
-- **Domain Layer**: 61.7% coverage (increased from 42.5%)
-- **Application Layer**: 22.0% coverage
-- **Adapter Layer**: 38.5% coverage (new coverage for registry/server)
-
-**Grand Total**: 76 test functions, 207+ test cases across all layers
-
-### ⏳ TODO (Next Phase)
-
-- Integration tests for `InMemoryAgent`
-- Integration tests for `CLI` adapter
-- Integration tests for Workload API server
-- E2E test: Bootstrap → Attest → Exchange
-
----
-
-## References
-
-- [Testify Documentation](https://github.com/stretchr/testify)
-- [Go Testing Best Practices](https://golang.org/doc/tutorial/add-a-test)
-- [Table-Driven Tests in Go](https://dave.cheney.net/2019/05/07/prefer-table-driven-tests)
-- [Hexagonal Architecture Testing](https://alistair.cockburn.us/hexagonal-architecture/)
+Always run `make verify` before committing!
+Run `make test-integration` before deploying!

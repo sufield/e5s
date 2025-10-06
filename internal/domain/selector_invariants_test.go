@@ -121,11 +121,11 @@ func TestSelector_Invariant_ParseRequiresThreeParts(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name        string
-		input       string
-		expectError bool
-		expectedType string
-		expectedKey  string
+		name          string
+		input         string
+		expectError   bool
+		expectedType  string
+		expectedKey   string
 		expectedValue string
 	}{
 		{

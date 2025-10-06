@@ -5,17 +5,17 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/pocket/hexagon/spire/internal/ports"
 	"github.com/pocket/hexagon/spire/internal/domain"
+	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
 // InMemoryRegistry is a read-only registry seeded at startup with identity mappings
 // It implements the ports.IdentityMapperRegistry interface for runtime read operations
 // Seeding is done via internal seed() method called only during bootstrap
 type InMemoryRegistry struct {
-	mu       sync.RWMutex
-	mappers  map[string]*domain.IdentityMapper // identityNamespace.String() → IdentityMapper
-	sealed   bool                               // Prevents modifications after bootstrap
+	mu      sync.RWMutex
+	mappers map[string]*domain.IdentityMapper // identityNamespace.String() → IdentityMapper
+	sealed  bool                              // Prevents modifications after bootstrap
 }
 
 // NewInMemoryRegistry creates a new unsealed in-memory registry

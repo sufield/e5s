@@ -1,8 +1,8 @@
 package inmemory
 
 import (
-	"github.com/pocket/hexagon/spire/internal/ports"
 	"github.com/pocket/hexagon/spire/internal/domain"
+	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
 // Anti-corruption layer: translates between domain types and adapter internal types
@@ -10,8 +10,8 @@ import (
 // domainToIdentity converts domain types to ports.Identity
 func domainToIdentity(identityNamespace *domain.IdentityNamespace, cert *domain.IdentityDocument) *ports.Identity {
 	return &ports.Identity{
-		IdentityNamespace:      identityNamespace,
-		Name:                extractNameFromIdentityNamespace(identityNamespace),
-		IdentityDocument: cert,
+		IdentityNamespace: identityNamespace,
+		Name:              extractNameFromIdentityNamespace(identityNamespace),
+		IdentityDocument:  cert,
 	}
 }

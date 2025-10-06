@@ -653,9 +653,9 @@ func TestAgent_NewInMemoryAgent_ErrorPaths(t *testing.T) {
 	parser := inmemory.NewInMemoryIdentityNamespaceParser()
 
 	tests := []struct {
-		name            string
-		identityURI     string
-		expectError     bool
+		name        string
+		identityURI string
+		expectError bool
 	}{
 		{"invalid URI", "not-a-spiffe-uri", true},
 		{"valid URI", "spiffe://example.org/agent", false},

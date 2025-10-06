@@ -58,4 +58,5 @@ func (p *InMemoryTrustBundleProvider) GetBundleForIdentity(ctx context.Context, 
 
 	return p.GetBundle(ctx, identityNamespace.TrustDomain())
 }
+
 var _ ports.TrustBundleProvider = (*InMemoryTrustBundleProvider)(nil)

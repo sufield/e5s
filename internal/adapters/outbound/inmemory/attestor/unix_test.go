@@ -199,11 +199,11 @@ func TestUnixWorkloadAttestor_Attest_TableDriven(t *testing.T) {
 			expectSelector: "unix:user:nobody",
 		},
 		{
-			name: "different GID than UID",
-			registerUIDs: map[int]string{1000: "unix:user:app"},
-			workload:     ports.ProcessIdentity{UID: 1000, GID: 2000, PID: 100, Path: "/app"},
-			expectError:  false,
-			expectedCount: 3,
+			name:           "different GID than UID",
+			registerUIDs:   map[int]string{1000: "unix:user:app"},
+			workload:       ports.ProcessIdentity{UID: 1000, GID: 2000, PID: 100, Path: "/app"},
+			expectError:    false,
+			expectedCount:  3,
 			expectSelector: "unix:user:app",
 		},
 	}

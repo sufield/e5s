@@ -35,15 +35,28 @@ func (c *SPIREClient) Attest(ctx context.Context, pid int32) (*domain.SelectorSe
 	svid := x509Ctx.SVIDs[0]
 
 	// Build selectors from the SVID
-	selectors := []domain.Selector{
-		domain.NewSelector("spiffe_id", svid.ID.String()),
-		domain.NewSelector("trust_domain", svid.ID.TrustDomain().String()),
+	selectors := []*domain.Selector{}
+
+	spiffeIDSel, err := domain.NewSelector(domain.SelectorTypeWorkload, "spiffe_id", svid.ID.String())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create spiffe_id selector: %w", err)
 	}
+	selectors = append(selectors, spiffeIDSel)
+
+	trustDomainSel, err := domain.NewSelector(domain.SelectorTypeWorkload, "trust_domain", svid.ID.TrustDomain().String())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create trust_domain selector: %w", err)
+	}
+	selectors = append(selectors, trustDomainSel)
 
 	// Add PID selector if provided
 	if pid > 0 {
-		selectors = append(selectors, domain.NewSelector("unix", fmt.Sprintf("pid:%d", pid)))
+		pidSel, err := domain.NewSelector(domain.SelectorTypeWorkload, "pid", fmt.Sprintf("%d", pid))
+		if err != nil {
+			return nil, fmt.Errorf("failed to create pid selector: %w", err)
+		}
+		selectors = append(selectors, pidSel)
 	}
 
-	return domain.NewSelectorSet(selectors), nil
+	return domain.NewSelectorSet(selectors...), nil
 }

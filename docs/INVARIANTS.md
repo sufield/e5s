@@ -771,6 +771,6 @@ func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload port
 - [Go Best Practices: Effective Go](https://go.dev/doc/effective_go) - Constructor validation patterns
 - [Hexagonal Architecture](https://alistair.cockburn.us/hexagonal-architecture/) - Port invariants
 - [SPIFFE Specification](https://github.com/spiffe/spiffe/blob/main/standards/SPIFFE.md) - Trust domain and SPIFFE ID invariants
-- `docs/TESTING.md` - Test strategies for validating invariants
-- `docs/CONTROL_PLANE.md` - Registry sealing and control plane invariants
+- [TESTING.md](TESTING.md) - Test strategies for validating invariants
+- [CONTROL_PLANE.md](CONTROL_PLANE.md) - Registry sealing and control plane invariants
 

@@ -22,7 +22,10 @@ func (c *SPIREClient) FetchX509Bundle(ctx context.Context) ([]*x509.Certificate,
 	}
 
 	// Get bundle for our trust domain
-	bundle := x509Ctx.Bundles.GetX509BundleForTrustDomain(x509Ctx.DefaultSVID().ID.TrustDomain())
+	bundle, err := x509Ctx.Bundles.GetX509BundleForTrustDomain(x509Ctx.DefaultSVID().ID.TrustDomain())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get X.509 bundle for trust domain %s: %w", c.trustDomain, err)
+	}
 	if bundle == nil {
 		return nil, fmt.Errorf("no X.509 bundle found for trust domain: %s", c.trustDomain)
 	}

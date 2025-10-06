@@ -13,23 +13,23 @@ func TestTrustDomain_Invariant_NameNeverEmpty(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name       string
-		inputName  string
+		name           string
+		inputName      string
 		expectNonEmpty bool
 	}{
 		{
-			name:       "valid trust domain name",
-			inputName:  "example.org",
+			name:           "valid trust domain name",
+			inputName:      "example.org",
 			expectNonEmpty: true,
 		},
 		{
-			name:       "valid trust domain with subdomain",
-			inputName:  "prod.example.org",
+			name:           "valid trust domain with subdomain",
+			inputName:      "prod.example.org",
 			expectNonEmpty: true,
 		},
 		{
-			name:       "single character name",
-			inputName:  "x",
+			name:           "single character name",
+			inputName:      "x",
 			expectNonEmpty: true,
 		},
 	}

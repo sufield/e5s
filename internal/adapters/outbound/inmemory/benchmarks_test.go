@@ -37,8 +37,8 @@ func BenchmarkIssueIdentity(b *testing.B) {
 func BenchmarkMatchesSelectors(b *testing.B) {
 	// Setup mapper with varying selector counts
 	benchmarks := []struct {
-		name            string
-		mapperSelCount  int
+		name             string
+		mapperSelCount   int
 		workloadSelCount int
 	}{
 		{"1mapper_1workload", 1, 1},
@@ -85,8 +85,8 @@ func BenchmarkRegistryFindBySelectors(b *testing.B) {
 	ctx := context.Background()
 
 	benchmarks := []struct {
-		name         string
-		mapperCount  int
+		name          string
+		mapperCount   int
 		selectorCount int
 	}{
 		{"10mappers_1sel", 10, 1},
@@ -131,8 +131,8 @@ func BenchmarkRegistryFindBySelectors(b *testing.B) {
 // Should remain O(n) for uniqueness check
 func BenchmarkSelectorSetAdd(b *testing.B) {
 	benchmarks := []struct {
-		name     string
-		setSize  int
+		name    string
+		setSize int
 	}{
 		{"empty_set", 0},
 		{"10_items", 10},

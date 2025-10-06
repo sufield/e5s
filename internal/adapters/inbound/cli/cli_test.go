@@ -280,9 +280,9 @@ func TestCLI_Run_ExpiredIdentityHandling(t *testing.T) {
 	expiredDoc := domain.NewIdentityDocumentFromComponents(
 		expiredNamespace,
 		domain.IdentityDocumentTypeX509,
-		nil, // cert
-		nil, // privateKey
-		nil, // chain
+		nil,                      // cert
+		nil,                      // privateKey
+		nil,                      // chain
 		time.Unix(1000000000, 0), // Expired (Jan 9, 2001)
 	)
 	expiredIdentity := &ports.Identity{

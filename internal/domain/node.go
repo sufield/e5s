@@ -4,16 +4,16 @@ package domain
 // Its identity is verified via node attestation
 type Node struct {
 	identityNamespace *IdentityNamespace
-	selectors      *SelectorSet
-	attested       bool
+	selectors         *SelectorSet
+	attested          bool
 }
 
 // NewNode creates a new node
 func NewNode(identityNamespace *IdentityNamespace) *Node {
 	return &Node{
 		identityNamespace: identityNamespace,
-		selectors:      NewSelectorSet(),
-		attested:       false,
+		selectors:         NewSelectorSet(),
+		attested:          false,
 	}
 }
 

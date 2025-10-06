@@ -23,16 +23,16 @@ func TestExchangeMessage_Invariant_RequiresNonNilNamespaces(t *testing.T) {
 	service := app.NewIdentityService(mockAgent, mockRegistry)
 
 	tests := []struct {
-		name        string
-		from        ports.Identity
-		to          ports.Identity
-		expectError bool
+		name          string
+		from          ports.Identity
+		to            ports.Identity
+		expectError   bool
 		errorContains string
 	}{
 		{
-			name: "both namespaces non-nil - valid",
-			from: *createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(1*time.Hour)),
-			to:   *createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(1*time.Hour)),
+			name:        "both namespaces non-nil - valid",
+			from:        *createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(1*time.Hour)),
+			to:          *createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(1*time.Hour)),
 			expectError: false,
 		},
 		{
@@ -41,8 +41,8 @@ func TestExchangeMessage_Invariant_RequiresNonNilNamespaces(t *testing.T) {
 				IdentityNamespace: nil, // Nil namespace
 				Name:              "client",
 			},
-			to:          *createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(1*time.Hour)),
-			expectError: true,
+			to:            *createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(1*time.Hour)),
+			expectError:   true,
 			errorContains: "sender identity namespace required",
 		},
 		{
@@ -52,7 +52,7 @@ func TestExchangeMessage_Invariant_RequiresNonNilNamespaces(t *testing.T) {
 				IdentityNamespace: nil, // Nil namespace
 				Name:              "server",
 			},
-			expectError: true,
+			expectError:   true,
 			errorContains: "receiver identity namespace required",
 		},
 	}
@@ -88,10 +88,10 @@ func TestExchangeMessage_Invariant_RequiresValidDocuments(t *testing.T) {
 	service := app.NewIdentityService(mockAgent, mockRegistry)
 
 	tests := []struct {
-		name        string
-		from        ports.Identity
-		to          ports.Identity
-		expectError bool
+		name          string
+		from          ports.Identity
+		to            ports.Identity
+		expectError   bool
 		errorContains string
 	}{
 		{
@@ -101,17 +101,17 @@ func TestExchangeMessage_Invariant_RequiresValidDocuments(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name:        "sender document expired - violates invariant",
-			from:        *createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(-1*time.Hour)),
-			to:          *createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(1*time.Hour)),
-			expectError: true,
+			name:          "sender document expired - violates invariant",
+			from:          *createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(-1*time.Hour)),
+			to:            *createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(1*time.Hour)),
+			expectError:   true,
 			errorContains: "sender identity document invalid or expired",
 		},
 		{
-			name:        "receiver document expired - violates invariant",
-			from:        *createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(1*time.Hour)),
-			to:          *createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(-1*time.Hour)),
-			expectError: true,
+			name:          "receiver document expired - violates invariant",
+			from:          *createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(1*time.Hour)),
+			to:            *createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(-1*time.Hour)),
+			expectError:   true,
 			errorContains: "receiver identity document invalid or expired",
 		},
 		{
@@ -122,8 +122,8 @@ func TestExchangeMessage_Invariant_RequiresValidDocuments(t *testing.T) {
 				Name:             "client",
 				IdentityDocument: nil, // Nil document
 			},
-			to:          *createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(1*time.Hour)),
-			expectError: true,
+			to:            *createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(1*time.Hour)),
+			expectError:   true,
 			errorContains: "sender identity document invalid or expired",
 		},
 		{
@@ -135,7 +135,7 @@ func TestExchangeMessage_Invariant_RequiresValidDocuments(t *testing.T) {
 				Name:             "server",
 				IdentityDocument: nil, // Nil document
 			},
-			expectError: true,
+			expectError:   true,
 			errorContains: "receiver identity document invalid or expired",
 		},
 	}
