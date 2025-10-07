@@ -25,7 +25,7 @@ func (c *SPIREClient) FetchX509SVID(ctx context.Context) (*domain.IdentityDocume
 
 	// Get default SVID (first one)
 	if len(x509Ctx.SVIDs) == 0 {
-		return nil, fmt.Errorf("no X.509 SVIDs available")
+		return nil, domain.ErrNoAttestationData
 	}
 
 	svid := x509Ctx.SVIDs[0]

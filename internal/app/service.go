@@ -2,8 +2,8 @@ package app
 
 import (
 	"context"
-	"fmt"
 
+	"github.com/pocket/hexagon/spire/internal/domain"
 	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
@@ -28,18 +28,18 @@ func NewIdentityService(agent ports.Agent, registry ports.IdentityMapperRegistry
 func (s *IdentityService) ExchangeMessage(ctx context.Context, from ports.Identity, to ports.Identity, content string) (*ports.Message, error) {
 	// Core business logic: validate identities
 	if from.IdentityNamespace == nil {
-		return nil, fmt.Errorf("sender identity namespace required")
+		return nil, domain.ErrInvalidIdentityNamespace
 	}
 	if to.IdentityNamespace == nil {
-		return nil, fmt.Errorf("receiver identity namespace required")
+		return nil, domain.ErrInvalidIdentityNamespace
 	}
 
 	// Verify identity documents are valid
 	if from.IdentityDocument == nil || !from.IdentityDocument.IsValid() {
-		return nil, fmt.Errorf("sender identity document invalid or expired")
+		return nil, domain.ErrIdentityDocumentExpired
 	}
 	if to.IdentityDocument == nil || !to.IdentityDocument.IsValid() {
-		return nil, fmt.Errorf("receiver identity document invalid or expired")
+		return nil, domain.ErrIdentityDocumentExpired
 	}
 
 	// Create authenticated message

@@ -42,7 +42,7 @@ func (a *InMemoryNodeAttestor) RegisterNodeSelectors(spiffeID string, selectors 
 // Returns a domain.Node with selectors populated and marked as attested
 func (a *InMemoryNodeAttestor) AttestNode(ctx context.Context, identityNamespace *domain.IdentityNamespace) (*domain.Node, error) {
 	if identityNamespace == nil {
-		return nil, fmt.Errorf("node identity namespace cannot be nil")
+		return nil, domain.ErrInvalidIdentityNamespace
 	}
 
 	// Verify the node belongs to the correct trust domain

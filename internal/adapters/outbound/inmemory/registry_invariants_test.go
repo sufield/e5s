@@ -145,19 +145,19 @@ func TestRegistry_Invariant_FindBySelectorsValidatesInput(t *testing.T) {
 	registry := inmemory.NewInMemoryRegistry()
 
 	tests := []struct {
-		name        string
-		selectors   *domain.SelectorSet
-		expectError bool
+		name      string
+		selectors *domain.SelectorSet
+		wantError bool
 	}{
 		{
-			name:        "nil selectors - invalid",
-			selectors:   nil,
-			expectError: true,
+			name:      "nil selectors - invalid",
+			selectors: nil,
+			wantError: true,
 		},
 		{
-			name:        "empty selectors - invalid",
-			selectors:   domain.NewSelectorSet(),
-			expectError: true,
+			name:      "empty selectors - invalid",
+			selectors: domain.NewSelectorSet(),
+			wantError: true,
 		},
 		{
 			name: "valid selectors",
@@ -167,7 +167,7 @@ func TestRegistry_Invariant_FindBySelectorsValidatesInput(t *testing.T) {
 				set.Add(sel)
 				return set
 			}(),
-			expectError: false, // No error, but might not find (ErrNoMatchingMapper)
+			wantError: false, // No error, but might not find (ErrNoMatchingMapper)
 		},
 	}
 
@@ -179,7 +179,7 @@ func TestRegistry_Invariant_FindBySelectorsValidatesInput(t *testing.T) {
 			_, err := registry.FindBySelectors(ctx, tt.selectors)
 
 			// Assert invariant: validates input
-			if tt.expectError {
+			if tt.wantError {
 				assert.Error(t, err, "Invariant violated: should validate input")
 				assert.ErrorIs(t, err, domain.ErrInvalidSelectors)
 			}
@@ -278,7 +278,7 @@ func TestRegistry_Invariant_ListAllNeverReturnsNilSlice(t *testing.T) {
 	tests := []struct {
 		name          string
 		setupRegistry func() *inmemory.InMemoryRegistry
-		expectError   bool
+		wantError     bool
 		expectNonNil  bool
 	}{
 		{
@@ -295,7 +295,7 @@ func TestRegistry_Invariant_ListAllNeverReturnsNilSlice(t *testing.T) {
 				reg.Seal()
 				return reg
 			},
-			expectError:  false,
+			wantError:    false,
 			expectNonNil: true,
 		},
 		{
@@ -305,7 +305,7 @@ func TestRegistry_Invariant_ListAllNeverReturnsNilSlice(t *testing.T) {
 				reg.Seal()
 				return reg
 			},
-			expectError:  true,
+			wantError:    true,
 			expectNonNil: false,
 		},
 	}
@@ -321,7 +321,7 @@ func TestRegistry_Invariant_ListAllNeverReturnsNilSlice(t *testing.T) {
 			mappers, err := registry.ListAll(ctx)
 
 			// Assert invariant
-			if tt.expectError {
+			if tt.wantError {
 				assert.Error(t, err)
 				assert.ErrorIs(t, err, domain.ErrRegistryEmpty)
 			} else {

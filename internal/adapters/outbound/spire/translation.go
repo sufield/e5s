@@ -11,12 +11,12 @@ import (
 // TranslateX509SVIDToIdentityDocument converts a go-spiffe X509SVID to a domain IdentityDocument
 func TranslateX509SVIDToIdentityDocument(svid *x509svid.SVID) (*domain.IdentityDocument, error) {
 	if svid == nil {
-		return nil, fmt.Errorf("svid cannot be nil")
+		return nil, domain.ErrIdentityDocumentInvalid
 	}
 
 	// Validate certificates exist
 	if len(svid.Certificates) == 0 {
-		return nil, fmt.Errorf("svid has no certificates")
+		return nil, domain.ErrIdentityDocumentInvalid
 	}
 
 	// Convert SPIFFE ID to domain IdentityNamespace
@@ -39,7 +39,7 @@ func TranslateX509SVIDToIdentityDocument(svid *x509svid.SVID) (*domain.IdentityD
 // TranslateSPIFFEIDToIdentityNamespace converts a go-spiffe ID to a domain IdentityNamespace
 func TranslateSPIFFEIDToIdentityNamespace(id spiffeid.ID) (*domain.IdentityNamespace, error) {
 	if id.IsZero() {
-		return nil, fmt.Errorf("SPIFFE ID is zero value")
+		return nil, domain.ErrInvalidIdentityNamespace
 	}
 
 	// Extract trust domain
@@ -58,7 +58,7 @@ func TranslateSPIFFEIDToIdentityNamespace(id spiffeid.ID) (*domain.IdentityNames
 // TranslateTrustDomainToSPIFFEID converts a domain TrustDomain to a go-spiffe TrustDomain
 func TranslateTrustDomainToSPIFFEID(trustDomain *domain.TrustDomain) (spiffeid.TrustDomain, error) {
 	if trustDomain == nil {
-		return spiffeid.TrustDomain{}, fmt.Errorf("trust domain cannot be nil")
+		return spiffeid.TrustDomain{}, domain.ErrInvalidTrustDomain
 	}
 
 	// Parse trust domain string into go-spiffe TrustDomain
@@ -73,7 +73,7 @@ func TranslateTrustDomainToSPIFFEID(trustDomain *domain.TrustDomain) (spiffeid.T
 // TranslateIdentityNamespaceToSPIFFEID converts a domain IdentityNamespace to a go-spiffe ID
 func TranslateIdentityNamespaceToSPIFFEID(identityNamespace *domain.IdentityNamespace) (spiffeid.ID, error) {
 	if identityNamespace == nil {
-		return spiffeid.ID{}, fmt.Errorf("identity namespace cannot be nil")
+		return spiffeid.ID{}, domain.ErrInvalidIdentityNamespace
 	}
 
 	// Parse the full SPIFFE ID string

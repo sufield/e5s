@@ -1,6 +1,6 @@
 # Port-Based mTLS Improvements
 
-This document describes the port-based improvements made to the mTLS implementation, following architecture principles with proper separation of concerns.
+Port-based improvements were made to the mTLS implementation, following proper separation of concerns.
 
 ## What Was Improved
 
@@ -40,6 +40,7 @@ type MTLSServer interface {
 - ✅ Graceful shutdown with context cancellation
 
 **Security Improvements**:
+
 ```go
 HTTP: ports.HTTPServerConfig{
     ReadHeaderTimeout: 10 * time.Second,  // Prevents Slowloris attacks
@@ -51,6 +52,7 @@ HTTP: ports.HTTPServerConfig{
 ### 3. Enhanced Configuration (internal/config/mtls.go)
 
 **New Conversion Methods**:
+
 ```go
 // Convert YAML config to port config
 func (c *MTLSConfig) ToServerConfig() ports.ServerConfig
@@ -62,6 +64,7 @@ This allows seamless integration between YAML configuration and port-based adapt
 ### 4. Improved Example (examples/identityserver-example/)
 
 **Features**:
+
 - Environment-based configuration
 - Proper signal handling (SIGINT, SIGTERM)
 - Graceful shutdown
@@ -117,8 +120,6 @@ server.Start(ctx)
 └─────────────────────────────────────────────────────────┘
 ```
 
-### Benefits
-
 1. **Dependency Inversion**: Application depends on abstractions (ports), not concrete implementations
 2. **Testability**: Easy to mock `ports.MTLSServer` for testing
 3. **Flexibility**: Can swap SPIFFE implementation without changing application code
@@ -140,6 +141,7 @@ server, err := httpapi.NewHTTPServer(
 ```
 
 **Issues**:
+
 - Configuration scattered in function call
 - No separation of configuration from behavior
 - No type safety for configuration
@@ -160,6 +162,7 @@ server, err := identityserver.NewSPIFFEServer(ctx, cfg)
 ```
 
 **Benefits**:
+
 - Configuration is a first-class data structure
 - Type-safe and well-documented
 - Easy to load from files, environment, or other sources

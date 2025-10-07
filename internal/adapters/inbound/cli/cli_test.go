@@ -159,7 +159,7 @@ func TestCLI_Run_TableDriven(t *testing.T) {
 	tests := []struct {
 		name          string
 		setupApp      func(t *testing.T) *app.Application
-		expectError   bool
+		wantError     bool
 		outputPattern string
 	}{
 		{
@@ -172,7 +172,7 @@ func TestCLI_Run_TableDriven(t *testing.T) {
 				require.NoError(t, err)
 				return app
 			},
-			expectError:   false,
+			wantError:     false,
 			outputPattern: "Server workload identity document issued",
 		},
 	}
@@ -200,7 +200,7 @@ func TestCLI_Run_TableDriven(t *testing.T) {
 				w.Close()
 				os.Stdout = old
 
-				if tt.expectError {
+				if tt.wantError {
 					assert.Error(t, err)
 				} else {
 					assert.NoError(t, err)

@@ -18,28 +18,28 @@ func TestSelector_Invariant_KeyValueNeverEmpty(t *testing.T) {
 		selectorType domain.SelectorType
 		key          string
 		value        string
-		expectError  bool
+		wantError    bool
 	}{
 		{
 			name:         "valid selector",
 			selectorType: "unix",
 			key:          "uid",
 			value:        "1000",
-			expectError:  false,
+			wantError:    false,
 		},
 		{
 			name:         "empty key violates invariant",
 			selectorType: "unix",
 			key:          "",
 			value:        "1000",
-			expectError:  true,
+			wantError:    true,
 		},
 		{
 			name:         "empty value violates invariant",
 			selectorType: "unix",
 			key:          "uid",
 			value:        "",
-			expectError:  true,
+			wantError:    true,
 		},
 	}
 
@@ -51,7 +51,7 @@ func TestSelector_Invariant_KeyValueNeverEmpty(t *testing.T) {
 			sel, err := domain.NewSelector(tt.selectorType, tt.key, tt.value)
 
 			// Assert invariant: key and value never empty if no error
-			if tt.expectError {
+			if tt.wantError {
 				assert.Error(t, err, "Expected error for invalid input")
 				assert.Nil(t, sel)
 			} else {
@@ -123,7 +123,7 @@ func TestSelector_Invariant_ParseRequiresThreeParts(t *testing.T) {
 	tests := []struct {
 		name          string
 		input         string
-		expectError   bool
+		wantError     bool
 		expectedType  string
 		expectedKey   string
 		expectedValue string
@@ -131,7 +131,7 @@ func TestSelector_Invariant_ParseRequiresThreeParts(t *testing.T) {
 		{
 			name:          "valid 3 parts",
 			input:         "unix:uid:1000",
-			expectError:   false,
+			wantError:     false,
 			expectedType:  "unix",
 			expectedKey:   "uid",
 			expectedValue: "1000",
@@ -139,25 +139,25 @@ func TestSelector_Invariant_ParseRequiresThreeParts(t *testing.T) {
 		{
 			name:          "valid with colon in value",
 			input:         "custom:key:value:with:colons",
-			expectError:   false,
+			wantError:     false,
 			expectedType:  "custom",
 			expectedKey:   "key",
 			expectedValue: "value:with:colons",
 		},
 		{
-			name:        "invalid 2 parts",
-			input:       "unix:uid",
-			expectError: true,
+			name:      "invalid 2 parts",
+			input:     "unix:uid",
+			wantError: true,
 		},
 		{
-			name:        "invalid 1 part",
-			input:       "unix",
-			expectError: true,
+			name:      "invalid 1 part",
+			input:     "unix",
+			wantError: true,
 		},
 		{
-			name:        "invalid empty",
-			input:       "",
-			expectError: true,
+			name:      "invalid empty",
+			input:     "",
+			wantError: true,
 		},
 	}
 
@@ -169,7 +169,7 @@ func TestSelector_Invariant_ParseRequiresThreeParts(t *testing.T) {
 			sel, err := domain.ParseSelectorFromString(tt.input)
 
 			// Assert invariant: requires at least 3 parts
-			if tt.expectError {
+			if tt.wantError {
 				assert.Error(t, err, "Expected error for invalid format")
 				assert.Nil(t, sel)
 			} else {

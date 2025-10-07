@@ -29,7 +29,7 @@ func (c *SPIREClient) Attest(ctx context.Context, pid int32) (*domain.SelectorSe
 	// Instead, it attests the calling workload automatically
 	// We return selectors from the current SVID
 	if len(x509Ctx.SVIDs) == 0 {
-		return nil, fmt.Errorf("no SVIDs available - workload not attested")
+		return nil, domain.ErrNoAttestationData
 	}
 
 	svid := x509Ctx.SVIDs[0]

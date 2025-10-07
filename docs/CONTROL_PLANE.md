@@ -1,8 +1,6 @@
 # Control Plane: Registration as Seeded Data
 
-## Overview
-
-In this hexagonal, in-memory SPIRE implementation, **registration is NOT a runtime operation**. There is no "Register workload" API or mutation endpoint. Instead:
+In this hexagonal, in-memory SPIRE implementation, registration is NOT a runtime operation. There is no "Register workload" API or mutation endpoint. Instead:
 
 - **Registration = Seeded fixtures** loaded at startup
 - **Runtime path = Attest → Match → Issue**
@@ -14,12 +12,11 @@ This aligns with hexagonal architecture: configuration is infrastructure, not be
 
 ## Control Plane Components and Directories
 
-### 📋 Summary
 This implementation does NOT have a traditional mutable control plane. Instead, it uses **"registration as seeded data"** - an immutable approach where workload registrations are loaded once at startup and sealed.
 
 ---
 
-### 🎯 Core Control Plane Components
+### ore Control Plane Components
 
 #### 1. **Server (Identity Issuance)**
 **Location**: `internal/adapters/outbound/inmemory/server.go`
@@ -30,14 +27,14 @@ This implementation does NOT have a traditional mutable control plane. Instead, 
 - Trust domain management
 - Root of trust (CA certificate) provider
 
-**Key Methods**:
+**Methods**:
 - `IssueIdentity(ctx, identityNamespace)` - Issues SVIDs for attested workloads
 - `GetTrustDomain()` - Returns trust domain
 - `GetCA()` - Returns CA certificate
 
 **Port Interface**: `ports.IdentityServer` (defined in `internal/ports/outbound.go:54-73`)
 
-**Implementation Details**:
+**Implementation**:
 ```go
 // InMemoryServer is an in-memory implementation of SPIRE server
 type InMemoryServer struct {
@@ -59,18 +56,18 @@ func (s *InMemoryServer) IssueIdentity(ctx context.Context, identityNamespace *d
 
 **Responsibilities**:
 - Stores identity mapper registrations (selector → SPIFFE ID mappings)
-- **Immutable after seeding** - sealed at startup
+- Immutable after seeding - sealed at startup
 - Read-only runtime queries via `FindBySelectors()`
 
-**Key Methods**:
-- `Seed(ctx, mapper)` - **Internal only**, called during bootstrap
+**Methods**:
+- `Seed(ctx, mapper)` - Internal only, called during bootstrap
 - `Seal()` - Makes registry immutable
 - `FindBySelectors(ctx, selectors)` - Runtime lookup (read-only)
 - `ListAll(ctx)` - Returns all registrations (admin/debug)
 
 **Port Interface**: `ports.IdentityMapperRegistry` (defined in `internal/ports/outbound.go:15-31`)
 
-**Implementation Details**:
+**Implementation**:
 ```go
 type InMemoryRegistry struct {
     mu      sync.RWMutex
@@ -122,12 +119,12 @@ func (r *InMemoryRegistry) FindBySelectors(ctx context.Context, selectors *domai
 **Location**: `internal/app/application.go` - `Bootstrap()` function
 
 **Responsibilities**:
-- **Loads workload registrations** from configuration fixtures (`config.Workloads`)
-- **Seeds the registry** with identity mappers (selector → SPIFFE ID)
-- **Seals the registry** to prevent mutations
+- Loads workload registrations from configuration fixtures (`config.Workloads`)
+- Seeds the registry with identity mappers (selector → SPIFFE ID)
+- Seals the registry to prevent mutations
 - Wires all control plane components (server, agent, registry)
 
-**Key Steps**:
+**Steps**:
 ```go
 func Bootstrap(ctx context.Context, configLoader ports.ConfigLoader, factory ports.AdapterFactory) (*Application, error) {
     // Step 1: Load configuration (fixtures)
@@ -192,7 +189,7 @@ func Bootstrap(ctx context.Context, configLoader ports.ConfigLoader, factory por
 }
 ```
 
-**Note**: This is the **only place** where workload registrations are loaded/seeded.
+This is the only place where workload registrations are loaded/seeded.
 
 **Seeding Characteristics**:
 - ✅ Seeding happens in composition root (`Bootstrap()`)
@@ -232,7 +229,7 @@ Workloads: []WorkloadConfig{
 - **Provides seeding methods** `SeedRegistry()` and `SealRegistry()`
 - Type-asserts to concrete types to call internal methods
 
-**Key Methods**:
+**Methods**:
 ```go
 type InMemoryAdapterFactory struct{}
 
@@ -266,7 +263,6 @@ func (f *InMemoryAdapterFactory) SealRegistry(registry ports.IdentityMapperRegis
 
 **Port Interface**: `ports.AdapterFactory` (defined in `internal/ports/outbound.go:197-212`)
 
-**Key Points**:
 - ✅ Type assertion to concrete type for seeding operations
 - ✅ Seeding methods NOT part of port interface
 - ✅ Clear documentation: "configuration, not runtime"
@@ -274,7 +270,7 @@ func (f *InMemoryAdapterFactory) SealRegistry(registry ports.IdentityMapperRegis
 
 ---
 
-### 📁 Directory Structure
+### Directory Structure
 
 ```
 internal/
@@ -299,7 +295,7 @@ internal/
 
 ### 🔍 What is NOT Control Plane
 
-These are **data plane** (runtime) components:
+These are data plane (runtime) components:
 
 - ❌ `internal/adapters/outbound/inmemory/agent.go` - **Data plane** (workload attestation + SVID fetching)
 - ❌ `internal/adapters/inbound/workloadapi/server.go` - **Data plane** (Workload API server)
@@ -321,11 +317,11 @@ These are **data plane** (runtime) components:
 
 ### ✅ What We DO Have
 
-- **Immutable registry** seeded at startup from fixtures and sealed
-- **Matching logic** that resolves selectors → identity namespace mappings
-- **Issuance flow** that attests → matches → mints certificates
-- **Composition root seeding** in `Bootstrap()` function
-- **Clean port naming** - `IdentityMapperRegistry` (not "Port" suffix)
+- Immutable registry seeded at startup from fixtures and sealed
+- Matching logic that resolves selectors → identity namespace mappings
+- Issuance flow that attests → matches → mints certificates
+- Composition root seeding** in `Bootstrap()` function
+- Good port naming - `IdentityMapperRegistry` (not "Port" suffix)
 
 ---
 
@@ -433,7 +429,6 @@ func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload port
 5. Return identity document to workload
 ```
 
-**Key Points**:
 - ✅ Pure read path - no mutations
 - ✅ Selectors → IdentityNamespace mapping from seeded data
 - ✅ Certificate minting is ephemeral (in-memory CA)
@@ -509,7 +504,7 @@ All deprecated code has been deleted:
 
 ---
 
-## Summary Table
+## Summary
 
 | Component | Location | Role | Mutable? |
 |-----------|----------|------|----------|
@@ -521,7 +516,7 @@ All deprecated code has been deleted:
 
 ---
 
-## Key Characteristics
+## Characteristics
 
 1. **No Mutation API**: Registry is sealed after bootstrap - no runtime registration
 2. **Configuration-Based**: Workload registrations loaded from fixtures (not database)

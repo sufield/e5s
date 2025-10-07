@@ -181,7 +181,7 @@ func TestTranslateX509SVIDToIdentityDocument_NilSVID(t *testing.T) {
 	doc, err := TranslateX509SVIDToIdentityDocument(nil)
 	assert.Error(t, err)
 	assert.Nil(t, doc)
-	assert.Contains(t, err.Error(), "svid cannot be nil")
+	assert.ErrorIs(t, err, domain.ErrIdentityDocumentInvalid)
 }
 
 func TestTranslateX509SVIDToIdentityDocument_NoCertificates(t *testing.T) {
@@ -197,5 +197,5 @@ func TestTranslateX509SVIDToIdentityDocument_NoCertificates(t *testing.T) {
 	doc, err := TranslateX509SVIDToIdentityDocument(svid)
 	assert.Error(t, err)
 	assert.Nil(t, doc)
-	assert.Contains(t, err.Error(), "no certificates")
+	assert.ErrorIs(t, err, domain.ErrIdentityDocumentInvalid)
 }

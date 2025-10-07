@@ -100,7 +100,7 @@ func TestIdentityService_ExchangeMessage_NilSenderNamespace(t *testing.T) {
 	// Assert
 	assert.Error(t, err)
 	assert.Nil(t, msg)
-	assert.Contains(t, err.Error(), "sender identity namespace required")
+	assert.ErrorIs(t, err, domain.ErrInvalidIdentityNamespace)
 }
 
 func TestIdentityService_ExchangeMessage_NilReceiverNamespace(t *testing.T) {
@@ -124,7 +124,7 @@ func TestIdentityService_ExchangeMessage_NilReceiverNamespace(t *testing.T) {
 	// Assert
 	assert.Error(t, err)
 	assert.Nil(t, msg)
-	assert.Contains(t, err.Error(), "receiver identity namespace required")
+	assert.ErrorIs(t, err, domain.ErrInvalidIdentityNamespace)
 }
 
 func TestIdentityService_ExchangeMessage_ExpiredSenderDocument(t *testing.T) {
@@ -146,7 +146,7 @@ func TestIdentityService_ExchangeMessage_ExpiredSenderDocument(t *testing.T) {
 	// Assert
 	assert.Error(t, err)
 	assert.Nil(t, msg)
-	assert.Contains(t, err.Error(), "sender identity document invalid or expired")
+	assert.ErrorIs(t, err, domain.ErrIdentityDocumentExpired)
 }
 
 func TestIdentityService_ExchangeMessage_ExpiredReceiverDocument(t *testing.T) {
@@ -167,7 +167,7 @@ func TestIdentityService_ExchangeMessage_ExpiredReceiverDocument(t *testing.T) {
 	// Assert
 	assert.Error(t, err)
 	assert.Nil(t, msg)
-	assert.Contains(t, err.Error(), "receiver identity document invalid or expired")
+	assert.ErrorIs(t, err, domain.ErrIdentityDocumentExpired)
 }
 
 func TestIdentityService_ExchangeMessage_NilSenderDocument(t *testing.T) {
@@ -193,7 +193,7 @@ func TestIdentityService_ExchangeMessage_NilSenderDocument(t *testing.T) {
 	// Assert
 	assert.Error(t, err)
 	assert.Nil(t, msg)
-	assert.Contains(t, err.Error(), "sender identity document invalid or expired")
+	assert.ErrorIs(t, err, domain.ErrIdentityDocumentExpired)
 }
 
 func TestIdentityService_ExchangeMessage_NilReceiverDocument(t *testing.T) {
@@ -219,7 +219,7 @@ func TestIdentityService_ExchangeMessage_NilReceiverDocument(t *testing.T) {
 	// Assert
 	assert.Error(t, err)
 	assert.Nil(t, msg)
-	assert.Contains(t, err.Error(), "receiver identity document invalid or expired")
+	assert.ErrorIs(t, err, domain.ErrIdentityDocumentExpired)
 }
 
 func TestIdentityService_ExchangeMessage_EmptyContent(t *testing.T) {
@@ -273,51 +273,51 @@ func TestIdentityService_ExchangeMessage_LongContent(t *testing.T) {
 
 func TestIdentityService_ExchangeMessage_TableDriven(t *testing.T) {
 	tests := []struct {
-		name        string
-		fromID      *ports.Identity
-		toID        *ports.Identity
-		content     string
-		expectError bool
-		errorMsg    string
+		name      string
+		fromID    *ports.Identity
+		toID      *ports.Identity
+		content   string
+		wantError bool
+		wantErr   error
 	}{
 		{
-			name:        "valid exchange",
-			fromID:      createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(1*time.Hour)),
-			toID:        createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(1*time.Hour)),
-			content:     "test message",
-			expectError: false,
+			name:      "valid exchange",
+			fromID:    createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(1*time.Hour)),
+			toID:      createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(1*time.Hour)),
+			content:   "test message",
+			wantError: false,
 		},
 		{
-			name:        "nil sender namespace",
-			fromID:      &ports.Identity{IdentityNamespace: nil, Name: "client"},
-			toID:        createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(1*time.Hour)),
-			content:     "test",
-			expectError: true,
-			errorMsg:    "sender identity namespace required",
+			name:      "nil sender namespace",
+			fromID:    &ports.Identity{IdentityNamespace: nil, Name: "client"},
+			toID:      createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(1*time.Hour)),
+			content:   "test",
+			wantError: true,
+			wantErr:   domain.ErrInvalidIdentityNamespace,
 		},
 		{
-			name:        "nil receiver namespace",
-			fromID:      createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(1*time.Hour)),
-			toID:        &ports.Identity{IdentityNamespace: nil, Name: "server"},
-			content:     "test",
-			expectError: true,
-			errorMsg:    "receiver identity namespace required",
+			name:      "nil receiver namespace",
+			fromID:    createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(1*time.Hour)),
+			toID:      &ports.Identity{IdentityNamespace: nil, Name: "server"},
+			content:   "test",
+			wantError: true,
+			wantErr:   domain.ErrInvalidIdentityNamespace,
 		},
 		{
-			name:        "expired sender document",
-			fromID:      createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(-1*time.Hour)),
-			toID:        createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(1*time.Hour)),
-			content:     "test",
-			expectError: true,
-			errorMsg:    "sender identity document invalid or expired",
+			name:      "expired sender document",
+			fromID:    createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(-1*time.Hour)),
+			toID:      createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(1*time.Hour)),
+			content:   "test",
+			wantError: true,
+			wantErr:   domain.ErrIdentityDocumentExpired,
 		},
 		{
-			name:        "expired receiver document",
-			fromID:      createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(1*time.Hour)),
-			toID:        createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(-1*time.Hour)),
-			content:     "test",
-			expectError: true,
-			errorMsg:    "receiver identity document invalid or expired",
+			name:      "expired receiver document",
+			fromID:    createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(1*time.Hour)),
+			toID:      createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(-1*time.Hour)),
+			content:   "test",
+			wantError: true,
+			wantErr:   domain.ErrIdentityDocumentExpired,
 		},
 	}
 
@@ -339,11 +339,11 @@ func TestIdentityService_ExchangeMessage_TableDriven(t *testing.T) {
 			msg, err := service.ExchangeMessage(ctx, *tt.fromID, *tt.toID, tt.content)
 
 			// Assert
-			if tt.expectError {
+			if tt.wantError {
 				assert.Error(t, err)
 				assert.Nil(t, msg)
-				if tt.errorMsg != "" {
-					assert.Contains(t, err.Error(), tt.errorMsg)
+				if tt.wantErr != nil {
+					assert.ErrorIs(t, err, tt.wantErr)
 				}
 			} else {
 				require.NoError(t, err)

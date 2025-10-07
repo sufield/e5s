@@ -23,7 +23,7 @@ Focus on one phase at a time—run `go test ./...` after each.
 `go mod tidy && go test ./...`. This gets you to a secure, dual-mode library—start with Prep!
 
 ### Evaluation of Code Changes
-These changes are **excellent and targeted**—they significantly enhance robustness, error handling, and contract clarity without altering core logic or violating hexagonal principles. The focus on typed errors, input validation, and port extensions (e.g., TLS config support) directly addresses prior gaps (e.g., incomplete error contracts, mTLS prep). Overall, this advances the skeleton toward production: domain errors are now exhaustive, in-memory impls are more resilient, and ports are better documented for real adapters. No regressions—changes are backward-compatible and test-friendly. Score: **9/10** (minor nit: some comments could be tighter).
+These changes are **excellent and targeted**—they enhance robustness, error handling, and contract clarity without altering core logic or violating hexagonal principles. The focus on typed errors, input validation, and port extensions (e.g., TLS config support) directly addresses prior gaps (e.g., incomplete error contracts, mTLS prep). Overall, this advances the skeleton toward production: domain errors are now exhaustive, in-memory impls are more resilient, and ports are better documented for real adapters. No regressions—changes are backward-compatible and test-friendly. 
 
 #### Strengths
 - **Error Handling Upgrade**: Wrapping with domain sentinels (e.g., `domain.ErrNoMatchingMapper`) enforces contracts—real impls must match these exactly, easing contract tests.
@@ -52,9 +52,8 @@ These changes are **excellent and targeted**—they significantly enhance robust
 - **Real Impl Alignment**: Perfect—new sentinels/bundle port guide spire adapters (e.g., `spire_provider` must return `ErrCertificateChainInvalid` on verify fail). Structure unchanged—add to `spire/` without refactor.
 
 #### Recommendations & Next Steps
-- **Immediate (Today)**: Run `go test ./internal/adapters/outbound/inmemory/...`—fix any new panics from validations.
-- **Short-Term (1-2 Days)**: Write 2-3 contract tests (e.g., registry lookup with/without match; provider create/validate with invalid CA). Use testify: `mockProvider.On("CreateX509IdentityDocument", mock.Anything, nil, mock.Anything).Return(nil, domain.ErrIdentityDocumentInvalid)`.
+- Run `go test ./internal/adapters/outbound/inmemory/...`—fix any new panics from validations.
+- Write 2-3 contract tests (e.g., registry lookup with/without match; provider create/validate with invalid CA). Use testify: `mockProvider.On("CreateX509IdentityDocument", mock.Anything, nil, mock.Anything).Return(nil, domain.ErrIdentityDocumentInvalid)`.
 - **Risks**: Over-validation in in-memory could slow mocks—profile if needed. Bundle port: Ensure real spire fetches from SDK bundle.Source.
-- **Polish**: Add `//go:generate mockgen` in ports for auto-mocks in contracts.
+- Add `//go:generate mockgen` in ports for auto-mocks in contracts.
 
-These changes push the library forward—great error hygiene! If sharing test skeletons, I can review.

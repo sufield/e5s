@@ -257,28 +257,28 @@ func TestIdentityNamespaceParser_ParseFromPath(t *testing.T) {
 		name        string
 		trustDomain *domain.TrustDomain
 		path        string
-		expectError bool
+		wantError   bool
 		expectedURI string
 	}{
 		{
 			name:        "valid workload path",
 			trustDomain: domain.NewTrustDomainFromName("example.org"),
 			path:        "/workload",
-			expectError: false,
+			wantError:   false,
 			expectedURI: "spiffe://example.org/workload",
 		},
 		{
 			name:        "root path",
 			trustDomain: domain.NewTrustDomainFromName("example.org"),
 			path:        "/",
-			expectError: false,
+			wantError:   false,
 			expectedURI: "spiffe://example.org/",
 		},
 		{
 			name:        "nested path",
 			trustDomain: domain.NewTrustDomainFromName("prod.example.org"),
 			path:        "/ns/prod/svc",
-			expectError: false,
+			wantError:   false,
 			expectedURI: "spiffe://prod.example.org/ns/prod/svc",
 		},
 	}
@@ -291,7 +291,7 @@ func TestIdentityNamespaceParser_ParseFromPath(t *testing.T) {
 			namespace, err := parser.ParseFromPath(ctx, tt.trustDomain, tt.path)
 
 			// Assert
-			if tt.expectError {
+			if tt.wantError {
 				assert.Error(t, err)
 				assert.Nil(t, namespace)
 			} else {
@@ -516,19 +516,19 @@ func TestIdentityNamespaceParser_ParseFromPath_ErrorCases(t *testing.T) {
 		name        string
 		trustDomain *domain.TrustDomain
 		path        string
-		expectError bool
+		wantError   bool
 	}{
 		{
 			name:        "nil trust domain",
 			trustDomain: nil,
 			path:        "/workload",
-			expectError: true,
+			wantError:   true,
 		},
 		{
 			name:        "empty path becomes root",
 			trustDomain: domain.NewTrustDomainFromName("example.org"),
 			path:        "",
-			expectError: false, // Empty path is normalized to "/"
+			wantError:   false, // Empty path is normalized to "/"
 		},
 	}
 
@@ -540,7 +540,7 @@ func TestIdentityNamespaceParser_ParseFromPath_ErrorCases(t *testing.T) {
 			namespace, err := parser.ParseFromPath(ctx, tt.trustDomain, tt.path)
 
 			// Assert
-			if tt.expectError {
+			if tt.wantError {
 				assert.Error(t, err)
 				assert.Nil(t, namespace)
 			} else {
@@ -559,10 +559,10 @@ func TestTrustDomainParser_FromString_InvalidDomain(t *testing.T) {
 	parser := inmemory.NewInMemoryTrustDomainParser()
 
 	tests := []struct {
-		name        string
-		input       string
-		expectError bool
-		errorMsg    string
+		name       string
+		input      string
+		wantError  bool
+		wantErrMsg string
 	}{
 		{"valid domain", "example.org", false, ""},
 		{"with scheme", "https://example.org", true, "must not contain scheme"},
@@ -578,11 +578,11 @@ func TestTrustDomainParser_FromString_InvalidDomain(t *testing.T) {
 			td, err := parser.FromString(ctx, tt.input)
 
 			// Assert
-			if tt.expectError {
+			if tt.wantError {
 				assert.Error(t, err)
 				assert.Nil(t, td)
-				if tt.errorMsg != "" {
-					assert.Contains(t, err.Error(), tt.errorMsg)
+				if tt.wantErrMsg != "" {
+					assert.Contains(t, err.Error(), tt.wantErrMsg)
 				}
 			} else {
 				require.NoError(t, err)
@@ -600,10 +600,10 @@ func TestIdentityNamespaceParser_ParseFromString_InvalidURI(t *testing.T) {
 	parser := inmemory.NewInMemoryIdentityNamespaceParser()
 
 	tests := []struct {
-		name        string
-		input       string
-		expectError bool
-		errorMsg    string
+		name       string
+		input      string
+		wantError  bool
+		wantErrMsg string
 	}{
 		{"empty string", "", true, "identity namespace cannot be empty"},
 		{"missing scheme", "example.org/workload", true, ""},
@@ -621,11 +621,11 @@ func TestIdentityNamespaceParser_ParseFromString_InvalidURI(t *testing.T) {
 			namespace, err := parser.ParseFromString(ctx, tt.input)
 
 			// Assert
-			if tt.expectError {
+			if tt.wantError {
 				assert.Error(t, err)
 				assert.Nil(t, namespace)
-				if tt.errorMsg != "" {
-					assert.Contains(t, err.Error(), tt.errorMsg)
+				if tt.wantErrMsg != "" {
+					assert.Contains(t, err.Error(), tt.wantErrMsg)
 				}
 			} else {
 				require.NoError(t, err)
@@ -655,7 +655,7 @@ func TestAgent_NewInMemoryAgent_ErrorPaths(t *testing.T) {
 	tests := []struct {
 		name        string
 		identityURI string
-		expectError bool
+		wantError   bool
 	}{
 		{"invalid URI", "not-a-spiffe-uri", true},
 		{"valid URI", "spiffe://example.org/agent", false},
@@ -677,7 +677,7 @@ func TestAgent_NewInMemoryAgent_ErrorPaths(t *testing.T) {
 			)
 
 			// Assert
-			if tt.expectError {
+			if tt.wantError {
 				assert.Error(t, err)
 				assert.Nil(t, agent)
 			} else {
@@ -699,7 +699,7 @@ func TestServer_NewInMemoryServer_ErrorPaths(t *testing.T) {
 	tests := []struct {
 		name        string
 		trustDomain string
-		expectError bool
+		wantError   bool
 	}{
 		{"valid trust domain", "example.org", false},
 		{"empty trust domain", "", true},
@@ -715,7 +715,7 @@ func TestServer_NewInMemoryServer_ErrorPaths(t *testing.T) {
 			server, err := inmemory.NewInMemoryServer(ctx, tt.trustDomain, tdParser, docProvider)
 
 			// Assert
-			if tt.expectError {
+			if tt.wantError {
 				assert.Error(t, err)
 				assert.Nil(t, server)
 			} else {

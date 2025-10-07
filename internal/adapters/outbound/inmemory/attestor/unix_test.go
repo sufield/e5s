@@ -151,8 +151,8 @@ func TestUnixWorkloadAttestor_Attest_TableDriven(t *testing.T) {
 		name           string
 		registerUIDs   map[int]string
 		workload       ports.ProcessIdentity
-		expectError    bool
-		expectedErr    error
+		wantError      bool
+		wantErr        error
 		expectedCount  int
 		expectSelector string
 	}{
@@ -160,7 +160,7 @@ func TestUnixWorkloadAttestor_Attest_TableDriven(t *testing.T) {
 			name:           "valid attestation",
 			registerUIDs:   map[int]string{1000: "unix:user:app"},
 			workload:       ports.ProcessIdentity{UID: 1000, GID: 1000, PID: 100, Path: "/app"},
-			expectError:    false,
+			wantError:      false,
 			expectedCount:  3,
 			expectSelector: "unix:user:app",
 		},
@@ -168,17 +168,17 @@ func TestUnixWorkloadAttestor_Attest_TableDriven(t *testing.T) {
 			name:           "unregistered UID",
 			registerUIDs:   map[int]string{1000: "unix:user:app"},
 			workload:       ports.ProcessIdentity{UID: 2000, GID: 2000, PID: 200, Path: "/other"},
-			expectError:    true,
-			expectedErr:    domain.ErrWorkloadAttestationFailed,
+			wantError:      true,
+			wantErr:        domain.ErrWorkloadAttestationFailed,
 			expectedCount:  0,
 			expectSelector: "",
 		},
 		{
-			name:           "negative UID",
-			registerUIDs:   map[int]string{},
-			workload:       ports.ProcessIdentity{UID: -5, GID: 100, PID: 100, Path: "/app"},
-			expectError:    true,
-			expectedErr:    domain.ErrInvalidProcessIdentity,
+			name:         "negative UID",
+			registerUIDs: map[int]string{},
+			workload:     ports.ProcessIdentity{UID: -5, GID: 100, PID: 100, Path: "/app"},
+			wantError:    true,
+			wantErr:      domain.ErrInvalidProcessIdentity,
 			expectedCount:  0,
 			expectSelector: "",
 		},
@@ -186,7 +186,7 @@ func TestUnixWorkloadAttestor_Attest_TableDriven(t *testing.T) {
 			name:           "zero UID root",
 			registerUIDs:   map[int]string{0: "unix:user:root"},
 			workload:       ports.ProcessIdentity{UID: 0, GID: 0, PID: 1, Path: "/sbin/init"},
-			expectError:    false,
+			wantError:      false,
 			expectedCount:  3,
 			expectSelector: "unix:user:root",
 		},
@@ -194,7 +194,7 @@ func TestUnixWorkloadAttestor_Attest_TableDriven(t *testing.T) {
 			name:           "high UID value",
 			registerUIDs:   map[int]string{65534: "unix:user:nobody"},
 			workload:       ports.ProcessIdentity{UID: 65534, GID: 65534, PID: 9999, Path: "/usr/bin/nobody"},
-			expectError:    false,
+			wantError:      false,
 			expectedCount:  3,
 			expectSelector: "unix:user:nobody",
 		},
@@ -202,7 +202,7 @@ func TestUnixWorkloadAttestor_Attest_TableDriven(t *testing.T) {
 			name:           "different GID than UID",
 			registerUIDs:   map[int]string{1000: "unix:user:app"},
 			workload:       ports.ProcessIdentity{UID: 1000, GID: 2000, PID: 100, Path: "/app"},
-			expectError:    false,
+			wantError:      false,
 			expectedCount:  3,
 			expectSelector: "unix:user:app",
 		},
@@ -223,10 +223,10 @@ func TestUnixWorkloadAttestor_Attest_TableDriven(t *testing.T) {
 			// Attest workload
 			selectors, err := attestorInst.Attest(ctx, tt.workload)
 
-			if tt.expectError {
+			if tt.wantError {
 				assert.Error(t, err)
-				if tt.expectedErr != nil {
-					assert.ErrorIs(t, err, tt.expectedErr)
+				if tt.wantErr != nil {
+					assert.ErrorIs(t, err, tt.wantErr)
 				}
 			} else {
 				require.NoError(t, err)

@@ -57,7 +57,7 @@ func TestIdentityMapper_Invariant_SelectorsNeverNilOrEmpty(t *testing.T) {
 	tests := []struct {
 		name           string
 		setupSelectors func() *domain.SelectorSet
-		expectError    bool
+		wantError      bool
 	}{
 		{
 			name: "valid selectors",
@@ -67,21 +67,21 @@ func TestIdentityMapper_Invariant_SelectorsNeverNilOrEmpty(t *testing.T) {
 				set.Add(sel)
 				return set
 			},
-			expectError: false,
+			wantError: false,
 		},
 		{
 			name: "nil selectors violate invariant",
 			setupSelectors: func() *domain.SelectorSet {
 				return nil
 			},
-			expectError: true,
+			wantError: true,
 		},
 		{
 			name: "empty selectors violate invariant",
 			setupSelectors: func() *domain.SelectorSet {
 				return domain.NewSelectorSet() // Empty
 			},
-			expectError: true,
+			wantError: true,
 		},
 	}
 
@@ -98,7 +98,7 @@ func TestIdentityMapper_Invariant_SelectorsNeverNilOrEmpty(t *testing.T) {
 			mapper, err := domain.NewIdentityMapper(namespace, selectors)
 
 			// Assert invariant
-			if tt.expectError {
+			if tt.wantError {
 				assert.Error(t, err, "Invariant enforced: invalid selectors should be rejected")
 				assert.ErrorIs(t, err, domain.ErrInvalidSelectors)
 				assert.Nil(t, mapper)

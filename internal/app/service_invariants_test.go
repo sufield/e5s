@@ -23,17 +23,17 @@ func TestExchangeMessage_Invariant_RequiresNonNilNamespaces(t *testing.T) {
 	service := app.NewIdentityService(mockAgent, mockRegistry)
 
 	tests := []struct {
-		name          string
-		from          ports.Identity
-		to            ports.Identity
-		expectError   bool
-		errorContains string
+		name      string
+		from      ports.Identity
+		to        ports.Identity
+		wantError bool
+		wantErr   error
 	}{
 		{
-			name:        "both namespaces non-nil - valid",
-			from:        *createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(1*time.Hour)),
-			to:          *createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(1*time.Hour)),
-			expectError: false,
+			name:      "both namespaces non-nil - valid",
+			from:      *createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(1*time.Hour)),
+			to:        *createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(1*time.Hour)),
+			wantError: false,
 		},
 		{
 			name: "sender namespace nil - violates invariant",
@@ -41,9 +41,9 @@ func TestExchangeMessage_Invariant_RequiresNonNilNamespaces(t *testing.T) {
 				IdentityNamespace: nil, // Nil namespace
 				Name:              "client",
 			},
-			to:            *createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(1*time.Hour)),
-			expectError:   true,
-			errorContains: "sender identity namespace required",
+			to:        *createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(1*time.Hour)),
+			wantError: true,
+			wantErr:   domain.ErrInvalidIdentityNamespace,
 		},
 		{
 			name: "receiver namespace nil - violates invariant",
@@ -52,8 +52,8 @@ func TestExchangeMessage_Invariant_RequiresNonNilNamespaces(t *testing.T) {
 				IdentityNamespace: nil, // Nil namespace
 				Name:              "server",
 			},
-			expectError:   true,
-			errorContains: "receiver identity namespace required",
+			wantError: true,
+			wantErr:   domain.ErrInvalidIdentityNamespace,
 		},
 	}
 
@@ -65,10 +65,10 @@ func TestExchangeMessage_Invariant_RequiresNonNilNamespaces(t *testing.T) {
 			msg, err := service.ExchangeMessage(ctx, tt.from, tt.to, "test")
 
 			// Assert invariant
-			if tt.expectError {
+			if tt.wantError {
 				assert.Error(t, err, "Invariant enforced: should reject nil namespaces")
 				assert.Nil(t, msg, "Invariant violated: msg should be nil when error occurs")
-				assert.Contains(t, err.Error(), tt.errorContains)
+				assert.ErrorIs(t, err, tt.wantErr)
 			} else {
 				require.NoError(t, err)
 				require.NotNil(t, msg)
@@ -88,31 +88,31 @@ func TestExchangeMessage_Invariant_RequiresValidDocuments(t *testing.T) {
 	service := app.NewIdentityService(mockAgent, mockRegistry)
 
 	tests := []struct {
-		name          string
-		from          ports.Identity
-		to            ports.Identity
-		expectError   bool
-		errorContains string
+		name      string
+		from      ports.Identity
+		to        ports.Identity
+		wantError bool
+		wantErr   error
 	}{
 		{
-			name:        "both documents valid - ok",
-			from:        *createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(1*time.Hour)),
-			to:          *createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(1*time.Hour)),
-			expectError: false,
+			name:      "both documents valid - ok",
+			from:      *createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(1*time.Hour)),
+			to:        *createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(1*time.Hour)),
+			wantError: false,
 		},
 		{
-			name:          "sender document expired - violates invariant",
-			from:          *createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(-1*time.Hour)),
-			to:            *createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(1*time.Hour)),
-			expectError:   true,
-			errorContains: "sender identity document invalid or expired",
+			name:      "sender document expired - violates invariant",
+			from:      *createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(-1*time.Hour)),
+			to:        *createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(1*time.Hour)),
+			wantError: true,
+			wantErr:   domain.ErrIdentityDocumentExpired,
 		},
 		{
-			name:          "receiver document expired - violates invariant",
-			from:          *createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(1*time.Hour)),
-			to:            *createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(-1*time.Hour)),
-			expectError:   true,
-			errorContains: "receiver identity document invalid or expired",
+			name:      "receiver document expired - violates invariant",
+			from:      *createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(1*time.Hour)),
+			to:        *createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(-1*time.Hour)),
+			wantError: true,
+			wantErr:   domain.ErrIdentityDocumentExpired,
 		},
 		{
 			name: "sender document nil - violates invariant",
@@ -122,9 +122,9 @@ func TestExchangeMessage_Invariant_RequiresValidDocuments(t *testing.T) {
 				Name:             "client",
 				IdentityDocument: nil, // Nil document
 			},
-			to:            *createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(1*time.Hour)),
-			expectError:   true,
-			errorContains: "sender identity document invalid or expired",
+			to:        *createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(1*time.Hour)),
+			wantError: true,
+			wantErr:   domain.ErrIdentityDocumentExpired,
 		},
 		{
 			name: "receiver document nil - violates invariant",
@@ -135,8 +135,8 @@ func TestExchangeMessage_Invariant_RequiresValidDocuments(t *testing.T) {
 				Name:             "server",
 				IdentityDocument: nil, // Nil document
 			},
-			expectError:   true,
-			errorContains: "receiver identity document invalid or expired",
+			wantError: true,
+			wantErr:   domain.ErrIdentityDocumentExpired,
 		},
 	}
 
@@ -148,10 +148,10 @@ func TestExchangeMessage_Invariant_RequiresValidDocuments(t *testing.T) {
 			msg, err := service.ExchangeMessage(ctx, tt.from, tt.to, "test")
 
 			// Assert invariant
-			if tt.expectError {
+			if tt.wantError {
 				assert.Error(t, err, "Invariant enforced: should reject invalid/expired documents")
 				assert.Nil(t, msg, "Invariant violated: msg should be nil when error occurs")
-				assert.Contains(t, err.Error(), tt.errorContains)
+				assert.ErrorIs(t, err, tt.wantErr)
 			} else {
 				require.NoError(t, err)
 				require.NotNil(t, msg)

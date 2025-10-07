@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/pocket/hexagon/spire/internal/domain"
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
 )
 
@@ -39,7 +40,7 @@ func NewSPIREClient(ctx context.Context, cfg Config) (*SPIREClient, error) {
 	}
 
 	if cfg.TrustDomain == "" {
-		return nil, fmt.Errorf("trust domain is required")
+		return nil, domain.ErrInvalidTrustDomain
 	}
 
 	if cfg.Timeout == 0 {

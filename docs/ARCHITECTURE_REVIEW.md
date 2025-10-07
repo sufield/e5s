@@ -1,7 +1,5 @@
 # Architecture Review: Port Placement and Adapter Complexity
 
-## Executive Summary
-
 This document analyzes two architectural concerns:
 
 1. **Port Definitions Placement**: Ports currently live in `internal/app/ports/` - should they be at `internal/ports/`?

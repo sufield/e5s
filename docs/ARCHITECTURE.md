@@ -536,26 +536,47 @@ type IdentityMapperRegistry interface {
 
 ---
 
-### Real SPIRE Adapters (`internal/adapters/outbound/spire/`) - Future
+### Real SPIRE Adapters (`internal/adapters/outbound/spire/`)
+
+**Status**: ✅ **Complete** - Production SPIRE adapters fully implemented and tested
 
 **Purpose**: Production integration with go-spiffe SDK
 
 **Characteristics**:
-- ✅ Full cryptographic verification (x509svid.Verify)
-- ✅ Real SPIRE server/agent communication
-- ✅ Bundle federation support
-- ✅ SVID rotation
-- ✅ Platform attestation (AWS, GCP, K8s)
+- ✅ Full cryptographic verification using go-spiffe SDK
+- ✅ Real SPIRE server/agent communication via Workload API
+- ✅ Bundle management and trust domain handling
+- ✅ X.509 and JWT SVID support
+- ✅ Automatic workload attestation through SPIRE
 
-**Planned Implementations**:
-- `SDKTrustDomainParser`: Wraps `spiffeid.TrustDomainFromString`
-- `SDKIdentityNamespaceParser`: Wraps `spiffeid.FromString`
-- `SDKTrustBundleProvider`: Uses `workloadapi.Client.FetchX509Bundles`
-- `SDKIdentityDocumentProvider`: Uses `x509svid.Verify` for validation
-- `SPIREAgent`: Uses `workloadapi.Client.FetchX509SVID`
-- Real attestors: Unix `/proc`, AWS EC2, GCP GCE, Kubernetes
+**Implemented Components**:
+- `SPIREClient`: go-spiffe Workload API client wrapper with connection management
+- `Agent`: Production agent delegating to external SPIRE infrastructure
+- `Server`: Production server using SPIRE CA certificates and trust bundles
+- `Translation`: Domain model conversions using `spiffeid` package
+  - `TranslateSPIFFEIDToIdentityNamespace`: Converts `spiffeid.ID` to domain types
+  - `TranslateTrustDomainToSPIFFEID`: Converts domain TrustDomain to `spiffeid.TrustDomain`
+  - `TranslateX509SVIDToIdentityDocument`: Converts `x509svid.SVID` to domain IdentityDocument
+- Identity operations using `workloadapi.Client`:
+  - `FetchX509SVID`: X.509 SVID fetching
+  - `FetchJWTSVID`: JWT SVID fetching with audience validation
+  - `ValidateJWTSVID`: JWT token validation using SPIRE bundles
+  - `FetchX509Bundle`: Trust bundle fetching
+- `Attest`: Workload attestation via SPIRE (returns selectors from current SVID)
 
-See `internal/adapters/outbound/spire/README.md` for detailed implementation guide.
+**Usage**:
+```go
+// Create SPIRE client
+client, err := spire.NewSPIREClient(ctx, socketPath, trustDomain, timeout)
+
+// Create production agent
+agent, err := spire.NewAgent(ctx, client, agentSpiffeID, registry, attestor, parser)
+
+// Create production server
+server, err := spire.NewServer(ctx, client, trustDomainStr, trustDomainParser)
+```
+
+See `internal/adapters/outbound/spire/README.md` for detailed documentation and usage examples.
 
 ---
 

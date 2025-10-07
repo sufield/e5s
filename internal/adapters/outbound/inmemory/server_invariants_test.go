@@ -61,20 +61,20 @@ func TestServer_Invariant_IssueIdentityValidatesInput(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
-		name        string
-		namespace   *domain.IdentityNamespace
-		expectError bool
+		name      string
+		namespace *domain.IdentityNamespace
+		wantError bool
 	}{
 		{
 			name: "valid namespace",
 			namespace: domain.NewIdentityNamespaceFromComponents(
 				domain.NewTrustDomainFromName("example.org"), "/workload"),
-			expectError: false,
+			wantError: false,
 		},
 		{
-			name:        "nil namespace - violates invariant",
-			namespace:   nil,
-			expectError: true,
+			name:      "nil namespace - violates invariant",
+			namespace: nil,
+			wantError: true,
 		},
 	}
 
@@ -86,7 +86,7 @@ func TestServer_Invariant_IssueIdentityValidatesInput(t *testing.T) {
 			doc, err := server.IssueIdentity(ctx, tt.namespace)
 
 			// Assert invariant: validates input
-			if tt.expectError {
+			if tt.wantError {
 				assert.Error(t, err, "Invariant enforced: should validate input before issuing")
 				assert.Nil(t, doc)
 			} else {

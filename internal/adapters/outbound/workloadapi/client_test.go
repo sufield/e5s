@@ -178,10 +178,10 @@ func TestClient_FetchX509SVID_TableDriven(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name          string
+		name       string
 		setupServer   func(t *testing.T) (string, func())
-		expectError   bool
-		errorContains string
+		wantError     bool
+		wantErrMsg string
 	}{
 		{
 			name: "server returns 500",
@@ -197,8 +197,8 @@ func TestClient_FetchX509SVID_TableDriven(t *testing.T) {
 				go ts.Serve(listener)
 				return socketPath, func() { ts.Close(); listener.Close() }
 			},
-			expectError:   true,
-			errorContains: "server returned error 500",
+			wantError:  true,
+			wantErrMsg: "server returned error 500",
 		},
 		{
 			name: "server returns 404",
@@ -214,8 +214,8 @@ func TestClient_FetchX509SVID_TableDriven(t *testing.T) {
 				go ts.Serve(listener)
 				return socketPath, func() { ts.Close(); listener.Close() }
 			},
-			expectError:   true,
-			errorContains: "server returned error 404",
+			wantError:  true,
+			wantErrMsg: "server returned error 404",
 		},
 		{
 			name: "server returns invalid JSON",
@@ -231,8 +231,8 @@ func TestClient_FetchX509SVID_TableDriven(t *testing.T) {
 				go ts.Serve(listener)
 				return socketPath, func() { ts.Close(); listener.Close() }
 			},
-			expectError:   true,
-			errorContains: "failed to decode response",
+			wantError:  true,
+			wantErrMsg: "failed to decode response",
 		},
 		{
 			name: "server returns valid response",
@@ -254,8 +254,8 @@ func TestClient_FetchX509SVID_TableDriven(t *testing.T) {
 				go ts.Serve(listener)
 				return socketPath, func() { ts.Close(); listener.Close() }
 			},
-			expectError:   false,
-			errorContains: "",
+			wantError:  false,
+			wantErrMsg: "",
 		},
 	}
 
@@ -274,10 +274,10 @@ func TestClient_FetchX509SVID_TableDriven(t *testing.T) {
 
 			resp, err := client.FetchX509SVID(ctx)
 
-			if tt.expectError {
+			if tt.wantError {
 				assert.Error(t, err)
-				if tt.errorContains != "" {
-					assert.Contains(t, err.Error(), tt.errorContains)
+				if tt.wantErrMsg != "" {
+					assert.Contains(t, err.Error(), tt.wantErrMsg)
 				}
 			} else {
 				require.NoError(t, err)

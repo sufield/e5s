@@ -46,7 +46,7 @@ func NewServer(
 	}
 
 	if len(caCerts) == 0 {
-		return nil, fmt.Errorf("no CA certificates available from SPIRE")
+		return nil, domain.ErrCANotInitialized
 	}
 
 	return &Server{
@@ -111,7 +111,7 @@ func (s *Server) RefreshCA(ctx context.Context) error {
 	}
 
 	if len(caCerts) == 0 {
-		return fmt.Errorf("no CA certificates available")
+		return domain.ErrCANotInitialized
 	}
 
 	s.caCertificates = caCerts

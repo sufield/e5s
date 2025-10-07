@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/x509"
 	"fmt"
+
+	"github.com/pocket/hexagon/spire/internal/domain"
 )
 
 // FetchX509Bundle fetches the X.509 trust bundle certificates for the trust domain
@@ -27,7 +29,7 @@ func (c *SPIREClient) FetchX509Bundle(ctx context.Context) ([]*x509.Certificate,
 		return nil, fmt.Errorf("failed to get X.509 bundle for trust domain %s: %w", c.trustDomain, err)
 	}
 	if bundle == nil {
-		return nil, fmt.Errorf("no X.509 bundle found for trust domain: %s", c.trustDomain)
+		return nil, fmt.Errorf("%w: %s", domain.ErrTrustBundleNotFound, c.trustDomain)
 	}
 
 	// Return the CA certificates

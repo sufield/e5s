@@ -92,7 +92,7 @@ func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload port
 	}
 
 	if len(selectorStrings) == 0 {
-		return nil, fmt.Errorf("no selectors returned for workload")
+		return nil, domain.ErrNoAttestationData
 	}
 
 	// Step 2: Convert selector strings to SelectorSet

@@ -1,7 +1,5 @@
 # Backward Compatibility Removal
 
-## Overview
-
 All backward compatibility type aliases have been removed from the codebase. The code now exclusively uses the unified configuration types.
 
 ## Changes Made
