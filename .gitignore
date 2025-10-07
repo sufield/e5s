@@ -44,3 +44,5 @@ helmfile.lock
 # OS files
 .DS_Store
 Thumbs.db
+client
+server

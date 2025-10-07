@@ -10,6 +10,46 @@ This project implements the SPIRE Workload API:
 - **Attestation Flow**: Agent attests workload identity → matches selectors → issues SVID
 - **Hexagonal Architecture**: Clean separation between domain, ports, and adapters
 
+## Features
+
+### 1. SPIRE Workload API
+
+- **Agent Server**: Runs on each host, provides Workload API on Unix socket
+- **Workload Clients**: Applications fetch their SVIDs from the local agent
+- **Attestation Flow**: Agent attests workload identity → matches selectors → issues SVID
+- **Hexagonal Architecture**: Clean separation between domain, ports, and adapters
+
+### 2. mTLS Authentication Library ✨
+
+A production-ready mTLS authentication library using SPIFFE/SPIRE for service-to-service communication:
+
+- ✅ **Automatic Certificate Management**: Zero-downtime certificate rotation via SPIRE
+- ✅ **mTLS Authentication**: Both client and server authenticate each other
+- ✅ **Identity Extraction**: SPIFFE ID available to application handlers
+- ✅ **Standard HTTP**: Compatible with Go's standard `http` package
+- ✅ **Authentication Only**: No authorization logic - app decides access
+- ✅ **Production Ready**: Comprehensive tests and examples
+- ✅ **Configuration Flexible**: YAML files with environment variable overrides
+
+**Quick Start**:
+
+```go
+// Server
+server, _ := httpapi.NewHTTPServer(ctx, ":8443", socketPath, tlsconfig.AuthorizeAny())
+server.RegisterHandler("/api/hello", func(w http.ResponseWriter, r *http.Request) {
+    clientID, _ := httpapi.GetSPIFFEID(r)
+    fmt.Fprintf(w, "Hello, %s!\n", clientID)
+})
+server.Start(ctx)
+
+// Client
+client, _ := httpclient.NewSPIFFEHTTPClient(ctx, socketPath, tlsconfig.AuthorizeID(serverID))
+resp, _ := client.Get(ctx, "https://server:8443/api/hello")
+```
+
+**Documentation**: See [docs/MTLS.md](docs/MTLS.md) for complete guide
+**Examples**: See [examples/mtls-adapters/](examples/mtls-adapters/) for working examples
+
 ## Architecture
 
 ### Directory Structure
@@ -19,19 +59,28 @@ internal/
 ├── domain/              # Pure domain entities (TrustDomain, IdentityNamespace, etc.)
 ├── ports/               # Port interfaces (contracts between layers)
 ├── app/                 # Application services (business logic)
+├── config/              # Configuration (YAML + env fallback)
 └── adapters/            # Infrastructure implementations
     ├── inbound/
     │   ├── workloadapi/ # Workload API server (Unix socket HTTP)
+    │   ├── httpapi/     # mTLS HTTP server (authentication)
     │   └── cli/         # CLI demonstration
     └── outbound/
         ├── inmemory/    # In-memory SPIRE implementation
         ├── workloadapi/ # Workload API client
+        ├── httpclient/  # mTLS HTTP client
         └── compose/     # Dependency injection factory
 
 cmd/
 ├── agent/               # SPIRE agent server (production entrypoint)
 ├── workload/            # Workload SVID fetch (production entrypoint)
 └── main.go              # CLI demonstration tool
+
+examples/
+└── mtls-adapters/       # Complete mTLS server/client examples
+    ├── server/          # Example mTLS server
+    ├── client/          # Example mTLS client
+    └── k8s/             # Kubernetes deployment manifests
 ```
 
 ### Hexagonal Architecture

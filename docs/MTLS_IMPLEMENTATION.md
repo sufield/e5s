@@ -766,14 +766,178 @@ Start Iter 1 (server)—testable. Use `//go:build prod` for examples if SPIRE-on
 
 
 
+```go
+// internal/identityclient/port.go
+package identityclient
 
-### Review of the mTLS HTTP Server Implementation
+import (
+	"context"
+	"net/http"
+	"time"
+)
 
-This implementation is **correct and functional** (8.5/10)—it's a clean, encapsulated mTLS server that leverages go-spiffe SDK (v2.6.0) for SVID rotation and ID-based auth, hiding SPIFFE details behind the `Server` port as intended for hexagonal architecture. The code compiles (`go build -v ./internal/identityserver`), runs (starts on :8443 with mTLS), and enforces verification (`AuthorizeID` rejects wrong clientID during handshake). `New` validates config, `Start` uses `once.Do` for safety, and `ListenAndServeTLS("", "")` correctly uses TLSConfig for keyless certs from source. Example main.go works (presents SVID, verifies server).
+// Config holds only configuration (no behavior).
+type Config struct {
+	WorkloadAPI struct {
+		SocketPath string // e.g., "unix:///tmp/agent.sock"
+	}
+	SPIFFE struct {
+		AllowedServerID string // e.g., "spiffe://example.org/server"
+	}
+	HTTP struct {
+		Timeout time.Duration // e.g., 10 * time.Second
+	}
+}
 
-However, minor gaps: No middleware for ID extraction (mentioned in plan but missing), incomplete error propagation in Start, and tests/docs needed. No races (`go run -race main.go` clean), but add context cancel handling.
+// Client is the stable interface your app depends on.
+type Client interface {
+	// Do executes an HTTP request using identity-based mTLS.
+	Do(ctx context.Context, req *http.Request) (*http.Response, error)
+	// Get is a convenience for simple GETs.
+	Get(ctx context.Context, url string) (*http.Response, error)
+	// Close releases resources (X509Source etc.).
+	Close() error
+}
+```
 
-#### Per-File Feedback
+```go
+// internal/identityclient/spiffe_client.go
+package identityclient
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"time"
+
+	"github.com/spiffe/go-spiffe/v2/spiffeid"
+	"github.com/spiffe/go-spiffe/v2/spiffetls/tlsconfig"
+	"github.com/spiffe/go-spiffe/v2/workloadapi"
+)
+
+type spiffeClient struct {
+	cfg    Config
+	source *workloadapi.X509Source
+	http   *http.Client
+}
+
+// New returns a Client that authenticates with SPIRE Workload API and
+// authorizes the server by its SPIFFE ID.
+func New(ctx context.Context, cfg Config) (Client, error) {
+	if cfg.WorkloadAPI.SocketPath == "" {
+		return nil, fmt.Errorf("workload api socket path is required")
+	}
+	if cfg.SPIFFE.AllowedServerID == "" {
+		return nil, fmt.Errorf("spiffe allowed server id is required")
+	}
+	if cfg.HTTP.Timeout <= 0 {
+		cfg.HTTP.Timeout = 30 * time.Second
+	}
+	// Build the X509 source from the local SPIRE Agent.
+	source, err := workloadapi.NewX509Source(
+		ctx,
+		workloadapi.WithClientOptions(workloadapi.WithAddr(cfg.WorkloadAPI.SocketPath)),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create X509Source: %w", err)
+	}
+	// Parse the server's expected SPIFFE ID.
+	serverID := spiffeid.RequireFromString(cfg.SPIFFE.AllowedServerID)
+	// mTLS client config: present our SVID, verify server ID.
+	tlsCfg := tlsconfig.MTLSClientConfig(source, source, tlsconfig.AuthorizeID(serverID))
+	httpClient := &http.Client{
+		Timeout: cfg.HTTP.Timeout,
+		Transport: &http.Transport{
+			TLSClientConfig: tlsCfg,
+		},
+	}
+	return &spiffeClient{
+		cfg:    cfg,
+		source: source,
+		http:   httpClient,
+	}, nil
+}
+
+func (c *spiffeClient) Do(ctx context.Context, req *http.Request) (*http.Response, error) {
+	// Ensure request carries context (cancellation, deadline).
+	req = req.WithContext(ctx)
+	return c.http.Do(req)
+}
+
+func (c *spiffeClient) Get(ctx context.Context, url string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	return c.http.Do(req)
+}
+
+func (c *spiffeClient) Close() error {
+	if c.source != nil {
+		c.source.Close()
+	}
+	return nil
+}
+```
+
+```go
+// examples/mtls-client/main.go (improved example)
+package main
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/pocket/hexagon/spire/internal/identityclient"
+)
+
+func main() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Handle shutdown signals
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigCh
+		fmt.Println("\nShutting down client...")
+		cancel()
+	}()
+
+	var cfg identityclient.Config
+	cfg.WorkloadAPI.SocketPath = "unix:///tmp/spire-agent/public/api.sock"
+	cfg.SPIFFE.AllowedServerID = "spiffe://example.org/server"
+	cfg.HTTP.Timeout = 10 * time.Second
+
+	c, err := identityclient.New(ctx, cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer c.Close()
+
+	// Make authenticated request
+	resp, err := c.Get(ctx, "https://localhost:8443/api/hello")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	fmt.Printf("Response: %s\n", body)
+
+	<-ctx.Done() // Wait for signal
+}
+```
+
+Iteration 1: mTLS Server (Inbound). This code directly implements the server port (NewHTTPServer, Start with ListenAndServeTLS, Handle for mux) and TLS config (MTLSServerConfig with authorizer), matching the phase's goal of an mTLS HTTP server with client auth. Add the middleware/ID extraction from Phase 3 to complete it, then test with go test ./internal/identityserver -v (mock source, assert ListenAndServeTLS starts, rejects wrong ID).
+
 **port.go**: Correct—`Config` is pure data (no behavior), `Server` port stable/simple (Handle/Start/Shutdown/Close). Defaults in New good. **Issue**: No validation for Required fields (e.g., SocketPath non-empty)—add in New. **Rating**: 9.5/10.
 
 **spiffe_server.go**: Correct—`NewX509Source(WithAddr)` for socket, `MTLSServerConfig(source, source, AuthorizeID)` for mutual auth (server SVID, client verify). `once.Do` prevents duplicate starts; `<-ctx.Done()` for shutdown. **Issue**: Start returns startErr but go func swallows http.ErrServerClosed (fix: check `if err != http.ErrServerClosed { log... }`). No GetCertificate callback explicit—SDK handles via source. **Rating**: 8.5/10 (add err check).
@@ -849,3 +1013,255 @@ However, minor gaps: No middleware for ID extraction (mentioned in plan but miss
 Prod-ready with middleware/test—check in! Next: Client phase.
 ```
 
+Iteration 2
+
+
+#### 🔧 Issues & Fixes
+- **Error Propagation**: New lacks wrapping (e.g., fmt.Errorf("new source: %w", err)).
+- **Config Defaults**: Timeout 30s hardcoded—use cfg or const.
+- **Example**: No signal handling; add defer client.Close().
+- **Tests Missing**: No file—add unit (mock source) for coverage.
+
+**Improved New** (add wrapping/defaults):
+```go
+func New(ctx context.Context, cfg Config) (Client, error) {
+    if cfg.WorkloadAPI.SocketPath == "" {
+        return nil, errors.New("socket path required")
+    }
+    if cfg.SPIFFE.AllowedServerID == "" {
+        return nil, errors.New("allowed server ID required")
+    }
+    if cfg.HTTP.Timeout <= 0 {
+        cfg.HTTP.Timeout = 30 * time.Second
+    }
+    source, err := workloadapi.NewX509Source(ctx, workloadapi.WithClientOptions(workloadapi.WithAddr(cfg.WorkloadAPI.SocketPath)))
+    if err != nil {
+        return nil, fmt.Errorf("create source: %w", err)
+    }
+    serverID := spiffeid.RequireFromString(cfg.SPIFFE.AllowedServerID)
+    tlsCfg := tlsconfig.MTLSClientConfig(source, source, tlsconfig.AuthorizeID(serverID))
+    httpClient := &http.Client{
+        Timeout: cfg.HTTP.Timeout,
+        Transport: &http.Transport{TLSClientConfig: tlsCfg},
+    }
+    return &spiffeClient{cfg: cfg, source: source, http: httpClient}, nil
+}
+```
+
+**Improved Example** (add Close/signal):
+```go
+func main() {
+    ctx, cancel := context.WithCancel(context.Background())
+    defer cancel()
+    var cfg identityclient.Config{...}
+    c, err := identityclient.New(ctx, cfg)
+    if err != nil { log.Fatal(err) }
+    defer c.Close()
+    resp, err := c.Get(ctx, "https://server:8443/api")
+    if err != nil { log.Fatal(err) }
+    defer resp.Body.Close()
+    body, _ := io.ReadAll(resp.Body)
+    fmt.Printf("Response: %s\n", body)
+}
+```
+
+```go
+// internal/identityserver/port.go
+package identityserver
+
+import (
+	"context"
+	"net/http"
+	"time"
+)
+
+// Config holds only configuration (no behavior).
+type Config struct {
+	WorkloadAPI struct {
+		SocketPath string // e.g., "unix:///tmp/agent.sock"
+	}
+	SPIFFE struct {
+		AllowedClientID string // e.g., "spiffe://example.org/client"
+	}
+	HTTP struct {
+		Address           string        // e.g., ":8443"
+		ReadHeaderTimeout time.Duration // e.g., 10 * time.Second
+	}
+}
+
+// Server is the stable interface your app depends on.
+type Server interface {
+	// Handle registers an HTTP handler (same semantics as http.ServeMux).
+	Handle(pattern string, handler http.Handler)
+	// Start begins serving HTTPS with identity-based mTLS.
+	Start(ctx context.Context) error
+	// Shutdown gracefully stops the server.
+	Shutdown(ctx context.Context) error
+	// Close releases resources (X509Source etc.).
+	Close() error
+}
+```
+
+```go
+// internal/identityserver/spiffe_server.go
+package identityserver
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"net/http"
+	"sync"
+	"time"
+
+	"github.com/spiffe/go-spiffe/v2/spiffeid"
+	"github.com/spiffe/go-spiffe/v2/spiffetls/tlsconfig"
+	"github.com/spiffe/go-spiffe/v2/workloadapi"
+)
+
+type spiffeServer struct {
+	cfg    Config
+	source *workloadapi.X509Source
+	srv    *http.Server
+	mux    *http.ServeMux
+	once   sync.Once
+}
+
+// New returns a Server that authenticates clients via SPIFFE ID
+// and serves HTTPS using the Workload API-provided SVID.
+func New(ctx context.Context, cfg Config) (Server, error) {
+	if cfg.WorkloadAPI.SocketPath == "" {
+		return nil, fmt.Errorf("workload api socket path is required")
+	}
+	if cfg.SPIFFE.AllowedClientID == "" {
+		return nil, fmt.Errorf("spiffe allowed client id is required")
+	}
+	if cfg.HTTP.Address == "" {
+		cfg.HTTP.Address = ":8443"
+	}
+	if cfg.HTTP.ReadHeaderTimeout <= 0 {
+		cfg.HTTP.ReadHeaderTimeout = 10 * time.Second
+	}
+	// Build the X509 source from the local SPIRE Agent.
+	source, err := workloadapi.NewX509Source(
+		ctx,
+		workloadapi.WithClientOptions(workloadapi.WithAddr(cfg.WorkloadAPI.SocketPath)),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create X509Source: %w", err)
+	}
+	// Parse the client's expected SPIFFE ID.
+	clientID := spiffeid.RequireFromString(cfg.SPIFFE.AllowedClientID)
+	// mTLS server config: present our SVID, verify client ID.
+	tlsCfg := tlsconfig.MTLSServerConfig(source, source, tlsconfig.AuthorizeID(clientID))
+	mux := http.NewServeMux()
+	server := &http.Server{
+		Addr:              cfg.HTTP.Address,
+		Handler:           mux,
+		TLSConfig:         tlsCfg,
+		ReadHeaderTimeout: cfg.HTTP.ReadHeaderTimeout,
+	}
+	return &spiffeServer{
+		cfg:    cfg,
+		source: source,
+		srv:    server,
+		mux:    mux,
+	}, nil
+}
+
+func (s *spiffeServer) Handle(pattern string, handler http.Handler) {
+	s.mux.Handle(pattern, handler)
+}
+
+func (s *spiffeServer) Start(ctx context.Context) error {
+	var startErr error
+	s.once.Do(func() {
+		// ListenAndServeTLS with empty cert/key uses TLSConfig's GetCertificate/SVID from the source.
+		go func() {
+			if err := s.srv.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
+				log.Printf("Server error: %v", err)
+			}
+			// When ctx is canceled, begin graceful shutdown.
+			<-ctx.Done()
+			_ = s.Shutdown(context.Background())
+		}()
+		startErr = s.srv.ListenAndServeTLS("", "")
+	})
+	return startErr
+}
+
+func (s *spiffeServer) Shutdown(ctx context.Context) error {
+	return s.srv.Shutdown(ctx)
+}
+
+func (s *spiffeServer) Close() error {
+	if s.source != nil {
+		s.source.Close()
+	}
+	return nil
+}
+```
+
+```go
+// examples/mtls-server/main.go (improved example)
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/pocket/hexagon/spire/internal/identityserver"
+)
+
+func main() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Handle shutdown signals
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigCh
+		fmt.Println("\nShutting down server...")
+		cancel()
+	}()
+
+	var cfg identityserver.Config
+	cfg.WorkloadAPI.SocketPath = "unix:///tmp/spire-agent/public/api.sock"
+	cfg.SPIFFE.AllowedClientID = "spiffe://example.org/client"
+	cfg.HTTP.Address = ":8443"
+
+	s, err := identityserver.New(ctx, cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer s.Close()
+
+	s.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("Success!!!"))
+	}))
+
+	fmt.Println("Server listening on :8443 with mTLS")
+	if err := s.Start(ctx); err != nil && err != http.ErrServerClosed {
+		log.Fatal(err)
+	}
+}
+```
+
+This is **Iteration 2: mTLS Client (Outbound)** in the 5-iteration plan. It implements the client port (`NewSPIFFEHTTPClient`, `Do`/`Get` with mTLS), building on Iter 1 (server) for mutual auth. Testable end: Client connects to server example, verifies response/ID.
+
+| Iteration | Tasks (Updated with This) | Testable Functionality | Verification |
+|-----------|---------------------------|------------------------|-------------|
+| **1: mTLS Server** | Server port/impl (prior). | Server starts, rejects wrong ID. | `go test ./internal/identityserver -v` (mock, assert ListenAndServeTLS). |
+| **2: mTLS Client (Outbound)** | Client port/impl (this code), Get/Do. | Client connects to mTLS server, fetches response. | `go test ./internal/identityclient -v` (httptest.Server, assert Do 200); run client to server example ("Response: ..."). |
+| **3: Identity Extraction** | Middleware for ID in ctx. | Handler extracts client ID. | `go test -v` (mock conn, assert GetSPIFFEID returns ID). |
+| **4: Examples** | mtls/{server,client}/main.go. | E2E exchange. | `go run ./examples/mtls/server` + client—log "Hello". |
+| **5: Testing/Config/Docs** | Unit/integration, config env. | Full suite 80%+. | `go test -tags=integration -v ./...` (real socket, no err). |
+
+Start with Iter 2 tests—1 day to verify client-server handshake.

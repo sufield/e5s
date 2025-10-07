@@ -1,0 +1,123 @@
+# Example mTLS Configuration
+# Copy this file to config.yaml and customize for your environment
+#
+# Environment variables will override values in this file:
+# - SPIRE_AGENT_SOCKET overrides spire.socket_path
+# - SPIRE_TRUST_DOMAIN overrides spire.trust_domain
+# - HTTP_ADDRESS overrides http.address
+# - HTTP_ENABLED overrides http.enabled
+# - AUTH_POLICY overrides http.authentication.policy
+# - ALLOWED_CLIENT_ID overrides http.authentication.allowed_id
+# - EXPECTED_SERVER_ID overrides http.authentication.allowed_id (for clients)
+# - AUTH_TRUST_DOMAIN overrides http.authentication.trust_domain
+
+# HTTP Server/Client Configuration
+http:
+  # Enable HTTP server/client
+  enabled: true
+
+  # Port to listen on (will be converted to :port format for address)
+  port: 8443
+
+  # Or specify full address (takes precedence over port)
+  address: ":8443"
+
+  # Request timeout
+  timeout: 30s
+
+  # Authentication configuration
+  # NOTE: This library only handles AUTHENTICATION (identity verification)
+  # Authorization (access control) is the application's responsibility
+  authentication:
+    # Policy options:
+    # - "any": Accept any authenticated client/server from SPIRE
+    # - "trust-domain": Accept clients/servers from specific trust domain
+    # - "specific-id": Accept only a specific SPIFFE ID
+    # - "one-of": Accept one of multiple specific SPIFFE IDs
+    policy: trust-domain
+
+    # Trust domain for "trust-domain" policy
+    # If not specified, uses spire.trust_domain
+    trust_domain: example.org
+
+    # Single allowed SPIFFE ID for "specific-id" policy
+    # For servers: allowed client ID
+    # For clients: expected server ID
+    # allowed_id: spiffe://example.org/service/client
+
+    # Multiple allowed SPIFFE IDs for "one-of" policy
+    # allowed_ids:
+    #   - spiffe://example.org/service/client1
+    #   - spiffe://example.org/service/client2
+    #   - spiffe://example.org/service/client3
+
+# SPIRE Configuration
+spire:
+  # Path to SPIRE agent socket
+  # Default: unix:///tmp/spire-agent/public/api.sock
+  socket_path: unix:///tmp/spire-agent/public/api.sock
+
+  # Trust domain for this deployment
+  # Must match the SPIRE server configuration
+  trust_domain: example.org
+
+---
+# Example configurations for different scenarios
+
+# Example 1: Development - Accept any authenticated client
+# http:
+#   enabled: true
+#   address: ":8443"
+#   authentication:
+#     policy: any
+# spire:
+#   socket_path: unix:///tmp/spire-agent/public/api.sock
+#   trust_domain: example.org
+
+# Example 2: Production - Specific client allowed
+# http:
+#   enabled: true
+#   address: ":8443"
+#   authentication:
+#     policy: specific-id
+#     allowed_id: spiffe://example.org/service/client
+# spire:
+#   socket_path: unix:///var/run/spire/agent.sock
+#   trust_domain: production.example.org
+
+# Example 3: Multi-environment - Trust domain restriction
+# http:
+#   enabled: true
+#   address: ":8443"
+#   authentication:
+#     policy: trust-domain
+#     trust_domain: production.example.org
+# spire:
+#   socket_path: unix:///var/run/spire/agent.sock
+#   trust_domain: production.example.org
+
+# Example 4: Load balancer - Multiple allowed clients
+# http:
+#   enabled: true
+#   address: ":8443"
+#   authentication:
+#     policy: one-of
+#     allowed_ids:
+#       - spiffe://example.org/gateway/instance-1
+#       - spiffe://example.org/gateway/instance-2
+#       - spiffe://example.org/gateway/instance-3
+# spire:
+#   socket_path: unix:///var/run/spire/agent.sock
+#   trust_domain: example.org
+
+# Example 5: Kubernetes deployment
+# http:
+#   enabled: true
+#   address: ":8443"
+#   timeout: 60s
+#   authentication:
+#     policy: trust-domain
+#     trust_domain: k8s.example.org
+# spire:
+#   socket_path: unix:///spire-agent-socket/api.sock
+#   trust_domain: k8s.example.org
