@@ -35,7 +35,7 @@ This implementation does NOT have a traditional mutable control plane. Instead, 
 - `GetTrustDomain()` - Returns trust domain
 - `GetCA()` - Returns CA certificate
 
-**Port Interface**: `ports.Server` (defined in `internal/ports/outbound.go:54-73`)
+**Port Interface**: `ports.IdentityServer` (defined in `internal/ports/outbound.go:54-73`)
 
 **Implementation Details**:
 ```go
@@ -240,7 +240,7 @@ func (f *InMemoryAdapterFactory) CreateRegistry() ports.IdentityMapperRegistry {
     return inmemory.NewInMemoryRegistry()
 }
 
-func (f *InMemoryAdapterFactory) CreateServer(ctx context.Context, trustDomain string, trustDomainParser ports.TrustDomainParser, docProvider ports.IdentityDocumentProvider) (ports.Server, error) {
+func (f *InMemoryAdapterFactory) CreateServer(ctx context.Context, trustDomain string, trustDomainParser ports.TrustDomainParser, docProvider ports.IdentityDocumentProvider) (ports.IdentityServer, error) {
     return inmemory.NewInMemoryServer(ctx, trustDomain, trustDomainParser, docProvider)
 }
 
@@ -363,7 +363,7 @@ type IdentityMapperRegistry interface {
 
 ```go
 // Server represents the identity server functionality
-type Server interface {
+type IdentityServer interface {
     // IssueIdentity issues an identity document for an identity namespace
     // Generates X.509 certificate signed by CA with identity namespace in URI SAN
     IssueIdentity(ctx context.Context, identityNamespace *domain.IdentityNamespace) (*domain.IdentityDocument, error)

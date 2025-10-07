@@ -51,7 +51,7 @@ type NodeAttestor interface {
 	AttestNode(ctx context.Context, identityNamespace *domain.IdentityNamespace) (*domain.Node, error)
 }
 
-// Server represents the identity server functionality
+// IdentityServer represents the identity server functionality
 //
 // Error Contract:
 // - IssueIdentity returns domain.ErrIdentityDocumentInvalid if identity namespace invalid
@@ -59,7 +59,7 @@ type NodeAttestor interface {
 // - IssueIdentity returns domain.ErrCANotInitialized if CA not initialized
 // - GetTrustDomain never returns error (returns nil if not initialized)
 // - GetCA returns nil if CA not initialized (check before use)
-type Server interface {
+type IdentityServer interface {
 	// IssueIdentity issues an identity document for an identity namespace
 	// Generates X.509 certificate signed by CA with identity namespace in URI SAN
 	IssueIdentity(ctx context.Context, identityNamespace *domain.IdentityNamespace) (*domain.IdentityDocument, error)
@@ -202,10 +202,10 @@ type AdapterFactory interface {
 	CreateTrustDomainParser() TrustDomainParser
 	CreateIdentityNamespaceParser() IdentityNamespaceParser
 	CreateIdentityDocumentProvider() IdentityDocumentProvider
-	CreateServer(ctx context.Context, trustDomain string, trustDomainParser TrustDomainParser, docProvider IdentityDocumentProvider) (Server, error)
+	CreateServer(ctx context.Context, trustDomain string, trustDomainParser TrustDomainParser, docProvider IdentityDocumentProvider) (IdentityServer, error)
 	CreateAttestor() WorkloadAttestor
 	RegisterWorkloadUID(attestor WorkloadAttestor, uid int, selector string)
-	CreateAgent(ctx context.Context, spiffeID string, server Server, registry IdentityMapperRegistry, attestor WorkloadAttestor, parser IdentityNamespaceParser, docProvider IdentityDocumentProvider) (Agent, error)
+	CreateAgent(ctx context.Context, spiffeID string, server IdentityServer, registry IdentityMapperRegistry, attestor WorkloadAttestor, parser IdentityNamespaceParser, docProvider IdentityDocumentProvider) (Agent, error)
 	// Seeding operations (configuration, not runtime - called only during bootstrap)
 	SeedRegistry(registry IdentityMapperRegistry, ctx context.Context, mapper *domain.IdentityMapper) error
 	SealRegistry(registry IdentityMapperRegistry)

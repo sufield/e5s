@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"syscall"
 
 	"github.com/pocket/hexagon/spire/internal/app"
 	"github.com/pocket/hexagon/spire/internal/domain"
@@ -164,30 +163,6 @@ func (s *Server) extractCallerIdentity(r *http.Request) (ports.ProcessIdentity, 
 		GID:  gid,
 		Path: path,
 	}, nil
-}
-
-// extractCallerCredentials uses SO_PEERCRED to get Unix socket peer credentials
-// This is commented out for now - would be used in production
-func extractCallerCredentials(conn net.Conn) (*syscall.Ucred, error) {
-	unixConn, ok := conn.(*net.UnixConn)
-	if !ok {
-		return nil, fmt.Errorf("connection is not a Unix socket")
-	}
-
-	// Get raw file descriptor
-	file, err := unixConn.File()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get file descriptor: %w", err)
-	}
-	defer file.Close()
-
-	// Get peer credentials using SO_PEERCRED
-	cred, err := syscall.GetsockoptUcred(int(file.Fd()), syscall.SOL_SOCKET, syscall.SO_PEERCRED)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get peer credentials: %w", err)
-	}
-
-	return cred, nil
 }
 
 // X509SVIDResponse is the response format for X.509 SVID requests

@@ -67,7 +67,7 @@ func (f *SPIREAdapterFactory) CreateServer(
 	trustDomain string,
 	trustDomainParser ports.TrustDomainParser,
 	docProvider ports.IdentityDocumentProvider,
-) (ports.Server, error) {
+) (ports.IdentityServer, error) {
 	return spire.NewServer(ctx, f.client, trustDomain, trustDomainParser)
 }
 
@@ -89,7 +89,7 @@ func (f *SPIREAdapterFactory) RegisterWorkloadUID(attestorInterface ports.Worklo
 func (f *SPIREAdapterFactory) CreateAgent(
 	ctx context.Context,
 	spiffeID string,
-	server ports.Server,
+	server ports.IdentityServer,
 	registry ports.IdentityMapperRegistry,
 	attestorInterface ports.WorkloadAttestor,
 	parser ports.IdentityNamespaceParser,

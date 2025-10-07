@@ -118,4 +118,4 @@ func (s *Server) RefreshCA(ctx context.Context) error {
 	return nil
 }
 
-var _ ports.Server = (*Server)(nil)
+var _ ports.IdentityServer = (*Server)(nil)

@@ -36,7 +36,7 @@ func (f *InMemoryAdapterFactory) CreateIdentityDocumentProvider() ports.Identity
 	return inmemory.NewInMemoryIdentityDocumentProvider()
 }
 
-func (f *InMemoryAdapterFactory) CreateTrustBundleProvider(server ports.Server) ports.TrustBundleProvider {
+func (f *InMemoryAdapterFactory) CreateTrustBundleProvider(server ports.IdentityServer) ports.TrustBundleProvider {
 	// Extract CA certificate from server for bundle
 	caCert := server.GetCA()
 	if caCert == nil {
@@ -52,7 +52,7 @@ func (f *InMemoryAdapterFactory) CreateIdentityDocumentValidator(bundleProvider 
 	return inmemory.NewIdentityDocumentValidator(bundleProvider)
 }
 
-func (f *InMemoryAdapterFactory) CreateServer(ctx context.Context, trustDomain string, trustDomainParser ports.TrustDomainParser, docProvider ports.IdentityDocumentProvider) (ports.Server, error) {
+func (f *InMemoryAdapterFactory) CreateServer(ctx context.Context, trustDomain string, trustDomainParser ports.TrustDomainParser, docProvider ports.IdentityDocumentProvider) (ports.IdentityServer, error) {
 	return inmemory.NewInMemoryServer(ctx, trustDomain, trustDomainParser, docProvider)
 }
 
@@ -70,7 +70,7 @@ func (f *InMemoryAdapterFactory) RegisterWorkloadUID(attestorInterface ports.Wor
 func (f *InMemoryAdapterFactory) CreateAgent(
 	ctx context.Context,
 	spiffeID string,
-	server ports.Server,
+	server ports.IdentityServer,
 	registry ports.IdentityMapperRegistry,
 	attestorInterface ports.WorkloadAttestor,
 	parser ports.IdentityNamespaceParser,

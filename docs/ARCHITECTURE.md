@@ -590,7 +590,7 @@ func (d *InMemoryDeps) CreateRegistry() ports.IdentityMapperRegistry {
     return inmemory.NewInMemoryRegistry()
 }
 
-func (d *InMemoryDeps) CreateServer(...) (ports.Server, error) {
+func (d *InMemoryDeps) CreateServer(...) (ports.IdentityServer, error) {
     return inmemory.NewInMemoryServer(...)
 }
 
