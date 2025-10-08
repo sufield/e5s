@@ -1,7 +1,5 @@
 # RegistrationEntry Entity Domain Purity Verification
 
-## Verification Results
-
 ### ✅ Pure Domain Entity
 
 The `RegistrationEntry` struct and its methods represent **pure domain logic** for an in-memory walking skeleton:
@@ -127,7 +125,7 @@ func (r *InMemoryRegistrationRepository) FindMatchingEntry(ctx context.Context, 
 ### Purpose
 Models **SPIRE's authorization policy**: defines which workloads (identified by selectors) qualify for which identities (SPIFFE IDs).
 
-### Key Methods
+### Methods
 
 #### `NewRegistrationEntry(identityNamespace, selectors)`
 **Domain validation:**
@@ -149,8 +147,8 @@ func (r *RegistrationEntry) MatchesSelectors(selectors *SelectorSet) bool {
 }
 ```
 
-This is **pure domain logic** implementing SPIRE's AND semantics:
-- **ALL** entry selectors must be present in discovered selectors
+This is domain logic implementing SPIRE's AND semantics:
+- ALL entry selectors must be present in discovered selectors
 - Ensures strong attestation (e.g., workload needs `unix:uid:1000` AND `k8s:ns:default`)
 - Discovered selectors can have additional selectors (superset is OK)
 - Used during attestation to find matching entries
@@ -278,11 +276,11 @@ $ IDP_MODE=inmem go run ./cmd/console
 - Real: Would connect to SPIRE server's datastore
 - Both use same domain `RegistrationEntry` entity
 
-The `RegistrationEntry` entity in `internal/core/domain/registration_entry.go` is **verified as pure domain logic** with:
+The `RegistrationEntry` entity in `internal/core/domain/registration_entry.go` is verified as domain logic with:
 - ✅ No SDK duplications (SDK lacks registration/policy types)
 - ✅ Technology-agnostic design
 - ✅ Proper port abstraction (RegistrationRepository)
 - ✅ Clean adapter separation (storage/query logic)
 - ✅ Ready for real SPIRE datastore integration
 
-The entity models **authorization policies** (SPIFFE ID eligibility rules) while adapters handle **persistence** (storage/retrieval mechanisms). This maintains hexagonal architecture structure and domain purity.
+The entity models authorization policies (SPIFFE ID eligibility rules) while adapters handle persistence (storage/retrieval mechanisms). This maintains hexagonal architecture structure and domain purity.

@@ -182,14 +182,14 @@ fi
 ```
 ?     github.com/pocket/hexagon/spire/internal/adapters/outbound/spire  [no test files]
 ```
-**This is EXPECTED!** The SPIRE adapter has no unit tests because it requires live SPIRE.
+This is EXPECTED! The SPIRE adapter has no unit tests because it requires live SPIRE.
 
 ### Integration Tests (Live SPIRE)
 ```
 --- PASS: TestFetchX509SVID (0.12s)
     integration_test.go:68: Fetched SVID for identity: spiffe://example.org/agent
 ```
-**This confirms** the SPIRE adapter works with real SPIRE infrastructure!
+This confirms the SPIRE adapter works with real SPIRE infrastructure!
 
 ---
 

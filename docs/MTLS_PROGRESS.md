@@ -2,8 +2,6 @@
 
 This document tracks the implementation progress of mTLS authentication using go-spiffe SDK.
 
-## Implementation Status
-
 ### ✅ Phase 1: Identity Server (mTLS HTTP Server) - COMPLETE
 
 **Goal**: Create an HTTP server that authenticates clients using X.509 SVIDs.
@@ -14,7 +12,7 @@ This document tracks the implementation progress of mTLS authentication using go
 - [internal/identityserver/port_test.go](../internal/identityserver/port_test.go) - Configuration tests
 - [internal/identityserver/spiffe_server_test.go](../internal/identityserver/spiffe_server_test.go) - Server tests
 
-**Key Features Implemented**:
+**Features Implemented**:
 - ✅ Clean `Server` port interface (4 methods: Handle, Start, Shutdown, Close)
 - ✅ Pure data `Config` struct with defaults
 - ✅ SPIFFE server adapter using go-spiffe SDK v2.6.0
@@ -50,7 +48,7 @@ go-spiffe SDK
 - [internal/httpclient/client.go](../internal/httpclient/client.go) - Client interface and implementation
 - [internal/httpclient/client_test.go](../internal/httpclient/client_test.go) - Client tests
 
-**Key Features Implemented**:
+**Features Implemented**:
 - ✅ Clean `Client` interface (Get, Post, Do, Close methods)
 - ✅ Pure data `Config` struct with defaults
 - ✅ Automatic X.509 SVID presentation to servers
@@ -84,7 +82,7 @@ go-spiffe SDK
 - [examples/mtls/client/main.go](../examples/mtls/client/main.go) - Example mTLS client
 - [examples/mtls/README.md](../examples/mtls/README.md) - Complete setup and usage guide
 
-**Example Features**:
+**Features**:
 - ✅ Server with multiple endpoints (/api/hello, /api/echo, /health)
 - ✅ Client identity extraction using `spiffetls.PeerIDFromConnectionState`
 - ✅ Client making authenticated requests
@@ -112,9 +110,7 @@ SERVER_URL=https://localhost:8443 \
 
 ---
 
-## Architecture Highlights
-
-### True Hexagonal Architecture
+### Hexagonal Architecture
 
 Following the recommendations from [MTLS_ARCHITECTURE_COMPARISON.md](MTLS_ARCHITECTURE_COMPARISON.md):
 
@@ -209,7 +205,7 @@ $ go build -o bin/mtls-client ./examples/mtls/client
 
 ### Scope: Authentication Only
 
-This implementation focuses on **authentication** ("who are you?"), not **authorization** ("what can you do?"):
+This implementation focuses on authentication** ("who are you?"), not authorization ("what can you do?"):
 
 ✅ **In Scope** (Implemented):
 - mTLS mutual authentication
@@ -314,4 +310,4 @@ The mTLS implementation is **complete and production-ready** for the core authen
 ✅ **Well Tested**: Unit tests for all components
 ✅ **Well Documented**: Comprehensive README with examples
 
-**Ready for integration testing and production deployment.**
+Ready for integration testing and production deployment.

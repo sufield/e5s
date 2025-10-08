@@ -2,7 +2,7 @@
 
 ## Current State ✅
 
-The hexagonal architecture is **production-ready** with complete dev/prod separation:
+The hexagonal architecture is production-ready with complete dev/prod separation:
 
 ### Build Verification
 ```bash
@@ -329,7 +329,7 @@ test-e2e: minikube-up
 - [x] Validates JWT tokens using SPIRE bundle
 - [x] Handles SPIRE agent unavailability gracefully
 - [x] Automatic certificate rotation works (via SPIRE)
-- [ ] Integration tests pass against Minikube SPIRE (TODO)
+- [ ] Integration tests pass against Minikube SPIRE - TODO
 - [x] Production binary excludes dev code
 - [x] Dev/prod build separation verified
 

@@ -113,7 +113,7 @@ func (s *IdentityNamespace) Equals(other *IdentityNamespace) bool { return s.uri
 func (s *IdentityNamespace) IsInTrustDomain(td *TrustDomain) bool { return s.trustDomain.Equals(td) }
 ```
 
-**Key Changes**:
+**Changes**:
 - ❌ Removed `NewIdentityNamespace(string)` - moved to adapter
 - ❌ Removed `NewIdentityNamespaceFromParts(td, path)` - moved to adapter
 - ❌ Removed `url.Parse`, `strings` imports - no parsing logic
@@ -533,4 +533,4 @@ The IdentityNamespace refactoring successfully:
 - ✅ **Reduced complexity** - Domain code reduced from ~105 to ~60 lines
 - ✅ **Preserved functionality** - All tests pass, application works correctly
 
-Domain should model **concepts**, not replicate **technology**. The IdentityNamespace concept ("identifier with trust domain and path") is separate from the parsing technology (SDK's `spiffeid.FromString`). By separating these via ports/adapters, we achieve both purity and practical utility.
+Domain should model concepts, not replicate technology. The IdentityNamespace concept ("identifier with trust domain and path") is separate from the parsing technology (SDK's `spiffeid.FromString`). By separating these via ports/adapters, we achieve both purity and practical utility.

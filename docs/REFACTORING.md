@@ -99,16 +99,28 @@ $ IDP_MODE=inmem go run ./cmd/console
 ✓ Success! Application runs correctly with refactored architecture
 ```
 
-## Future Work
+## go-spiffe SDK Integration
 
-When integrating the go-spiffe SDK:
+✅ **Complete**: Production SPIRE adapters have been fully implemented using the go-spiffe SDK.
 
-1. Add `github.com/spiffe/go-spiffe/v2` to dependencies
-2. Update `internal/adapters/outbound/spire/validator.go`:
-   - Import `github.com/spiffe/go-spiffe/v2/svid/x509svid`
-   - Implement bundle management
-   - Use `x509svid.Verify()` for full chain validation
-3. Optionally create a `BundleSource` adapter port if needed
+**Implemented Components**:
+
+1. **Dependency**: `github.com/spiffe/go-spiffe/v2 v2.6.0` added to `go.mod`
+2. **SPIRE Client** (`internal/adapters/outbound/spire/client.go`):
+   - Workload API client connection management
+   - Uses `workloadapi.New()` for SDK integration
+3. **Identity Operations** (`internal/adapters/outbound/spire/identity_provider.go`):
+   - X.509 SVID fetching using `client.FetchX509Context()`
+   - JWT SVID fetching using `client.FetchJWTSVID()`
+   - JWT validation using `jwtsvid.ParseAndValidate()` with bundle management
+4. **Bundle Management** (`internal/adapters/outbound/spire/bundle_provider.go`):
+   - Trust bundle fetching using `FetchX509Context()` and `Bundles.GetX509BundleForTrustDomain()`
+5. **Translation Layer** (`internal/adapters/outbound/spire/translation.go`):
+   - Domain model conversions using `spiffeid` package
+   - Uses `spiffeid.FromString()` and `spiffeid.TrustDomainFromString()`
+   - Converts `x509svid.SVID` to domain `IdentityDocument`
+
+See `internal/adapters/outbound/spire/README.md` for complete documentation.
 
 ## References
 

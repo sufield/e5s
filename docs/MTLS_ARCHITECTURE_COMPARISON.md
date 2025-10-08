@@ -1,11 +1,9 @@
 # mTLS Architecture Comparison
 
-## Overview
-
 This document compares two approaches to implementing mTLS with SPIFFE/SPIRE:
 
 1. **My Approach** (MTLS_IMPLEMENTATION.md): Detailed phases with explicit adapters
-2. **Your Approach**: Clean identity server abstraction hiding SPIFFE details
+2. **Your Approach**: Identity server abstraction hiding SPIFFE details
 
 ---
 
@@ -340,7 +338,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 ---
 
-## Key Differences Summary
+## Differences Summary
 
 | Feature | My Approach | Your Approach | Winner |
 |---------|-------------|---------------|--------|
@@ -492,7 +490,7 @@ To adopt your approach:
 
 ## Conclusion
 
-**Your approach is the correct hexagonal architecture pattern.**
+Your approach is the correct hexagonal architecture pattern.
 
 My approach was on the right track (authentication only, no authorization) but:
 - ❌ Missing explicit port interface
@@ -506,5 +504,3 @@ Your approach:
 - ✅ Minimal API surface
 - ✅ Trivial to test
 - ✅ Config as data
-
-**I should adopt your architecture for this library.**

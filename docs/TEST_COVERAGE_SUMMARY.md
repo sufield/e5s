@@ -38,7 +38,7 @@ Comprehensive test suite for inbound/cmd adapters and attestor/workloadapi packa
 ✓ TestCLI_ImplementsPort - Interface compliance
 ```
 
-**Key Test Patterns:**
+**Test Patterns:**
 - Real implementations (no mocks)
 - Stdout capture for CLI output verification
 - Error path testing (expired identities)
@@ -57,7 +57,7 @@ Comprehensive test suite for inbound/cmd adapters and attestor/workloadapi packa
 ✓ TestServer_ImplementsPort - Interface compliance
 ```
 
-**Key Test Patterns:**
+**Test Patterns:**
 - Unix domain socket testing
 - Real HTTP server with Unix socket
 - Header-based credential passing (demo mode)
@@ -78,7 +78,7 @@ Comprehensive test suite for inbound/cmd adapters and attestor/workloadapi packa
 ✓ TestUnixWorkloadAttestor_ContextCancellation - Context handling
 ```
 
-**Key Test Patterns:**
+**Test Patterns:**
 - Table-driven tests (6 scenarios)
 - Edge cases: negative UID, zero UID (root), high UID (65534)
 - Error domain validation
@@ -99,7 +99,7 @@ Comprehensive test suite for inbound/cmd adapters and attestor/workloadapi packa
 ✓ TestClient_ConcurrentRequests - Concurrent safety (20 requests)
 ```
 
-**Key Test Patterns:**
+**Test Patterns:**
 - Mock HTTP servers over Unix sockets
 - Error scenario coverage (404, 500, bad JSON)
 - Context timeout testing

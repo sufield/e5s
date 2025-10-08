@@ -2,8 +2,6 @@
 
 Port-based improvements were made to the mTLS implementation, following proper separation of concerns.
 
-## What Was Improved
-
 ### 1. Port Interfaces (internal/ports/identityserver.go)
 
 Created port interfaces that separate configuration from behavior:

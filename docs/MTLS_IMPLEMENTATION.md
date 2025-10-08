@@ -14,7 +14,7 @@
 - Policy engines
 - Access control lists (ACLs)
 
-**Philosophy**: This library focuses on **authentication** ("who are you?"), not **authorization** ("what can you do?"). Authorization should be implemented in the application layer by the consumer of this library.
+This library focuses on authentication ("who are you?"), not authorization ("what can you do?"). Authorization should be implemented in the application layer by the consumer of this library.
 
 ---
 
@@ -176,7 +176,7 @@ func GetSPIFFEIDFromContext(ctx context.Context) (spiffeid.ID, bool) {
 }
 ```
 
-**Key Features**:
+**Features**:
 - ✅ Automatic SVID rotation (via X509Source)
 - ✅ mTLS with client authentication
 - ✅ Identity extraction (SPIFFE ID available to handlers)
@@ -316,7 +316,7 @@ func (c *SPIFFEHTTPClient) Close() error {
 }
 ```
 
-**Key Features**:
+**Features**:
 - ✅ Automatic SVID presentation
 - ✅ Automatic SVID rotation
 - ✅ Server identity verification
@@ -711,20 +711,7 @@ spire:
 
 ---
 
-## Timeline Estimate
-
-| Phase | Effort | Dependencies |
-|-------|--------|--------------|
-| Phase 1: mTLS Server | 2 days | Current SPIRE adapters |
-| Phase 2: mTLS Client | 1 day | Phase 1 |
-| Phase 3: Identity Utils | 0.5 days | Phase 1 |
-| Phase 4: Examples | 1 day | Phases 1-3 |
-| Testing & Docs | 1.5 days | All phases |
-| **Total** | **6 days** | |
-
----
-
-## Key Principles
+## Principles
 
 1. **Authentication Only**: Library verifies identity, not permissions
 2. **Use go-spiffe Built-ins**: No custom authorizers beyond go-spiffe
@@ -762,9 +749,7 @@ Split into 5 iterations (1-2 days each), with testable functionality at end (run
 | **4: Service-to-Service Examples** | - Create examples/mtls/{server,client}/main.go.<br>- Wire server/client with ports.<br>- Add README with run/build. | - End-to-end mTLS exchange (hello/response).<br>- ID mismatch fails handshake. | - `go run ./examples/mtls/server` + `go run ./examples/mtls/client`—expect "Hello from server" log.<br>- Wrong ID: "tls: bad certificate" err. |
 | **5: Testing, Config, Docs** | - Add unit/integration tests (mocks, real socket).<br>- Impl config.yaml with env fallback.<br>- Create MTLS.md, update README. | - Full suite passes (80%+ coverage).<br>- Config loads/overrides work. | - `go test -tags=integration -v ./...` (real Minikube socket, assert no errs).<br>- `make test-coverage` >70%; manual curl to examples. |
 
-Start Iter 1 (server)—testable. Use `//go:build prod` for examples if SPIRE-only. This builds a robust auth lib!
-
-
+Start Iter 1 (server)—testable. Use `//go:build prod` for examples if SPIRE-only.
 
 ```go
 // internal/identityclient/port.go
@@ -936,7 +921,9 @@ func main() {
 }
 ```
 
-Iteration 1: mTLS Server (Inbound). This code directly implements the server port (NewHTTPServer, Start with ListenAndServeTLS, Handle for mux) and TLS config (MTLSServerConfig with authorizer), matching the phase's goal of an mTLS HTTP server with client auth. Add the middleware/ID extraction from Phase 3 to complete it, then test with go test ./internal/identityserver -v (mock source, assert ListenAndServeTLS starts, rejects wrong ID).
+Iteration 1: 
+
+mTLS Server (Inbound). This code directly implements the server port (NewHTTPServer, Start with ListenAndServeTLS, Handle for mux) and TLS config (MTLSServerConfig with authorizer), matching the phase's goal of an mTLS HTTP server with client auth. Add the middleware/ID extraction from Phase 3 to complete it, then test with go test ./internal/identityserver -v (mock source, assert ListenAndServeTLS starts, rejects wrong ID).
 
 **port.go**: Correct—`Config` is pure data (no behavior), `Server` port stable/simple (Handle/Start/Shutdown/Close). Defaults in New good. **Issue**: No validation for Required fields (e.g., SocketPath non-empty)—add in New. **Rating**: 9.5/10.
 
@@ -1011,7 +998,6 @@ Iteration 1: mTLS Server (Inbound). This code directly implements the server por
 5. **Integration**: With Minikube socket—set `cfg.WorkloadAPI.SocketPath = "/tmp/spire-agent/public/api.sock"`; test curl with SVID.
 
 Prod-ready with middleware/test—check in! Next: Client phase.
-```
 
 Iteration 2
 
@@ -1023,6 +1009,7 @@ Iteration 2
 - **Tests Missing**: No file—add unit (mock source) for coverage.
 
 **Improved New** (add wrapping/defaults):
+
 ```go
 func New(ctx context.Context, cfg Config) (Client, error) {
     if cfg.WorkloadAPI.SocketPath == "" {
@@ -1263,5 +1250,3 @@ This is **Iteration 2: mTLS Client (Outbound)** in the 5-iteration plan. It impl
 | **3: Identity Extraction** | Middleware for ID in ctx. | Handler extracts client ID. | `go test -v` (mock conn, assert GetSPIFFEID returns ID). |
 | **4: Examples** | mtls/{server,client}/main.go. | E2E exchange. | `go run ./examples/mtls/server` + client—log "Hello". |
 | **5: Testing/Config/Docs** | Unit/integration, config env. | Full suite 80%+. | `go test -tags=integration -v ./...` (real socket, no err). |
-
-Start with Iter 2 tests—1 day to verify client-server handshake.

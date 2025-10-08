@@ -1,7 +1,5 @@
 # Unified Configuration Improvements
 
-## Overview
-
 This document describes the final set of improvements that unified the mTLS configuration structure and introduced generic "peer" terminology throughout the codebase.
 
 ## Changes Made

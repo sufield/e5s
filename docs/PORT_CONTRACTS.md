@@ -1,14 +1,44 @@
 # Port Contracts
 
-This document defines the complete contract for all ports in the system. These contracts **must** be honored by all implementations (in-memory, real SDK, mocks).
+This document defines the contract for all ports in the system. These contracts must be honored by all implementations (in-memory, real SDK, mocks).
 
 ## Error Contract Philosophy
 
-All ports return **typed domain errors** from `domain/errors.go`. This ensures:
+All ports return typed domain errors from `domain/errors.go`. This ensures:
 - Callers can use `errors.Is()` for reliable error checking
 - Real SDK adapters map SDK errors to domain errors
 - Tests can assert exact error types
 - Error handling is consistent across all implementations
+
+### Sentinel Error Usage Patterns
+
+**Direct Return (No Additional Context)**:
+```go
+if len(caCerts) == 0 {
+    return nil, domain.ErrCANotInitialized
+}
+```
+
+**Wrapped with Context** (preserves sentinel for `errors.Is()` while adding details):
+```go
+if identityNamespace == nil {
+    return nil, fmt.Errorf("%w: identity namespace cannot be nil", domain.ErrIdentityDocumentInvalid)
+}
+```
+
+**Wrapping SDK Errors**:
+```go
+doc, err := s.client.FetchX509SVID(ctx)
+if err != nil {
+    return nil, fmt.Errorf("%w: failed to fetch identity from SPIRE: %v", domain.ErrServerUnavailable, err)
+}
+```
+
+**Key Rules**:
+1. Always use `%w` verb to wrap sentinel errors (not `%v`)
+2. Add context after the sentinel error, not before
+3. Return sentinel directly when the error is self-explanatory
+4. Wrap with context when additional information helps debugging
 
 ## Outbound Ports
 
@@ -340,7 +370,9 @@ func TestWorkloadAttestation(t *testing.T) {
 When implementing a new adapter:
 
 - [ ] Returns exact domain errors from `domain/errors.go`
-- [ ] Uses `fmt.Errorf("%w", domain.Err...)` to wrap with context
+- [ ] Uses sentinel errors appropriately:
+  - Direct return when no context needed: `return nil, domain.ErrCANotInitialized`
+  - Wrapped with context: `return nil, fmt.Errorf("%w: additional context", domain.ErrSentinel)`
 - [ ] Validates all inputs (nil checks, format validation)
 - [ ] Handles all error cases documented in port contract
 - [ ] Maps SDK errors to domain errors (if using real SDK)

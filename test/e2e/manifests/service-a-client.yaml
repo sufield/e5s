@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: service-a
+  namespace: spire-e2e-test
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: service-a
+  namespace: spire-e2e-test
+  labels:
+    app: service-a
+    role: client
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: service-a
+  template:
+    metadata:
+      labels:
+        app: service-a
+        role: client
+    spec:
+      serviceAccountName: service-a
+      hostPID: false
+      hostNetwork: false
+      containers:
+      - name: service-a
+        image: service-a:latest
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: SPIFFE_ENDPOINT_SOCKET
+          value: "unix:///spire-agent-socket/agent.sock"
+        - name: SERVICE_NAME
+          value: "service-a"
+        - name: SERVICE_ROLE
+          value: "client"
+        - name: TARGET_SERVICE
+          value: "service-b.spire-e2e-test.svc.cluster.local:8443"
+        volumeMounts:
+        - name: spire-agent-socket
+          mountPath: /spire-agent-socket
+          readOnly: true
+      volumes:
+      - name: spire-agent-socket
+        hostPath:
+          path: /run/spire/sockets
+          type: Directory

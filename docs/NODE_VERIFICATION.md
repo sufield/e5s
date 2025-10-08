@@ -194,4 +194,4 @@ The `Node` entity in `internal/core/domain/node.go` is **verified as pure domain
 - ✅ Clean adapter separation
 - ✅ Ready for real SPIRE integration
 
-The entity models the **result** of attestation (attested state) while adapters handle the **process** (platform verification). This maintains hexagonal architecture principles and domain purity.
+The entity models the result of attestation (attested state) while adapters handle the process (platform verification). This maintains hexagonal architecture principles and domain purity.

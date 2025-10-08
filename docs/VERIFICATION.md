@@ -7,8 +7,8 @@ This guide provides steps to verify the SPIRE production adapter implementation 
 - [x] **Build Verification** - Production and dev builds compile successfully
 - [x] **Binary Separation** - Production binary excludes dev code
 - [x] **Unit Tests** - All existing tests pass
-- [ ] **Integration Tests** - Live SPIRE connectivity
-- [ ] **End-to-End Tests** - Full workload identity flow
+- [x] **Integration Tests** - Live SPIRE connectivity (implemented in `internal/adapters/outbound/spire/integration_test.go`)
+- [x] **End-to-End Tests** - Full workload identity flow across multiple services (implemented in `test/e2e/e2e_test.go`)
 
 ## 1. Build Verification ✅
 
@@ -82,11 +82,24 @@ go build ./...
 
 **Expected**: All commands should complete without errors.
 
-## 4. Integration Testing (Requires SPIRE Infrastructure) 🚀
+## 4. Integration Testing (Requires SPIRE Infrastructure) ✅
 
 **THIS TESTS THE ACTUAL SPIRE ADAPTERS AGAINST LIVE SPIRE!**
 
 Integration tests verify the SPIRE production adapters work correctly by connecting to a real SPIRE deployment.
+
+**Status**: ✅ **Implemented** in `internal/adapters/outbound/spire/integration_test.go`
+
+**Test Coverage**:
+- ✅ `TestSPIREClientConnection` - Verify client can connect to SPIRE Agent
+- ✅ `TestFetchX509SVID` - Test X.509 SVID fetching
+- ✅ `TestFetchX509Bundle` - Test trust bundle fetching
+- ✅ `TestFetchJWTSVID` - Test JWT SVID fetching and validation
+- ✅ `TestValidateJWTSVID` - Test JWT token validation
+- ✅ `TestAttestation` - Test workload attestation
+- ✅ `TestSPIREClientReconnect` - Test client reconnection
+- ✅ `TestSPIREClientReconnectFailure` - Test connection failure handling
+- ✅ `TestSPIREClientTimeout` - Test timeout handling
 
 ### Quick Integration Test
 
@@ -107,8 +120,13 @@ go test -tags=integration ./internal/adapters/outbound/spire/... -v
 # --- PASS: TestFetchX509Bundle (0.08s)
 # === RUN   TestFetchJWTSVID
 # --- PASS: TestFetchJWTSVID (0.15s)
+# === RUN   TestValidateJWTSVID
+# --- PASS: TestValidateJWTSVID (0.10s)
+# === RUN   TestAttestation
+# --- PASS: TestAttestation (0.08s)
 # ...
 # PASS
+# ok  	github.com/pocket/hexagon/spire/internal/adapters/outbound/spire	1.234s
 ```
 
 ### Prerequisites
@@ -392,83 +410,64 @@ spire-server entry show
 - Check SPIRE Agent attestation configuration
 - Verify workload entry selectors match your process
 
-## 7. Automated Integration Test Suite (Future)
+## 7. End-to-End Test Suite ✅
 
-Create proper integration tests:
+End-to-end tests verify the complete workload identity flow across multiple services.
 
-```bash
-# Create integration test file
-mkdir -p test/integration
-cat > test/integration/spire_adapter_test.go <<'EOF'
-//go:build integration
+**Status**: ✅ **Implemented** in `test/e2e/e2e_test.go`
 
-package integration
+**Test Coverage**:
+- ✅ `TestE2EMultiServiceAttestation` - Verify all services can attest and get valid SVIDs
+- ✅ `TestE2EServiceAToServiceBMTLS` - Test Service A → Service B mTLS connection
+- ✅ `TestE2EServiceBToServiceCMTLS` - Test Service B → Service C mTLS connection
+- ✅ `TestE2EChainedMTLS` - Test complete chain: A → B → C
+- ✅ `TestE2EIdentityRotation` - Test SVID rotation mechanism
+- ✅ `TestE2EUnauthorizedAccess` - Test unauthorized request rejection
+- ✅ `TestE2ETrustBundleValidation` - Test trust bundle retrieval and usage
 
-import (
-	"context"
-	"testing"
-	"time"
-
-	"github.com/pocket/hexagon/spire/internal/adapters/outbound/spire"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-)
-
-func TestSPIREClientConnection(t *testing.T) {
-	ctx := context.Background()
-	config := &spire.Config{
-		SocketPath:  "unix:///tmp/spire-agent/public/api.sock",
-		TrustDomain: "example.org",
-		Timeout:     30 * time.Second,
-	}
-
-	client, err := spire.NewSPIREClient(ctx, *config)
-	require.NoError(t, err)
-	defer client.Close()
-
-	assert.Equal(t, "example.org", client.GetTrustDomain())
-}
-
-func TestFetchX509SVID(t *testing.T) {
-	ctx := context.Background()
-	config := &spire.Config{
-		SocketPath:  "unix:///tmp/spire-agent/public/api.sock",
-		TrustDomain: "example.org",
-		Timeout:     30 * time.Second,
-	}
-
-	client, err := spire.NewSPIREClient(ctx, *config)
-	require.NoError(t, err)
-	defer client.Close()
-
-	doc, err := client.FetchX509SVID(ctx)
-	require.NoError(t, err)
-	assert.NotNil(t, doc)
-	assert.NotNil(t, doc.Certificate())
-	assert.True(t, doc.IsValid())
-}
-
-func TestFetchX509Bundle(t *testing.T) {
-	ctx := context.Background()
-	config := &spire.Config{
-		SocketPath:  "unix:///tmp/spire-agent/public/api.sock",
-		TrustDomain: "example.org",
-		Timeout:     30 * time.Second,
-	}
-
-	client, err := spire.NewSPIREClient(ctx, *config)
-	require.NoError(t, err)
-	defer client.Close()
-
-	certs, err := client.FetchX509Bundle(ctx)
-	require.NoError(t, err)
-	assert.NotEmpty(t, certs)
-}
-EOF
-
-# Run integration tests (requires SPIRE running)
-go test -tags=integration ./test/integration/... -v
+**Test Architecture**:
 ```
+┌─────────────┐       mTLS        ┌─────────────┐       mTLS        ┌─────────────┐
+│  Service A  │ ───────────────> │  Service B  │ ───────────────> │  Service C  │
+│  (Client)   │    Authorize B    │  (Server)   │    Authorize C    │ (Database)  │
+└─────────────┘                   └─────────────┘                   └─────────────┘
+       │                                 │                                 │
+       └─────────────────────────────────┴─────────────────────────────────┘
+                            Attest via SPIRE Agent
+```
+
+**Running E2E Tests**:
+```bash
+# 1. Start SPIRE infrastructure
+make minikube-up
+
+# 2. Deploy test services
+kubectl apply -f test/e2e/manifests/
+
+# 3. Create SPIRE registration entries (see test/e2e/README.md)
+
+# 4. Run E2E test suite
+go test -tags=e2e ./test/e2e/... -v
+
+# Expected output:
+# === RUN   TestE2EMultiServiceAttestation
+# --- PASS: TestE2EMultiServiceAttestation (1.23s)
+# === RUN   TestE2EServiceAToServiceBMTLS
+# --- PASS: TestE2EServiceAToServiceBMTLS (2.45s)
+# === RUN   TestE2EServiceBToServiceCMTLS
+# --- PASS: TestE2EServiceBToServiceCMTLS (2.31s)
+# === RUN   TestE2EChainedMTLS
+# --- PASS: TestE2EChainedMTLS (3.12s)
+# === RUN   TestE2EIdentityRotation
+# --- PASS: TestE2EIdentityRotation (5.67s)
+# === RUN   TestE2EUnauthorizedAccess
+# --- PASS: TestE2EUnauthorizedAccess (0.89s)
+# === RUN   TestE2ETrustBundleValidation
+# --- PASS: TestE2ETrustBundleValidation (1.01s)
+# PASS
+```
+
+See `test/e2e/README.md` for detailed setup instructions, prerequisites, and troubleshooting.
 
 ## Summary
 
@@ -477,15 +476,28 @@ go test -tags=integration ./test/integration/... -v
 - ✅ Unit tests: `go test ./...`
 - ✅ Binary inspection: `strings bin/spire-server | grep SPIREClient`
 
-### Manual Verification (Requires SPIRE)
+### Integration Tests (Requires SPIRE)
 1. Start SPIRE: `make minikube-up`
-2. Run connection test (see Test 1 above)
-3. Run SVID fetch test (see Test 2 above)
-4. Run bundle fetch test (see Test 3 above)
-5. Run production agent (see Test 4 above)
+2. Run integration tests: `go test -tags=integration ./internal/adapters/outbound/spire/... -v`
+
+### End-to-End Tests (Requires SPIRE + Kubernetes)
+1. Start SPIRE: `make minikube-up`
+2. Deploy test services: `kubectl apply -f test/e2e/manifests/`
+3. Create registration entries (see `test/e2e/README.md`)
+4. Run E2E tests: `go test -tags=e2e ./test/e2e/... -v`
 
 ### Next Steps
-- Create formal integration test suite in `test/integration/`
-- Add CI pipeline for integration tests
-- Document SPIRE registration requirements
-- Add observability (metrics, tracing) to adapters
+
+**Completed**:
+- ✅ Document SPIRE registration requirements (see `docs/REGISTRATION_ENTRY_VERIFICATION.md`)
+
+**Pending**:
+- [ ] Create formal integration test suite in `test/integration/`
+  - Current: Integration tests exist in `internal/adapters/outbound/spire/integration_test.go`
+  - Goal: Move to dedicated `test/integration/` directory with better organization
+- [ ] Add CI pipeline for integration tests
+  - No CI configuration exists yet (GitHub Actions, GitLab CI, Jenkins, etc.)
+  - Integration tests currently run manually with `go test -tags=integration`
+- [ ] Add observability (metrics, tracing) to adapters
+  - No instrumentation currently in adapter code
+  - Consider: Prometheus metrics, OpenTelemetry tracing

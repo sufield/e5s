@@ -20,9 +20,9 @@
 
 ## Overview
 
-This library provides mTLS (Mutual TLS) authentication using SPIFFE/SPIRE for service-to-service communication. It implements the **adapter pattern** and focuses solely on **authentication** (verifying identity), leaving **authorization** (access control) to the application layer.
+This library provides mTLS (Mutual TLS) authentication using SPIFFE/SPIRE for service-to-service communication. It implements the adapter pattern and focuses solely on authentication (verifying identity), leaving authorization (access control) to the application layer.
 
-### Key Features
+### Features
 
 - ✅ **Automatic Certificate Management**: Zero-downtime certificate rotation via SPIRE
 - ✅ **mTLS Authentication**: Both client and server authenticate each other
@@ -588,7 +588,7 @@ cfg := config.LoadFromEnv()
 
 ## Authentication vs Authorization
 
-This library handles **authentication only**. Your application must implement **authorization**.
+This library handles authentication only. Your application must implement authorization.
 
 ### Authentication (This Library) ✅
 
@@ -988,7 +988,3 @@ For issues and questions:
 - **Troubleshooting**: See [Troubleshooting](#troubleshooting) section above
 - **SPIRE Issues**: [spiffe/spire GitHub](https://github.com/spiffe/spire/issues)
 
----
-
-**Last Updated**: 2025-10-07
-**Version**: 1.0.0
