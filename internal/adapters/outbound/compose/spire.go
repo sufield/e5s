@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/pocket/hexagon/spire/internal/adapters/outbound/inmemory"
-	"github.com/pocket/hexagon/spire/internal/adapters/outbound/inmemory/attestor"
 	"github.com/pocket/hexagon/spire/internal/adapters/outbound/spire"
 	"github.com/pocket/hexagon/spire/internal/domain"
 	"github.com/pocket/hexagon/spire/internal/ports"
@@ -37,9 +36,12 @@ func NewSPIREAdapterFactory(ctx context.Context, cfg *spire.Config) (*SPIREAdapt
 }
 
 // CreateRegistry creates an identity mapper registry
-// For production, we still use in-memory registry as it's seeded at startup
+// PRODUCTION NOTE: In production mode with SPIRE, the registry is managed by SPIRE Server.
+// This method is not used when using ProductionAgent.
+// Returns nil to indicate registry is external.
 func (f *SPIREAdapterFactory) CreateRegistry() ports.IdentityMapperRegistry {
-	return inmemory.NewInMemoryRegistry()
+	// Production uses SPIRE Server's registration entries, not in-memory registry
+	return nil
 }
 
 // CreateTrustDomainParser creates a trust domain parser
@@ -48,10 +50,10 @@ func (f *SPIREAdapterFactory) CreateTrustDomainParser() ports.TrustDomainParser 
 	return inmemory.NewInMemoryTrustDomainParser()
 }
 
-// CreateIdentityNamespaceParser creates an identity namespace parser
+// CreateIdentityCredentialParser creates an identity credential parser
 // Uses in-memory parser which wraps go-spiffe SDK
-func (f *SPIREAdapterFactory) CreateIdentityNamespaceParser() ports.IdentityNamespaceParser {
-	return inmemory.NewInMemoryIdentityNamespaceParser()
+func (f *SPIREAdapterFactory) CreateIdentityCredentialParser() ports.IdentityCredentialParser {
+	return inmemory.NewInMemoryIdentityCredentialParser()
 }
 
 // CreateIdentityDocumentProvider creates an identity document provider
@@ -72,47 +74,49 @@ func (f *SPIREAdapterFactory) CreateServer(
 }
 
 // CreateAttestor creates a workload attestor
-// Uses Unix workload attestor for process-based attestation
+// PRODUCTION NOTE: In production mode with SPIRE, attestation is handled by SPIRE Agent.
+// This method is not used when using ProductionAgent.
+// Returns nil to indicate attestation is external.
 func (f *SPIREAdapterFactory) CreateAttestor() ports.WorkloadAttestor {
-	return attestor.NewUnixWorkloadAttestor()
+	// Production uses SPIRE Agent for workload attestation, not local attestor
+	return nil
 }
 
 // RegisterWorkloadUID registers a workload UID with the attestor
+// PRODUCTION NOTE: Not used in production mode - SPIRE Server manages registration entries
 func (f *SPIREAdapterFactory) RegisterWorkloadUID(attestorInterface ports.WorkloadAttestor, uid int, selector string) {
-	// Type assert to concrete type for UID registration
-	if unixAttestor, ok := attestorInterface.(*attestor.UnixWorkloadAttestor); ok {
-		unixAttestor.RegisterUID(uid, selector)
-	}
+	// No-op in production mode - SPIRE Server handles workload registration
 }
 
-// CreateAgent creates a SPIRE-backed agent
+// CreateAgent creates a SPIRE-backed production agent
+// This agent fully delegates to external SPIRE for registry and attestation
 func (f *SPIREAdapterFactory) CreateAgent(
 	ctx context.Context,
 	spiffeID string,
 	server ports.IdentityServer,
 	registry ports.IdentityMapperRegistry,
 	attestorInterface ports.WorkloadAttestor,
-	parser ports.IdentityNamespaceParser,
+	parser ports.IdentityCredentialParser,
 	docProvider ports.IdentityDocumentProvider,
 ) (ports.Agent, error) {
-	return spire.NewAgent(ctx, f.client, spiffeID, registry, attestorInterface, parser)
+	// Use Agent which delegates everything to SPIRE
+	// Registry and attestor parameters are ignored (they're nil in production)
+	return spire.NewAgent(ctx, f.client, spiffeID, parser)
 }
 
 // SeedRegistry seeds the registry with an identity mapper
+// PRODUCTION NOTE: Not used in production - SPIRE Server manages registration entries
+// Registration entries should be created via SPIRE Server API or CLI
 func (f *SPIREAdapterFactory) SeedRegistry(registry ports.IdentityMapperRegistry, ctx context.Context, mapper *domain.IdentityMapper) error {
-	concreteRegistry, ok := registry.(*inmemory.InMemoryRegistry)
-	if !ok {
-		return fmt.Errorf("expected InMemoryRegistry for seeding")
-	}
-	return concreteRegistry.Seed(ctx, mapper)
+	// No-op in production - registry is managed by SPIRE Server
+	// Registration entries are created using: spire-server entry create
+	return nil
 }
 
 // SealRegistry marks the registry as immutable after seeding
+// PRODUCTION NOTE: Not used in production - SPIRE Server manages registry lifecycle
 func (f *SPIREAdapterFactory) SealRegistry(registry ports.IdentityMapperRegistry) {
-	concreteRegistry, ok := registry.(*inmemory.InMemoryRegistry)
-	if ok {
-		concreteRegistry.Seal()
-	}
+	// No-op in production - SPIRE Server manages registry
 }
 
 // Close closes the SPIRE client connection

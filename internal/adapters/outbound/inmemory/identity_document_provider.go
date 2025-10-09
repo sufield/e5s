@@ -28,12 +28,12 @@ func NewInMemoryIdentityDocumentProvider() ports.IdentityDocumentProvider {
 // CreateX509IdentityDocument creates an X.509 identity certificate by generating a certificate signed by the CA
 func (p *InMemoryIdentityDocumentProvider) CreateX509IdentityDocument(
 	ctx context.Context,
-	identityNamespace *domain.IdentityNamespace,
+	identityCredential *domain.IdentityCredential,
 	caCert interface{},
 	caKey interface{},
 ) (*domain.IdentityDocument, error) {
-	if identityNamespace == nil {
-		return nil, fmt.Errorf("%w: identity namespace cannot be nil", domain.ErrIdentityDocumentInvalid)
+	if identityCredential == nil {
+		return nil, fmt.Errorf("%w: identity credential cannot be nil", domain.ErrIdentityDocumentInvalid)
 	}
 
 	// Type assert CA cert and key
@@ -53,10 +53,10 @@ func (p *InMemoryIdentityDocumentProvider) CreateX509IdentityDocument(
 		return nil, fmt.Errorf("%w: failed to generate private key: %v", domain.ErrIdentityDocumentInvalid, err)
 	}
 
-	// Parse identity namespace as URI for certificate
-	identityURI, err := url.Parse(identityNamespace.String())
+	// Parse identity credential as URI for certificate
+	identityURI, err := url.Parse(identityCredential.String())
 	if err != nil {
-		return nil, fmt.Errorf("%w: invalid identity namespace URI: %v", domain.ErrIdentityDocumentInvalid, err)
+		return nil, fmt.Errorf("%w: invalid identity credential URI: %v", domain.ErrIdentityDocumentInvalid, err)
 	}
 
 	// Create certificate template
@@ -67,7 +67,7 @@ func (p *InMemoryIdentityDocumentProvider) CreateX509IdentityDocument(
 	template := &x509.Certificate{
 		SerialNumber: serial,
 		Subject: pkix.Name{
-			CommonName: identityNamespace.String(),
+			CommonName: identityCredential.String(),
 		},
 		URIs:                  []*url.URL{identityURI},
 		NotBefore:             notBefore,
@@ -91,7 +91,7 @@ func (p *InMemoryIdentityDocumentProvider) CreateX509IdentityDocument(
 
 	// Create domain identity certificate from validated components
 	return domain.NewIdentityDocumentFromComponents(
-		identityNamespace,
+		identityCredential,
 		domain.IdentityDocumentTypeX509,
 		cert,
 		privateKey,
@@ -104,7 +104,7 @@ func (p *InMemoryIdentityDocumentProvider) CreateX509IdentityDocument(
 func (p *InMemoryIdentityDocumentProvider) ValidateIdentityDocument(
 	ctx context.Context,
 	cert *domain.IdentityDocument,
-	expectedID *domain.IdentityNamespace,
+	expectedID *domain.IdentityCredential,
 ) error {
 	if cert == nil {
 		return fmt.Errorf("%w: identity certificate is nil", domain.ErrIdentityDocumentInvalid)
@@ -115,9 +115,9 @@ func (p *InMemoryIdentityDocumentProvider) ValidateIdentityDocument(
 		return domain.ErrIdentityDocumentExpired
 	}
 
-	// Check identity namespace match
-	if expectedID != nil && !cert.IdentityNamespace().Equals(expectedID) {
-		return fmt.Errorf("%w: expected %s, got %s", domain.ErrIdentityDocumentMismatch, expectedID.String(), cert.IdentityNamespace().String())
+	// Check identity credential match
+	if expectedID != nil && !cert.IdentityCredential().Equals(expectedID) {
+		return fmt.Errorf("%w: expected %s, got %s", domain.ErrIdentityDocumentMismatch, expectedID.String(), cert.IdentityCredential().String())
 	}
 
 	// For X.509, check certificate validity window
@@ -135,7 +135,7 @@ func (p *InMemoryIdentityDocumentProvider) ValidateIdentityDocument(
 		// In real implementation with SDK:
 		// - Verify certificate chain with trust bundle
 		// - Check signature validity
-		// - Validate identity namespace in certificate URIs
+		// - Validate identity credential in certificate URIs
 		// Example: x509svid.Verify(cert, chain, bundle)
 	}
 

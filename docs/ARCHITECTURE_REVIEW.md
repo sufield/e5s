@@ -94,7 +94,7 @@ internal/adapters/outbound/inmemory/
 ├── config.go                          # Configuration loader (✅ adapter)
 ├── translation.go                     # Anti-corruption layer (✅ adapter)
 ├── validator.go                       # Identity document validator (⚠️ thin wrapper)
-├── identity_namespace_parser.go       # Parses SPIFFE IDs (⚠️ parsing logic)
+├── identity_credential_parser.go       # Parses SPIFFE IDs (⚠️ parsing logic)
 ├── trust_domain_parser.go             # Parses trust domains (⚠️ parsing logic)
 ├── identity_document_provider.go      # Creates X.509 certificates (⚠️ complex logic)
 └── attestor/
@@ -131,21 +131,21 @@ internal/adapters/outbound/inmemory/
 
 #### ⚠️ Questionable Placement (Potential Domain Logic)
 
-**`identity_namespace_parser.go`** (77 lines):
+**`identity_credential_parser.go`** (77 lines):
 - **What it does**: Parses SPIFFE ID strings (`spiffe://example.org/path`) into domain types
 - **Why it's questionable**: Parsing logic with validation rules (scheme check, path validation)
 - **Alternative**: This could be domain logic OR SDK wrapper
-- **Current port**: `IdentityNamespaceParser` interface
+- **Current port**: `IdentityCredentialParser` interface
 
 **Analysis**:
 ```go
 // Current: Adapter contains parsing + validation logic
-func (p *InMemoryIdentityNamespaceParser) ParseFromString(ctx, id string) (*domain.IdentityNamespace, error) {
+func (p *InMemoryIdentityCredentialParser) ParseFromString(ctx, id string) (*domain.IdentityCredential, error) {
     // Validation: scheme must be "spiffe"
     // Validation: URI format
     // Extraction: trust domain from host
     // Extraction: path component
-    // Construction: domain.IdentityNamespace
+    // Construction: domain.IdentityCredential
 }
 ```
 
@@ -195,14 +195,14 @@ func (p *InMemoryIdentityNamespaceParser) ParseFromString(ctx, id string) (*doma
 
 **`validator.go`** (61 lines):
 - **What it does**: Validates identity documents
-- Currently contains basic expiration + identity namespace match checks
+- Currently contains basic expiration + identity credential match checks
 - Very thin wrapper around domain methods
 
 **Analysis**:
 ```go
 func (v *IdentityDocumentValidator) Validate(ctx, cert, expectedID) error {
     if !cert.IsValid() { ... }                    // Calls domain method
-    if !cert.IdentityNamespace().Equals(expectedID) { ... }  // Calls domain method
+    if !cert.IdentityCredential().Equals(expectedID) { ... }  // Calls domain method
 }
 ```
 
@@ -252,13 +252,13 @@ Most files are legitimate SDK abstractions (parsers, certificate provider) that 
 ```go
 // Port interface
 type IdentityDocumentValidator interface {
-    Validate(ctx context.Context, doc *domain.IdentityDocument, expectedID *domain.IdentityNamespace) error
+    Validate(ctx context.Context, doc *domain.IdentityDocument, expectedID *domain.IdentityCredential) error
 }
 
 // Adapter (just wraps domain methods)
 func (v *IdentityDocumentValidator) Validate(ctx, cert, expectedID) error {
     if !cert.IsValid() { return err }                         // Domain method
-    if !cert.IdentityNamespace().Equals(expectedID) { ... }   // Domain method
+    if !cert.IdentityCredential().Equals(expectedID) { ... }   // Domain method
     return nil
 }
 ```
@@ -281,7 +281,7 @@ Add package-level documentation to `inmemory/` explaining its role:
 // system, these adapters would be replaced with go-spiffe SDK wrappers.
 //
 // SDK Abstraction Files:
-// - identity_namespace_parser.go: Would use spiffeid.FromString()
+// - identity_credential_parser.go: Would use spiffeid.FromString()
 // - trust_domain_parser.go: Would use spiffeid.TrustDomainFromString()
 // - identity_document_provider.go: Would use x509svid package
 // - validator.go: Would use x509svid.Verify()
@@ -297,10 +297,10 @@ package inmemory
 Add comments to each parser/provider file:
 
 ```go
-// InMemoryIdentityNamespaceParser provides simple string-based parsing without SDK.
+// InMemoryIdentityCredentialParser provides simple string-based parsing without SDK.
 // In production, this would delegate to go-spiffe SDK's spiffeid.FromString().
 // This implementation exists to demonstrate the architecture without external deps.
-type InMemoryIdentityNamespaceParser struct{}
+type InMemoryIdentityCredentialParser struct{}
 ```
 
 ### 3. File Organization: No Changes Needed
@@ -316,11 +316,11 @@ The current structure is clean:
 
 ### What if Parsing Was in Domain?
 
-**Option**: Move `IdentityNamespaceParser` logic to domain constructors
+**Option**: Move `IdentityCredentialParser` logic to domain constructors
 
 ```go
-// domain/identity_namespace.go
-func NewIdentityNamespaceFromString(id string) (*IdentityNamespace, error) {
+// domain/identity_credential.go
+func NewIdentityCredentialFromString(id string) (*IdentityCredential, error) {
     // Parse URI, validate scheme, extract components...
 }
 ```
@@ -339,7 +339,7 @@ func NewIdentityNamespaceFromString(id string) (*IdentityNamespace, error) {
 
 ### What if We Merged Parser Files?
 
-**Option**: Combine `identity_namespace_parser.go` + `trust_domain_parser.go` into `parsers.go`
+**Option**: Combine `identity_credential_parser.go` + `trust_domain_parser.go` into `parsers.go`
 
 **Analysis**:
 - Each file implements a specific port interface
@@ -379,7 +379,7 @@ func NewIdentityNamespaceFromString(id string) (*IdentityNamespace, error) {
 | Port | Purpose | In-Memory Adapter | Real SDK Adapter |
 |------|---------|-------------------|------------------|
 | `IdentityMapperRegistry` | Selector → Identity mapping | In-memory map | SPIRE Server API |
-| `IdentityNamespaceParser` | Parse SPIFFE IDs | String parsing | `spiffeid.FromString()` |
+| `IdentityCredentialParser` | Parse SPIFFE IDs | String parsing | `spiffeid.FromString()` |
 | `TrustDomainParser` | Parse trust domains | String validation | `spiffeid.TrustDomainFromString()` |
 | `IdentityDocumentProvider` | Create X.509 SVIDs | Manual cert gen | `x509svid` package |
 | `IdentityDocumentValidator` | Validate SVIDs | Basic checks | `x509svid.Verify()` |

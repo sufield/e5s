@@ -7,7 +7,7 @@
 
 #### Domain Layer (Pure Business Logic)
 - ✅ `domain/` - Core entities with invariants
-  - IdentityDocument, IdentityNamespace, TrustDomain
+  - IdentityDocument, IdentityCredential, TrustDomain
   - IdentityMapper, SelectorSet
   - Message exchange domain logic
   - **Coverage: 64.2%**
@@ -28,7 +28,7 @@
   - InMemoryIdentityDocumentProvider
   - InMemoryTrustBundleProvider
   - InMemoryValidator
-  - Parsers (TrustDomain, IdentityNamespace)
+  - Parsers (TrustDomain, IdentityCredential)
   - **Coverage: 82.0%**
 
 - ✅ `adapters/outbound/inmemory/attestor/` - Unix workload attestor
@@ -245,7 +245,7 @@ Workload Process (UID:1001)
     │        DOMAIN LAYER (Core)          │
     │                                     │
     │  - IdentityDocument                 │
-    │  - IdentityNamespace                │
+    │  - IdentityCredential                │
     │  - IdentityMapper                   │
     │  - Message                          │
     │  - Business Rules & Invariants      │

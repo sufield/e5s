@@ -6,14 +6,14 @@ The `RegistrationEntry` struct and its methods represent **pure domain logic** f
 
 ```go
 type RegistrationEntry struct {
-    identityNamespace  *IdentityNamespace
+    identityCredential  *IdentityCredential
     selectors *SelectorSet
-    parentID  *IdentityNamespace // Parent SPIFFE ID (e.g., agent ID)
+    parentID  *IdentityCredential // Parent SPIFFE ID (e.g., agent ID)
 }
 ```
 
 **Characteristics:**
-- No external SDK dependencies (only domain types: `IdentityNamespace`, `SelectorSet`)
+- No external SDK dependencies (only domain types: `IdentityCredential`, `SelectorSet`)
 - Only standard library imports (`fmt`)
 - Models SPIRE's authorization policy: SPIFFE ID → selector mappings
 - Validates entries: non-nil SPIFFE ID, non-empty selectors
@@ -52,7 +52,7 @@ type RegistrationRepository interface {
     ListEntries(ctx context.Context) ([]*domain.RegistrationEntry, error)
 
     // DeleteEntry deletes a registration entry by SPIFFE ID
-    DeleteEntry(ctx context.Context, identityNamespace *domain.IdentityNamespace) error
+    DeleteEntry(ctx context.Context, identityCredential *domain.IdentityCredential) error
 }
 ```
 
@@ -87,7 +87,7 @@ func (r *InMemoryRegistrationRepository) FindMatchingEntry(ctx context.Context, 
 - ✅ Entity with validation (`NewRegistrationEntry` checks nil/empty)
 - ✅ Authorization logic (`MatchesSelectors()` business rule)
 - ✅ Parent-child relationships (`SetParentID()`)
-- ✅ Domain-only dependencies (`IdentityNamespace`, `SelectorSet`)
+- ✅ Domain-only dependencies (`IdentityCredential`, `SelectorSet`)
 
 **Adapter** (`internal/adapters/outbound/spire/registration_repository.go`):
 - ✅ Storage mechanism (in-memory map with mutex)
@@ -127,7 +127,7 @@ Models **SPIRE's authorization policy**: defines which workloads (identified by 
 
 ### Methods
 
-#### `NewRegistrationEntry(identityNamespace, selectors)`
+#### `NewRegistrationEntry(identityCredential, selectors)`
 **Domain validation:**
 - Ensures SPIFFE ID is not nil
 - Ensures selectors are not empty
@@ -175,13 +175,13 @@ The current implementation uses in-memory storage for demonstration:
 repo := spire.NewInMemoryRegistrationRepository()
 
 // Create domain entry
-identityNamespace, _ := domain.NewIdentityNamespace("spiffe://example.org/server-workload")
+identityCredential, _ := domain.NewIdentityCredential("spiffe://example.org/server-workload")
 selector, _ := domain.NewSelector(domain.SelectorTypeWorkload, "user", "server-workload")
 selectorSet := domain.NewSelectorSet()
 selectorSet.Add(selector)
 
-entry, _ := domain.NewRegistrationEntry(identityNamespace, selectorSet)
-entry.SetParentID(agentIdentityNamespace)
+entry, _ := domain.NewRegistrationEntry(identityCredential, selectorSet)
+entry.SetParentID(agentIdentityCredential)
 
 // Store via adapter
 repo.CreateEntry(ctx, entry)
@@ -240,7 +240,7 @@ func (r *SQLRegistrationRepository) FindMatchingEntry(ctx context.Context, selec
 ```
 
 1. ✅ **Retained RegistrationEntry as-is** - Pure domain abstraction, no changes needed
-2. ✅ **Dependencies domain-only** - Uses only `IdentityNamespace` and `SelectorSet` (no SDK imports)
+2. ✅ **Dependencies domain-only** - Uses only `IdentityCredential` and `SelectorSet` (no SDK imports)
 3. ✅ **Created RegistrationRepository port** - Defined in `internal/app/ports.go`
 4. ✅ **Implemented in-memory adapter** - Map-based storage for walking skeleton in `internal/adapters/outbound/spire/registration_repository.go`
 5. ✅ **Documented extension points** - Comments show how to integrate real datastore

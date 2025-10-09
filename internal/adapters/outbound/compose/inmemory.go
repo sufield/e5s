@@ -28,8 +28,8 @@ func (f *InMemoryAdapterFactory) CreateTrustDomainParser() ports.TrustDomainPars
 	return inmemory.NewInMemoryTrustDomainParser()
 }
 
-func (f *InMemoryAdapterFactory) CreateIdentityNamespaceParser() ports.IdentityNamespaceParser {
-	return inmemory.NewInMemoryIdentityNamespaceParser()
+func (f *InMemoryAdapterFactory) CreateIdentityCredentialParser() ports.IdentityCredentialParser {
+	return inmemory.NewInMemoryIdentityCredentialParser()
 }
 
 func (f *InMemoryAdapterFactory) CreateIdentityDocumentProvider() ports.IdentityDocumentProvider {
@@ -73,7 +73,7 @@ func (f *InMemoryAdapterFactory) CreateAgent(
 	server ports.IdentityServer,
 	registry ports.IdentityMapperRegistry,
 	attestorInterface ports.WorkloadAttestor,
-	parser ports.IdentityNamespaceParser,
+	parser ports.IdentityCredentialParser,
 	docProvider ports.IdentityDocumentProvider,
 ) (ports.Agent, error) {
 	// Need concrete types for agent creation

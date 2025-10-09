@@ -15,12 +15,12 @@
 //     or JWT). Includes expiration logic but delegates crypto/parsing to
 //     adapters via the IdentityDocumentProvider/Validator ports.
 //   - identity_mapper.go
-//   - IdentityMapper: maps selector sets to identity namespaces. Provides
+//   - IdentityMapper: maps selector sets to identity credentials. Provides
 //     matching logic via MatchesSelectors.
-//   - identity_namespace.go
-//   - IdentityNamespace: value object modeling a URI-formatted identity
+//   - identity_credential.go
+//   - IdentityCredential: value object modeling a URI-formatted identity
 //     (e.g., SPIFFE ID). Construction and validation are handled by
-//     IdentityNamespaceParser adapters.
+//     IdentityCredentialParser adapters.
 //   - node.go
 //   - Node: represents a host machine/environment and holds selectors and
 //     attestation status.

@@ -39,8 +39,8 @@
 //     components.
 //
 //   - identity_namespace_parser.go
-//     InMemoryIdentityNamespaceParser: parses SPIFFE ID-like strings into
-//     `domain.IdentityNamespace` objects. Used when constructing agent and
+//     InMemoryIdentityCredentialParser: parses SPIFFE ID-like strings into
+//     `domain.IdentityCredential` objects. Used when constructing agent and
 //     mapper identities.
 //
 //   - identity_document_provider.go

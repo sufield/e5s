@@ -27,15 +27,15 @@ func NewIdentityDocumentValidator(bundleProvider ports.TrustBundleProvider) *Ide
 	}
 }
 
-// Validate checks if an identity certificate is valid for the given identity namespace
+// Validate checks if an identity certificate is valid for the given identity credential
 // This is the anti-corruption layer between domain and SDK validation logic
-func (v *IdentityDocumentValidator) Validate(ctx context.Context, cert *domain.IdentityDocument, expectedID *domain.IdentityNamespace) error {
+func (v *IdentityDocumentValidator) Validate(ctx context.Context, cert *domain.IdentityDocument, expectedID *domain.IdentityCredential) error {
 	if cert == nil {
 		return fmt.Errorf("%w: identity document cannot be nil", domain.ErrIdentityDocumentInvalid)
 	}
 
 	if expectedID == nil {
-		return fmt.Errorf("%w: expected identity namespace cannot be nil", domain.ErrInvalidIdentityNamespace)
+		return fmt.Errorf("%w: expected identity credential cannot be nil", domain.ErrInvalidIdentityCredential)
 	}
 
 	// Check time validity (using domain method that wraps x509)
@@ -43,16 +43,16 @@ func (v *IdentityDocumentValidator) Validate(ctx context.Context, cert *domain.I
 		return fmt.Errorf("%w: certificate expired or not yet valid", domain.ErrIdentityDocumentExpired)
 	}
 
-	// Check identity namespace matches expected
-	if !cert.IdentityNamespace().Equals(expectedID) {
+	// Check identity credential matches expected
+	if !cert.IdentityCredential().Equals(expectedID) {
 		return fmt.Errorf("%w: expected %s, got %s",
-			domain.ErrIdentityDocumentMismatch, expectedID.String(), cert.IdentityNamespace().String())
+			domain.ErrIdentityDocumentMismatch, expectedID.String(), cert.IdentityCredential().String())
 	}
 
 	// Bundle verification (optional - if provider is available)
 	// TODO: Implement full chain verification with go-spiffe SDK
 	if v.bundleProvider != nil {
-		bundle, err := v.bundleProvider.GetBundleForIdentity(ctx, cert.IdentityNamespace())
+		bundle, err := v.bundleProvider.GetBundleForIdentity(ctx, cert.IdentityCredential())
 		if err != nil {
 			return fmt.Errorf("%w: failed to get trust bundle: %v", domain.ErrCertificateChainInvalid, err)
 		}
@@ -70,7 +70,7 @@ func (v *IdentityDocumentValidator) Validate(ctx context.Context, cert *domain.I
 		//
 		// // Parse PEM bundle as x509bundle.Source for verification
 		// // Note: Port returns []byte to stay SDK-agnostic; real adapter could return parsed bundle
-		// bundleSource, err := x509bundle.Parse(cert.IdentityNamespace().TrustDomain(), bundle)
+		// bundleSource, err := x509bundle.Parse(cert.IdentityCredential().TrustDomain(), bundle)
 		// if err != nil {
 		//     return fmt.Errorf("%w: failed to parse bundle: %v", domain.ErrCertificateChainInvalid, err)
 		// }
@@ -84,8 +84,8 @@ func (v *IdentityDocumentValidator) Validate(ctx context.Context, cert *domain.I
 		//     return fmt.Errorf("%w: chain verification failed: %v", domain.ErrCertificateChainInvalid, err)
 		// }
 		//
-		// // Validate extracted SPIFFE ID matches expected identity namespace
-		// if spiffeID.String() != cert.IdentityNamespace().String() {
+		// // Validate extracted SPIFFE ID matches expected identity credential
+		// if spiffeID.String() != cert.IdentityCredential().String() {
 		//     return fmt.Errorf("%w: SPIFFE ID mismatch after verification", domain.ErrIdentityDocumentMismatch)
 		// }
 		// _ = chains // Verified chains available for further validation if needed

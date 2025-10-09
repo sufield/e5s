@@ -4,14 +4,14 @@ The `Node` struct and its methods represent **pure domain logic** for an in-memo
 
 ```go
 type Node struct {
-    identityNamespace  *IdentityNamespace
+    identityCredential  *IdentityCredential
     selectors *SelectorSet
     attested  bool
 }
 ```
 
 **Characteristics:**
-- No external SDK dependencies (only domain types: `IdentityNamespace`, `SelectorSet`)
+- No external SDK dependencies (only domain types: `IdentityCredential`, `SelectorSet`)
 - Only standard library imports
 - Models node lifecycle: unattested → selectors populated → marked as attested
 - Captures business rules: attestation state, selector management
@@ -34,7 +34,7 @@ type NodeAttestor interface {
     // AttestNode performs node attestation and returns attested domain.Node
     // In-memory: uses hardcoded selectors
     // Real SPIRE: uses platform attestation (AWS IID, TPM, etc.)
-    AttestNode(ctx context.Context, identityNamespace *domain.IdentityNamespace) (*domain.Node, error)
+    AttestNode(ctx context.Context, identityCredential *domain.IdentityCredential) (*domain.Node, error)
 }
 ```
 
@@ -45,12 +45,12 @@ type InMemoryNodeAttestor struct {
     nodeSelectors map[string][]*domain.Selector
 }
 
-func (a *InMemoryNodeAttestor) AttestNode(ctx context.Context, identityNamespace *domain.IdentityNamespace) (*domain.Node, error) {
+func (a *InMemoryNodeAttestor) AttestNode(ctx context.Context, identityCredential *domain.IdentityCredential) (*domain.Node, error) {
     // 1. Create unattested node (domain logic)
-    node := domain.NewNode(identityNamespace)
+    node := domain.NewNode(identityCredential)
 
     // 2. Simulate platform attestation (adapter logic)
-    selectors := a.getSelectorsForNode(identityNamespace)
+    selectors := a.getSelectorsForNode(identityCredential)
 
     // 3. Populate and mark attested (domain logic)
     selectorSet := domain.NewSelectorSet()
@@ -71,7 +71,7 @@ func (a *InMemoryNodeAttestor) AttestNode(ctx context.Context, identityNamespace
 **Domain** (`internal/core/domain/node.go`):
 - ✅ Entity with lifecycle state (`attested` flag)
 - ✅ Business methods (`MarkAttested()`, `IsAttested()`)
-- ✅ Domain-only dependencies (`IdentityNamespace`, `SelectorSet`)
+- ✅ Domain-only dependencies (`IdentityCredential`, `SelectorSet`)
 
 **Adapter** (`internal/adapters/outbound/attestor/node.go`):
 - ✅ Platform-specific attestation simulation
@@ -104,7 +104,7 @@ func (a *InMemoryNodeAttestor) AttestNode(ctx context.Context, identityNamespace
 ```
 
 1. ✅ **Retained Node entity as-is** - Pure domain abstraction, no changes needed
-2. ✅ **Dependencies domain-only** - Uses only `IdentityNamespace` and `SelectorSet` (no SDK imports)
+2. ✅ **Dependencies domain-only** - Uses only `IdentityCredential` and `SelectorSet` (no SDK imports)
 3. ✅ **Created NodeAttestor port** - Defined in `internal/app/ports.go`
 4. ✅ **Implemented in-memory adapter** - Hardcoded selectors for walking skeleton
 5. ✅ **Documented extension points** - Comments show how to integrate real platform attestation
@@ -128,7 +128,7 @@ nodeAttestor.RegisterNodeSelectors(
 )
 
 // Attest node (creates domain.Node, populates selectors, marks attested)
-node, err := nodeAttestor.AttestNode(ctx, agentIdentityNamespace)
+node, err := nodeAttestor.AttestNode(ctx, agentIdentityCredential)
 ```
 
 ## Future Real SPIRE Integration
@@ -147,7 +147,7 @@ When integrating real SPIRE attestation plugins:
 Example real implementation:
 ```go
 // In adapter
-func (a *RealNodeAttestor) AttestNode(ctx context.Context, identityNamespace *domain.IdentityNamespace) (*domain.Node, error) {
+func (a *RealNodeAttestor) AttestNode(ctx context.Context, identityCredential *domain.IdentityCredential) (*domain.Node, error) {
     // 1. Receive attestation data from agent
     attestationData := receiveFromAgent()
 
@@ -161,7 +161,7 @@ func (a *RealNodeAttestor) AttestNode(ctx context.Context, identityNamespace *do
     domainSelectors := convertToDomainSelectors(platformSelectors)
 
     // 4. Create and populate domain.Node (same as in-memory)
-    node := domain.NewNode(identityNamespace)
+    node := domain.NewNode(identityCredential)
     selectorSet := domain.NewSelectorSet()
     for _, sel := range domainSelectors {
         selectorSet.Add(sel)

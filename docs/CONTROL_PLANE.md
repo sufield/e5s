@@ -1,5 +1,7 @@
 # Control Plane: Registration as Seeded Data
 
+> **Note**: This document describes the **in-memory (development)** implementation. In **production mode** with external SPIRE, the control plane (registry, attestation, matching) is managed entirely by SPIRE Server. See `docs/PRODUCTION_VS_DEVELOPMENT.md` for comparison.
+
 In this hexagonal, in-memory SPIRE implementation, registration is NOT a runtime operation. There is no "Register workload" API or mutation endpoint. Instead:
 
 - **Registration = Seeded fixtures** loaded at startup
@@ -28,7 +30,7 @@ This implementation does NOT have a traditional mutable control plane. Instead, 
 - Root of trust (CA certificate) provider
 
 **Methods**:
-- `IssueIdentity(ctx, identityNamespace)` - Issues SVIDs for attested workloads
+- `IssueIdentity(ctx, identityCredential)` - Issues SVIDs for attested workloads
 - `GetTrustDomain()` - Returns trust domain
 - `GetCA()` - Returns CA certificate
 
@@ -44,9 +46,9 @@ type InMemoryServer struct {
     certificateProvider  ports.IdentityDocumentProvider
 }
 
-// IssueIdentity issues an X.509 identity document for an identity namespace
+// IssueIdentity issues an X.509 identity document for an identity credential
 // No verification of registration - that's done by the agent during attestation/matching
-func (s *InMemoryServer) IssueIdentity(ctx context.Context, identityNamespace *domain.IdentityNamespace) (*domain.IdentityDocument, error)
+func (s *InMemoryServer) IssueIdentity(ctx context.Context, identityCredential *domain.IdentityCredential) (*domain.IdentityDocument, error)
 ```
 
 ---
@@ -82,10 +84,10 @@ func (r *InMemoryRegistry) Seed(ctx context.Context, mapper *domain.IdentityMapp
     defer r.mu.Unlock()
 
     if r.sealed {
-        return fmt.Errorf("registry is sealed, cannot seed after bootstrap")
+        return fmt.Errorf("%w", domain.ErrRegistrySealed)
     }
 
-    key := mapper.IdentityNamespace().String()
+    key := mapper.IdentityCredential().String()
     r.mappers[key] = mapper
     return nil
 }
@@ -102,12 +104,18 @@ func (r *InMemoryRegistry) FindBySelectors(ctx context.Context, selectors *domai
     r.mu.RLock()
     defer r.mu.RUnlock()
 
+    // Validate input
+    if selectors == nil || len(selectors.All()) == 0 {
+        return nil, fmt.Errorf("%w: selectors are nil or empty", domain.ErrInvalidSelectors)
+    }
+
+    // Match selectors against all mappers
     for _, mapper := range r.mappers {
         if mapper.MatchesSelectors(selectors) {
             return mapper, nil
         }
     }
-    return nil, domain.ErrNoMatchingMapper
+    return nil, fmt.Errorf("%w: no mapper matches selectors", domain.ErrNoMatchingMapper)
 }
 ```
 
@@ -140,10 +148,10 @@ func Bootstrap(ctx context.Context, configLoader ports.ConfigLoader, factory por
 
     // Step 9: SEED registry with identity mappers (configuration, not runtime)
     for _, workload := range config.Workloads {
-        // Parse identity namespace from fixture
-        identityNamespace, err := parser.ParseFromString(ctx, workload.SpiffeID)
+        // Parse identity credential from fixture
+        identityCredential, err := parser.ParseFromString(ctx, workload.SpiffeID)
         if err != nil {
-            return nil, fmt.Errorf("invalid identity namespace %s: %w", workload.SpiffeID, err)
+            return nil, fmt.Errorf("invalid identity credential %s: %w", workload.SpiffeID, err)
         }
 
         // Parse selectors from fixture
@@ -157,7 +165,7 @@ func Bootstrap(ctx context.Context, configLoader ports.ConfigLoader, factory por
         selectorSet.Add(selector)
 
         // Create identity mapper (domain entity)
-        mapper, err := domain.NewIdentityMapper(identityNamespace, selectorSet)
+        mapper, err := domain.NewIdentityMapper(identityCredential, selectorSet)
         if err != nil {
             return nil, fmt.Errorf("failed to create identity mapper for %s: %w", workload.SpiffeID, err)
         }
@@ -318,7 +326,7 @@ These are data plane (runtime) components:
 ### ✅ What We DO Have
 
 - Immutable registry seeded at startup from fixtures and sealed
-- Matching logic that resolves selectors → identity namespace mappings
+- Matching logic that resolves selectors → identity credential mappings
 - Issuance flow that attests → matches → mints certificates
 - Composition root seeding** in `Bootstrap()` function
 - Good port naming - `IdentityMapperRegistry` (not "Port" suffix)
@@ -337,7 +345,7 @@ These are data plane (runtime) components:
 // No mutations allowed after seeding - registry is immutable
 type IdentityMapperRegistry interface {
     // FindBySelectors finds an identity mapper matching the given selectors (AND logic)
-    // This is the core runtime operation: selectors → identity namespace mapping
+    // This is the core runtime operation: selectors → identity credential mapping
     FindBySelectors(ctx context.Context, selectors *domain.SelectorSet) (*domain.IdentityMapper, error)
 
     // ListAll returns all seeded identity mappers (for debugging/admin)
@@ -360,9 +368,9 @@ type IdentityMapperRegistry interface {
 ```go
 // Server represents the identity server functionality
 type IdentityServer interface {
-    // IssueIdentity issues an identity document for an identity namespace
-    // Generates X.509 certificate signed by CA with identity namespace in URI SAN
-    IssueIdentity(ctx context.Context, identityNamespace *domain.IdentityNamespace) (*domain.IdentityDocument, error)
+    // IssueIdentity issues an identity document for an identity credential
+    // Generates X.509 certificate signed by CA with identity credential in URI SAN
+    IssueIdentity(ctx context.Context, identityCredential *domain.IdentityCredential) (*domain.IdentityDocument, error)
 
     // GetTrustDomain returns the trust domain this server manages
     GetTrustDomain() *domain.TrustDomain
@@ -406,15 +414,15 @@ func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload port
     }
 
     // Step 4: Issue identity document from server
-    doc, err := a.server.IssueIdentity(ctx, mapper.IdentityNamespace())
+    doc, err := a.server.IssueIdentity(ctx, mapper.IdentityCredential())
     if err != nil {
         return nil, fmt.Errorf("failed to issue identity document: %w", err)
     }
 
     // Step 5: Return identity with document
     return &ports.Identity{
-        IdentityNamespace:   mapper.IdentityNamespace(),
-        Name:             extractNameFromIdentityNamespace(mapper.IdentityNamespace()),
+        IdentityCredential:   mapper.IdentityCredential(),
+        Name:             extractNameFromIdentityCredential(mapper.IdentityCredential()),
         IdentityDocument: doc,
     }, nil
 }
@@ -425,12 +433,12 @@ func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload port
 1. Workload calls agent.FetchIdentityDocument(processInfo)
 2. Attestor computes selectors from process attributes
 3. Registry.FindBySelectors(selectors) → lookup in immutable registry
-4. Server.IssueIdentity(identityNamespace) → mint certificate
+4. Server.IssueIdentity(identityCredential) → mint certificate
 5. Return identity document to workload
 ```
 
 - ✅ Pure read path - no mutations
-- ✅ Selectors → IdentityNamespace mapping from seeded data
+- ✅ Selectors → IdentityCredential mapping from seeded data
 - ✅ Certificate minting is ephemeral (in-memory CA)
 - ✅ No state changes to registry
 - ✅ Registry sealed - guaranteed immutable

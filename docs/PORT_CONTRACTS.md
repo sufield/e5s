@@ -21,8 +21,8 @@ if len(caCerts) == 0 {
 
 **Wrapped with Context** (preserves sentinel for `errors.Is()` while adding details):
 ```go
-if identityNamespace == nil {
-    return nil, fmt.Errorf("%w: identity namespace cannot be nil", domain.ErrIdentityDocumentInvalid)
+if identityCredential == nil {
+    return nil, fmt.Errorf("%w: identity credential cannot be nil", domain.ErrIdentityDocumentInvalid)
 }
 ```
 
@@ -44,7 +44,7 @@ if err != nil {
 
 ### IdentityMapperRegistry
 
-**Purpose**: Read-only registry of identity mappers (selectors → identity namespace mappings)
+**Purpose**: Read-only registry of identity mappers (selectors → identity credential mappings)
 
 **Lifecycle**: Seeded at bootstrap, sealed before runtime, immutable after
 
@@ -123,7 +123,7 @@ selectors, err := attestor.Attest(ctx, workload)
 
 | Method | Signature | Description | Returns | Error Cases |
 |--------|-----------|-------------|---------|-------------|
-| `IssueIdentity` | `(ctx, identityNamespace) → (*IdentityDocument, error)` | Issues X.509 SVID signed by CA | Identity document | `ErrIdentityDocumentInvalid` if namespace invalid<br>`ErrServerUnavailable` if server down<br>`ErrCANotInitialized` if CA missing |
+| `IssueIdentity` | `(ctx, identityCredential) → (*IdentityDocument, error)` | Issues X.509 SVID signed by CA | Identity document | `ErrIdentityDocumentInvalid` if namespace invalid<br>`ErrServerUnavailable` if server down<br>`ErrCANotInitialized` if CA missing |
 | `GetTrustDomain` | `() → *TrustDomain` | Returns server's trust domain | Trust domain or nil | None (returns nil if not initialized) |
 | `GetCA` | `() → *x509.Certificate` | Returns CA certificate | CA cert or nil | None (returns nil if not initialized) |
 
@@ -200,7 +200,7 @@ td, err := parser.FromString(ctx, "spiffe://example.org")
 
 ---
 
-### IdentityNamespaceParser
+### IdentityCredentialParser
 
 **Purpose**: Parses and validates SPIFFE ID strings
 
@@ -210,8 +210,8 @@ td, err := parser.FromString(ctx, "spiffe://example.org")
 
 | Method | Signature | Description | Returns | Error Cases |
 |--------|-----------|-------------|---------|-------------|
-| `ParseFromString` | `(ctx, id) → (*IdentityNamespace, error)` | Parses SPIFFE ID URI | Identity namespace | `ErrInvalidIdentityNamespace` if empty/invalid<br>`ErrInvalidIdentityNamespace` if scheme != "spiffe"<br>`ErrInvalidIdentityNamespace` if trust domain empty |
-| `ParseFromPath` | `(ctx, trustDomain, path) → (*IdentityNamespace, error)` | Constructs from components | Identity namespace | `ErrInvalidIdentityNamespace` if trust domain nil |
+| `ParseFromString` | `(ctx, id) → (*IdentityCredential, error)` | Parses SPIFFE ID URI | Identity credential | `ErrInvalidIdentityCredential` if empty/invalid<br>`ErrInvalidIdentityCredential` if scheme != "spiffe"<br>`ErrInvalidIdentityCredential` if trust domain empty |
+| `ParseFromPath` | `(ctx, trustDomain, path) → (*IdentityCredential, error)` | Constructs from components | Identity credential | `ErrInvalidIdentityCredential` if trust domain nil |
 
 **Validation Rules**:
 - ✅ Valid: `"spiffe://example.org/host"`, `"spiffe://example.org/workload/server"`
@@ -242,7 +242,7 @@ ns, err := parser.ParseFromPath(ctx, td, "/workload")
 | Method | Signature | Description | Returns | Error Cases |
 |--------|-----------|-------------|---------|-------------|
 | `GetBundle` | `(ctx, trustDomain) → ([]byte, error)` | Gets trust bundle for trust domain | PEM-encoded CA cert(s) | `ErrTrustBundleNotFound` if no bundle<br>`ErrInvalidTrustDomain` if trust domain nil |
-| `GetBundleForIdentity` | `(ctx, identityNamespace) → ([]byte, error)` | Gets bundle for identity's trust domain | PEM-encoded CA cert(s) | `ErrTrustBundleNotFound` if no bundle<br>`ErrInvalidIdentityNamespace` if namespace nil |
+| `GetBundleForIdentity` | `(ctx, identityCredential) → ([]byte, error)` | Gets bundle for identity's trust domain | PEM-encoded CA cert(s) | `ErrTrustBundleNotFound` if no bundle<br>`ErrInvalidIdentityCredential` if namespace nil |
 
 **Example Usage**:
 ```go
@@ -268,7 +268,7 @@ err = x509svid.Verify(svid.Certificates, bundle)
 
 | Method | Signature | Description | Returns | Error Cases |
 |--------|-----------|-------------|---------|-------------|
-| `CreateX509IdentityDocument` | `(ctx, identityNamespace, caCert, caKey) → (*IdentityDocument, error)` | Creates X.509 SVID | Identity document | `ErrIdentityDocumentInvalid` if inputs invalid |
+| `CreateX509IdentityDocument` | `(ctx, identityCredential, caCert, caKey) → (*IdentityDocument, error)` | Creates X.509 SVID | Identity document | `ErrIdentityDocumentInvalid` if inputs invalid |
 | `ValidateIdentityDocument` | `(ctx, doc, expectedID) → error` | Validates SVID | nil or error | `ErrIdentityDocumentExpired` if expired<br>`ErrIdentityDocumentMismatch` if namespace mismatch<br>`ErrCertificateChainInvalid` if chain invalid (SDK) |
 
 **Example Usage**:
@@ -359,7 +359,7 @@ func TestWorkloadAttestation(t *testing.T) {
     identity, err := app.Agent.FetchIdentityDocument(ctx, workload)
 
     require.NoError(t, err)
-    assert.Equal(t, "spiffe://example.org/test-workload", identity.IdentityNamespace.String())
+    assert.Equal(t, "spiffe://example.org/test-workload", identity.IdentityCredential.String())
 }
 ```
 

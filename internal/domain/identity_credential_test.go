@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNewIdentityNamespaceFromComponents(t *testing.T) {
+func TestNewIdentityCredentialFromComponents(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -19,28 +19,28 @@ func TestNewIdentityNamespaceFromComponents(t *testing.T) {
 		wantPath    string
 	}{
 		{
-			name:        "valid identity namespace with path",
+			name:        "valid identity credential with path",
 			trustDomain: "example.org",
 			path:        "/workload/server",
 			wantURI:     "spiffe://example.org/workload/server",
 			wantPath:    "/workload/server",
 		},
 		{
-			name:        "identity namespace with empty path defaults to /",
+			name:        "identity credential with empty path defaults to /",
 			trustDomain: "example.org",
 			path:        "",
 			wantURI:     "spiffe://example.org/",
 			wantPath:    "/",
 		},
 		{
-			name:        "identity namespace with root path",
+			name:        "identity credential with root path",
 			trustDomain: "example.org",
 			path:        "/",
 			wantURI:     "spiffe://example.org/",
 			wantPath:    "/",
 		},
 		{
-			name:        "identity namespace with nested path",
+			name:        "identity credential with nested path",
 			trustDomain: "prod.example.org",
 			path:        "/ns/prod/svc/api",
 			wantURI:     "spiffe://prod.example.org/ns/prod/svc/api",
@@ -56,7 +56,7 @@ func TestNewIdentityNamespaceFromComponents(t *testing.T) {
 			td := domain.NewTrustDomainFromName(tt.trustDomain)
 
 			// Act
-			id := domain.NewIdentityNamespaceFromComponents(td, tt.path)
+			id := domain.NewIdentityCredentialFromComponents(td, tt.path)
 
 			// Assert
 			require.NotNil(t, id)
@@ -67,36 +67,36 @@ func TestNewIdentityNamespaceFromComponents(t *testing.T) {
 	}
 }
 
-func TestIdentityNamespace_Equals(t *testing.T) {
+func TestIdentityCredential_Equals(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name  string
-		id1   *domain.IdentityNamespace
-		id2   *domain.IdentityNamespace
+		id1   *domain.IdentityCredential
+		id2   *domain.IdentityCredential
 		equal bool
 	}{
 		{
-			name:  "equal identity namespaces",
-			id1:   domain.NewIdentityNamespaceFromComponents(domain.NewTrustDomainFromName("example.org"), "/workload"),
-			id2:   domain.NewIdentityNamespaceFromComponents(domain.NewTrustDomainFromName("example.org"), "/workload"),
+			name:  "equal identity credentials",
+			id1:   domain.NewIdentityCredentialFromComponents(domain.NewTrustDomainFromName("example.org"), "/workload"),
+			id2:   domain.NewIdentityCredentialFromComponents(domain.NewTrustDomainFromName("example.org"), "/workload"),
 			equal: true,
 		},
 		{
 			name:  "different paths",
-			id1:   domain.NewIdentityNamespaceFromComponents(domain.NewTrustDomainFromName("example.org"), "/server"),
-			id2:   domain.NewIdentityNamespaceFromComponents(domain.NewTrustDomainFromName("example.org"), "/client"),
+			id1:   domain.NewIdentityCredentialFromComponents(domain.NewTrustDomainFromName("example.org"), "/server"),
+			id2:   domain.NewIdentityCredentialFromComponents(domain.NewTrustDomainFromName("example.org"), "/client"),
 			equal: false,
 		},
 		{
 			name:  "different trust domains",
-			id1:   domain.NewIdentityNamespaceFromComponents(domain.NewTrustDomainFromName("example.org"), "/workload"),
-			id2:   domain.NewIdentityNamespaceFromComponents(domain.NewTrustDomainFromName("other.org"), "/workload"),
+			id1:   domain.NewIdentityCredentialFromComponents(domain.NewTrustDomainFromName("example.org"), "/workload"),
+			id2:   domain.NewIdentityCredentialFromComponents(domain.NewTrustDomainFromName("other.org"), "/workload"),
 			equal: false,
 		},
 		{
 			name:  "nil comparison returns false",
-			id1:   domain.NewIdentityNamespaceFromComponents(domain.NewTrustDomainFromName("example.org"), "/workload"),
+			id1:   domain.NewIdentityCredentialFromComponents(domain.NewTrustDomainFromName("example.org"), "/workload"),
 			id2:   nil,
 			equal: false,
 		},
@@ -113,30 +113,30 @@ func TestIdentityNamespace_Equals(t *testing.T) {
 	}
 }
 
-func TestIdentityNamespace_IsInTrustDomain(t *testing.T) {
+func TestIdentityCredential_IsInTrustDomain(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name        string
-		id          *domain.IdentityNamespace
+		id          *domain.IdentityCredential
 		trustDomain *domain.TrustDomain
 		inDomain    bool
 	}{
 		{
 			name:        "identity in same trust domain",
-			id:          domain.NewIdentityNamespaceFromComponents(domain.NewTrustDomainFromName("example.org"), "/workload"),
+			id:          domain.NewIdentityCredentialFromComponents(domain.NewTrustDomainFromName("example.org"), "/workload"),
 			trustDomain: domain.NewTrustDomainFromName("example.org"),
 			inDomain:    true,
 		},
 		{
 			name:        "identity in different trust domain",
-			id:          domain.NewIdentityNamespaceFromComponents(domain.NewTrustDomainFromName("example.org"), "/workload"),
+			id:          domain.NewIdentityCredentialFromComponents(domain.NewTrustDomainFromName("example.org"), "/workload"),
 			trustDomain: domain.NewTrustDomainFromName("other.org"),
 			inDomain:    false,
 		},
 		{
 			name:        "identity with subdomain trust domain",
-			id:          domain.NewIdentityNamespaceFromComponents(domain.NewTrustDomainFromName("prod.example.org"), "/svc"),
+			id:          domain.NewIdentityCredentialFromComponents(domain.NewTrustDomainFromName("prod.example.org"), "/svc"),
 			trustDomain: domain.NewTrustDomainFromName("example.org"),
 			inDomain:    false,
 		},
@@ -153,12 +153,12 @@ func TestIdentityNamespace_IsInTrustDomain(t *testing.T) {
 	}
 }
 
-func TestIdentityNamespace_String(t *testing.T) {
+func TestIdentityCredential_String(t *testing.T) {
 	t.Parallel()
 
 	// Arrange
 	td := domain.NewTrustDomainFromName("example.org")
-	id := domain.NewIdentityNamespaceFromComponents(td, "/workload/server")
+	id := domain.NewIdentityCredentialFromComponents(td, "/workload/server")
 
 	// Act
 	str := id.String()
@@ -167,12 +167,12 @@ func TestIdentityNamespace_String(t *testing.T) {
 	assert.Equal(t, "spiffe://example.org/workload/server", str)
 }
 
-func TestIdentityNamespace_TrustDomain(t *testing.T) {
+func TestIdentityCredential_TrustDomain(t *testing.T) {
 	t.Parallel()
 
 	// Arrange
 	td := domain.NewTrustDomainFromName("example.org")
-	id := domain.NewIdentityNamespaceFromComponents(td, "/workload")
+	id := domain.NewIdentityCredentialFromComponents(td, "/workload")
 
 	// Act
 	result := id.TrustDomain()
@@ -181,12 +181,12 @@ func TestIdentityNamespace_TrustDomain(t *testing.T) {
 	assert.Equal(t, td, result)
 }
 
-func TestIdentityNamespace_Path(t *testing.T) {
+func TestIdentityCredential_Path(t *testing.T) {
 	t.Parallel()
 
 	// Arrange
 	td := domain.NewTrustDomainFromName("example.org")
-	id := domain.NewIdentityNamespaceFromComponents(td, "/workload/server")
+	id := domain.NewIdentityCredentialFromComponents(td, "/workload/server")
 
 	// Act
 	result := id.Path()

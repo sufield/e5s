@@ -52,8 +52,8 @@ func TestBootstrap_Invariant_SealedRegistry(t *testing.T) {
 
 // Helper function to create a test mapper
 func createTestMapper(ctx context.Context, factory *compose.InMemoryAdapterFactory) (*domain.IdentityMapper, error) {
-	parser := factory.CreateIdentityNamespaceParser()
-	namespace, err := parser.ParseFromString(ctx, "spiffe://test.org/test")
+	parser := factory.CreateIdentityCredentialParser()
+	credential, err := parser.ParseFromString(ctx, "spiffe://test.org/test")
 	if err != nil {
 		return nil, err
 	}
@@ -66,5 +66,5 @@ func createTestMapper(ctx context.Context, factory *compose.InMemoryAdapterFacto
 	selectorSet := domain.NewSelectorSet()
 	selectorSet.Add(selector)
 
-	return domain.NewIdentityMapper(namespace, selectorSet)
+	return domain.NewIdentityMapper(credential, selectorSet)
 }

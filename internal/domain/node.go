@@ -3,23 +3,23 @@ package domain
 // Node represents the host machine or environment where the agent and workloads run
 // Its identity is verified via node attestation
 type Node struct {
-	identityNamespace *IdentityNamespace
+	identityCredential *IdentityCredential
 	selectors         *SelectorSet
 	attested          bool
 }
 
 // NewNode creates a new node
-func NewNode(identityNamespace *IdentityNamespace) *Node {
+func NewNode(identityCredential *IdentityCredential) *Node {
 	return &Node{
-		identityNamespace: identityNamespace,
+		identityCredential: identityCredential,
 		selectors:         NewSelectorSet(),
 		attested:          false,
 	}
 }
 
-// IdentityNamespace returns the node's identity namespace
-func (n *Node) IdentityNamespace() *IdentityNamespace {
-	return n.identityNamespace
+// IdentityCredential returns the node's identity credential
+func (n *Node) IdentityCredential() *IdentityCredential {
+	return n.identityCredential
 }
 
 // Selectors returns the node's selectors

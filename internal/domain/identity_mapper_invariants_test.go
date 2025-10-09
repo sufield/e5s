@@ -9,29 +9,29 @@ import (
 )
 
 // TestIdentityMapper_Invariant_NamespaceNeverNil tests the invariant:
-// "identityNamespace is never nil after construction"
+// "identityCredential is never nil after construction"
 func TestIdentityMapper_Invariant_NamespaceNeverNil(t *testing.T) {
 	t.Parallel()
 
 	// Arrange
 	td := domain.NewTrustDomainFromName("example.org")
-	namespace := domain.NewIdentityNamespaceFromComponents(td, "/workload")
+	credential := domain.NewIdentityCredentialFromComponents(td, "/workload")
 	selectors := domain.NewSelectorSet()
 	sel, _ := domain.ParseSelectorFromString("unix:uid:1000")
 	selectors.Add(sel)
 
 	// Act
-	mapper, err := domain.NewIdentityMapper(namespace, selectors)
+	mapper, err := domain.NewIdentityMapper(credential, selectors)
 
-	// Assert invariant: identityNamespace is never nil
+	// Assert invariant: identityCredential is never nil
 	require.NoError(t, err)
 	require.NotNil(t, mapper)
-	assert.NotNil(t, mapper.IdentityNamespace(),
-		"Invariant violated: IdentityNamespace() returned nil")
+	assert.NotNil(t, mapper.IdentityCredential(),
+		"Invariant violated: IdentityCredential() returned nil")
 }
 
 // TestIdentityMapper_Invariant_NamespaceNilRejected tests the invariant:
-// "Construction fails if identityNamespace is nil"
+// "Construction fails if identityCredential is nil"
 func TestIdentityMapper_Invariant_NamespaceNilRejected(t *testing.T) {
 	t.Parallel()
 
@@ -43,9 +43,9 @@ func TestIdentityMapper_Invariant_NamespaceNilRejected(t *testing.T) {
 	// Act
 	mapper, err := domain.NewIdentityMapper(nil, selectors)
 
-	// Assert invariant: nil namespace is rejected
-	assert.Error(t, err, "Invariant enforced: nil namespace should be rejected")
-	assert.ErrorIs(t, err, domain.ErrInvalidIdentityNamespace)
+	// Assert invariant: nil credential is rejected
+	assert.Error(t, err, "Invariant enforced: nil credential should be rejected")
+	assert.ErrorIs(t, err, domain.ErrInvalidIdentityCredential)
 	assert.Nil(t, mapper)
 }
 
@@ -91,11 +91,11 @@ func TestIdentityMapper_Invariant_SelectorsNeverNilOrEmpty(t *testing.T) {
 
 			// Arrange
 			td := domain.NewTrustDomainFromName("example.org")
-			namespace := domain.NewIdentityNamespaceFromComponents(td, "/workload")
+			credential := domain.NewIdentityCredentialFromComponents(td, "/workload")
 			selectors := tt.setupSelectors()
 
 			// Act
-			mapper, err := domain.NewIdentityMapper(namespace, selectors)
+			mapper, err := domain.NewIdentityMapper(credential, selectors)
 
 			// Assert invariant
 			if tt.wantError {
@@ -121,7 +121,7 @@ func TestIdentityMapper_Invariant_MatchesSelectorsANDLogic(t *testing.T) {
 
 	// Arrange - Create mapper requiring TWO selectors
 	td := domain.NewTrustDomainFromName("example.org")
-	namespace := domain.NewIdentityNamespaceFromComponents(td, "/workload")
+	credential := domain.NewIdentityCredentialFromComponents(td, "/workload")
 
 	mapperSelectors := domain.NewSelectorSet()
 	sel1, _ := domain.ParseSelectorFromString("unix:uid:1000")
@@ -129,7 +129,7 @@ func TestIdentityMapper_Invariant_MatchesSelectorsANDLogic(t *testing.T) {
 	mapperSelectors.Add(sel1)
 	mapperSelectors.Add(sel2)
 
-	mapper, err := domain.NewIdentityMapper(namespace, mapperSelectors)
+	mapper, err := domain.NewIdentityMapper(credential, mapperSelectors)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -197,7 +197,7 @@ func TestIdentityMapper_Invariant_MatchesSelectorsAllRequired(t *testing.T) {
 
 	// Arrange - Create mapper with 3 required selectors
 	td := domain.NewTrustDomainFromName("example.org")
-	namespace := domain.NewIdentityNamespaceFromComponents(td, "/workload")
+	credential := domain.NewIdentityCredentialFromComponents(td, "/workload")
 
 	mapperSelectors := domain.NewSelectorSet()
 	sel1, _ := domain.ParseSelectorFromString("unix:uid:1000")
@@ -207,7 +207,7 @@ func TestIdentityMapper_Invariant_MatchesSelectorsAllRequired(t *testing.T) {
 	mapperSelectors.Add(sel2)
 	mapperSelectors.Add(sel3)
 
-	mapper, err := domain.NewIdentityMapper(namespace, mapperSelectors)
+	mapper, err := domain.NewIdentityMapper(credential, mapperSelectors)
 	require.NoError(t, err)
 
 	// Test case: workload has all 3
@@ -234,13 +234,13 @@ func TestIdentityMapper_Invariant_MatchesSelectorsConsistency(t *testing.T) {
 
 	// Arrange
 	td := domain.NewTrustDomainFromName("example.org")
-	namespace := domain.NewIdentityNamespaceFromComponents(td, "/workload")
+	credential := domain.NewIdentityCredentialFromComponents(td, "/workload")
 
 	mapperSelectors := domain.NewSelectorSet()
 	sel, _ := domain.ParseSelectorFromString("unix:uid:1000")
 	mapperSelectors.Add(sel)
 
-	mapper, err := domain.NewIdentityMapper(namespace, mapperSelectors)
+	mapper, err := domain.NewIdentityMapper(credential, mapperSelectors)
 	require.NoError(t, err)
 
 	workloadSet := domain.NewSelectorSet()

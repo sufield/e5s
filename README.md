@@ -56,7 +56,7 @@ resp, _ := client.Get(ctx, "https://server:8443/api/hello")
 
 ```
 internal/
-├── domain/              # Pure domain entities (TrustDomain, IdentityNamespace, etc.)
+├── domain/              # Pure domain entities (TrustDomain, IdentityCredential, etc.)
 ├── ports/               # Port interfaces (contracts between layers)
 ├── app/                 # Application services (business logic)
 ├── config/              # Configuration (YAML + env fallback)
@@ -109,7 +109,7 @@ examples/
 │                           │                             │
 │  ┌────────────────────────▼─────────────────────────┐   │
 │  │              Domain Entities                      │   │
-│  │  • TrustDomain  • IdentityNamespace              │   │
+│  │  • TrustDomain  • IdentityCredential              │   │
 │  │  • IdentityDocument  • Selector                  │   │
 │  └───────────────────────────────────────────────────┘   │
 │                           │                             │
@@ -298,7 +298,7 @@ type IdentityClient interface {
 ```go
 client := workloadapi.NewClient("/tmp/spire-agent/public/api.sock")
 svid, err := client.FetchX509SVID(ctx)
-// Use svid.IdentityNamespace, svid.IdentityDocument
+// Use svid.IdentityCredential, svid.IdentityDocument
 ```
 
 ### Agent (Server-Side Interface)
@@ -324,7 +324,7 @@ type Agent interface {
 // IdentityMapperRegistry provides read-only access to identity mappings
 // Seeded at startup, sealed before runtime, no mutations allowed
 type IdentityMapperRegistry interface {
-    // FindBySelectors matches selectors to identity namespace (AND logic)
+    // FindBySelectors matches selectors to identity credential (AND logic)
     FindBySelectors(ctx context.Context, selectors *domain.SelectorSet) (*domain.IdentityMapper, error)
 
     // ListAll returns all seeded identity mappers
@@ -334,11 +334,11 @@ type IdentityMapperRegistry interface {
 
 ## Domain Entities
 
-### IdentityNamespace (SPIFFE ID)
+### IdentityCredential (SPIFFE ID)
 
 ```go
-// IdentityNamespace represents a SPIFFE ID: spiffe://<trust-domain>/<path>
-type IdentityNamespace struct {
+// IdentityCredential represents a SPIFFE ID: spiffe://<trust-domain>/<path>
+type IdentityCredential struct {
     trustDomain *TrustDomain
     path        string
 }
@@ -353,7 +353,7 @@ type IdentityNamespace struct {
 ```go
 // IdentityDocument represents an X.509 SVID or JWT SVID
 type IdentityDocument struct {
-    identityNamespace *IdentityNamespace
+    identityCredential *IdentityCredential
     documentType      IdentityDocumentType
     certificate       *x509.Certificate  // X.509 only
     privateKey        *rsa.PrivateKey    // X.509 only
@@ -380,10 +380,10 @@ type Selector struct {
 ### IdentityMapper
 
 ```go
-// IdentityMapper maps selectors to identity namespace
+// IdentityMapper maps selectors to identity credential
 // Used by registry to match attested workloads to identities
 type IdentityMapper struct {
-    identityNamespace *IdentityNamespace
+    identityCredential *IdentityCredential
     selectors         *SelectorSet
 }
 ```
@@ -514,7 +514,7 @@ func TestWorkloadAttestation(t *testing.T) {
     identity, err := app.Agent.FetchIdentityDocument(ctx, workload)
 
     require.NoError(t, err)
-    assert.Equal(t, "spiffe://example.org/test-workload", identity.IdentityNamespace.String())
+    assert.Equal(t, "spiffe://example.org/test-workload", identity.IdentityCredential.String())
 }
 ```
 
@@ -603,8 +603,8 @@ func TestIdentityService_Invariants_PostExchange(t *testing.T) {
 				// But assert in assertFn
 			},
 			assertFn: func(msg *ports.Message) {
-				assert.NotNil(t, msg.From.IdentityNamespace)
-				assert.NotNil(t, msg.To.IdentityNamespace)
+				assert.NotNil(t, msg.From.IdentityCredential)
+				assert.NotNil(t, msg.To.IdentityCredential)
 				assert.True(t, msg.From.IdentityDocument.IsValid())
 				assert.True(t, msg.To.IdentityDocument.IsValid())
 			},

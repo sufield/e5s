@@ -30,16 +30,16 @@ func (c *SPIREClient) FetchX509SVID(ctx context.Context) (*domain.IdentityDocume
 
 	svid := x509Ctx.SVIDs[0]
 
-	// Parse SPIFFE ID to get identity namespace
+	// Parse SPIFFE ID to get identity credential
 	// Extract trust domain and path from SPIFFE ID
 	spiffeID := svid.ID
 	trustDomain := domain.NewTrustDomainFromName(spiffeID.TrustDomain().String())
 	path := spiffeID.Path()
-	identityNamespace := domain.NewIdentityNamespaceFromComponents(trustDomain, path)
+	identityCredential := domain.NewIdentityCredentialFromComponents(trustDomain, path)
 
 	// Create identity document
 	return domain.NewIdentityDocumentFromComponents(
-		identityNamespace,
+		identityCredential,
 		domain.IdentityDocumentTypeX509,
 		svid.Certificates[0], // Leaf certificate
 		svid.PrivateKey,

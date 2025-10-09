@@ -19,15 +19,15 @@ func TranslateX509SVIDToIdentityDocument(svid *x509svid.SVID) (*domain.IdentityD
 		return nil, domain.ErrIdentityDocumentInvalid
 	}
 
-	// Convert SPIFFE ID to domain IdentityNamespace
-	identityNamespace, err := TranslateSPIFFEIDToIdentityNamespace(svid.ID)
+	// Convert SPIFFE ID to domain IdentityCredential
+	identityCredential, err := TranslateSPIFFEIDToIdentityCredential(svid.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to translate SPIFFE ID: %w", err)
 	}
 
 	// Create identity document from SVID components
 	return domain.NewIdentityDocumentFromComponents(
-		identityNamespace,
+		identityCredential,
 		domain.IdentityDocumentTypeX509,
 		svid.Certificates[0], // Leaf certificate
 		svid.PrivateKey,
@@ -36,10 +36,10 @@ func TranslateX509SVIDToIdentityDocument(svid *x509svid.SVID) (*domain.IdentityD
 	), nil
 }
 
-// TranslateSPIFFEIDToIdentityNamespace converts a go-spiffe ID to a domain IdentityNamespace
-func TranslateSPIFFEIDToIdentityNamespace(id spiffeid.ID) (*domain.IdentityNamespace, error) {
+// TranslateSPIFFEIDToIdentityCredential converts a go-spiffe ID to a domain IdentityCredential
+func TranslateSPIFFEIDToIdentityCredential(id spiffeid.ID) (*domain.IdentityCredential, error) {
 	if id.IsZero() {
-		return nil, domain.ErrInvalidIdentityNamespace
+		return nil, domain.ErrInvalidIdentityCredential
 	}
 
 	// Extract trust domain
@@ -51,8 +51,8 @@ func TranslateSPIFFEIDToIdentityNamespace(id spiffeid.ID) (*domain.IdentityNames
 		path = "/"
 	}
 
-	// Create domain IdentityNamespace
-	return domain.NewIdentityNamespaceFromComponents(trustDomain, path), nil
+	// Create domain IdentityCredential
+	return domain.NewIdentityCredentialFromComponents(trustDomain, path), nil
 }
 
 // TranslateTrustDomainToSPIFFEID converts a domain TrustDomain to a go-spiffe TrustDomain
@@ -70,14 +70,14 @@ func TranslateTrustDomainToSPIFFEID(trustDomain *domain.TrustDomain) (spiffeid.T
 	return td, nil
 }
 
-// TranslateIdentityNamespaceToSPIFFEID converts a domain IdentityNamespace to a go-spiffe ID
-func TranslateIdentityNamespaceToSPIFFEID(identityNamespace *domain.IdentityNamespace) (spiffeid.ID, error) {
-	if identityNamespace == nil {
-		return spiffeid.ID{}, domain.ErrInvalidIdentityNamespace
+// TranslateIdentityCredentialToSPIFFEID converts a domain IdentityCredential to a go-spiffe ID
+func TranslateIdentityCredentialToSPIFFEID(identityCredential *domain.IdentityCredential) (spiffeid.ID, error) {
+	if identityCredential == nil {
+		return spiffeid.ID{}, domain.ErrInvalidIdentityCredential
 	}
 
 	// Parse the full SPIFFE ID string
-	id, err := spiffeid.FromString(identityNamespace.String())
+	id, err := spiffeid.FromString(identityCredential.String())
 	if err != nil {
 		return spiffeid.ID{}, fmt.Errorf("failed to parse SPIFFE ID: %w", err)
 	}

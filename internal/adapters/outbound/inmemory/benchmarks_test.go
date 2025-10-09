@@ -20,12 +20,12 @@ func BenchmarkIssueIdentity(b *testing.B) {
 		b.Fatalf("Failed to create server: %v", err)
 	}
 
-	namespace := domain.NewIdentityNamespaceFromComponents(
+	credential := domain.NewIdentityCredentialFromComponents(
 		domain.NewTrustDomainFromName("example.org"), "/workload")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := server.IssueIdentity(ctx, namespace)
+		_, err := server.IssueIdentity(ctx, credential)
 		if err != nil {
 			b.Fatalf("IssueIdentity failed: %v", err)
 		}
@@ -51,7 +51,7 @@ func BenchmarkMatchesSelectors(b *testing.B) {
 		b.Run(bm.name, func(b *testing.B) {
 			// Create mapper with N selectors
 			td := domain.NewTrustDomainFromName("example.org")
-			namespace := domain.NewIdentityNamespaceFromComponents(td, "/workload")
+			credential := domain.NewIdentityCredentialFromComponents(td, "/workload")
 
 			mapperSelectors := domain.NewSelectorSet()
 			for i := 0; i < bm.mapperSelCount; i++ {
@@ -59,7 +59,7 @@ func BenchmarkMatchesSelectors(b *testing.B) {
 				mapperSelectors.Add(sel)
 			}
 
-			mapper, err := domain.NewIdentityMapper(namespace, mapperSelectors)
+			mapper, err := domain.NewIdentityMapper(credential, mapperSelectors)
 			if err != nil {
 				b.Fatalf("Failed to create mapper: %v", err)
 			}
@@ -101,13 +101,13 @@ func BenchmarkRegistryFindBySelectors(b *testing.B) {
 
 			// Seed registry with N mappers
 			for i := 0; i < bm.mapperCount; i++ {
-				namespace := domain.NewIdentityNamespaceFromComponents(td, "/workload"+string(rune('0'+i)))
+				credential := domain.NewIdentityCredentialFromComponents(td, "/workload"+string(rune('0'+i)))
 				selectors := domain.NewSelectorSet()
 				for j := 0; j < bm.selectorCount; j++ {
 					sel, _ := domain.ParseSelectorFromString("unix:uid:" + string(rune('0'+i)) + string(rune('0'+j)))
 					selectors.Add(sel)
 				}
-				mapper, _ := domain.NewIdentityMapper(namespace, selectors)
+				mapper, _ := domain.NewIdentityMapper(credential, selectors)
 				_ = registry.Seed(ctx, mapper)
 			}
 			registry.Seal()

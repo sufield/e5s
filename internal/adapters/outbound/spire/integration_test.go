@@ -60,13 +60,13 @@ func TestFetchX509SVID(t *testing.T) {
 	require.NotNil(t, doc, "Identity document should not be nil")
 
 	// Verify document properties
-	assert.NotNil(t, doc.IdentityNamespace(), "Identity namespace should not be nil")
+	assert.NotNil(t, doc.IdentityCredential(), "Identity credential should not be nil")
 	assert.NotNil(t, doc.Certificate(), "Certificate should not be nil")
 	assert.NotNil(t, doc.PrivateKey(), "Private key should not be nil")
 	assert.True(t, doc.IsValid(), "Document should be valid")
 	assert.False(t, doc.IsExpired(), "Document should not be expired")
 
-	t.Logf("Fetched SVID for identity: %s", doc.IdentityNamespace().String())
+	t.Logf("Fetched SVID for identity: %s", doc.IdentityCredential().String())
 	t.Logf("Certificate expires: %s", doc.ExpiresAt().Format(time.RFC3339))
 }
 
@@ -183,8 +183,8 @@ func TestSPIREClientReconnect(t *testing.T) {
 	require.NoError(t, err, "Failed to fetch SVID with second client")
 
 	// Both should work and have same trust domain
-	assert.Equal(t, doc1.IdentityNamespace().TrustDomain().String(),
-		doc2.IdentityNamespace().TrustDomain().String(),
+	assert.Equal(t, doc1.IdentityCredential().TrustDomain().String(),
+		doc2.IdentityCredential().TrustDomain().String(),
 		"Trust domains should match across reconnects")
 }
 

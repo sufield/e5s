@@ -31,7 +31,7 @@ This library focuses on authentication ("who are you?"), not authorization ("wha
 
 2. **Domain Model** (Complete)
    - `IdentityDocument` with X.509 certificates
-   - `TrustDomain` and `IdentityNamespace`
+   - `TrustDomain` and `IdentityCredential`
    - Certificate validation logic
 
 3. **Basic HTTP Server** (Unix Socket)

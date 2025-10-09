@@ -57,18 +57,18 @@ func NewServer(
 	}, nil
 }
 
-// IssueIdentity issues an identity document for an identity namespace
+// IssueIdentity issues an identity document for an identity credential
 // In production SPIRE, identity issuance is handled by the external SPIRE Server
 // This method fetches the identity document from SPIRE via the Workload API
-func (s *Server) IssueIdentity(ctx context.Context, identityNamespace *domain.IdentityNamespace) (*domain.IdentityDocument, error) {
-	if identityNamespace == nil {
-		return nil, fmt.Errorf("%w: identity namespace cannot be nil", domain.ErrIdentityDocumentInvalid)
+func (s *Server) IssueIdentity(ctx context.Context, identityCredential *domain.IdentityCredential) (*domain.IdentityDocument, error) {
+	if identityCredential == nil {
+		return nil, fmt.Errorf("%w: identity credential cannot be nil", domain.ErrIdentityDocumentInvalid)
 	}
 
-	// Verify the identity namespace belongs to this trust domain
-	if !identityNamespace.IsInTrustDomain(s.trustDomain) {
-		return nil, fmt.Errorf("%w: identity namespace %s does not belong to trust domain %s",
-			domain.ErrIdentityDocumentInvalid, identityNamespace.String(), s.trustDomain.String())
+	// Verify the identity credential belongs to this trust domain
+	if !identityCredential.IsInTrustDomain(s.trustDomain) {
+		return nil, fmt.Errorf("%w: identity credential %s does not belong to trust domain %s",
+			domain.ErrIdentityDocumentInvalid, identityCredential.String(), s.trustDomain.String())
 	}
 
 	// Fetch X.509 SVID from SPIRE
@@ -80,9 +80,9 @@ func (s *Server) IssueIdentity(ctx context.Context, identityNamespace *domain.Id
 	}
 
 	// Verify the issued document matches the requested identity
-	if !doc.IdentityNamespace().Equals(identityNamespace) {
+	if !doc.IdentityCredential().Equals(identityCredential) {
 		return nil, fmt.Errorf("identity mismatch: requested %s, SPIRE issued %s",
-			identityNamespace.String(), doc.IdentityNamespace().String())
+			identityCredential.String(), doc.IdentityCredential().String())
 	}
 
 	return doc, nil

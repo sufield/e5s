@@ -14,7 +14,7 @@ import (
 // Seeding is done via internal seed() method called only during bootstrap
 type InMemoryRegistry struct {
 	mu      sync.RWMutex
-	mappers map[string]*domain.IdentityMapper // identityNamespace.String() → IdentityMapper
+	mappers map[string]*domain.IdentityMapper // identityCredential.String() → IdentityMapper
 	sealed  bool                              // Prevents modifications after bootstrap
 }
 
@@ -38,7 +38,7 @@ func (r *InMemoryRegistry) Seed(ctx context.Context, mapper *domain.IdentityMapp
 		return fmt.Errorf("%w", domain.ErrRegistrySealed)
 	}
 
-	idStr := mapper.IdentityNamespace().String()
+	idStr := mapper.IdentityCredential().String()
 	if _, exists := r.mappers[idStr]; exists {
 		return fmt.Errorf("identity mapper for %s already exists", idStr)
 	}

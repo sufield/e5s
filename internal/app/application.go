@@ -34,8 +34,8 @@ func Bootstrap(ctx context.Context, configLoader ports.ConfigLoader, factory por
 	// Step 3: Initialize trust domain parser (abstracts SDK trust domain validation)
 	trustDomainParser := factory.CreateTrustDomainParser()
 
-	// Step 4: Initialize identity namespace parser (abstracts SDK parsing logic)
-	parser := factory.CreateIdentityNamespaceParser()
+	// Step 4: Initialize identity credential parser (abstracts SDK parsing logic)
+	parser := factory.CreateIdentityCredentialParser()
 
 	// Step 5: Initialize identity document provider (abstracts SDK document creation/validation)
 	docProvider := factory.CreateIdentityDocumentProvider()
@@ -56,10 +56,10 @@ func Bootstrap(ctx context.Context, configLoader ports.ConfigLoader, factory por
 
 	// Step 9: SEED registry with identity mappers (configuration, not runtime)
 	for _, workload := range config.Workloads {
-		// Parse identity namespace from fixture
-		identityNamespace, err := parser.ParseFromString(ctx, workload.SpiffeID)
+		// Parse identity credential from fixture
+		identityCredential, err := parser.ParseFromString(ctx, workload.SpiffeID)
 		if err != nil {
-			return nil, fmt.Errorf("invalid identity namespace %s: %w", workload.SpiffeID, err)
+			return nil, fmt.Errorf("invalid identity credential %s: %w", workload.SpiffeID, err)
 		}
 
 		// Parse selectors from fixture
@@ -73,7 +73,7 @@ func Bootstrap(ctx context.Context, configLoader ports.ConfigLoader, factory por
 		selectorSet.Add(selector)
 
 		// Create identity mapper (domain entity)
-		mapper, err := domain.NewIdentityMapper(identityNamespace, selectorSet)
+		mapper, err := domain.NewIdentityMapper(identityCredential, selectorSet)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create identity mapper for %s: %w", workload.SpiffeID, err)
 		}

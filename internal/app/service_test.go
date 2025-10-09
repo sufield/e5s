@@ -75,8 +75,8 @@ func TestIdentityService_ExchangeMessage_Success(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, msg)
 	assert.Equal(t, "Hello server", msg.Content)
-	assert.Equal(t, fromID.IdentityNamespace, msg.From.IdentityNamespace)
-	assert.Equal(t, toID.IdentityNamespace, msg.To.IdentityNamespace)
+	assert.Equal(t, fromID.IdentityCredential, msg.From.IdentityCredential)
+	assert.Equal(t, toID.IdentityCredential, msg.To.IdentityCredential)
 }
 
 func TestIdentityService_ExchangeMessage_NilSenderNamespace(t *testing.T) {
@@ -89,7 +89,7 @@ func TestIdentityService_ExchangeMessage_NilSenderNamespace(t *testing.T) {
 	service := app.NewIdentityService(mockAgent, mockRegistry)
 
 	fromID := ports.Identity{
-		IdentityNamespace: nil, // Invalid: nil namespace
+		IdentityCredential: nil, // Invalid: nil credential
 		Name:              "client",
 	}
 	toID := createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(1*time.Hour))
@@ -100,7 +100,7 @@ func TestIdentityService_ExchangeMessage_NilSenderNamespace(t *testing.T) {
 	// Assert
 	assert.Error(t, err)
 	assert.Nil(t, msg)
-	assert.ErrorIs(t, err, domain.ErrInvalidIdentityNamespace)
+	assert.ErrorIs(t, err, domain.ErrInvalidIdentityCredential)
 }
 
 func TestIdentityService_ExchangeMessage_NilReceiverNamespace(t *testing.T) {
@@ -114,7 +114,7 @@ func TestIdentityService_ExchangeMessage_NilReceiverNamespace(t *testing.T) {
 
 	fromID := createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(1*time.Hour))
 	toID := ports.Identity{
-		IdentityNamespace: nil, // Invalid: nil namespace
+		IdentityCredential: nil, // Invalid: nil credential
 		Name:              "server",
 	}
 
@@ -124,7 +124,7 @@ func TestIdentityService_ExchangeMessage_NilReceiverNamespace(t *testing.T) {
 	// Assert
 	assert.Error(t, err)
 	assert.Nil(t, msg)
-	assert.ErrorIs(t, err, domain.ErrInvalidIdentityNamespace)
+	assert.ErrorIs(t, err, domain.ErrInvalidIdentityCredential)
 }
 
 func TestIdentityService_ExchangeMessage_ExpiredSenderDocument(t *testing.T) {
@@ -181,7 +181,7 @@ func TestIdentityService_ExchangeMessage_NilSenderDocument(t *testing.T) {
 
 	td := domain.NewTrustDomainFromName("example.org")
 	fromID := &ports.Identity{
-		IdentityNamespace: domain.NewIdentityNamespaceFromComponents(td, "/client"),
+		IdentityCredential: domain.NewIdentityCredentialFromComponents(td, "/client"),
 		Name:              "client",
 		IdentityDocument:  nil, // Invalid: nil document
 	}
@@ -208,7 +208,7 @@ func TestIdentityService_ExchangeMessage_NilReceiverDocument(t *testing.T) {
 	td := domain.NewTrustDomainFromName("example.org")
 	fromID := createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(1*time.Hour))
 	toID := &ports.Identity{
-		IdentityNamespace: domain.NewIdentityNamespaceFromComponents(td, "/server"),
+		IdentityCredential: domain.NewIdentityCredentialFromComponents(td, "/server"),
 		Name:              "server",
 		IdentityDocument:  nil, // Invalid: nil document
 	}
@@ -241,8 +241,8 @@ func TestIdentityService_ExchangeMessage_EmptyContent(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, msg)
 	assert.Equal(t, "", msg.Content)
-	assert.Equal(t, fromID.IdentityNamespace, msg.From.IdentityNamespace)
-	assert.Equal(t, toID.IdentityNamespace, msg.To.IdentityNamespace)
+	assert.Equal(t, fromID.IdentityCredential, msg.From.IdentityCredential)
+	assert.Equal(t, toID.IdentityCredential, msg.To.IdentityCredential)
 }
 
 func TestIdentityService_ExchangeMessage_LongContent(t *testing.T) {
@@ -267,8 +267,8 @@ func TestIdentityService_ExchangeMessage_LongContent(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, msg)
 	assert.Equal(t, longContent, msg.Content)
-	assert.Equal(t, fromID.IdentityNamespace, msg.From.IdentityNamespace)
-	assert.Equal(t, toID.IdentityNamespace, msg.To.IdentityNamespace)
+	assert.Equal(t, fromID.IdentityCredential, msg.From.IdentityCredential)
+	assert.Equal(t, toID.IdentityCredential, msg.To.IdentityCredential)
 }
 
 func TestIdentityService_ExchangeMessage_TableDriven(t *testing.T) {
@@ -288,20 +288,20 @@ func TestIdentityService_ExchangeMessage_TableDriven(t *testing.T) {
 			wantError: false,
 		},
 		{
-			name:      "nil sender namespace",
-			fromID:    &ports.Identity{IdentityNamespace: nil, Name: "client"},
+			name:      "nil sender credential",
+			fromID:    &ports.Identity{IdentityCredential: nil, Name: "client"},
 			toID:      createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(1*time.Hour)),
 			content:   "test",
 			wantError: true,
-			wantErr:   domain.ErrInvalidIdentityNamespace,
+			wantErr:   domain.ErrInvalidIdentityCredential,
 		},
 		{
-			name:      "nil receiver namespace",
+			name:      "nil receiver credential",
 			fromID:    createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(1*time.Hour)),
-			toID:      &ports.Identity{IdentityNamespace: nil, Name: "server"},
+			toID:      &ports.Identity{IdentityCredential: nil, Name: "server"},
 			content:   "test",
 			wantError: true,
-			wantErr:   domain.ErrInvalidIdentityNamespace,
+			wantErr:   domain.ErrInvalidIdentityCredential,
 		},
 		{
 			name:      "expired sender document",
@@ -349,8 +349,8 @@ func TestIdentityService_ExchangeMessage_TableDriven(t *testing.T) {
 				require.NoError(t, err)
 				require.NotNil(t, msg)
 				assert.Equal(t, tt.content, msg.Content)
-				assert.Equal(t, tt.fromID.IdentityNamespace, msg.From.IdentityNamespace)
-				assert.Equal(t, tt.toID.IdentityNamespace, msg.To.IdentityNamespace)
+				assert.Equal(t, tt.fromID.IdentityCredential, msg.From.IdentityCredential)
+				assert.Equal(t, tt.toID.IdentityCredential, msg.To.IdentityCredential)
 			}
 		})
 	}
@@ -366,13 +366,13 @@ func createValidIdentity(t *testing.T, spiffeID string, expiresAt time.Time) *po
 		path = spiffeID[len("spiffe://example.org"):]
 	}
 
-	identityNamespace := domain.NewIdentityNamespaceFromComponents(td, path)
+	identityCredential := domain.NewIdentityCredentialFromComponents(td, path)
 
 	return &ports.Identity{
-		IdentityNamespace: identityNamespace,
+		IdentityCredential: identityCredential,
 		Name:              "test-identity",
 		IdentityDocument: domain.NewIdentityDocumentFromComponents(
-			identityNamespace,
+			identityCredential,
 			domain.IdentityDocumentTypeX509,
 			nil, // cert
 			nil, // privateKey

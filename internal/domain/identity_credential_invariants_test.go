@@ -8,9 +8,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestIdentityNamespace_Invariant_TrustDomainNeverNil tests the invariant:
+// TestIdentityCredential_Invariant_TrustDomainNeverNil tests the invariant:
 // "trustDomain is never nil after construction"
-func TestIdentityNamespace_Invariant_TrustDomainNeverNil(t *testing.T) {
+func TestIdentityCredential_Invariant_TrustDomainNeverNil(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -32,7 +32,7 @@ func TestIdentityNamespace_Invariant_TrustDomainNeverNil(t *testing.T) {
 			td := domain.NewTrustDomainFromName(tt.trustDomain)
 
 			// Act
-			id := domain.NewIdentityNamespaceFromComponents(td, tt.path)
+			id := domain.NewIdentityCredentialFromComponents(td, tt.path)
 
 			// Assert invariant: trustDomain is never nil
 			require.NotNil(t, id)
@@ -42,9 +42,9 @@ func TestIdentityNamespace_Invariant_TrustDomainNeverNil(t *testing.T) {
 	}
 }
 
-// TestIdentityNamespace_Invariant_PathNeverEmpty tests the invariant:
+// TestIdentityCredential_Invariant_PathNeverEmpty tests the invariant:
 // "path defaults to '/' if empty, never stored as empty string"
-func TestIdentityNamespace_Invariant_PathNeverEmpty(t *testing.T) {
+func TestIdentityCredential_Invariant_PathNeverEmpty(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -66,7 +66,7 @@ func TestIdentityNamespace_Invariant_PathNeverEmpty(t *testing.T) {
 			td := domain.NewTrustDomainFromName("example.org")
 
 			// Act
-			id := domain.NewIdentityNamespaceFromComponents(td, tt.inputPath)
+			id := domain.NewIdentityCredentialFromComponents(td, tt.inputPath)
 
 			// Assert invariant: path is never empty
 			path := id.Path()
@@ -76,9 +76,9 @@ func TestIdentityNamespace_Invariant_PathNeverEmpty(t *testing.T) {
 	}
 }
 
-// TestIdentityNamespace_Invariant_URIFormat tests the invariant:
+// TestIdentityCredential_Invariant_URIFormat tests the invariant:
 // "uri is always formatted as 'spiffe://<trustDomain><path>'"
-func TestIdentityNamespace_Invariant_URIFormat(t *testing.T) {
+func TestIdentityCredential_Invariant_URIFormat(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -121,7 +121,7 @@ func TestIdentityNamespace_Invariant_URIFormat(t *testing.T) {
 			td := domain.NewTrustDomainFromName(tt.trustDomain)
 
 			// Act
-			id := domain.NewIdentityNamespaceFromComponents(td, tt.path)
+			id := domain.NewIdentityCredentialFromComponents(td, tt.path)
 
 			// Assert invariant: URI format is "spiffe://<trustDomain><path>"
 			uri := id.String()
@@ -140,9 +140,9 @@ func TestIdentityNamespace_Invariant_URIFormat(t *testing.T) {
 	}
 }
 
-// TestIdentityNamespace_Invariant_EqualsReflexive tests the invariant:
+// TestIdentityCredential_Invariant_EqualsReflexive tests the invariant:
 // "Equals() is reflexive"
-func TestIdentityNamespace_Invariant_EqualsReflexive(t *testing.T) {
+func TestIdentityCredential_Invariant_EqualsReflexive(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -161,7 +161,7 @@ func TestIdentityNamespace_Invariant_EqualsReflexive(t *testing.T) {
 
 			// Arrange
 			td := domain.NewTrustDomainFromName(tt.trustDomain)
-			id := domain.NewIdentityNamespaceFromComponents(td, tt.path)
+			id := domain.NewIdentityCredentialFromComponents(td, tt.path)
 
 			// Assert invariant: reflexive
 			assert.True(t, id.Equals(id), "Invariant violated: Equals() is not reflexive")
@@ -169,9 +169,9 @@ func TestIdentityNamespace_Invariant_EqualsReflexive(t *testing.T) {
 	}
 }
 
-// TestIdentityNamespace_Invariant_EqualsSymmetric tests the invariant:
+// TestIdentityCredential_Invariant_EqualsSymmetric tests the invariant:
 // "Equals() is symmetric"
-func TestIdentityNamespace_Invariant_EqualsSymmetric(t *testing.T) {
+func TestIdentityCredential_Invariant_EqualsSymmetric(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -182,7 +182,7 @@ func TestIdentityNamespace_Invariant_EqualsSymmetric(t *testing.T) {
 		path2  string
 		equals bool
 	}{
-		{"same namespace", "example.org", "/workload", "example.org", "/workload", true},
+		{"same credential", "example.org", "/workload", "example.org", "/workload", true},
 		{"different paths", "example.org", "/workload", "example.org", "/service", false},
 		{"different domains", "example.org", "/workload", "other.org", "/workload", false},
 	}
@@ -192,9 +192,9 @@ func TestIdentityNamespace_Invariant_EqualsSymmetric(t *testing.T) {
 			t.Parallel()
 
 			// Arrange
-			id1 := domain.NewIdentityNamespaceFromComponents(
+			id1 := domain.NewIdentityCredentialFromComponents(
 				domain.NewTrustDomainFromName(tt.td1), tt.path1)
-			id2 := domain.NewIdentityNamespaceFromComponents(
+			id2 := domain.NewIdentityCredentialFromComponents(
 				domain.NewTrustDomainFromName(tt.td2), tt.path2)
 
 			// Assert invariant: symmetric
@@ -205,16 +205,16 @@ func TestIdentityNamespace_Invariant_EqualsSymmetric(t *testing.T) {
 	}
 }
 
-// TestIdentityNamespace_Invariant_EqualsTransitive tests the invariant:
+// TestIdentityCredential_Invariant_EqualsTransitive tests the invariant:
 // "Equals() is transitive"
-func TestIdentityNamespace_Invariant_EqualsTransitive(t *testing.T) {
+func TestIdentityCredential_Invariant_EqualsTransitive(t *testing.T) {
 	t.Parallel()
 
 	// Arrange
 	td := domain.NewTrustDomainFromName("example.org")
-	id1 := domain.NewIdentityNamespaceFromComponents(td, "/workload")
-	id2 := domain.NewIdentityNamespaceFromComponents(td, "/workload")
-	id3 := domain.NewIdentityNamespaceFromComponents(td, "/workload")
+	id1 := domain.NewIdentityCredentialFromComponents(td, "/workload")
+	id2 := domain.NewIdentityCredentialFromComponents(td, "/workload")
+	id3 := domain.NewIdentityCredentialFromComponents(td, "/workload")
 
 	// Assert invariant: transitive
 	assert.True(t, id1.Equals(id2), "Setup: id1 should equal id2")
@@ -222,14 +222,14 @@ func TestIdentityNamespace_Invariant_EqualsTransitive(t *testing.T) {
 	assert.True(t, id1.Equals(id3), "Invariant violated: Equals() is not transitive")
 }
 
-// TestIdentityNamespace_Invariant_EqualsNilSafe tests the invariant:
+// TestIdentityCredential_Invariant_EqualsNilSafe tests the invariant:
 // "Equals() returns false for nil input, never panics"
-func TestIdentityNamespace_Invariant_EqualsNilSafe(t *testing.T) {
+func TestIdentityCredential_Invariant_EqualsNilSafe(t *testing.T) {
 	t.Parallel()
 
 	// Arrange
 	td := domain.NewTrustDomainFromName("example.org")
-	id := domain.NewIdentityNamespaceFromComponents(td, "/workload")
+	id := domain.NewIdentityCredentialFromComponents(td, "/workload")
 
 	// Assert invariant: nil-safe
 	assert.NotPanics(t, func() {
@@ -238,9 +238,9 @@ func TestIdentityNamespace_Invariant_EqualsNilSafe(t *testing.T) {
 	})
 }
 
-// TestIdentityNamespace_Invariant_IsInTrustDomain tests the invariant:
+// TestIdentityCredential_Invariant_IsInTrustDomain tests the invariant:
 // "IsInTrustDomain(td) iff i.trustDomain.Equals(td)"
-func TestIdentityNamespace_Invariant_IsInTrustDomain(t *testing.T) {
+func TestIdentityCredential_Invariant_IsInTrustDomain(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -279,7 +279,7 @@ func TestIdentityNamespace_Invariant_IsInTrustDomain(t *testing.T) {
 
 			// Arrange
 			td := domain.NewTrustDomainFromName(tt.idTrustDomain)
-			id := domain.NewIdentityNamespaceFromComponents(td, tt.idPath)
+			id := domain.NewIdentityCredentialFromComponents(td, tt.idPath)
 			checkTD := domain.NewTrustDomainFromName(tt.checkDomain)
 
 			// Act

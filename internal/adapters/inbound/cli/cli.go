@@ -52,7 +52,7 @@ func (c *CLI) Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to fetch server identity document: %w", err)
 	}
-	fmt.Printf("  ✓ Server workload identity document issued: %s\n", serverIdentity.IdentityNamespace.String())
+	fmt.Printf("  ✓ Server workload identity document issued: %s\n", serverIdentity.IdentityCredential.String())
 
 	// Client workload
 	clientWorkload := ports.ProcessIdentity{
@@ -65,7 +65,7 @@ func (c *CLI) Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to fetch client identity document: %w", err)
 	}
-	fmt.Printf("  ✓ Client workload identity document issued: %s\n", clientIdentity.IdentityNamespace.String())
+	fmt.Printf("  ✓ Client workload identity document issued: %s\n", clientIdentity.IdentityCredential.String())
 	fmt.Println()
 
 	// Execute core use case: authenticated message exchange

@@ -5,12 +5,12 @@
 //
 // 1) InMemoryNodeAttestor (node.go)
 //   - Purpose: Demonstrates node-level attestation in-memory for the demo
-//     server. It maps a node's IdentityNamespace (SPIFFE ID) to a set of
+//     server. It maps a node's IdentityCredential (SPIFFE ID) to a set of
 //     platform selectors and returns a `domain.Node` marked as attested.
 //   - API:
 //   - NewInMemoryNodeAttestor(trustDomain string)
 //   - RegisterNodeSelectors(spiffeID string, selectors []*domain.Selector)
-//   - AttestNode(ctx, identityNamespace) (*domain.Node, error)
+//   - AttestNode(ctx, identityCredential) (*domain.Node, error)
 //   - Notes: In production, node attestation is platform-specific (EC2 IID,
 //     GCP tokens, TPM, etc.). This in-memory attestor is only suitable for
 //     local development and tests.

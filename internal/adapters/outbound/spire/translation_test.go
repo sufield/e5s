@@ -50,16 +50,16 @@ func TestTranslateTrustDomainToSPIFFEID(t *testing.T) {
 	}
 }
 
-func TestTranslateIdentityNamespaceToSPIFFEID(t *testing.T) {
+func TestTranslateIdentityCredentialToSPIFFEID(t *testing.T) {
 	tests := []struct {
-		name      string
-		namespace *domain.IdentityNamespace
-		want      string
-		wantErr   bool
+		name       string
+		credential *domain.IdentityCredential
+		want       string
+		wantErr    bool
 	}{
 		{
 			name: "with path",
-			namespace: domain.NewIdentityNamespaceFromComponents(
+			credential: domain.NewIdentityCredentialFromComponents(
 				domain.NewTrustDomainFromName("example.org"),
 				"/workload/server",
 			),
@@ -68,7 +68,7 @@ func TestTranslateIdentityNamespaceToSPIFFEID(t *testing.T) {
 		},
 		{
 			name: "single segment path",
-			namespace: domain.NewIdentityNamespaceFromComponents(
+			credential: domain.NewIdentityCredentialFromComponents(
 				domain.NewTrustDomainFromName("example.org"),
 				"/workload",
 			),
@@ -79,7 +79,7 @@ func TestTranslateIdentityNamespaceToSPIFFEID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := TranslateIdentityNamespaceToSPIFFEID(tt.namespace)
+			got, err := TranslateIdentityCredentialToSPIFFEID(tt.credential)
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -90,7 +90,7 @@ func TestTranslateIdentityNamespaceToSPIFFEID(t *testing.T) {
 	}
 }
 
-func TestTranslateSPIFFEIDToIdentityNamespace(t *testing.T) {
+func TestTranslateSPIFFEIDToIdentityCredential(t *testing.T) {
 	tests := []struct {
 		name       string
 		spiffeID   string
@@ -119,7 +119,7 @@ func TestTranslateSPIFFEIDToIdentityNamespace(t *testing.T) {
 			id, err := spiffeid.FromString(tt.spiffeID)
 			require.NoError(t, err, "Failed to parse test SPIFFE ID")
 
-			got, err := TranslateSPIFFEIDToIdentityNamespace(id)
+			got, err := TranslateSPIFFEIDToIdentityCredential(id)
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -169,7 +169,7 @@ func TestTranslateX509SVIDToIdentityDocument(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.NotNil(t, doc)
-	assert.Equal(t, "spiffe://example.org/workload", doc.IdentityNamespace().String())
+	assert.Equal(t, "spiffe://example.org/workload", doc.IdentityCredential().String())
 	assert.Equal(t, domain.IdentityDocumentTypeX509, doc.Type())
 	assert.NotNil(t, doc.Certificate())
 	assert.NotNil(t, doc.PrivateKey())

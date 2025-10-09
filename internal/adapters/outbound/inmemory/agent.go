@@ -10,12 +10,12 @@ import (
 
 // InMemoryAgent is an in-memory implementation of SPIRE agent
 type InMemoryAgent struct {
-	identityNamespace   *domain.IdentityNamespace
+	identityCredential   *domain.IdentityCredential
 	trustDomain         *domain.TrustDomain
 	server              *InMemoryServer
 	registry            ports.IdentityMapperRegistry
 	attestor            ports.WorkloadAttestor
-	parser              ports.IdentityNamespaceParser
+	parser              ports.IdentityCredentialParser
 	certificateProvider ports.IdentityDocumentProvider
 	agentIdentity       *ports.Identity
 }
@@ -27,17 +27,17 @@ func NewInMemoryAgent(
 	server *InMemoryServer,
 	registry ports.IdentityMapperRegistry,
 	attestor ports.WorkloadAttestor,
-	parser ports.IdentityNamespaceParser,
+	parser ports.IdentityCredentialParser,
 	certProvider ports.IdentityDocumentProvider,
 ) (*InMemoryAgent, error) {
 	// Use parser port instead of domain constructor
-	identityNamespace, err := parser.ParseFromString(ctx, agentSpiffeIDStr)
+	identityCredential, err := parser.ParseFromString(ctx, agentSpiffeIDStr)
 	if err != nil {
-		return nil, fmt.Errorf("invalid agent identity namespace: %w", err)
+		return nil, fmt.Errorf("invalid agent identity credential: %w", err)
 	}
 
 	agent := &InMemoryAgent{
-		identityNamespace:   identityNamespace,
+		identityCredential:   identityCredential,
 		trustDomain:         server.GetTrustDomain(),
 		server:              server,
 		registry:            registry,
@@ -60,13 +60,13 @@ func (a *InMemoryAgent) initializeAgentIdentity(ctx context.Context) error {
 	caCert := a.server.GetCA()
 	caKey := a.server.caKey
 
-	agentDoc, err := a.certificateProvider.CreateX509IdentityDocument(ctx, a.identityNamespace, caCert, caKey)
+	agentDoc, err := a.certificateProvider.CreateX509IdentityDocument(ctx, a.identityCredential, caCert, caKey)
 	if err != nil {
 		return fmt.Errorf("failed to create agent identity document: %w", err)
 	}
 
 	a.agentIdentity = &ports.Identity{
-		IdentityNamespace: a.identityNamespace,
+		IdentityCredential: a.identityCredential,
 		Name:              "agent",
 		IdentityDocument:  agentDoc,
 	}
@@ -112,21 +112,21 @@ func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload port
 	}
 
 	// Step 4: Issue identity document from server
-	doc, err := a.server.IssueIdentity(ctx, mapper.IdentityNamespace())
+	doc, err := a.server.IssueIdentity(ctx, mapper.IdentityCredential())
 	if err != nil {
 		return nil, fmt.Errorf("failed to issue identity document: %w", err)
 	}
 
 	// Step 5: Return identity with document
 	return &ports.Identity{
-		IdentityNamespace: mapper.IdentityNamespace(),
-		Name:              extractNameFromIdentityNamespace(mapper.IdentityNamespace()),
+		IdentityCredential: mapper.IdentityCredential(),
+		Name:              extractNameFromIdentityCredential(mapper.IdentityCredential()),
 		IdentityDocument:  doc,
 	}, nil
 }
 
-// extractNameFromIdentityNamespace extracts a human-readable name from identity namespace
-func extractNameFromIdentityNamespace(id *domain.IdentityNamespace) string {
+// extractNameFromIdentityCredential extracts a human-readable name from identity credential
+func extractNameFromIdentityCredential(id *domain.IdentityCredential) string {
 	// Extract last path segment as name
 	path := id.Path()
 	if path == "/" || path == "" {

@@ -27,11 +27,11 @@ func NewIdentityService(agent ports.Agent, registry ports.IdentityMapperRegistry
 // This demonstrates the core business logic using identities
 func (s *IdentityService) ExchangeMessage(ctx context.Context, from ports.Identity, to ports.Identity, content string) (*ports.Message, error) {
 	// Core business logic: validate identities
-	if from.IdentityNamespace == nil {
-		return nil, domain.ErrInvalidIdentityNamespace
+	if from.IdentityCredential == nil {
+		return nil, domain.ErrInvalidIdentityCredential
 	}
-	if to.IdentityNamespace == nil {
-		return nil, domain.ErrInvalidIdentityNamespace
+	if to.IdentityCredential == nil {
+		return nil, domain.ErrInvalidIdentityCredential
 	}
 
 	// Verify identity documents are valid

@@ -46,15 +46,15 @@ func NewInMemoryServer(ctx context.Context, trustDomainStr string, trustDomainPa
 	}, nil
 }
 
-// IssueIdentity issues an X.509 identity document for an identity namespace
+// IssueIdentity issues an X.509 identity document for an identity credential
 // No verification of registration - that's done by the agent during attestation/matching
-func (s *InMemoryServer) IssueIdentity(ctx context.Context, identityNamespace *domain.IdentityNamespace) (*domain.IdentityDocument, error) {
+func (s *InMemoryServer) IssueIdentity(ctx context.Context, identityCredential *domain.IdentityCredential) (*domain.IdentityDocument, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	// Validate inputs
-	if identityNamespace == nil {
-		return nil, fmt.Errorf("%w: identity namespace cannot be nil", domain.ErrIdentityDocumentInvalid)
+	if identityCredential == nil {
+		return nil, fmt.Errorf("%w: identity credential cannot be nil", domain.ErrIdentityDocumentInvalid)
 	}
 
 	if s.caCert == nil || s.caKey == nil {
@@ -62,7 +62,7 @@ func (s *InMemoryServer) IssueIdentity(ctx context.Context, identityNamespace *d
 	}
 
 	// Use IdentityDocumentProvider port to create identity certificate (delegates certificate generation)
-	doc, err := s.certificateProvider.CreateX509IdentityDocument(ctx, identityNamespace, s.caCert, s.caKey)
+	doc, err := s.certificateProvider.CreateX509IdentityDocument(ctx, identityCredential, s.caCert, s.caKey)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", domain.ErrServerUnavailable, err)
 	}

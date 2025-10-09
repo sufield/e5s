@@ -61,20 +61,20 @@ func TestServer_Invariant_IssueIdentityValidatesInput(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
-		name      string
-		namespace *domain.IdentityNamespace
-		wantError bool
+		name       string
+		credential *domain.IdentityCredential
+		wantError  bool
 	}{
 		{
-			name: "valid namespace",
-			namespace: domain.NewIdentityNamespaceFromComponents(
+			name: "valid credential",
+			credential: domain.NewIdentityCredentialFromComponents(
 				domain.NewTrustDomainFromName("example.org"), "/workload"),
 			wantError: false,
 		},
 		{
-			name:      "nil namespace - violates invariant",
-			namespace: nil,
-			wantError: true,
+			name:       "nil credential - violates invariant",
+			credential: nil,
+			wantError:  true,
 		},
 	}
 
@@ -83,7 +83,7 @@ func TestServer_Invariant_IssueIdentityValidatesInput(t *testing.T) {
 			t.Parallel()
 
 			// Act
-			doc, err := server.IssueIdentity(ctx, tt.namespace)
+			doc, err := server.IssueIdentity(ctx, tt.credential)
 
 			// Assert invariant: validates input
 			if tt.wantError {
@@ -98,7 +98,7 @@ func TestServer_Invariant_IssueIdentityValidatesInput(t *testing.T) {
 }
 
 // TestServer_Invariant_IssueIdentityMatchesNamespace tests the invariant:
-// "Document's identity namespace matches input identityNamespace"
+// "Document's identity credential matches input identityCredential"
 func TestServer_Invariant_IssueIdentityMatchesNamespace(t *testing.T) {
 	t.Parallel()
 
@@ -110,22 +110,22 @@ func TestServer_Invariant_IssueIdentityMatchesNamespace(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
-		name      string
-		namespace *domain.IdentityNamespace
+		name       string
+		credential *domain.IdentityCredential
 	}{
 		{
-			name: "workload namespace",
-			namespace: domain.NewIdentityNamespaceFromComponents(
+			name: "workload credential",
+			credential: domain.NewIdentityCredentialFromComponents(
 				domain.NewTrustDomainFromName("example.org"), "/workload"),
 		},
 		{
-			name: "service namespace",
-			namespace: domain.NewIdentityNamespaceFromComponents(
+			name: "service credential",
+			credential: domain.NewIdentityCredentialFromComponents(
 				domain.NewTrustDomainFromName("example.org"), "/service/api"),
 		},
 		{
-			name: "agent namespace",
-			namespace: domain.NewIdentityNamespaceFromComponents(
+			name: "agent credential",
+			credential: domain.NewIdentityCredentialFromComponents(
 				domain.NewTrustDomainFromName("example.org"), "/agent"),
 		},
 	}
@@ -135,13 +135,13 @@ func TestServer_Invariant_IssueIdentityMatchesNamespace(t *testing.T) {
 			t.Parallel()
 
 			// Act
-			doc, err := server.IssueIdentity(ctx, tt.namespace)
+			doc, err := server.IssueIdentity(ctx, tt.credential)
 
-			// Assert invariant: namespace matches
+			// Assert invariant: credential matches
 			require.NoError(t, err)
 			require.NotNil(t, doc)
-			assert.Equal(t, tt.namespace, doc.IdentityNamespace(),
-				"Invariant violated: issued document namespace must match input")
+			assert.Equal(t, tt.credential, doc.IdentityCredential(),
+				"Invariant violated: issued document credential must match input")
 		})
 	}
 }
@@ -188,11 +188,11 @@ func TestServer_Invariant_IssuedDocumentsAreValid(t *testing.T) {
 	require.NoError(t, err)
 
 	// Arrange
-	namespace := domain.NewIdentityNamespaceFromComponents(
+	credential := domain.NewIdentityCredentialFromComponents(
 		domain.NewTrustDomainFromName("example.org"), "/workload")
 
 	// Act
-	doc, err := server.IssueIdentity(ctx, namespace)
+	doc, err := server.IssueIdentity(ctx, credential)
 
 	// Assert invariant: freshly issued document is valid
 	require.NoError(t, err)

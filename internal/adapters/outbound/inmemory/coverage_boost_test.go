@@ -35,7 +35,7 @@ func TestAgent_FetchIdentityDocument_NoSelectorsRegistered(t *testing.T) {
 
 	// Create attestor WITHOUT registering any UIDs
 	workloadAttestor := attestor.NewUnixWorkloadAttestor()
-	parser := inmemory.NewInMemoryIdentityNamespaceParser()
+	parser := inmemory.NewInMemoryIdentityCredentialParser()
 
 	agent, err := inmemory.NewInMemoryAgent(
 		ctx,
@@ -75,7 +75,7 @@ func TestAgent_FetchIdentityDocument_NoMatchingMapper(t *testing.T) {
 	workloadAttestor := attestor.NewUnixWorkloadAttestor()
 	workloadAttestor.RegisterUID(1000, "unix:user:testuser")
 
-	parser := inmemory.NewInMemoryIdentityNamespaceParser()
+	parser := inmemory.NewInMemoryIdentityCredentialParser()
 
 	agent, err := inmemory.NewInMemoryAgent(
 		ctx,
@@ -139,12 +139,12 @@ func TestTrustBundleProvider_GetBundleForIdentity(t *testing.T) {
 	caCerts := []*x509.Certificate{server.GetCA()}
 	provider := inmemory.NewInMemoryTrustBundleProvider(caCerts)
 
-	// Create identity namespace
+	// Create identity credential
 	td := domain.NewTrustDomainFromName("example.org")
-	namespace := domain.NewIdentityNamespaceFromComponents(td, "/workload")
+	credential := domain.NewIdentityCredentialFromComponents(td, "/workload")
 
 	// Act
-	bundle, err := provider.GetBundleForIdentity(ctx, namespace)
+	bundle, err := provider.GetBundleForIdentity(ctx, credential)
 
 	// Assert
 	require.NoError(t, err)
@@ -246,12 +246,12 @@ func TestTrustDomainParser_FromString_ValidCases(t *testing.T) {
 
 // Coverage tests for identity_namespace_parser.go - ParseFromPath
 
-// TestIdentityNamespaceParser_ParseFromPath tests path-based parsing
-func TestIdentityNamespaceParser_ParseFromPath(t *testing.T) {
+// TestIdentityCredentialParser_ParseFromPath tests path-based parsing
+func TestIdentityCredentialParser_ParseFromPath(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	parser := inmemory.NewInMemoryIdentityNamespaceParser()
+	parser := inmemory.NewInMemoryIdentityCredentialParser()
 
 	tests := []struct {
 		name        string
@@ -288,16 +288,16 @@ func TestIdentityNamespaceParser_ParseFromPath(t *testing.T) {
 			t.Parallel()
 
 			// Act
-			namespace, err := parser.ParseFromPath(ctx, tt.trustDomain, tt.path)
+			credential, err := parser.ParseFromPath(ctx, tt.trustDomain, tt.path)
 
 			// Assert
 			if tt.wantError {
 				assert.Error(t, err)
-				assert.Nil(t, namespace)
+				assert.Nil(t, credential)
 			} else {
 				require.NoError(t, err)
-				assert.NotNil(t, namespace)
-				assert.Equal(t, tt.expectedURI, namespace.String())
+				assert.NotNil(t, credential)
+				assert.Equal(t, tt.expectedURI, credential.String())
 			}
 		})
 	}
@@ -313,10 +313,10 @@ func TestIdentityDocumentValidator_Validate_NilDocument(t *testing.T) {
 	validator := inmemory.NewIdentityDocumentValidator(nil)
 
 	td := domain.NewTrustDomainFromName("example.org")
-	namespace := domain.NewIdentityNamespaceFromComponents(td, "/workload")
+	credential := domain.NewIdentityCredentialFromComponents(td, "/workload")
 
 	// Act - Pass nil document
-	err := validator.Validate(ctx, nil, namespace)
+	err := validator.Validate(ctx, nil, credential)
 
 	// Assert
 	assert.Error(t, err)
@@ -338,9 +338,9 @@ func TestIdentityDocumentValidator_Validate_NilExpectedID(t *testing.T) {
 
 	// Create a valid document
 	td := domain.NewTrustDomainFromName("example.org")
-	namespace := domain.NewIdentityNamespaceFromComponents(td, "/workload")
+	credential := domain.NewIdentityCredentialFromComponents(td, "/workload")
 	doc := domain.NewIdentityDocumentFromComponents(
-		namespace,
+		credential,
 		domain.IdentityDocumentTypeX509,
 		server.GetCA(),
 		nil, nil,
@@ -352,7 +352,7 @@ func TestIdentityDocumentValidator_Validate_NilExpectedID(t *testing.T) {
 
 	// Assert
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "expected identity namespace cannot be nil")
+	assert.Contains(t, err.Error(), "expected identity credential cannot be nil")
 }
 
 // TestIdentityDocumentValidator_Validate_ExpiredDocument tests expired document
@@ -363,18 +363,18 @@ func TestIdentityDocumentValidator_Validate_ExpiredDocument(t *testing.T) {
 	validator := inmemory.NewIdentityDocumentValidator(nil)
 
 	td := domain.NewTrustDomainFromName("example.org")
-	namespace := domain.NewIdentityNamespaceFromComponents(td, "/workload")
+	credential := domain.NewIdentityCredentialFromComponents(td, "/workload")
 
 	// Create expired document
 	doc := domain.NewIdentityDocumentFromComponents(
-		namespace,
+		credential,
 		domain.IdentityDocumentTypeX509,
 		nil, nil, nil,
 		time.Unix(1000000000, 0), // Past expiry
 	)
 
 	// Act
-	err := validator.Validate(ctx, doc, namespace)
+	err := validator.Validate(ctx, doc, credential)
 
 	// Assert
 	assert.Error(t, err)
@@ -389,8 +389,8 @@ func TestIdentityDocumentValidator_Validate_MismatchedNamespace(t *testing.T) {
 	validator := inmemory.NewIdentityDocumentValidator(nil)
 
 	td := domain.NewTrustDomainFromName("example.org")
-	namespace1 := domain.NewIdentityNamespaceFromComponents(td, "/workload1")
-	namespace2 := domain.NewIdentityNamespaceFromComponents(td, "/workload2")
+	namespace1 := domain.NewIdentityCredentialFromComponents(td, "/workload1")
+	namespace2 := domain.NewIdentityCredentialFromComponents(td, "/workload2")
 
 	// Create document with namespace1
 	doc := domain.NewIdentityDocumentFromComponents(
@@ -425,18 +425,18 @@ func TestIdentityDocumentValidator_Validate_Success(t *testing.T) {
 	validator := inmemory.NewIdentityDocumentValidator(bundleProvider)
 
 	td := domain.NewTrustDomainFromName("example.org")
-	namespace := domain.NewIdentityNamespaceFromComponents(td, "/workload")
+	credential := domain.NewIdentityCredentialFromComponents(td, "/workload")
 
 	// Create valid document
 	doc := domain.NewIdentityDocumentFromComponents(
-		namespace,
+		credential,
 		domain.IdentityDocumentTypeX509,
 		nil, nil, nil,
 		time.Unix(2000000000, 0), // Future expiry
 	)
 
 	// Act
-	err = validator.Validate(ctx, doc, namespace)
+	err = validator.Validate(ctx, doc, credential)
 
 	// Assert - Should succeed
 	assert.NoError(t, err)
@@ -444,7 +444,7 @@ func TestIdentityDocumentValidator_Validate_Success(t *testing.T) {
 
 // Additional coverage tests to push over 70%
 
-// TestTrustBundleProvider_GetBundleForIdentity_NilNamespace tests nil identity namespace error
+// TestTrustBundleProvider_GetBundleForIdentity_NilNamespace tests nil identity credential error
 func TestTrustBundleProvider_GetBundleForIdentity_NilNamespace(t *testing.T) {
 	t.Parallel()
 
@@ -458,13 +458,13 @@ func TestTrustBundleProvider_GetBundleForIdentity_NilNamespace(t *testing.T) {
 	caCerts := []*x509.Certificate{server.GetCA()}
 	provider := inmemory.NewInMemoryTrustBundleProvider(caCerts)
 
-	// Act - Pass nil identity namespace
+	// Act - Pass nil identity credential
 	bundle, err := provider.GetBundleForIdentity(ctx, nil)
 
 	// Assert - Should return error
 	assert.Error(t, err)
 	assert.Nil(t, bundle)
-	assert.Contains(t, err.Error(), "identity namespace cannot be nil")
+	assert.Contains(t, err.Error(), "identity credential cannot be nil")
 }
 
 // TestAgent_GetIdentity tests the GetIdentity method
@@ -482,7 +482,7 @@ func TestAgent_GetIdentity(t *testing.T) {
 	registry.Seal()
 
 	workloadAttestor := attestor.NewUnixWorkloadAttestor()
-	parser := inmemory.NewInMemoryIdentityNamespaceParser()
+	parser := inmemory.NewInMemoryIdentityCredentialParser()
 
 	agent, err := inmemory.NewInMemoryAgent(
 		ctx,
@@ -501,16 +501,16 @@ func TestAgent_GetIdentity(t *testing.T) {
 	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, identity)
-	assert.NotNil(t, identity.IdentityNamespace)
-	assert.Equal(t, "spiffe://example.org/agent", identity.IdentityNamespace.String())
+	assert.NotNil(t, identity.IdentityCredential)
+	assert.Equal(t, "spiffe://example.org/agent", identity.IdentityCredential.String())
 }
 
-// TestIdentityNamespaceParser_ParseFromPath_ErrorCases tests error handling
-func TestIdentityNamespaceParser_ParseFromPath_ErrorCases(t *testing.T) {
+// TestIdentityCredentialParser_ParseFromPath_ErrorCases tests error handling
+func TestIdentityCredentialParser_ParseFromPath_ErrorCases(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	parser := inmemory.NewInMemoryIdentityNamespaceParser()
+	parser := inmemory.NewInMemoryIdentityCredentialParser()
 
 	tests := []struct {
 		name        string
@@ -537,15 +537,15 @@ func TestIdentityNamespaceParser_ParseFromPath_ErrorCases(t *testing.T) {
 			t.Parallel()
 
 			// Act
-			namespace, err := parser.ParseFromPath(ctx, tt.trustDomain, tt.path)
+			credential, err := parser.ParseFromPath(ctx, tt.trustDomain, tt.path)
 
 			// Assert
 			if tt.wantError {
 				assert.Error(t, err)
-				assert.Nil(t, namespace)
+				assert.Nil(t, credential)
 			} else {
 				require.NoError(t, err)
-				assert.NotNil(t, namespace)
+				assert.NotNil(t, credential)
 			}
 		})
 	}
@@ -592,12 +592,12 @@ func TestTrustDomainParser_FromString_InvalidDomain(t *testing.T) {
 	}
 }
 
-// TestIdentityNamespaceParser_ParseFromString_InvalidURI tests error handling for invalid URIs
-func TestIdentityNamespaceParser_ParseFromString_InvalidURI(t *testing.T) {
+// TestIdentityCredentialParser_ParseFromString_InvalidURI tests error handling for invalid URIs
+func TestIdentityCredentialParser_ParseFromString_InvalidURI(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	parser := inmemory.NewInMemoryIdentityNamespaceParser()
+	parser := inmemory.NewInMemoryIdentityCredentialParser()
 
 	tests := []struct {
 		name       string
@@ -605,7 +605,7 @@ func TestIdentityNamespaceParser_ParseFromString_InvalidURI(t *testing.T) {
 		wantError  bool
 		wantErrMsg string
 	}{
-		{"empty string", "", true, "identity namespace cannot be empty"},
+		{"empty string", "", true, "identity credential cannot be empty"},
 		{"missing scheme", "example.org/workload", true, ""},
 		{"wrong scheme", "http://example.org/workload", true, "must use 'spiffe' scheme"},
 		{"missing host/trust domain", "spiffe:///workload", true, "must contain a trust domain"},
@@ -618,18 +618,18 @@ func TestIdentityNamespaceParser_ParseFromString_InvalidURI(t *testing.T) {
 			t.Parallel()
 
 			// Act
-			namespace, err := parser.ParseFromString(ctx, tt.input)
+			credential, err := parser.ParseFromString(ctx, tt.input)
 
 			// Assert
 			if tt.wantError {
 				assert.Error(t, err)
-				assert.Nil(t, namespace)
+				assert.Nil(t, credential)
 				if tt.wantErrMsg != "" {
 					assert.Contains(t, err.Error(), tt.wantErrMsg)
 				}
 			} else {
 				require.NoError(t, err)
-				assert.NotNil(t, namespace)
+				assert.NotNil(t, credential)
 			}
 		})
 	}
@@ -650,7 +650,7 @@ func TestAgent_NewInMemoryAgent_ErrorPaths(t *testing.T) {
 	registry.Seal()
 
 	workloadAttestor := attestor.NewUnixWorkloadAttestor()
-	parser := inmemory.NewInMemoryIdentityNamespaceParser()
+	parser := inmemory.NewInMemoryIdentityCredentialParser()
 
 	tests := []struct {
 		name        string
@@ -744,7 +744,7 @@ func TestAgent_FetchIdentityDocument_InvalidSelector(t *testing.T) {
 	workloadAttestor := attestor.NewUnixWorkloadAttestor()
 	workloadAttestor.RegisterUID(2000, "invalid-selector-no-colon")
 
-	parser := inmemory.NewInMemoryIdentityNamespaceParser()
+	parser := inmemory.NewInMemoryIdentityCredentialParser()
 
 	agent, err := inmemory.NewInMemoryAgent(
 		ctx,
@@ -765,8 +765,8 @@ func TestAgent_FetchIdentityDocument_InvalidSelector(t *testing.T) {
 	assert.Contains(t, err.Error(), "invalid selector")
 }
 
-// TestServer_IssueIdentity_NilNamespace tests nil namespace error
-func TestServer_IssueIdentity_NilNamespace(t *testing.T) {
+// TestServer_IssueIdentity_NilCredential tests nil credential error
+func TestServer_IssueIdentity_NilCredential(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -776,13 +776,13 @@ func TestServer_IssueIdentity_NilNamespace(t *testing.T) {
 	server, err := inmemory.NewInMemoryServer(ctx, "example.org", tdParser, docProvider)
 	require.NoError(t, err)
 
-	// Act - Pass nil namespace
+	// Act - Pass nil credential
 	doc, err := server.IssueIdentity(ctx, nil)
 
 	// Assert
 	assert.Error(t, err)
 	assert.Nil(t, doc)
-	assert.Contains(t, err.Error(), "identity namespace cannot be nil")
+	assert.Contains(t, err.Error(), "identity credential cannot be nil")
 }
 
 // TestAgent_FetchIdentityDocument_FullErrorFlow tests the complete error flow
@@ -800,13 +800,13 @@ func TestAgent_FetchIdentityDocument_FullErrorFlow(t *testing.T) {
 
 	// Register a mapper
 	td := domain.NewTrustDomainFromName("example.org")
-	namespace := domain.NewIdentityNamespaceFromComponents(td, "/workload")
+	credential := domain.NewIdentityCredentialFromComponents(td, "/workload")
 	selector, err := domain.ParseSelectorFromString("unix:uid:1000")
 	require.NoError(t, err)
 
 	selectorSet := domain.NewSelectorSet()
 	selectorSet.Add(selector)
-	mapper, err := domain.NewIdentityMapper(namespace, selectorSet)
+	mapper, err := domain.NewIdentityMapper(credential, selectorSet)
 	require.NoError(t, err)
 	err = registry.Seed(ctx, mapper)
 	require.NoError(t, err)
@@ -815,7 +815,7 @@ func TestAgent_FetchIdentityDocument_FullErrorFlow(t *testing.T) {
 	workloadAttestor := attestor.NewUnixWorkloadAttestor()
 	workloadAttestor.RegisterUID(1000, "unix:uid:1000")
 
-	parser := inmemory.NewInMemoryIdentityNamespaceParser()
+	parser := inmemory.NewInMemoryIdentityCredentialParser()
 
 	agent, err := inmemory.NewInMemoryAgent(
 		ctx,
@@ -838,7 +838,7 @@ func TestAgent_FetchIdentityDocument_FullErrorFlow(t *testing.T) {
 	assert.NotNil(t, identity.IdentityDocument)
 }
 
-// TestAgent_ExtractName_RootPath tests extractNameFromIdentityNamespace with root path
+// TestAgent_ExtractName_RootPath tests extractNameFromIdentityCredential with root path
 func TestAgent_ExtractName_RootPath(t *testing.T) {
 	t.Parallel()
 
@@ -853,13 +853,13 @@ func TestAgent_ExtractName_RootPath(t *testing.T) {
 
 	// Register a mapper with root path "/"
 	td := domain.NewTrustDomainFromName("example.org")
-	namespace := domain.NewIdentityNamespaceFromComponents(td, "/")
+	credential := domain.NewIdentityCredentialFromComponents(td, "/")
 	selector, err := domain.ParseSelectorFromString("unix:uid:2000")
 	require.NoError(t, err)
 
 	selectorSet := domain.NewSelectorSet()
 	selectorSet.Add(selector)
-	mapper, err := domain.NewIdentityMapper(namespace, selectorSet)
+	mapper, err := domain.NewIdentityMapper(credential, selectorSet)
 	require.NoError(t, err)
 	err = registry.Seed(ctx, mapper)
 	require.NoError(t, err)
@@ -868,7 +868,7 @@ func TestAgent_ExtractName_RootPath(t *testing.T) {
 	workloadAttestor := attestor.NewUnixWorkloadAttestor()
 	workloadAttestor.RegisterUID(2000, "unix:uid:2000")
 
-	parser := inmemory.NewInMemoryIdentityNamespaceParser()
+	parser := inmemory.NewInMemoryIdentityCredentialParser()
 
 	agent, err := inmemory.NewInMemoryAgent(
 		ctx,

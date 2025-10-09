@@ -2,6 +2,14 @@
 
 This document explains why we created custom selector domain entities instead of using SPIRE SDK types.
 
+## Important: Production vs Development
+
+**Production Mode**: When using external SPIRE infrastructure (`SPIREAdapterFactory`), selector domain logic is **NOT required**. SPIRE Server manages all selector matching against registration entries. Your application simply fetches SVIDs via Workload API.
+
+**Development Mode**: When using in-memory implementations (`InMemoryAdapterFactory`), selector domain logic **IS required** for local attestation and matching.
+
+See `docs/PRODUCTION_VS_DEVELOPMENT.md` for detailed architectural comparison.
+
 ## The Problem We're Solving
 
 **SPIRE's Architecture has a Gap**: SPIRE is split into two main components:
@@ -135,7 +143,7 @@ func (ss *SelectorSet) All() []*Selector {
 
 ```go
 type IdentityMapper struct {
-    identityNamespace *IdentityNamespace
+    identityCredential *IdentityCredential
     selectors         *SelectorSet  // Required selectors
 }
 
@@ -185,10 +193,10 @@ func (r *InMemoryRegistry) FindBySelectors(ctx, selectors) (*IdentityMapper, err
 ### Production SPIRE
 
 ```
-┌─────────────┐   gRPC API    ┌──────────────┐
-│ SPIRE Server│◄─────────────►│  SPIRE Agent │
-│ (Postgres)  │               │  (eBPF/Unix) │
-└─────────────┘               └──────────────┘
+┌─────────────┐   gRPC API    ┌──────────────┐   Workload API   ┌─────────────┐
+│ SPIRE Server│◄─────────────►│  SPIRE Agent │◄────────────────►│ Your App    │
+│ (Postgres)  │               │  (eBPF/Unix) │  (Unix Socket)   │             │
+└─────────────┘               └──────────────┘                  └─────────────┘
       │                              │
       │ Registration Entries         │ Attestation
       │ (selectors → SPIFFE IDs)     │ (discover selectors)
@@ -196,7 +204,12 @@ func (r *InMemoryRegistry) FindBySelectors(ctx, selectors) (*IdentityMapper, err
       └──────────────┬───────────────┘
                      │
             Selector Matching
-         (inside SPIRE Agent process)
+    (inside SPIRE Server, NOT your app)
+```
+
+**Key Point**: Your application does NOT implement selector matching in production. You just call:
+```go
+client.FetchX509SVID(ctx)  // SPIRE handles everything
 ```
 
 ### Our Hexagonal Learning Implementation
@@ -248,18 +261,20 @@ Selector matching is **business logic**, not infrastructure:
 - ✅ Validation rules
 - ✅ Invariants enforced
 
-### 5. Portable
-Can swap implementations without changing domain:
+### 5. Portable (Development Only)
+Can swap implementations for development/testing:
 ```go
-// In-memory (testing)
+// In-memory (development/testing)
 registry := inmemory.NewInMemoryRegistry()
-
-// Real SPIRE (production)
-registry := spire.NewSPIRERegistry(client)
-
-// Domain code unchanged:
 mapper, err := registry.FindBySelectors(ctx, selectors)
+
+// Production SPIRE - NO registry needed
+// SPIRE Server manages registration entries externally
+agent, err := spire.NewAgent(ctx, client, agentSpiffeID, parser)
+identity, err := agent.FetchIdentityDocument(ctx, workload)
 ```
+
+**Note**: Production deployments use `SPIREAdapterFactory` which returns `nil` for registry. All selector matching happens in external SPIRE Server.
 
 ## SDK Responsibility Matrix
 
@@ -302,11 +317,11 @@ mapper, err := registry.FindBySelectors(ctx, selectorSet)
 // Uses: mapper.MatchesSelectors(selectorSet) - Our matching logic
 
 // 6. Issue SVID for matched SPIFFE ID
-doc, err := server.IssueIdentity(ctx, mapper.IdentityNamespace())
+doc, err := server.IssueIdentity(ctx, mapper.IdentityCredential())
 
 // 7. Return to workload
 return &Identity{
-    IdentityNamespace: mapper.IdentityNamespace(),
+    IdentityCredential: mapper.IdentityCredential(),
     IdentityDocument:  doc,
 }
 ```
@@ -335,7 +350,7 @@ registry.Seed(ctx, NewIdentityMapper(
 
 // Equivalent matching (in-process)
 mapper, _ := registry.FindBySelectors(ctx, discovered)
-doc, _ := server.IssueIdentity(ctx, mapper.IdentityNamespace())
+doc, _ := server.IssueIdentity(ctx, mapper.IdentityCredential())
 ```
 
 ## When to Use Each Approach

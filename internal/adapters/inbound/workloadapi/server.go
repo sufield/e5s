@@ -112,7 +112,7 @@ func (s *Server) handleFetchX509SVID(w http.ResponseWriter, r *http.Request) {
 
 	// Serialize and return identity document
 	response := &X509SVIDResponse{
-		SPIFFEID:  identity.IdentityNamespace.String(),
+		SPIFFEID:  identity.IdentityCredential.String(),
 		X509SVID:  formatCertificate(identity.IdentityDocument),
 		ExpiresAt: identity.IdentityDocument.ExpiresAt().Unix(),
 	}
@@ -179,7 +179,7 @@ func formatCertificate(doc *domain.IdentityDocument) string {
 		return ""
 	}
 	return fmt.Sprintf("X.509 Certificate for %s (expires: %s)",
-		doc.IdentityNamespace().String(),
+		doc.IdentityCredential().String(),
 		doc.ExpiresAt().Format("2006-01-02 15:04:05"))
 }
 

@@ -6,7 +6,7 @@ import (
 
 // Identity represents a verified identity
 type Identity struct {
-	IdentityNamespace *domain.IdentityNamespace // Identity format (URI-formatted identifier)
+	IdentityCredential *domain.IdentityCredential // Identity format (URI-formatted identifier)
 	Name              string                    // Human-readable name
 	IdentityDocument  *domain.IdentityDocument  // X.509 or JWT identity document
 }
@@ -39,7 +39,7 @@ type Config struct {
 }
 
 // WorkloadEntry represents a workload entry for registration (e.g., from config or mocks):
-// associates UID (for attestation), selector (for matching), and SpiffeID string (the issued identity namespace).
+// associates UID (for attestation), selector (for matching), and SpiffeID string (the issued identity credential).
 type WorkloadEntry struct {
 	SpiffeID string
 	Selector string

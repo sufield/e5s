@@ -13,7 +13,7 @@ import (
 )
 
 // TestExchangeMessage_Invariant_RequiresNonNilNamespaces tests the invariant:
-// "ExchangeMessage requires non-nil identity namespaces"
+// "ExchangeMessage requires non-nil identity credentials"
 func TestExchangeMessage_Invariant_RequiresNonNilNamespaces(t *testing.T) {
 	t.Parallel()
 
@@ -36,24 +36,24 @@ func TestExchangeMessage_Invariant_RequiresNonNilNamespaces(t *testing.T) {
 			wantError: false,
 		},
 		{
-			name: "sender namespace nil - violates invariant",
+			name: "sender credential nil - violates invariant",
 			from: ports.Identity{
-				IdentityNamespace: nil, // Nil namespace
+				IdentityCredential: nil, // Nil credential
 				Name:              "client",
 			},
 			to:        *createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(1*time.Hour)),
 			wantError: true,
-			wantErr:   domain.ErrInvalidIdentityNamespace,
+			wantErr:   domain.ErrInvalidIdentityCredential,
 		},
 		{
-			name: "receiver namespace nil - violates invariant",
+			name: "receiver credential nil - violates invariant",
 			from: *createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(1*time.Hour)),
 			to: ports.Identity{
-				IdentityNamespace: nil, // Nil namespace
+				IdentityCredential: nil, // Nil credential
 				Name:              "server",
 			},
 			wantError: true,
-			wantErr:   domain.ErrInvalidIdentityNamespace,
+			wantErr:   domain.ErrInvalidIdentityCredential,
 		},
 	}
 
@@ -66,7 +66,7 @@ func TestExchangeMessage_Invariant_RequiresNonNilNamespaces(t *testing.T) {
 
 			// Assert invariant
 			if tt.wantError {
-				assert.Error(t, err, "Invariant enforced: should reject nil namespaces")
+				assert.Error(t, err, "Invariant enforced: should reject nil credentials")
 				assert.Nil(t, msg, "Invariant violated: msg should be nil when error occurs")
 				assert.ErrorIs(t, err, tt.wantErr)
 			} else {
@@ -117,7 +117,7 @@ func TestExchangeMessage_Invariant_RequiresValidDocuments(t *testing.T) {
 		{
 			name: "sender document nil - violates invariant",
 			from: ports.Identity{
-				IdentityNamespace: domain.NewIdentityNamespaceFromComponents(
+				IdentityCredential: domain.NewIdentityCredentialFromComponents(
 					domain.NewTrustDomainFromName("example.org"), "/client"),
 				Name:             "client",
 				IdentityDocument: nil, // Nil document
@@ -130,7 +130,7 @@ func TestExchangeMessage_Invariant_RequiresValidDocuments(t *testing.T) {
 			name: "receiver document nil - violates invariant",
 			from: *createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(1*time.Hour)),
 			to: ports.Identity{
-				IdentityNamespace: domain.NewIdentityNamespaceFromComponents(
+				IdentityCredential: domain.NewIdentityCredentialFromComponents(
 					domain.NewTrustDomainFromName("example.org"), "/server"),
 				Name:             "server",
 				IdentityDocument: nil, // Nil document
@@ -176,14 +176,14 @@ func TestExchangeMessage_Invariant_NeverReturnsPartialResult(t *testing.T) {
 		to   ports.Identity
 	}{
 		{
-			name: "nil sender namespace",
-			from: ports.Identity{IdentityNamespace: nil, Name: "client"},
+			name: "nil sender credential",
+			from: ports.Identity{IdentityCredential: nil, Name: "client"},
 			to:   *createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(1*time.Hour)),
 		},
 		{
-			name: "nil receiver namespace",
+			name: "nil receiver credential",
 			from: *createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(1*time.Hour)),
-			to:   ports.Identity{IdentityNamespace: nil, Name: "server"},
+			to:   ports.Identity{IdentityCredential: nil, Name: "server"},
 		},
 		{
 			name: "expired sender document",
@@ -260,10 +260,10 @@ func TestExchangeMessage_Invariant_PreservesInputIdentities(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, msg)
 
-			assert.Equal(t, tt.from.IdentityNamespace, msg.From.IdentityNamespace,
-				"Invariant violated: From.IdentityNamespace not preserved")
-			assert.Equal(t, tt.to.IdentityNamespace, msg.To.IdentityNamespace,
-				"Invariant violated: To.IdentityNamespace not preserved")
+			assert.Equal(t, tt.from.IdentityCredential, msg.From.IdentityCredential,
+				"Invariant violated: From.IdentityCredential not preserved")
+			assert.Equal(t, tt.to.IdentityCredential, msg.To.IdentityCredential,
+				"Invariant violated: To.IdentityCredential not preserved")
 			assert.Equal(t, tt.content, msg.Content,
 				"Invariant violated: Content not preserved")
 		})
@@ -291,9 +291,9 @@ func TestExchangeMessage_Invariant_SuccessImpliesNonNilMessage(t *testing.T) {
 	assert.NotNil(t, msg, "Invariant violated: msg must be non-nil when err == nil")
 
 	if msg != nil {
-		assert.Equal(t, from.IdentityNamespace, msg.From.IdentityNamespace,
+		assert.Equal(t, from.IdentityCredential, msg.From.IdentityCredential,
 			"Invariant violated: msg.From should match input from")
-		assert.Equal(t, to.IdentityNamespace, msg.To.IdentityNamespace,
+		assert.Equal(t, to.IdentityCredential, msg.To.IdentityCredential,
 			"Invariant violated: msg.To should match input to")
 	}
 }
@@ -324,8 +324,8 @@ func TestExchangeMessage_Invariant_Idempotency(t *testing.T) {
 
 	assert.Equal(t, msg1.Content, msg2.Content, "Invariant violated: should be idempotent")
 	assert.Equal(t, msg2.Content, msg3.Content, "Invariant violated: should be idempotent")
-	assert.Equal(t, msg1.From.IdentityNamespace, msg2.From.IdentityNamespace)
-	assert.Equal(t, msg1.To.IdentityNamespace, msg2.To.IdentityNamespace)
+	assert.Equal(t, msg1.From.IdentityCredential, msg2.From.IdentityCredential)
+	assert.Equal(t, msg1.To.IdentityCredential, msg2.To.IdentityCredential)
 }
 
 // TestExchangeMessage_Invariant_LargeContentNoTruncation tests the invariant:

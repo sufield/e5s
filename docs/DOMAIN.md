@@ -47,7 +47,7 @@ The adapters act as an **anti-corruption layer** between the domain and external
 ┌─────────────────────────────────────────┐
 │     Core Domain (domain/*.go)           │
 │   - TrustDomain                          │
-│   - IdentityNamespace                             │
+│   - IdentityCredential                             │
 │   - IdentityDocument                                 │
 │   - Selector                             │
 │   - Pure business logic                  │
@@ -68,11 +68,11 @@ td, err := domain.NewTrustDomain("example.org")
 td.Name() // "example.org"
 ```
 
-#### **IdentityNamespace** (`identity_namespace.go`)
-URI-based workload identifier in SPIFFE format. **Minimal value object** - parsing delegated to `IdentityNamespaceParser` port.
+#### **IdentityCredential** (`identity_credential.go`)
+URI-based workload identifier in SPIFFE format. **Minimal value object** - parsing delegated to `IdentityCredentialParser` port.
 
 ```go
-// Parsing done via IdentityNamespaceParser adapter (not domain)
+// Parsing done via IdentityCredentialParser adapter (not domain)
 id, err := parser.ParseFromString(ctx, "spiffe://example.org/workload")
 
 // Domain only provides getters
@@ -128,7 +128,7 @@ Entities have identity and lifecycle.
 SPIFFE Verifiable Identity Document - the issued credential.
 
 ```go
-svid, err := domain.NewX509SVID(identityNamespace, cert, privateKey, chain)
+svid, err := domain.NewX509SVID(identityCredential, cert, privateKey, chain)
 svid.IsValid() // Checks time validity
 svid.IsExpired() // Checks expiration
 svid.ExpiresAt() // Returns expiration time
@@ -149,14 +149,14 @@ workload.UID() // User ID
 Host machine where the agent and workloads run. Represents the compute node's identity after attestation.
 
 **Pure Domain Entity**: Models node lifecycle without SDK dependencies:
-- Created unattested via `NewNode(identityNamespace)`
+- Created unattested via `NewNode(identityCredential)`
 - Selectors populated during attestation via `SetSelectors()`
 - Marked as attested via `MarkAttested()` after platform verification
 - State checked via `IsAttested()`
 
 ```go
 // Create unattested node
-node := domain.NewNode(identityNamespace)
+node := domain.NewNode(identityCredential)
 
 // During attestation (performed by NodeAttestor adapter)
 node.SetSelectors(selectorSet)  // Platform selectors (e.g., aws:region, hostname)
@@ -190,13 +190,13 @@ selectorSet := domain.NewSelectorSet()
 selectorSet.Add(uidSelector)
 selectorSet.Add(nsSelector)
 
-entry, err := domain.NewRegistrationEntry(identityNamespace, selectorSet)
+entry, err := domain.NewRegistrationEntry(identityCredential, selectorSet)
 if err != nil {
     // Handles nil checks, empty selectors
 }
 
 // Set parent relationship (e.g., workload's parent is agent)
-entry.SetParentID(agentIdentityNamespace)
+entry.SetParentID(agentIdentityCredential)
 
 // Authorization check during workload attestation (AND logic)
 // Workload MUST have ALL entry selectors to qualify
@@ -241,7 +241,7 @@ if err != nil {
 **Sentinel Errors**: The domain uses sentinel errors (`errors.go`) for better error handling:
 - `ErrNoMatchingEntry` - No registration entry matches selectors
 - `ErrInvalidSelectors` - Selectors are nil or empty
-- `ErrInvalidIdentityNamespace` - SPIFFE ID is nil or malformed
+- `ErrInvalidIdentityCredential` - SPIFFE ID is nil or malformed
 - `ErrNodeAttestationFailed` - Node attestation failed
 - `ErrWorkloadAttestationFailed` - Workload attestation failed
 - `ErrSVIDExpired`, `ErrSVIDInvalid`, `ErrSVIDMismatch` - IdentityDocument validation errors
@@ -256,13 +256,13 @@ Ports (interfaces in `internal/app/ports.go`) use **ONLY domain types**:
 
 ```go
 type SPIREServer interface {
-    IssueIdentity(ctx context.Context, identityNamespace *domain.IdentityNamespace) (*domain.IdentityDocument, error)
+    IssueIdentity(ctx context.Context, identityCredential *domain.IdentityCredential) (*domain.IdentityDocument, error)
     GetTrustDomain() *domain.TrustDomain
 }
 
 type IdentityStore interface {
-    Register(ctx context.Context, identityNamespace *domain.IdentityNamespace, selector *domain.Selector) error
-    GetIdentity(ctx context.Context, identityNamespace *domain.IdentityNamespace) (*Identity, error)
+    Register(ctx context.Context, identityCredential *domain.IdentityCredential, selector *domain.Selector) error
+    GetIdentity(ctx context.Context, identityCredential *domain.IdentityCredential) (*Identity, error)
 }
 
 type RegistrationRepository interface {
@@ -270,14 +270,14 @@ type RegistrationRepository interface {
     CreateEntry(ctx context.Context, entry *domain.RegistrationEntry) error
     FindMatchingEntry(ctx context.Context, selectors *domain.SelectorSet) (*domain.RegistrationEntry, error)
     ListEntries(ctx context.Context) ([]*domain.RegistrationEntry, error)
-    DeleteEntry(ctx context.Context, identityNamespace *domain.IdentityNamespace) error
+    DeleteEntry(ctx context.Context, identityCredential *domain.IdentityCredential) error
 }
 
 type NodeAttestor interface {
     // AttestNode performs node attestation and returns attested domain.Node
     // In-memory: uses hardcoded selectors
     // Real SPIRE: uses platform attestation (AWS IID, TPM, etc.)
-    AttestNode(ctx context.Context, identityNamespace *domain.IdentityNamespace) (*domain.Node, error)
+    AttestNode(ctx context.Context, identityCredential *domain.IdentityCredential) (*domain.Node, error)
 }
 
 type WorkloadAttestor interface {
@@ -287,15 +287,15 @@ type WorkloadAttestor interface {
 
 type IdentityDocumentValidator interface {
     // Validate uses SDK verification (e.g., x509svid.ParseAndVerify)
-    Validate(ctx context.Context, svid *domain.IdentityDocument, expectedID *domain.IdentityNamespace) error
+    Validate(ctx context.Context, svid *domain.IdentityDocument, expectedID *domain.IdentityCredential) error
 }
 
-type IdentityNamespaceParser interface {
+type IdentityCredentialParser interface {
     // ParseFromString parses SPIFFE ID from URI string (abstracts SDK's spiffeid.FromString)
-    ParseFromString(ctx context.Context, id string) (*domain.IdentityNamespace, error)
+    ParseFromString(ctx context.Context, id string) (*domain.IdentityCredential, error)
 
     // ParseFromPath creates SPIFFE ID from components (abstracts SDK's spiffeid.FromPath)
-    ParseFromPath(ctx context.Context, trustDomain *domain.TrustDomain, path string) (*domain.IdentityNamespace, error)
+    ParseFromPath(ctx context.Context, trustDomain *domain.TrustDomain, path string) (*domain.IdentityCredential, error)
 }
 ```
 
@@ -305,9 +305,9 @@ Adapters translate between SDK types and domain types:
 
 ```go
 // In internal/adapters/outbound/spire/server.go
-func (s *InMemoryServer) IssueIdentity(ctx context.Context, identityNamespace *domain.IdentityNamespace) (*domain.IdentityDocument, error) {
-    // Use identityNamespace.String() when calling x509 APIs
-    spiffeURI, _ := url.Parse(identityNamespace.String())
+func (s *InMemoryServer) IssueIdentity(ctx context.Context, identityCredential *domain.IdentityCredential) (*domain.IdentityDocument, error) {
+    // Use identityCredential.String() when calling x509 APIs
+    spiffeURI, _ := url.Parse(identityCredential.String())
 
     // Create x509.Certificate using standard library
     cert := &x509.Certificate{
@@ -316,16 +316,16 @@ func (s *InMemoryServer) IssueIdentity(ctx context.Context, identityNamespace *d
     }
 
     // Return domain IdentityDocument
-    return domain.NewX509SVID(identityNamespace, cert, privateKey, chain)
+    return domain.NewX509SVID(identityCredential, cert, privateKey, chain)
 }
 ```
 
 ```go
 // Translation helper in internal/adapters/outbound/spire/translation.go
-func domainToIdentity(identityNamespace *domain.IdentityNamespace, svid *domain.IdentityDocument) *app.Identity {
+func domainToIdentity(identityCredential *domain.IdentityCredential, svid *domain.IdentityDocument) *app.Identity {
     return &app.Identity{
-        IdentityNamespace: identityNamespace,
-        Name:     extractNameFromIdentityNamespace(identityNamespace.String()),
+        IdentityCredential: identityCredential,
+        Name:     extractNameFromIdentityCredential(identityCredential.String()),
         IdentityDocument:     svid,
     }
 }
@@ -339,15 +339,15 @@ IdentityDocument validation is implemented as an adapter to avoid duplicating go
 // In internal/adapters/outbound/spire/validator.go
 type IdentityDocumentValidator struct{}
 
-func (v *IdentityDocumentValidator) Validate(ctx context.Context, svid *domain.IdentityDocument, expectedID *domain.IdentityNamespace) error {
+func (v *IdentityDocumentValidator) Validate(ctx context.Context, svid *domain.IdentityDocument, expectedID *domain.IdentityCredential) error {
     // Basic checks
     if svid == nil || !svid.IsValid() {
-        return fmt.Errorf("IdentityDocument invalid")
+        return fmt.Errorf("%w", domain.ErrIdentityDocumentInvalid)
     }
 
     // SPIFFE ID match
-    if !svid.IdentityNamespace().Equals(expectedID) {
-        return fmt.Errorf("SPIFFE ID mismatch")
+    if !svid.IdentityCredential().Equals(expectedID) {
+        return fmt.Errorf("%w: expected %s", domain.ErrIdentityDocumentMismatch, expectedID.String())
     }
 
     // In real implementation with go-spiffe SDK:
@@ -377,12 +377,12 @@ type InMemoryNodeAttestor struct {
     nodeSelectors map[string][]*domain.Selector
 }
 
-func (a *InMemoryNodeAttestor) AttestNode(ctx context.Context, identityNamespace *domain.IdentityNamespace) (*domain.Node, error) {
+func (a *InMemoryNodeAttestor) AttestNode(ctx context.Context, identityCredential *domain.IdentityCredential) (*domain.Node, error) {
     // Create unattested node (pure domain logic)
-    node := domain.NewNode(identityNamespace)
+    node := domain.NewNode(identityCredential)
 
     // In-memory: use pre-registered selectors
-    selectors := a.nodeSelectors[identityNamespace.String()]
+    selectors := a.nodeSelectors[identityCredential.String()]
     if len(selectors) == 0 {
         // Default for demonstration
         selector, _ := domain.NewSelector(domain.SelectorTypeNode, "hostname", "localhost")
@@ -424,8 +424,8 @@ func (r *InMemoryRegistrationRepository) CreateEntry(ctx context.Context, entry 
     r.mu.Lock()
     defer r.mu.Unlock()
 
-    identityNamespaceStr := entry.IdentityNamespace().String()
-    r.entries[identityNamespaceStr] = entry
+    identityCredentialStr := entry.IdentityCredential().String()
+    r.entries[identityCredentialStr] = entry
     return nil
 }
 
@@ -439,7 +439,7 @@ func (r *InMemoryRegistrationRepository) FindMatchingEntry(ctx context.Context, 
             return entry, nil
         }
     }
-    return nil, fmt.Errorf("no matching entry")
+    return nil, fmt.Errorf("%w", domain.ErrNoMatchingMapper)
 }
 ```
 

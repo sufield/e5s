@@ -75,33 +75,33 @@ func (td *TrustDomain) String() string
 
 ---
 
-### 2. `domain.IdentityNamespace`
+### 2. `domain.IdentityCredential`
 
-**File**: `internal/domain/identity_namespace.go`
+**File**: `internal/domain/identity_credential.go`
 
 #### Invariants:
 
 ```go
 // Invariant: trustDomain is never nil after construction
-// Location: NewIdentityNamespaceFromComponents (line 25)
-func NewIdentityNamespaceFromComponents(trustDomain *TrustDomain, path string) *IdentityNamespace
+// Location: NewIdentityCredentialFromComponents (line 25)
+func NewIdentityCredentialFromComponents(trustDomain *TrustDomain, path string) *IdentityCredential
 ```
 - **Pre**: `trustDomain != nil` (enforced by caller, see line 24 comment)
 - **Post**: `i.trustDomain != nil` always holds
-- **Rationale**: IdentityNamespace without trust domain is meaningless
+- **Rationale**: IdentityCredential without trust domain is meaningless
 
 ```go
 // Invariant: path defaults to "/" if empty, never stored as empty string
-// Location: NewIdentityNamespaceFromComponents (line 26-28)
-func NewIdentityNamespaceFromComponents(trustDomain *TrustDomain, path string) *IdentityNamespace
+// Location: NewIdentityCredentialFromComponents (line 26-28)
+func NewIdentityCredentialFromComponents(trustDomain *TrustDomain, path string) *IdentityCredential
 ```
 - **Post**: `i.path != ""` (always "/" or user-provided non-empty path)
 - **Rationale**: SPIFFE IDs require path component, "/" is valid root
 
 ```go
 // Invariant: uri is always formatted as "spiffe://<trustDomain><path>"
-// Location: NewIdentityNamespaceFromComponents (line 30)
-func NewIdentityNamespaceFromComponents(trustDomain *TrustDomain, path string) *IdentityNamespace
+// Location: NewIdentityCredentialFromComponents (line 30)
+func NewIdentityCredentialFromComponents(trustDomain *TrustDomain, path string) *IdentityCredential
 ```
 - **Post**: `i.uri` starts with `"spiffe://"` and matches `trustDomain + path`
 - **Rationale**: Cached representation must match components
@@ -109,7 +109,7 @@ func NewIdentityNamespaceFromComponents(trustDomain *TrustDomain, path string) *
 ```go
 // Invariant: Equals() is reflexive, symmetric, transitive
 // Location: Equals (line 54)
-func (i *IdentityNamespace) Equals(other *IdentityNamespace) bool
+func (i *IdentityCredential) Equals(other *IdentityCredential) bool
 ```
 - **Post**: `i.Equals(i) == true` (reflexive)
 - **Post**: `i.Equals(j) == j.Equals(i)` (symmetric)
@@ -120,7 +120,7 @@ func (i *IdentityNamespace) Equals(other *IdentityNamespace) bool
 ```go
 // Invariant: IsInTrustDomain(td) iff i.trustDomain.Equals(td)
 // Location: IsInTrustDomain (line 62)
-func (i *IdentityNamespace) IsInTrustDomain(td *TrustDomain) bool
+func (i *IdentityCredential) IsInTrustDomain(td *TrustDomain) bool
 ```
 - **Post**: Result matches `i.trustDomain.Equals(td)`
 - **Rationale**: Trust domain membership is exact match only
@@ -215,13 +215,13 @@ func (ss *SelectorSet) All() []*Selector
 #### Invariants:
 
 ```go
-// Invariant: identityNamespace is never nil for valid document
+// Invariant: identityCredential is never nil for valid document
 // Location: NewIdentityDocumentFromComponents (line 43)
 func NewIdentityDocumentFromComponents(...) *IdentityDocument
 ```
-- **Pre**: `identityNamespace != nil` (enforced by caller)
-- **Post**: `id.identityNamespace != nil` always holds
-- **Rationale**: Document without identity namespace is meaningless
+- **Pre**: `identityCredential != nil` (enforced by caller)
+- **Post**: `id.identityCredential != nil` always holds
+- **Rationale**: Document without identity credential is meaningless
 
 ```go
 // Invariant: For X.509 documents, cert/privateKey/chain are non-nil
@@ -266,18 +266,18 @@ func (id *IdentityDocument) IsValid() bool
 #### Invariants:
 
 ```go
-// Invariant: identityNamespace is never nil after construction
+// Invariant: identityCredential is never nil after construction
 // Location: NewIdentityMapper (line 15)
-func NewIdentityMapper(identityNamespace *IdentityNamespace, selectors *SelectorSet) (*IdentityMapper, error)
+func NewIdentityMapper(identityCredential *IdentityCredential, selectors *SelectorSet) (*IdentityMapper, error)
 ```
-- **Pre**: `identityNamespace != nil` (validated, returns `ErrInvalidIdentityNamespace` otherwise)
-- **Post**: If `err == nil`, then `im.identityNamespace != nil` always holds
-- **Rationale**: Mapper without identity namespace is meaningless
+- **Pre**: `identityCredential != nil` (validated, returns `ErrInvalidIdentityCredential` otherwise)
+- **Post**: If `err == nil`, then `im.identityCredential != nil` always holds
+- **Rationale**: Mapper without identity credential is meaningless
 
 ```go
 // Invariant: selectors is never nil or empty after construction
 // Location: NewIdentityMapper (line 15)
-func NewIdentityMapper(identityNamespace *IdentityNamespace, selectors *SelectorSet) (*IdentityMapper, error)
+func NewIdentityMapper(identityCredential *IdentityCredential, selectors *SelectorSet) (*IdentityMapper, error)
 ```
 - **Pre**: `selectors != nil && len(selectors.All()) > 0` (validated, returns `ErrInvalidSelectors` otherwise)
 - **Post**: If `err == nil`, then `im.selectors != nil && len(im.selectors.All()) > 0` always hold
@@ -303,11 +303,11 @@ func (im *IdentityMapper) MatchesSelectors(selectors *SelectorSet) bool
 #### Invariants:
 
 ```go
-// Invariant: ExchangeMessage requires non-nil identity namespaces
+// Invariant: ExchangeMessage requires non-nil identity credentials
 // Location: ExchangeMessage (line 28)
 func (s *IdentityService) ExchangeMessage(ctx context.Context, from ports.Identity, to ports.Identity, content string) (*ports.Message, error)
 ```
-- **Pre**: `from.IdentityNamespace != nil` and `to.IdentityNamespace != nil`
+- **Pre**: `from.IdentityCredential != nil` and `to.IdentityCredential != nil`
 - **Post**: If `err != nil`, then error message indicates which namespace is nil
 - **Rationale**: Cannot exchange messages without knowing sender/receiver identities
 
@@ -336,8 +336,8 @@ func (s *IdentityService) ExchangeMessage(ctx context.Context, from ports.Identi
 func (s *IdentityService) ExchangeMessage(ctx context.Context, from ports.Identity, to ports.Identity, content string) (*ports.Message, error)
 ```
 - **Post**: If `err == nil`, then:
-  - `msg.From.IdentityNamespace == from.IdentityNamespace`
-  - `msg.To.IdentityNamespace == to.IdentityNamespace`
+  - `msg.From.IdentityCredential == from.IdentityCredential`
+  - `msg.To.IdentityCredential == to.IdentityCredential`
   - `msg.Content == content`
 - **Rationale**: Message must accurately represent exchange parameters
 
@@ -361,14 +361,14 @@ func (r *InMemoryRegistry) Seal()
 - **Rationale**: Prevents runtime mutations to control plane configuration
 
 ```go
-// Invariant: Seed() rejects duplicates by identity namespace
+// Invariant: Seed() rejects duplicates by identity credential
 // Location: Seed (line 33)
 func (r *InMemoryRegistry) Seed(ctx context.Context, mapper *domain.IdentityMapper) error
 ```
 - **Pre**: Registry is not sealed (`r.sealed == false`)
-- **Post**: If `err == nil`, mapper is added and `r.mappers[mapper.IdentityNamespace().String()] == mapper`
+- **Post**: If `err == nil`, mapper is added and `r.mappers[mapper.IdentityCredential().String()] == mapper`
 - **Post**: If mapper already exists, returns error and registry unchanged
-- **Rationale**: Each identity namespace maps to exactly one set of selectors
+- **Rationale**: Each identity credential maps to exactly one set of selectors
 
 ```go
 // Invariant: FindBySelectors() is read-only (never modifies registry)
@@ -434,9 +434,9 @@ func NewInMemoryServer(ctx context.Context, trustDomainStr string, trustDomainPa
 ```go
 // Invariant: IssueIdentity() validates inputs before issuing
 // Location: IssueIdentity (line 51)
-func (s *InMemoryServer) IssueIdentity(ctx context.Context, identityNamespace *domain.IdentityNamespace) (*domain.IdentityDocument, error)
+func (s *InMemoryServer) IssueIdentity(ctx context.Context, identityCredential *domain.IdentityCredential) (*domain.IdentityDocument, error)
 ```
-- **Pre**: `identityNamespace != nil`
+- **Pre**: `identityCredential != nil`
 - **Pre**: `s.caCert != nil && s.caKey != nil`
 - **Post**: If validation fails, returns error before calling provider
 - **Rationale**: Prevents issuing documents with invalid inputs
@@ -444,10 +444,10 @@ func (s *InMemoryServer) IssueIdentity(ctx context.Context, identityNamespace *d
 ```go
 // Invariant: IssueIdentity() delegates document creation to provider
 // Location: IssueIdentity (line 65)
-func (s *InMemoryServer) IssueIdentity(ctx context.Context, identityNamespace *domain.IdentityNamespace) (*domain.IdentityDocument, error)
+func (s *InMemoryServer) IssueIdentity(ctx context.Context, identityCredential *domain.IdentityCredential) (*domain.IdentityDocument, error)
 ```
 - **Post**: If `err == nil`, returned document is created by `certificateProvider`
-- **Post**: Document's identity namespace matches input `identityNamespace`
+- **Post**: Document's identity credential matches input `identityCredential`
 - **Rationale**: Document creation logic is in provider port
 
 ```go
@@ -468,13 +468,13 @@ func (s *InMemoryServer) GetCA() *x509.Certificate
 #### Invariants:
 
 ```go
-// Invariant: identityNamespace is never nil after construction
+// Invariant: identityCredential is never nil after construction
 // Location: NewInMemoryAgent (line 24)
 func NewInMemoryAgent(...) (*InMemoryAgent, error)
 ```
 - **Pre**: `agentSpiffeIDStr` is valid (validated by `parser`)
-- **Post**: If `err == nil`, then `a.identityNamespace != nil` always holds
-- **Rationale**: Agent must have its own identity namespace
+- **Post**: If `err == nil`, then `a.identityCredential != nil` always holds
+- **Rationale**: Agent must have its own identity credential
 
 ```go
 // Invariant: agentIdentity is initialized before agent is returned
@@ -520,7 +520,7 @@ func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload port
 ```
 - **Post**: If `err == nil`, then:
   - `identity != nil`
-  - `identity.IdentityNamespace != nil`
+  - `identity.IdentityCredential != nil`
   - `identity.IdentityDocument != nil`
   - `identity.IdentityDocument.IsValid() == true` (freshly issued)
 - **Rationale**: Returned identity must be complete and valid
@@ -627,7 +627,7 @@ func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload port
    msg, err := service.ExchangeMessage(ctx, from, to, content)
    require.NoError(t, err)
    assert.NotNil(t, msg)
-   assert.Equal(t, from.IdentityNamespace, msg.From.IdentityNamespace) // Invariant: preserves identities
+   assert.Equal(t, from.IdentityCredential, msg.From.IdentityCredential) // Invariant: preserves identities
    ```
 
 2. **Table-Driven Tests**: Cover edge cases that might violate invariants
@@ -637,7 +637,7 @@ func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload port
        fromID      *ports.Identity
        expectError bool
    }{
-       {"nil namespace", &ports.Identity{IdentityNamespace: nil}, true}, // Invariant violation
+       {"nil namespace", &ports.Identity{IdentityCredential: nil}, true}, // Invariant violation
        {"valid identity", createValidIdentity(t), false},
    }
    ```
@@ -647,7 +647,7 @@ func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload port
    func assertValidIdentity(t *testing.T, id *ports.Identity) {
        t.Helper()
        require.NotNil(t, id)
-       require.NotNil(t, id.IdentityNamespace) // Invariant
+       require.NotNil(t, id.IdentityCredential) // Invariant
        require.NotNil(t, id.IdentityDocument)  // Invariant
        assert.True(t, id.IdentityDocument.IsValid()) // Invariant
    }
@@ -663,9 +663,9 @@ func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload port
 
 1. **Constructor Validation**:
    ```go
-   func NewIdentityMapper(id *IdentityNamespace, sel *SelectorSet) (*IdentityMapper, error) {
+   func NewIdentityMapper(id *IdentityCredential, sel *SelectorSet) (*IdentityMapper, error) {
        if id == nil {
-           return nil, ErrInvalidIdentityNamespace // Enforce invariant
+           return nil, ErrInvalidIdentityCredential // Enforce invariant
        }
        // ...
    }
@@ -696,7 +696,7 @@ func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload port
 
 5. **Explicit Invariant Checks**:
    ```go
-   require.NotNil(t, result.IdentityNamespace) // Test invariant explicitly
+   require.NotNil(t, result.IdentityCredential) // Test invariant explicitly
    ```
 
 6. **Negative Test Cases**:
@@ -715,8 +715,8 @@ func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload port
 
 8. **Runtime Assertions** (dev/staging only):
    ```go
-   if buildMode == "debug" && identity.IdentityNamespace == nil {
-       panic("Invariant violated: nil identity namespace")
+   if buildMode == "debug" && identity.IdentityCredential == nil {
+       panic("Invariant violated: nil identity credential")
    }
    ```
 

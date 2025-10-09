@@ -250,7 +250,7 @@ entrySelectors := domain.NewSelectorSet()
 entrySelectors.Add(uidSelector)
 entrySelectors.Add(nsSelector)
 
-entry, _ := domain.NewRegistrationEntry(identityNamespace, entrySelectors)
+entry, _ := domain.NewRegistrationEntry(identityCredential, entrySelectors)
 
 // Discovered workload selectors during attestation
 discovered := domain.NewSelectorSet()
@@ -294,7 +294,7 @@ nodeSelectors.Add(hostnameSelector)
 nodeSelectors.Add(regionSelector)
 nodeSelectors.Add(accountSelector)
 
-node := domain.NewNode(agentIdentityNamespace)
+node := domain.NewNode(agentIdentityCredential)
 node.SetSelectors(nodeSelectors)
 node.MarkAttested()
 ```

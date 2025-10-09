@@ -51,12 +51,12 @@ func (p *InMemoryTrustBundleProvider) GetBundle(ctx context.Context, trustDomain
 }
 
 // GetBundleForIdentity returns the trust bundle for an identity's trust domain
-func (p *InMemoryTrustBundleProvider) GetBundleForIdentity(ctx context.Context, identityNamespace *domain.IdentityNamespace) ([]byte, error) {
-	if identityNamespace == nil {
-		return nil, fmt.Errorf("%w: identity namespace cannot be nil", domain.ErrInvalidIdentityNamespace)
+func (p *InMemoryTrustBundleProvider) GetBundleForIdentity(ctx context.Context, identityCredential *domain.IdentityCredential) ([]byte, error) {
+	if identityCredential == nil {
+		return nil, fmt.Errorf("%w: identity credential cannot be nil", domain.ErrInvalidIdentityCredential)
 	}
 
-	return p.GetBundle(ctx, identityNamespace.TrustDomain())
+	return p.GetBundle(ctx, identityCredential.TrustDomain())
 }
 
 var _ ports.TrustBundleProvider = (*InMemoryTrustBundleProvider)(nil)

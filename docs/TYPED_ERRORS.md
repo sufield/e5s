@@ -17,15 +17,25 @@ return nil, fmt.Errorf("no registration entry found matching selectors")
 
 **After (sentinel errors)**:
 ```go
+// Direct return when error is self-explanatory
 return nil, domain.ErrNoMatchingEntry
+
+// Or wrap with context for additional information
+return nil, fmt.Errorf("%w: selectors %v", domain.ErrNoMatchingEntry, selectors)
 ```
 
 **Benefits:**
 - Idiomatic Go error handling with `errors.Is()`
 - Compile-time checked error constants
-- Can wrap with context: `fmt.Errorf("failed: %w", domain.ErrNoMatchingEntry)`
+- Must use `%w` verb for wrapping (not `%v`) to preserve sentinel
 - Clear, predefined error values
 - Works with error unwrapping chains
+
+**Critical**: Always use `%w` verb when wrapping sentinel errors:
+```go
+✅ fmt.Errorf("%w: additional context", domain.ErrNoMatchingEntry)
+❌ fmt.Errorf("%v: additional context", domain.ErrNoMatchingEntry)  // WRONG - breaks errors.Is()
+```
 
 ## Sentinel Errors
 
@@ -41,8 +51,8 @@ var (
     // ErrInvalidSelectors indicates selectors are nil or empty
     ErrInvalidSelectors = errors.New("selectors cannot be nil or empty")
 
-    // ErrInvalidIdentityNamespace indicates SPIFFE ID is nil or malformed
-    ErrInvalidIdentityNamespace = errors.New("SPIFFE ID cannot be nil")
+    // ErrInvalidIdentityCredential indicates SPIFFE ID is nil or malformed
+    ErrInvalidIdentityCredential = errors.New("SPIFFE ID cannot be nil")
 
     // ErrInvalidTrustDomain indicates trust domain is nil or empty
     ErrInvalidTrustDomain = errors.New("trust domain cannot be nil or empty")
@@ -143,8 +153,8 @@ func (s *AttestationService) MatchWorkloadToEntry(
 
 **Before**:
 ```go
-func NewRegistrationEntry(identityNamespace *IdentityNamespace, selectors *SelectorSet) (*RegistrationEntry, error) {
-    if identityNamespace == nil {
+func NewRegistrationEntry(identityCredential *IdentityCredential, selectors *SelectorSet) (*RegistrationEntry, error) {
+    if identityCredential == nil {
         return nil, fmt.Errorf("SPIFFE ID cannot be nil")
     }
     if selectors == nil || len(selectors.All()) == 0 {
@@ -156,9 +166,9 @@ func NewRegistrationEntry(identityNamespace *IdentityNamespace, selectors *Selec
 
 **After (with sentinel errors)**:
 ```go
-func NewRegistrationEntry(identityNamespace *IdentityNamespace, selectors *SelectorSet) (*RegistrationEntry, error) {
-    if identityNamespace == nil {
-        return nil, ErrInvalidIdentityNamespace
+func NewRegistrationEntry(identityCredential *IdentityCredential, selectors *SelectorSet) (*RegistrationEntry, error) {
+    if identityCredential == nil {
+        return nil, ErrInvalidIdentityCredential
     }
     if selectors == nil || len(selectors.All()) == 0 {
         return nil, ErrInvalidSelectors

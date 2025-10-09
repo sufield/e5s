@@ -97,7 +97,7 @@ func TestCLI_Run_WorkloadIdentityIssuance(t *testing.T) {
 	serverIdentity, err := application.Agent.FetchIdentityDocument(ctx, serverWorkload)
 	require.NoError(t, err)
 	assert.NotNil(t, serverIdentity)
-	assert.Contains(t, serverIdentity.IdentityNamespace.String(), "example.org")
+	assert.Contains(t, serverIdentity.IdentityCredential.String(), "example.org")
 
 	clientWorkload := ports.ProcessIdentity{
 		PID:  12346,
@@ -108,7 +108,7 @@ func TestCLI_Run_WorkloadIdentityIssuance(t *testing.T) {
 	clientIdentity, err := application.Agent.FetchIdentityDocument(ctx, clientWorkload)
 	require.NoError(t, err)
 	assert.NotNil(t, clientIdentity)
-	assert.Contains(t, clientIdentity.IdentityNamespace.String(), "example.org")
+	assert.Contains(t, clientIdentity.IdentityCredential.String(), "example.org")
 }
 
 // TestCLI_Run_MessageExchange tests the authenticated message exchange
@@ -276,7 +276,7 @@ func TestCLI_Run_ExpiredIdentityHandling(t *testing.T) {
 
 	// Create expired identity
 	td := domain.NewTrustDomainFromName("example.org")
-	expiredNamespace := domain.NewIdentityNamespaceFromComponents(td, "/expired")
+	expiredNamespace := domain.NewIdentityCredentialFromComponents(td, "/expired")
 	expiredDoc := domain.NewIdentityDocumentFromComponents(
 		expiredNamespace,
 		domain.IdentityDocumentTypeX509,
@@ -287,7 +287,7 @@ func TestCLI_Run_ExpiredIdentityHandling(t *testing.T) {
 	)
 	expiredIdentity := &ports.Identity{
 		Name:              "expired",
-		IdentityNamespace: expiredNamespace,
+		IdentityCredential: expiredNamespace,
 		IdentityDocument:  expiredDoc,
 	}
 

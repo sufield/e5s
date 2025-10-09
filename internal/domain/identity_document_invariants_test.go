@@ -10,18 +10,18 @@ import (
 )
 
 // TestIdentityDocument_Invariant_NamespaceNeverNil tests the invariant:
-// "identityNamespace is never nil for valid document"
+// "identityCredential is never nil for valid document"
 func TestIdentityDocument_Invariant_NamespaceNeverNil(t *testing.T) {
 	t.Parallel()
 
 	// Arrange - Use fixed time for determinism
 	td := domain.NewTrustDomainFromName("example.org")
-	namespace := domain.NewIdentityNamespaceFromComponents(td, "/workload")
+	credential := domain.NewIdentityCredentialFromComponents(td, "/workload")
 	expiresAt := time.Unix(2000000000, 0) // May 18, 2033 - fixed future time
 
 	// Act
 	doc := domain.NewIdentityDocumentFromComponents(
-		namespace,
+		credential,
 		domain.IdentityDocumentTypeX509,
 		nil, // cert
 		nil, // privateKey
@@ -29,11 +29,11 @@ func TestIdentityDocument_Invariant_NamespaceNeverNil(t *testing.T) {
 		expiresAt,
 	)
 
-	// Assert invariant: identityNamespace is never nil
+	// Assert invariant: identityCredential is never nil
 	require.NotNil(t, doc)
-	assert.NotNil(t, doc.IdentityNamespace(),
-		"Invariant violated: IdentityNamespace() returned nil")
-	assert.Equal(t, namespace, doc.IdentityNamespace())
+	assert.NotNil(t, doc.IdentityCredential(),
+		"Invariant violated: IdentityCredential() returned nil")
+	assert.Equal(t, credential, doc.IdentityCredential())
 }
 
 // TestIdentityDocument_Invariant_IsExpiredMonotonic tests the invariant:
@@ -43,14 +43,14 @@ func TestIdentityDocument_Invariant_IsExpiredMonotonic(t *testing.T) {
 
 	// Arrange - Use fixed time for determinism
 	td := domain.NewTrustDomainFromName("example.org")
-	namespace := domain.NewIdentityNamespaceFromComponents(td, "/workload")
+	credential := domain.NewIdentityCredentialFromComponents(td, "/workload")
 
 	// Use Unix epoch time for deterministic testing
 	// expiresAt is set to a specific past time
 	expiresAt := time.Unix(1000000000, 0) // January 9, 2001 - definitely in the past
 
 	doc := domain.NewIdentityDocumentFromComponents(
-		namespace,
+		credential,
 		domain.IdentityDocumentTypeX509,
 		nil, nil, nil,
 		expiresAt,
@@ -95,9 +95,9 @@ func TestIdentityDocument_Invariant_IsValidEqualsNotExpired(t *testing.T) {
 
 			// Arrange
 			td := domain.NewTrustDomainFromName("example.org")
-			namespace := domain.NewIdentityNamespaceFromComponents(td, "/workload")
+			credential := domain.NewIdentityCredentialFromComponents(td, "/workload")
 			doc := domain.NewIdentityDocumentFromComponents(
-				namespace,
+				credential,
 				domain.IdentityDocumentTypeX509,
 				nil, nil, nil,
 				tt.expiresAt,
@@ -132,9 +132,9 @@ func TestIdentityDocument_Invariant_ExpirationTimeCheck(t *testing.T) {
 
 			// Arrange
 			td := domain.NewTrustDomainFromName("example.org")
-			namespace := domain.NewIdentityNamespaceFromComponents(td, "/workload")
+			credential := domain.NewIdentityCredentialFromComponents(td, "/workload")
 			doc := domain.NewIdentityDocumentFromComponents(
-				namespace,
+				credential,
 				domain.IdentityDocumentTypeX509,
 				nil, nil, nil,
 				tt.expiresAt,
@@ -168,12 +168,12 @@ func TestIdentityDocument_Invariant_TypePreservation(t *testing.T) {
 
 			// Arrange
 			td := domain.NewTrustDomainFromName("example.org")
-			namespace := domain.NewIdentityNamespaceFromComponents(td, "/workload")
+			credential := domain.NewIdentityCredentialFromComponents(td, "/workload")
 			expiresAt := time.Unix(2000000000, 0) // May 18, 2033 - fixed future time
 
 			// Act
 			doc := domain.NewIdentityDocumentFromComponents(
-				namespace,
+				credential,
 				tt.docType,
 				nil, nil, nil,
 				expiresAt,
@@ -193,37 +193,37 @@ func TestIdentityDocument_Invariant_Immutability(t *testing.T) {
 
 	// Arrange - Use fixed time for determinism
 	td := domain.NewTrustDomainFromName("example.org")
-	namespace := domain.NewIdentityNamespaceFromComponents(td, "/workload")
+	credential := domain.NewIdentityCredentialFromComponents(td, "/workload")
 	expiresAt := time.Unix(2000000000, 0) // May 18, 2033 - fixed future time
 
 	doc := domain.NewIdentityDocumentFromComponents(
-		namespace,
+		credential,
 		domain.IdentityDocumentTypeX509,
 		nil, nil, nil,
 		expiresAt,
 	)
 
 	// Store initial values
-	initialNamespace := doc.IdentityNamespace()
+	initialNamespace := doc.IdentityCredential()
 	initialType := doc.Type()
 	initialExpiresAt := doc.ExpiresAt()
 
 	// Call getters multiple times (no time.Sleep needed - using fixed time)
 	// If document were mutable, values could change between calls
-	secondNamespace := doc.IdentityNamespace()
+	secondNamespace := doc.IdentityCredential()
 	secondType := doc.Type()
 	secondExpiresAt := doc.ExpiresAt()
 
 	// Assert invariant: all fields unchanged (immutable)
 	assert.Equal(t, initialNamespace, secondNamespace,
-		"Invariant violated: identityNamespace was modified")
+		"Invariant violated: identityCredential was modified")
 	assert.Equal(t, initialType, secondType,
 		"Invariant violated: type was modified")
 	assert.Equal(t, initialExpiresAt, secondExpiresAt,
 		"Invariant violated: expiresAt was modified")
 
 	// Verify exact values match construction parameters
-	assert.Equal(t, namespace, doc.IdentityNamespace())
+	assert.Equal(t, credential, doc.IdentityCredential())
 	assert.Equal(t, domain.IdentityDocumentTypeX509, doc.Type())
 	assert.Equal(t, expiresAt, doc.ExpiresAt())
 }
@@ -235,12 +235,12 @@ func TestIdentityDocument_Invariant_JWTHasNilCrypto(t *testing.T) {
 
 	// Arrange - Use fixed time for determinism
 	td := domain.NewTrustDomainFromName("example.org")
-	namespace := domain.NewIdentityNamespaceFromComponents(td, "/workload")
+	credential := domain.NewIdentityCredentialFromComponents(td, "/workload")
 	expiresAt := time.Unix(2000000000, 0) // May 18, 2033 - fixed future time
 
 	// Act - Create JWT document
 	doc := domain.NewIdentityDocumentFromComponents(
-		namespace,
+		credential,
 		domain.IdentityDocumentTypeJWT,
 		nil, // cert should be nil for JWT
 		nil, // privateKey should be nil for JWT

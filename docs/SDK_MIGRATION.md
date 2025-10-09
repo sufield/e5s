@@ -127,7 +127,7 @@ func (c *SDKIdentityClient) Close() error {
 // convertSDKSVIDToIdentity converts SDK types to domain types
 func convertSDKSVIDToIdentity(svid *x509svid.SVID) *ports.Identity {
     // TODO: Map x509svid.SVID fields to ports.Identity
-    // - svid.ID.String() → IdentityNamespace
+    // - svid.ID.String() → IdentityCredential
     // - svid.Certificates → IdentityDocument
     // - svid.PrivateKey → IdentityDocument
     return &ports.Identity{
@@ -178,7 +178,7 @@ func main() {
         log.Fatalf("Failed to fetch SVID: %v", err)
     }
 
-    fmt.Printf("SPIFFE ID: %s\n", svid.IdentityNamespace.String())
+    fmt.Printf("SPIFFE ID: %s\n", svid.IdentityCredential.String())
 }
 ```
 
@@ -195,7 +195,7 @@ For server-side, you would:
 | Walking Skeleton Type | go-spiffe SDK Type | Notes |
 |-----------------------|-------------------|-------|
 | `ports.Identity` | `x509svid.SVID` | Contains cert chain + private key |
-| `ports.IdentityNamespace` | `spiffeid.ID` | SPIFFE ID parsing/validation |
+| `ports.IdentityCredential` | `spiffeid.ID` | SPIFFE ID parsing/validation |
 | `domain.TrustDomain` | `spiffeid.TrustDomain` | Trust domain validation |
 | `ports.ProcessIdentity` | N/A (server-side only) | Used for attestation |
 
@@ -218,7 +218,7 @@ func TestFetchSVID(t *testing.T) {
     // Mock IdentityClient for testing
     mockClient := &MockIdentityClient{
         svid: &ports.Identity{
-            IdentityNamespace: testNamespace,
+            IdentityCredential: testNamespace,
             IdentityDocument: testDoc,
         },
     }
@@ -226,7 +226,7 @@ func TestFetchSVID(t *testing.T) {
     // Test code works with interface
     svid, err := mockClient.FetchX509SVID(context.Background())
     require.NoError(t, err)
-    assert.Equal(t, testNamespace, svid.IdentityNamespace)
+    assert.Equal(t, testNamespace, svid.IdentityCredential)
 }
 ```
 

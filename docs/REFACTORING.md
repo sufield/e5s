@@ -22,7 +22,7 @@ Refactored the SPIRE identity system to eliminate SDK duplication and maintain s
 
 ```go
 type IdentityDocumentValidator interface {
-    Validate(ctx context.Context, svid *domain.IdentityDocument, expectedID *domain.IdentityNamespace) error
+    Validate(ctx context.Context, svid *domain.IdentityDocument, expectedID *domain.IdentityCredential) error
 }
 ```
 
@@ -87,7 +87,7 @@ After this refactoring, the domain contains NO duplications of SDK functionality
 
 ✅ **NodeAttestationResult / WorkloadAttestationResult**: Pure domain concepts, no SDK equivalent
 ✅ **MatchWorkloadToEntry**: Custom selector matching logic, SPIRE-specific, not in SDK
-✅ **IdentityNamespace.Equals()**: Useful domain addition (SDK's `spiffeid.ID` lacks explicit `Equals`)
+✅ **IdentityCredential.Equals()**: Useful domain addition (SDK's `spiffeid.ID` lacks explicit `Equals`)
 ✅ **ValidateSVID**: ❌ REMOVED - moved to adapter to use SDK verification
 
 ## Testing

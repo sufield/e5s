@@ -110,7 +110,7 @@ This is **AND logic**:
 
 ### Before Fix
 ```go
-entry := NewRegistrationEntry(identityNamespace, selectorSet) // Requires [uid:1000, ns:default]
+entry := NewRegistrationEntry(identityCredential, selectorSet) // Requires [uid:1000, ns:default]
 discovered := NewSelectorSet()
 discovered.Add(uidSelector) // Only has uid:1000
 
@@ -119,7 +119,7 @@ entry.MatchesSelectors(discovered) // TRUE (incorrect!)
 
 ### After Fix
 ```go
-entry := NewRegistrationEntry(identityNamespace, selectorSet) // Requires [uid:1000, ns:default]
+entry := NewRegistrationEntry(identityCredential, selectorSet) // Requires [uid:1000, ns:default]
 discovered := NewSelectorSet()
 discovered.Add(uidSelector) // Only has uid:1000
 

@@ -25,9 +25,9 @@ var (
 
 // Parser and validation errors
 var (
-	// ErrInvalidIdentityNamespace indicates identity namespace is nil or malformed
-	// Used by: IdentityNamespaceParser.ParseFromString, ParseFromPath
-	ErrInvalidIdentityNamespace = errors.New("invalid identity namespace")
+	// ErrInvalidIdentityCredential indicates identity credential is nil or malformed
+	// Used by: IdentityCredentialParser.ParseFromString, ParseFromPath
+	ErrInvalidIdentityCredential = errors.New("invalid identity credential")
 
 	// ErrInvalidTrustDomain indicates trust domain is nil, empty, or malformed
 	// Used by: TrustDomainParser.FromString
@@ -52,9 +52,9 @@ var (
 	// Used by: IdentityDocumentProvider.CreateX509IdentityDocument, ValidateIdentityDocument
 	ErrIdentityDocumentInvalid = errors.New("identity document is invalid")
 
-	// ErrIdentityDocumentMismatch indicates identity document identity namespace doesn't match expected
+	// ErrIdentityDocumentMismatch indicates identity document identity credential doesn't match expected
 	// Used by: IdentityDocumentProvider.ValidateIdentityDocument
-	ErrIdentityDocumentMismatch = errors.New("identity document identity namespace mismatch")
+	ErrIdentityDocumentMismatch = errors.New("identity document identity credential mismatch")
 
 	// ErrCertificateChainInvalid indicates certificate chain validation failed
 	// Used by: IdentityDocumentProvider.ValidateIdentityDocument (with SDK)

@@ -1,39 +1,39 @@
 package domain
 
-// IdentityMapper represents a mapping that associates an identity namespace with selectors
+// IdentityMapper represents a mapping that associates an identity credential with selectors
 // It defines the conditions under which a workload qualifies for that identity
 // This shifts focus to the "mapping" intent—clearly expressing how selectors map to identities.
 type IdentityMapper struct {
-	identityNamespace *IdentityNamespace
+	identityCredential *IdentityCredential
 	selectors         *SelectorSet
-	parentID          *IdentityNamespace // Parent identity namespace (e.g., agent ID)
+	parentID          *IdentityCredential // Parent identity credential (e.g., agent ID)
 }
 
 // NewIdentityMapper creates a new identity mapper
-// Returns ErrInvalidIdentityNamespace if identityNamespace is nil
+// Returns ErrInvalidIdentityCredential if identityCredential is nil
 // Returns ErrInvalidSelectors if selectors are nil or empty
-func NewIdentityMapper(identityNamespace *IdentityNamespace, selectors *SelectorSet) (*IdentityMapper, error) {
-	if identityNamespace == nil {
-		return nil, ErrInvalidIdentityNamespace
+func NewIdentityMapper(identityCredential *IdentityCredential, selectors *SelectorSet) (*IdentityMapper, error) {
+	if identityCredential == nil {
+		return nil, ErrInvalidIdentityCredential
 	}
 	if selectors == nil || len(selectors.All()) == 0 {
 		return nil, ErrInvalidSelectors
 	}
 
 	return &IdentityMapper{
-		identityNamespace: identityNamespace,
+		identityCredential: identityCredential,
 		selectors:         selectors,
 	}, nil
 }
 
-// SetParentID sets the parent identity namespace (agent ID)
-func (im *IdentityMapper) SetParentID(parentID *IdentityNamespace) {
+// SetParentID sets the parent identity credential (agent ID)
+func (im *IdentityMapper) SetParentID(parentID *IdentityCredential) {
 	im.parentID = parentID
 }
 
-// IdentityNamespace returns the identity namespace
-func (im *IdentityMapper) IdentityNamespace() *IdentityNamespace {
-	return im.identityNamespace
+// IdentityCredential returns the identity credential
+func (im *IdentityMapper) IdentityCredential() *IdentityCredential {
+	return im.identityCredential
 }
 
 // Selectors returns the selector set
@@ -41,8 +41,8 @@ func (im *IdentityMapper) Selectors() *SelectorSet {
 	return im.selectors
 }
 
-// ParentID returns the parent identity namespace
-func (im *IdentityMapper) ParentID() *IdentityNamespace {
+// ParentID returns the parent identity credential
+func (im *IdentityMapper) ParentID() *IdentityCredential {
 	return im.parentID
 }
 

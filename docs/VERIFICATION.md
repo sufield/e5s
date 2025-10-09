@@ -234,7 +234,7 @@ func main() {
 	}
 
 	fmt.Println("✅ Successfully fetched X.509 SVID")
-	fmt.Printf("Identity: %s\n", doc.IdentityNamespace().String())
+	fmt.Printf("Identity: %s\n", doc.IdentityCredential().String())
 	fmt.Printf("Expires: %s\n", doc.ExpiresAt().Format(time.RFC3339))
 	fmt.Printf("Valid: %v\n", doc.IsValid())
 	fmt.Printf("Certificate CN: %s\n", doc.Certificate().Subject.CommonName)

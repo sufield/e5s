@@ -15,7 +15,7 @@ The scope of identities issued by a SPIRE Server, defining the namespace for SPI
 - Provides equality comparison
 - Immutable value object
 
-### IdentityNamespace (`identity_namespace.go`)
+### IdentityCredential (`identity_credential.go`)
 
 A unique, URI-formatted identifier for a workload or agent, serving as the core identity in the system.
 
@@ -69,9 +69,9 @@ A software process or service requesting an identity; the primary entity that un
 A mapping that associates a SPIFFE ID with a set of selectors, defining the conditions under which a workload qualifies for that identity.
 
 **Components**:
-- IdentityNamespace (identity to issue)
+- IdentityCredential (identity to issue)
 - Selectors (matching criteria)
-- Parent ID (agent IdentityNamespace)
+- Parent ID (agent IdentityCredential)
 
 **Responsibilities**:
 - Maps selectors to identities
@@ -132,13 +132,13 @@ Encapsulates domain logic for attestation processes.
 
 ### 1. **Ubiquitous Language**
 All domain concepts use SPIRE/SPIFFE terminology:
-- TrustDomain, IdentityNamespace, IdentityDocument, Selector, etc.
+- TrustDomain, IdentityCredential, IdentityDocument, Selector, etc.
 - Names match the official SPIRE specification
 
 ### 2. **Value Objects vs Entities**
 - **Value Objects** (immutable, compared by value):
   - TrustDomain
-  - IdentityNamespace
+  - IdentityCredential
   - Selector
   - SelectorSet
 
@@ -149,7 +149,7 @@ All domain concepts use SPIRE/SPIFFE terminology:
   - Workload
 
 ### 3. **Domain Invariants**
-- IdentityNamespace must follow URI format
+- IdentityCredential must follow URI format
 - Trust domains cannot contain schemes or paths
 - Selectors must have key and value
 - IdentityDocument validate expiration
@@ -171,7 +171,7 @@ All domain concepts use SPIRE/SPIFFE terminology:
 td, _ := domain.NewTrustDomain("example.org")
 
 // Create SPIFFE ID
-identityNamespace, _ := domain.NewIdentityNamespaceFromParts(td, "/server-workload")
+identityCredential, _ := domain.NewIdentityCredentialFromParts(td, "/server-workload")
 
 // Create selectors
 selector1, _ := domain.NewSelector(domain.SelectorTypeWorkload, "unix:uid", "1001")
@@ -179,7 +179,7 @@ selector2, _ := domain.ParseSelector(domain.SelectorTypeWorkload, "unix:user:ser
 selectors := domain.NewSelectorSet(selector1, selector2)
 
 // Create registration entry
-entry, _ := domain.NewRegistrationEntry(identityNamespace, selectors)
+entry, _ := domain.NewRegistrationEntry(identityCredential, selectors)
 
 // Create workload
 workload := domain.NewWorkload(12345, 1001, 1001, "/usr/bin/server")
@@ -189,10 +189,10 @@ attestationSvc := domain.NewAttestationService()
 matchedEntry, _ := attestationSvc.MatchWorkloadToEntry(selectors, []*domain.RegistrationEntry{entry})
 
 // Create IdentityDocument
-svid, _ := domain.NewX509SVID(identityNamespace, cert, privateKey, chain)
+svid, _ := domain.NewX509SVID(identityCredential, cert, privateKey, chain)
 
 // Validate IdentityDocument
-err := attestationSvc.ValidateSVID(svid, identityNamespace)
+err := attestationSvc.ValidateSVID(svid, identityCredential)
 ```
 
 ## Relationship to Ports

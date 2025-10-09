@@ -20,12 +20,12 @@ func TestRegistry_Invariant_ImmutableAfterSealing(t *testing.T) {
 
 	// Arrange - Seed and seal
 	td := domain.NewTrustDomainFromName("example.org")
-	namespace := domain.NewIdentityNamespaceFromComponents(td, "/workload")
+	credential := domain.NewIdentityCredentialFromComponents(td, "/workload")
 	selectors := domain.NewSelectorSet()
 	sel, _ := domain.ParseSelectorFromString("unix:uid:1000")
 	selectors.Add(sel)
 
-	mapper, err := domain.NewIdentityMapper(namespace, selectors)
+	mapper, err := domain.NewIdentityMapper(credential, selectors)
 	require.NoError(t, err)
 
 	err = registry.Seed(ctx, mapper)
@@ -35,8 +35,8 @@ func TestRegistry_Invariant_ImmutableAfterSealing(t *testing.T) {
 	registry.Seal()
 
 	// Try to seed after sealing
-	namespace2 := domain.NewIdentityNamespaceFromComponents(td, "/service")
-	mapper2, err := domain.NewIdentityMapper(namespace2, selectors)
+	credential2 := domain.NewIdentityCredentialFromComponents(td, "/service")
+	mapper2, err := domain.NewIdentityMapper(credential2, selectors)
 	require.NoError(t, err)
 
 	err = registry.Seed(ctx, mapper2)
@@ -53,16 +53,16 @@ func TestRegistry_Invariant_ImmutableAfterSealing(t *testing.T) {
 }
 
 // TestRegistry_Invariant_SeedRejectsDuplicates tests the invariant:
-// "Seed() rejects duplicates by identity namespace"
+// "Seed() rejects duplicates by identity credential"
 func TestRegistry_Invariant_SeedRejectsDuplicates(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 	registry := inmemory.NewInMemoryRegistry()
 
-	// Arrange - Create two mappers with same namespace
+	// Arrange - Create two mappers with same credential
 	td := domain.NewTrustDomainFromName("example.org")
-	namespace := domain.NewIdentityNamespaceFromComponents(td, "/workload")
+	credential := domain.NewIdentityCredentialFromComponents(td, "/workload")
 
 	selectors1 := domain.NewSelectorSet()
 	sel1, _ := domain.ParseSelectorFromString("unix:uid:1000")
@@ -72,28 +72,28 @@ func TestRegistry_Invariant_SeedRejectsDuplicates(t *testing.T) {
 	sel2, _ := domain.ParseSelectorFromString("unix:uid:2000")
 	selectors2.Add(sel2)
 
-	mapper1, err := domain.NewIdentityMapper(namespace, selectors1)
+	mapper1, err := domain.NewIdentityMapper(credential, selectors1)
 	require.NoError(t, err)
 
-	mapper2, err := domain.NewIdentityMapper(namespace, selectors2) // Same namespace!
+	mapper2, err := domain.NewIdentityMapper(credential, selectors2) // Same credential!
 	require.NoError(t, err)
 
 	// Act - Seed first mapper
 	err = registry.Seed(ctx, mapper1)
 	require.NoError(t, err)
 
-	// Try to seed duplicate namespace
+	// Try to seed duplicate credential
 	err = registry.Seed(ctx, mapper2)
 
 	// Assert invariant: duplicate rejected
-	assert.Error(t, err, "Invariant violated: should reject duplicate namespace")
+	assert.Error(t, err, "Invariant violated: should reject duplicate credential")
 	assert.Contains(t, err.Error(), "already exists")
 
 	// Verify only first mapper exists
 	mappers, err := registry.ListAll(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, 1, len(mappers), "Invariant violated: duplicate was added")
-	assert.Equal(t, mapper1.IdentityNamespace(), mappers[0].IdentityNamespace())
+	assert.Equal(t, mapper1.IdentityCredential(), mappers[0].IdentityCredential())
 }
 
 // TestRegistry_Invariant_FindBySelectorsReadOnly tests the invariant:
@@ -106,12 +106,12 @@ func TestRegistry_Invariant_FindBySelectorsReadOnly(t *testing.T) {
 
 	// Arrange - Seed registry
 	td := domain.NewTrustDomainFromName("example.org")
-	namespace := domain.NewIdentityNamespaceFromComponents(td, "/workload")
+	credential := domain.NewIdentityCredentialFromComponents(td, "/workload")
 	selectors := domain.NewSelectorSet()
 	sel, _ := domain.ParseSelectorFromString("unix:uid:1000")
 	selectors.Add(sel)
 
-	mapper, err := domain.NewIdentityMapper(namespace, selectors)
+	mapper, err := domain.NewIdentityMapper(credential, selectors)
 	require.NoError(t, err)
 
 	err = registry.Seed(ctx, mapper)
@@ -198,7 +198,7 @@ func TestRegistry_Invariant_FindBySelectorsANDLogic(t *testing.T) {
 
 	// Arrange - Create mapper requiring 2 selectors
 	td := domain.NewTrustDomainFromName("example.org")
-	namespace := domain.NewIdentityNamespaceFromComponents(td, "/workload")
+	credential := domain.NewIdentityCredentialFromComponents(td, "/workload")
 
 	mapperSelectors := domain.NewSelectorSet()
 	sel1, _ := domain.ParseSelectorFromString("unix:uid:1000")
@@ -206,7 +206,7 @@ func TestRegistry_Invariant_FindBySelectorsANDLogic(t *testing.T) {
 	mapperSelectors.Add(sel1)
 	mapperSelectors.Add(sel2)
 
-	mapper, err := domain.NewIdentityMapper(namespace, mapperSelectors)
+	mapper, err := domain.NewIdentityMapper(credential, mapperSelectors)
 	require.NoError(t, err)
 
 	err = registry.Seed(ctx, mapper)
@@ -258,7 +258,7 @@ func TestRegistry_Invariant_FindBySelectorsANDLogic(t *testing.T) {
 			if tt.shouldMatch {
 				require.NoError(t, err, "Should find match")
 				assert.NotNil(t, found)
-				assert.Equal(t, namespace, found.IdentityNamespace())
+				assert.Equal(t, credential, found.IdentityCredential())
 			} else {
 				assert.Error(t, err, "Should not find match")
 				assert.ErrorIs(t, err, domain.ErrNoMatchingMapper)
@@ -286,11 +286,11 @@ func TestRegistry_Invariant_ListAllNeverReturnsNilSlice(t *testing.T) {
 			setupRegistry: func() *inmemory.InMemoryRegistry {
 				reg := inmemory.NewInMemoryRegistry()
 				td := domain.NewTrustDomainFromName("example.org")
-				namespace := domain.NewIdentityNamespaceFromComponents(td, "/workload")
+				credential := domain.NewIdentityCredentialFromComponents(td, "/workload")
 				selectors := domain.NewSelectorSet()
 				sel, _ := domain.ParseSelectorFromString("unix:uid:1000")
 				selectors.Add(sel)
-				mapper, _ := domain.NewIdentityMapper(namespace, selectors)
+				mapper, _ := domain.NewIdentityMapper(credential, selectors)
 				_ = reg.Seed(ctx, mapper)
 				reg.Seal()
 				return reg
@@ -346,7 +346,7 @@ func TestRegistry_Invariant_SealIsOneWay(t *testing.T) {
 
 	// Arrange - Seed before sealing
 	td := domain.NewTrustDomainFromName("example.org")
-	namespace1 := domain.NewIdentityNamespaceFromComponents(td, "/workload1")
+	namespace1 := domain.NewIdentityCredentialFromComponents(td, "/workload1")
 	selectors := domain.NewSelectorSet()
 	sel, _ := domain.ParseSelectorFromString("unix:uid:1000")
 	selectors.Add(sel)
@@ -362,7 +362,7 @@ func TestRegistry_Invariant_SealIsOneWay(t *testing.T) {
 	registry.Seal()
 
 	// Try to seed after sealing (should fail)
-	namespace2 := domain.NewIdentityNamespaceFromComponents(td, "/workload2")
+	namespace2 := domain.NewIdentityCredentialFromComponents(td, "/workload2")
 	mapper2, err := domain.NewIdentityMapper(namespace2, selectors)
 	require.NoError(t, err)
 
@@ -373,7 +373,7 @@ func TestRegistry_Invariant_SealIsOneWay(t *testing.T) {
 	registry.Seal()
 
 	// Try to seed after second seal (should still fail)
-	namespace3 := domain.NewIdentityNamespaceFromComponents(td, "/workload3")
+	namespace3 := domain.NewIdentityCredentialFromComponents(td, "/workload3")
 	mapper3, err := domain.NewIdentityMapper(namespace3, selectors)
 	require.NoError(t, err)
 
@@ -397,11 +397,11 @@ func TestRegistry_Invariant_ListAllWorksAfterSealing(t *testing.T) {
 	// Arrange - Seed multiple mappers
 	td := domain.NewTrustDomainFromName("example.org")
 	for i := 0; i < 5; i++ {
-		namespace := domain.NewIdentityNamespaceFromComponents(td, "/workload"+string(rune('0'+i)))
+		credential := domain.NewIdentityCredentialFromComponents(td, "/workload"+string(rune('0'+i)))
 		selectors := domain.NewSelectorSet()
 		sel, _ := domain.ParseSelectorFromString("unix:uid:100" + string(rune('0'+i)))
 		selectors.Add(sel)
-		mapper, _ := domain.NewIdentityMapper(namespace, selectors)
+		mapper, _ := domain.NewIdentityMapper(credential, selectors)
 		_ = registry.Seed(ctx, mapper)
 	}
 
