@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/spiffe/go-spiffe/v2/spiffetls"
@@ -12,31 +13,60 @@ import (
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
 )
 
+// ServerConfig contains configuration for creating an HTTP server with mTLS.
+type ServerConfig struct {
+	// Address is the server listen address (e.g., ":8443")
+	Address string
+
+	// SocketPath is the SPIRE agent socket path (e.g., "unix:///tmp/spire-agent/public/api.sock")
+	SocketPath string
+
+	// Authorizer verifies client identities (use tlsconfig.AuthorizeAny(), AuthorizeID(), etc.)
+	Authorizer tlsconfig.Authorizer
+
+	// Timeouts (optional - defaults provided)
+	ReadHeaderTimeout time.Duration
+	ReadTimeout       time.Duration
+	WriteTimeout      time.Duration
+	IdleTimeout       time.Duration
+}
+
 // HTTPServer provides an mTLS HTTP server that authenticates clients using X.509 SVIDs.
 type HTTPServer struct {
 	server     *http.Server
 	x509Source *workloadapi.X509Source
 	authorizer tlsconfig.Authorizer
 	mux        *http.ServeMux
+	once       sync.Once
+	mu         sync.Mutex
+	closed     bool
 }
 
 // NewHTTPServer creates an mTLS HTTP server that authenticates clients.
-// The authorizer parameter is from go-spiffe and performs identity verification only.
-func NewHTTPServer(
-	ctx context.Context,
-	addr string,
-	socketPath string,
-	authorizer tlsconfig.Authorizer, // Use go-spiffe authorizers only
-) (*HTTPServer, error) {
-	// Validate inputs
-	if addr == "" {
+func NewHTTPServer(ctx context.Context, cfg ServerConfig) (*HTTPServer, error) {
+	// Validate required fields
+	if cfg.Address == "" {
 		return nil, fmt.Errorf("address is required")
 	}
-	if socketPath == "" {
+	if cfg.SocketPath == "" {
 		return nil, fmt.Errorf("socket path is required")
 	}
-	if authorizer == nil {
+	if cfg.Authorizer == nil {
 		return nil, fmt.Errorf("authorizer is required")
+	}
+
+	// Apply defaults for timeouts
+	if cfg.ReadHeaderTimeout == 0 {
+		cfg.ReadHeaderTimeout = 10 * time.Second
+	}
+	if cfg.ReadTimeout == 0 {
+		cfg.ReadTimeout = 30 * time.Second
+	}
+	if cfg.WriteTimeout == 0 {
+		cfg.WriteTimeout = 30 * time.Second
+	}
+	if cfg.IdleTimeout == 0 {
+		cfg.IdleTimeout = 120 * time.Second
 	}
 
 	// Create X.509 source from SPIRE Workload API
@@ -44,7 +74,7 @@ func NewHTTPServer(
 	x509Source, err := workloadapi.NewX509Source(
 		ctx,
 		workloadapi.WithClientOptions(
-			workloadapi.WithAddr(socketPath),
+			workloadapi.WithAddr(cfg.SocketPath),
 		),
 	)
 	if err != nil {
@@ -56,70 +86,89 @@ func NewHTTPServer(
 	// - Clients must present valid SVIDs
 	// - Authorizer verifies client identity (authentication only)
 	tlsConfig := tlsconfig.MTLSServerConfig(
-		x509Source, // SVID source (server certificate)
-		x509Source, // Bundle source (trusted CAs)
-		authorizer, // Identity verification (go-spiffe only)
+		x509Source,     // SVID source (server certificate)
+		x509Source,     // Bundle source (trusted CAs)
+		cfg.Authorizer, // Identity verification (go-spiffe only)
 	)
 
 	mux := http.NewServeMux()
 
 	server := &http.Server{
-		Addr:              addr,
+		Addr:              cfg.Address,
 		Handler:           mux,
 		TLSConfig:         tlsConfig,
-		ReadHeaderTimeout: 10 * time.Second,
-		ReadTimeout:       30 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       120 * time.Second,
+		ReadHeaderTimeout: cfg.ReadHeaderTimeout,
+		ReadTimeout:       cfg.ReadTimeout,
+		WriteTimeout:      cfg.WriteTimeout,
+		IdleTimeout:       cfg.IdleTimeout,
 	}
 
 	return &HTTPServer{
 		server:     server,
 		x509Source: x509Source,
-		authorizer: authorizer,
+		authorizer: cfg.Authorizer,
 		mux:        mux,
 	}, nil
 }
 
 // Start starts the mTLS HTTP server.
 func (s *HTTPServer) Start(ctx context.Context) error {
-	// Start server with mTLS
-	// Uses certificates from TLSConfig (GetCertificate callback)
-	errChan := make(chan error, 1)
-	go func() {
-		// Empty strings for certFile and keyFile because TLSConfig provides them
-		if err := s.server.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
-			log.Printf("httpapi server error: %v", err)
-			errChan <- err
-		}
-	}()
-
+	s.once.Do(func() {
+		go func() {
+			log.Printf("Starting mTLS server on %s", s.server.Addr)
+			if err := s.server.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
+				log.Printf("Server error: %v", err)
+			}
+		}()
+	})
 	// Wait briefly to catch immediate startup errors
 	select {
-	case err := <-errChan:
-		return err
+	case <-ctx.Done():
+		return ctx.Err()
 	case <-time.After(100 * time.Millisecond):
-		log.Printf("httpapi server listening on %s with mTLS", s.server.Addr)
+		log.Printf("mTLS server listening on %s", s.server.Addr)
 		return nil
 	}
 }
 
-// Stop gracefully shuts down the server and releases resources.
+// Shutdown gracefully shuts down the server without closing X509Source.
+func (s *HTTPServer) Shutdown(ctx context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return nil
+	}
+	log.Println("Shutting down server...")
+	if err := s.server.Shutdown(ctx); err != nil {
+		return fmt.Errorf("shutdown error: %w", err)
+	}
+	return nil
+}
+
+// Stop gracefully shuts down the server and releases all resources.
 func (s *HTTPServer) Stop(ctx context.Context) error {
-	// Close X509Source (stops SVID fetching and rotation)
+	// First shutdown the server
+	if err := s.Shutdown(ctx); err != nil {
+		return err
+	}
+	// Then close resources
+	return s.Close()
+}
+
+// Close releases resources (X509Source, connections, etc.).
+func (s *HTTPServer) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return nil
+	}
+	s.closed = true
 	if s.x509Source != nil {
 		if err := s.x509Source.Close(); err != nil {
-			log.Printf("error closing X509Source: %v", err)
+			return fmt.Errorf("close X509Source: %w", err)
 		}
 	}
-
-	// Shutdown HTTP server
-	if s.server != nil {
-		if err := s.server.Shutdown(ctx); err != nil {
-			return fmt.Errorf("failed to shutdown server: %w", err)
-		}
-	}
-
+	log.Println("Server resources released")
 	return nil
 }
 

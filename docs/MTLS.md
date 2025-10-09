@@ -845,13 +845,20 @@ authorizer := tlsconfig.AuthorizeID(
 ### 2. Always Close Resources
 
 ```go
-server, err := httpapi.NewHTTPServer(ctx, addr, socket, authorizer)
+server, err := httpapi.NewHTTPServer(ctx, httpapi.ServerConfig{
+    Address:    addr,
+    SocketPath: socket,
+    Authorizer: authorizer,
+})
 if err != nil {
     return err
 }
 defer server.Stop(ctx)  // ✅ Always defer Stop
 
-client, err := httpclient.NewSPIFFEHTTPClient(ctx, socket, authorizer)
+client, err := httpclient.NewSPIFFEHTTPClient(ctx, httpclient.ClientConfig{
+    SocketPath:       socket,
+    ServerAuthorizer: authorizer,
+})
 if err != nil {
     return err
 }

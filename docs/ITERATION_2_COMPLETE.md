@@ -227,7 +227,11 @@ The client (Iteration 2) works seamlessly with the server (Iteration 1):
 
 ```go
 // Server (Iteration 1)
-server, err := httpapi.NewHTTPServer(ctx, ":8443", socketPath, tlsconfig.AuthorizeAny())
+server, err := httpapi.NewHTTPServer(ctx, httpapi.ServerConfig{
+    Address:    ":8443",
+    SocketPath: socketPath,
+    Authorizer: tlsconfig.AuthorizeAny(),
+})
 if err != nil {
     log.Fatalf("Failed to create server: %v", err)
 }
@@ -247,7 +251,10 @@ if err := server.Start(ctx); err != nil {
 }
 
 // Client (Iteration 2)
-client, err := httpclient.NewSPIFFEHTTPClient(ctx, socketPath, tlsconfig.AuthorizeAny())
+client, err := httpclient.NewSPIFFEHTTPClient(ctx, httpclient.ClientConfig{
+    SocketPath:       socketPath,
+    ServerAuthorizer: tlsconfig.AuthorizeAny(),
+})
 if err != nil {
     log.Fatalf("Failed to create client: %v", err)
 }

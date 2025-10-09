@@ -22,7 +22,7 @@ func TestNewSPIFFEHTTPClient_ValidConfig(t *testing.T) {
 	socketPath := "unix:///tmp/spire-agent/public/api.sock"
 	authorizer := tlsconfig.AuthorizeAny()
 
-	client, err := NewSPIFFEHTTPClient(ctx, socketPath, authorizer)
+	client, err := NewSPIFFEHTTPClient(ctx, ClientConfig{SocketPath: socketPath, ServerAuthorizer: authorizer})
 
 	// If SPIRE is not running, this will fail - that's expected
 	if err != nil {
@@ -43,7 +43,7 @@ func TestNewSPIFFEHTTPClient_MissingSocketPath(t *testing.T) {
 	ctx := context.Background()
 	authorizer := tlsconfig.AuthorizeAny()
 
-	client, err := NewSPIFFEHTTPClient(ctx, "", authorizer)
+	client, err := NewSPIFFEHTTPClient(ctx, ClientConfig{SocketPath: "", ServerAuthorizer: authorizer})
 
 	require.Error(t, err)
 	assert.Nil(t, client)
@@ -53,11 +53,73 @@ func TestNewSPIFFEHTTPClient_MissingSocketPath(t *testing.T) {
 func TestNewSPIFFEHTTPClient_MissingAuthorizer(t *testing.T) {
 	ctx := context.Background()
 
-	client, err := NewSPIFFEHTTPClient(ctx, "unix:///tmp/socket", nil)
+	client, err := NewSPIFFEHTTPClient(ctx, ClientConfig{SocketPath: "unix:///tmp/socket", ServerAuthorizer: nil})
 
 	require.Error(t, err)
 	assert.Nil(t, client)
 	assert.Contains(t, err.Error(), "server authorizer is required")
+}
+
+func TestSPIFFEHTTPClient_Defaults(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	socketPath := "unix:///tmp/spire-agent/public/api.sock"
+	authorizer := tlsconfig.AuthorizeAny()
+
+	client, err := NewSPIFFEHTTPClient(ctx, ClientConfig{
+		SocketPath:       socketPath,
+		ServerAuthorizer: authorizer,
+	})
+	if err != nil {
+		t.Skipf("Skipping test - SPIRE agent not available: %v", err)
+		return
+	}
+	defer client.Close()
+
+	// Verify default timeout
+	assert.Equal(t, 30*time.Second, client.client.Timeout, "Default timeout should be 30s")
+
+	// Verify default transport settings
+	transport, ok := client.client.Transport.(*http.Transport)
+	require.True(t, ok, "Transport should be *http.Transport")
+	assert.Equal(t, 100, transport.MaxIdleConns, "Default MaxIdleConns should be 100")
+	assert.Equal(t, 10, transport.MaxIdleConnsPerHost, "Default MaxIdleConnsPerHost should be 10")
+	assert.Equal(t, 90*time.Second, transport.IdleConnTimeout, "Default IdleConnTimeout should be 90s")
+}
+
+func TestSPIFFEHTTPClient_CustomDefaults(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	socketPath := "unix:///tmp/spire-agent/public/api.sock"
+	authorizer := tlsconfig.AuthorizeAny()
+
+	client, err := NewSPIFFEHTTPClient(ctx, ClientConfig{
+		SocketPath:       socketPath,
+		ServerAuthorizer: authorizer,
+		Timeout:          15 * time.Second,
+		Transport: TransportConfig{
+			MaxIdleConns:        50,
+			MaxIdleConnsPerHost: 5,
+			IdleConnTimeout:     60 * time.Second,
+		},
+	})
+	if err != nil {
+		t.Skipf("Skipping test - SPIRE agent not available: %v", err)
+		return
+	}
+	defer client.Close()
+
+	// Verify custom timeout
+	assert.Equal(t, 15*time.Second, client.client.Timeout, "Custom timeout should be 15s")
+
+	// Verify custom transport settings
+	transport, ok := client.client.Transport.(*http.Transport)
+	require.True(t, ok, "Transport should be *http.Transport")
+	assert.Equal(t, 50, transport.MaxIdleConns, "Custom MaxIdleConns should be 50")
+	assert.Equal(t, 5, transport.MaxIdleConnsPerHost, "Custom MaxIdleConnsPerHost should be 5")
+	assert.Equal(t, 60*time.Second, transport.IdleConnTimeout, "Custom IdleConnTimeout should be 60s")
 }
 
 func TestSPIFFEHTTPClient_SetTimeout(t *testing.T) {
@@ -67,7 +129,7 @@ func TestSPIFFEHTTPClient_SetTimeout(t *testing.T) {
 	socketPath := "unix:///tmp/spire-agent/public/api.sock"
 	authorizer := tlsconfig.AuthorizeAny()
 
-	client, err := NewSPIFFEHTTPClient(ctx, socketPath, authorizer)
+	client, err := NewSPIFFEHTTPClient(ctx, ClientConfig{SocketPath: socketPath, ServerAuthorizer: authorizer})
 	if err != nil {
 		t.Skipf("Skipping test - SPIRE agent not available: %v", err)
 		return
@@ -88,7 +150,7 @@ func TestSPIFFEHTTPClient_GetHTTPClient(t *testing.T) {
 	socketPath := "unix:///tmp/spire-agent/public/api.sock"
 	authorizer := tlsconfig.AuthorizeAny()
 
-	client, err := NewSPIFFEHTTPClient(ctx, socketPath, authorizer)
+	client, err := NewSPIFFEHTTPClient(ctx, ClientConfig{SocketPath: socketPath, ServerAuthorizer: authorizer})
 	if err != nil {
 		t.Skipf("Skipping test - SPIRE agent not available: %v", err)
 		return
@@ -109,7 +171,7 @@ func TestHTTPMethods_RequestCreation(t *testing.T) {
 	socketPath := "unix:///tmp/spire-agent/public/api.sock"
 	authorizer := tlsconfig.AuthorizeAny()
 
-	client, err := NewSPIFFEHTTPClient(ctx, socketPath, authorizer)
+	client, err := NewSPIFFEHTTPClient(ctx, ClientConfig{SocketPath: socketPath, ServerAuthorizer: authorizer})
 	if err != nil {
 		t.Skipf("Skipping test - SPIRE agent not available: %v", err)
 		return
@@ -206,7 +268,7 @@ func TestSPIFFEHTTPClient_Do(t *testing.T) {
 	socketPath := "unix:///tmp/spire-agent/public/api.sock"
 	authorizer := tlsconfig.AuthorizeAny()
 
-	client, err := NewSPIFFEHTTPClient(ctx, socketPath, authorizer)
+	client, err := NewSPIFFEHTTPClient(ctx, ClientConfig{SocketPath: socketPath, ServerAuthorizer: authorizer})
 	if err != nil {
 		t.Skipf("Skipping test - SPIRE agent not available: %v", err)
 		return
@@ -234,7 +296,7 @@ func TestSPIFFEHTTPClient_Close(t *testing.T) {
 	socketPath := "unix:///tmp/spire-agent/public/api.sock"
 	authorizer := tlsconfig.AuthorizeAny()
 
-	client, err := NewSPIFFEHTTPClient(ctx, socketPath, authorizer)
+	client, err := NewSPIFFEHTTPClient(ctx, ClientConfig{SocketPath: socketPath, ServerAuthorizer: authorizer})
 	if err != nil {
 		t.Skipf("Skipping test - SPIRE agent not available: %v", err)
 		return
@@ -254,11 +316,10 @@ func ExampleNewSPIFFEHTTPClient() {
 	ctx := context.Background()
 
 	// Create client with server identity verification
-	client, err := NewSPIFFEHTTPClient(
-		ctx,
-		"unix:///tmp/spire-agent/public/api.sock",
-		tlsconfig.AuthorizeAny(), // Allow any server from trust domain
-	)
+	client, err := NewSPIFFEHTTPClient(ctx, ClientConfig{
+		SocketPath:       "unix:///tmp/spire-agent/public/api.sock",
+		ServerAuthorizer: tlsconfig.AuthorizeAny(), // Allow any server from trust domain
+	})
 	if err != nil {
 		panic(err)
 	}

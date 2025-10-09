@@ -48,7 +48,7 @@ Successfully implemented **Iteration 1 (mTLS Server)** and **Iteration 2 (mTLS C
 ┌─────────────────────────────────────────────────────────────────────┐
 │                     Client Application                               │
 │                                                                      │
-│  httpclient.NewSPIFFEHTTPClient(ctx, socket, authorizer)            │
+│  httpclient.NewSPIFFEHTTPClient(ctx, ClientConfig{...})             │
 │       ↓                                                              │
 │  client.Get(ctx, "https://server:8443/api/hello")                   │
 └───────────────────────────┬─────────────────────────────────────────┘
@@ -65,7 +65,7 @@ Successfully implemented **Iteration 1 (mTLS Server)** and **Iteration 2 (mTLS C
 ┌─────────────────────────────────────────────────────────────────────┐
 │                     Server Application                               │
 │                                                                      │
-│  httpapi.NewHTTPServer(ctx, ":8443", socket, authorizer)            │
+│  httpapi.NewHTTPServer(ctx, ServerConfig{...})                      │
 │       ↓                                                              │
 │  server.RegisterHandler("/api/hello", handler)                      │
 │       ↓                                                              │

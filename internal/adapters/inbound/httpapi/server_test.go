@@ -20,11 +20,13 @@ func TestNewHTTPServer_ValidConfig(t *testing.T) {
 
 	// Note: This test requires a running SPIRE agent
 	// Skip if SPIRE_AGENT_SOCKET not set
-	socketPath := "unix:///tmp/spire-agent/public/api.sock"
+	cfg := ServerConfig{
+		Address:    ":18443",
+		SocketPath: "unix:///tmp/spire-agent/public/api.sock",
+		Authorizer: tlsconfig.AuthorizeAny(),
+	}
 
-	authorizer := tlsconfig.AuthorizeAny()
-
-	server, err := NewHTTPServer(ctx, ":18443", socketPath, authorizer)
+	server, err := NewHTTPServer(ctx, cfg)
 
 	// If SPIRE is not running, this will fail - that's expected
 	if err != nil {
@@ -41,7 +43,7 @@ func TestNewHTTPServer_MissingAddress(t *testing.T) {
 
 	authorizer := tlsconfig.AuthorizeAny()
 
-	server, err := NewHTTPServer(ctx, "", "unix:///tmp/socket", authorizer)
+	server, err := NewHTTPServer(ctx, ServerConfig{Address: "", SocketPath: "unix:///tmp/socket", Authorizer: authorizer})
 
 	require.Error(t, err)
 	assert.Nil(t, server)
@@ -53,7 +55,7 @@ func TestNewHTTPServer_MissingSocketPath(t *testing.T) {
 
 	authorizer := tlsconfig.AuthorizeAny()
 
-	server, err := NewHTTPServer(ctx, ":8443", "", authorizer)
+	server, err := NewHTTPServer(ctx, ServerConfig{Address: ":8443", SocketPath: "", Authorizer: authorizer})
 
 	require.Error(t, err)
 	assert.Nil(t, server)
@@ -63,7 +65,7 @@ func TestNewHTTPServer_MissingSocketPath(t *testing.T) {
 func TestNewHTTPServer_MissingAuthorizer(t *testing.T) {
 	ctx := context.Background()
 
-	server, err := NewHTTPServer(ctx, ":8443", "unix:///tmp/socket", nil)
+	server, err := NewHTTPServer(ctx, ServerConfig{Address: ":8443", SocketPath: "unix:///tmp/socket", Authorizer: nil})
 
 	require.Error(t, err)
 	assert.Nil(t, server)
@@ -160,7 +162,7 @@ func TestWrapHandler_NoTLS(t *testing.T) {
 	socketPath := "unix:///tmp/spire-agent/public/api.sock"
 	authorizer := tlsconfig.AuthorizeAny()
 
-	server, err := NewHTTPServer(ctx, ":18444", socketPath, authorizer)
+	server, err := NewHTTPServer(ctx, ServerConfig{Address: ":18444", SocketPath: socketPath, Authorizer: authorizer})
 	if err != nil {
 		t.Skipf("Skipping test - SPIRE agent not available: %v", err)
 		return
@@ -196,7 +198,7 @@ func TestRegisterHandler(t *testing.T) {
 	socketPath := "unix:///tmp/spire-agent/public/api.sock"
 	authorizer := tlsconfig.AuthorizeAny()
 
-	server, err := NewHTTPServer(ctx, ":18445", socketPath, authorizer)
+	server, err := NewHTTPServer(ctx, ServerConfig{Address: ":18445", SocketPath: socketPath, Authorizer: authorizer})
 	if err != nil {
 		t.Skipf("Skipping test - SPIRE agent not available: %v", err)
 		return
@@ -233,7 +235,7 @@ func TestGetMux(t *testing.T) {
 	socketPath := "unix:///tmp/spire-agent/public/api.sock"
 	authorizer := tlsconfig.AuthorizeAny()
 
-	server, err := NewHTTPServer(ctx, ":18446", socketPath, authorizer)
+	server, err := NewHTTPServer(ctx, ServerConfig{Address: ":18446", SocketPath: socketPath, Authorizer: authorizer})
 	if err != nil {
 		t.Skipf("Skipping test - SPIRE agent not available: %v", err)
 		return
@@ -251,7 +253,7 @@ func TestStop_MultipleCallsIdempotent(t *testing.T) {
 	socketPath := "unix:///tmp/spire-agent/public/api.sock"
 	authorizer := tlsconfig.AuthorizeAny()
 
-	server, err := NewHTTPServer(ctx, ":18447", socketPath, authorizer)
+	server, err := NewHTTPServer(ctx, ServerConfig{Address: ":18447", SocketPath: socketPath, Authorizer: authorizer})
 	if err != nil {
 		t.Skipf("Skipping test - SPIRE agent not available: %v", err)
 		return
@@ -272,7 +274,7 @@ func TestWrapHandler_ExtractsIdentity(t *testing.T) {
 	socketPath := "unix:///tmp/spire-agent/public/api.sock"
 	authorizer := tlsconfig.AuthorizeAny()
 
-	server, err := NewHTTPServer(ctx, ":18448", socketPath, authorizer)
+	server, err := NewHTTPServer(ctx, ServerConfig{Address: ":18448", SocketPath: socketPath, Authorizer: authorizer})
 	if err != nil {
 		t.Skipf("Skipping test - SPIRE agent not available: %v", err)
 		return
@@ -303,12 +305,11 @@ func ExampleHTTPServer_RegisterHandler() {
 		spiffeid.RequireTrustDomainFromString("example.org"),
 	)
 
-	server, err := NewHTTPServer(
-		ctx,
-		":8443",
-		"unix:///tmp/spire-agent/public/api.sock",
-		authorizer,
-	)
+	server, err := NewHTTPServer(ctx, ServerConfig{
+		Address:    ":8443",
+		SocketPath: "unix:///tmp/spire-agent/public/api.sock",
+		Authorizer: authorizer,
+	})
 	if err != nil {
 		panic(err)
 	}

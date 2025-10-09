@@ -11,6 +11,33 @@ import (
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
 )
 
+// ClientConfig contains configuration for creating an HTTP client with mTLS.
+type ClientConfig struct {
+	// SocketPath is the SPIRE agent socket path (e.g., "unix:///tmp/spire-agent/public/api.sock")
+	SocketPath string
+
+	// ServerAuthorizer verifies server identity (use tlsconfig.AuthorizeAny(), AuthorizeID(), etc.)
+	ServerAuthorizer tlsconfig.Authorizer
+
+	// Timeout for HTTP requests (optional - defaults to 30s)
+	Timeout time.Duration
+
+	// Transport settings (optional - defaults provided)
+	Transport TransportConfig
+}
+
+// TransportConfig contains HTTP transport configuration.
+type TransportConfig struct {
+	// MaxIdleConns controls the maximum number of idle connections across all hosts (default: 100)
+	MaxIdleConns int
+
+	// MaxIdleConnsPerHost controls the maximum idle connections per host (default: 10)
+	MaxIdleConnsPerHost int
+
+	// IdleConnTimeout is the maximum time an idle connection is kept (default: 90s)
+	IdleConnTimeout time.Duration
+}
+
 // SPIFFEHTTPClient is an HTTP client that uses X.509 SVIDs for mTLS authentication.
 type SPIFFEHTTPClient struct {
 	client     *http.Client
@@ -18,18 +45,27 @@ type SPIFFEHTTPClient struct {
 }
 
 // NewSPIFFEHTTPClient creates an mTLS HTTP client.
-// The authorizer verifies the server's identity (authentication).
-func NewSPIFFEHTTPClient(
-	ctx context.Context,
-	socketPath string,
-	serverAuthorizer tlsconfig.Authorizer, // Verifies server identity
-) (*SPIFFEHTTPClient, error) {
-	// Validate inputs
-	if socketPath == "" {
+func NewSPIFFEHTTPClient(ctx context.Context, cfg ClientConfig) (*SPIFFEHTTPClient, error) {
+	// Validate required fields
+	if cfg.SocketPath == "" {
 		return nil, fmt.Errorf("socket path is required")
 	}
-	if serverAuthorizer == nil {
+	if cfg.ServerAuthorizer == nil {
 		return nil, fmt.Errorf("server authorizer is required")
+	}
+
+	// Apply defaults
+	if cfg.Timeout == 0 {
+		cfg.Timeout = 30 * time.Second
+	}
+	if cfg.Transport.MaxIdleConns == 0 {
+		cfg.Transport.MaxIdleConns = 100
+	}
+	if cfg.Transport.MaxIdleConnsPerHost == 0 {
+		cfg.Transport.MaxIdleConnsPerHost = 10
+	}
+	if cfg.Transport.IdleConnTimeout == 0 {
+		cfg.Transport.IdleConnTimeout = 90 * time.Second
 	}
 
 	// Create X.509 source from SPIRE Workload API
@@ -37,7 +73,7 @@ func NewSPIFFEHTTPClient(
 	x509Source, err := workloadapi.NewX509Source(
 		ctx,
 		workloadapi.WithClientOptions(
-			workloadapi.WithAddr(socketPath),
+			workloadapi.WithAddr(cfg.SocketPath),
 		),
 	)
 	if err != nil {
@@ -48,23 +84,23 @@ func NewSPIFFEHTTPClient(
 	// - Client presents its SVID to server
 	// - Server must present valid SVID matching authorizer
 	tlsConfig := tlsconfig.MTLSClientConfig(
-		x509Source,       // SVID source (client certificate)
-		x509Source,       // Bundle source (trusted CAs)
-		serverAuthorizer, // Server identity verification
+		x509Source,           // SVID source (client certificate)
+		x509Source,           // Bundle source (trusted CAs)
+		cfg.ServerAuthorizer, // Server identity verification
 	)
 
 	// Create HTTP transport with mTLS
 	transport := &http.Transport{
 		TLSClientConfig:     tlsConfig,
-		MaxIdleConns:        100,
-		MaxIdleConnsPerHost: 10,
-		IdleConnTimeout:     90 * time.Second,
+		MaxIdleConns:        cfg.Transport.MaxIdleConns,
+		MaxIdleConnsPerHost: cfg.Transport.MaxIdleConnsPerHost,
+		IdleConnTimeout:     cfg.Transport.IdleConnTimeout,
 	}
 
-	// Create HTTP client with default timeout
+	// Create HTTP client with configured timeout
 	client := &http.Client{
 		Transport: transport,
-		Timeout:   30 * time.Second,
+		Timeout:   cfg.Timeout,
 	}
 
 	return &SPIFFEHTTPClient{

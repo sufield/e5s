@@ -35,7 +35,11 @@ A production-ready mTLS authentication library using SPIFFE/SPIRE for service-to
 
 ```go
 // Server
-server, _ := httpapi.NewHTTPServer(ctx, ":8443", socketPath, tlsconfig.AuthorizeAny())
+server, _ := httpapi.NewHTTPServer(ctx, httpapi.ServerConfig{
+    Address:    ":8443",
+    SocketPath: socketPath,
+    Authorizer: tlsconfig.AuthorizeAny(),
+})
 server.RegisterHandler("/api/hello", func(w http.ResponseWriter, r *http.Request) {
     clientID, _ := httpapi.GetSPIFFEID(r)
     fmt.Fprintf(w, "Hello, %s!\n", clientID)
@@ -43,7 +47,10 @@ server.RegisterHandler("/api/hello", func(w http.ResponseWriter, r *http.Request
 server.Start(ctx)
 
 // Client
-client, _ := httpclient.NewSPIFFEHTTPClient(ctx, socketPath, tlsconfig.AuthorizeID(serverID))
+client, _ := httpclient.NewSPIFFEHTTPClient(ctx, httpclient.ClientConfig{
+    SocketPath:       socketPath,
+    ServerAuthorizer: tlsconfig.AuthorizeID(serverID),
+})
 resp, _ := client.Get(ctx, "https://server:8443/api/hello")
 ```
 

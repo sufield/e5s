@@ -318,7 +318,11 @@ func (s *spiffeServer) Close() error {
 
 **Old code**:
 ```go
-server, err := httpapi.NewHTTPServer(ctx, ":8443", socket, authorizer)
+server, err := httpapi.NewHTTPServer(ctx, httpapi.ServerConfig{
+    Address:    ":8443",
+    SocketPath: socket,
+    Authorizer: authorizer,
+})
 server.RegisterHandler("/api", handler)
 server.Start(ctx)
 ```

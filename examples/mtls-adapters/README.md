@@ -17,7 +17,7 @@ These examples show how to:
 ┌─────────────────────────────────────────────────────────────────────┐
 │                     Client Application                               │
 │                                                                      │
-│  httpclient.NewSPIFFEHTTPClient(ctx, socket, authorizer)            │
+│  httpclient.NewSPIFFEHTTPClient(ctx, ClientConfig{...})             │
 │       ↓                                                              │
 │  client.Get(ctx, "https://server:8443/api/hello")                   │
 └───────────────────────────┬─────────────────────────────────────────┘
@@ -34,7 +34,7 @@ These examples show how to:
 ┌─────────────────────────────────────────────────────────────────────┐
 │                     Server Application                               │
 │                                                                      │
-│  httpapi.NewHTTPServer(ctx, ":8443", socket, authorizer)            │
+│  httpapi.NewHTTPServer(ctx, ServerConfig{...})                      │
 │       ↓                                                              │
 │  server.RegisterHandler("/api/hello", handler)                      │
 │       ↓                                                              │

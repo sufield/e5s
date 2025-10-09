@@ -85,7 +85,10 @@ httpapi.MatchesTrustDomain(r, "example.org")
 
 **Request Pattern**:
 ```go
-client, err := httpclient.NewSPIFFEHTTPClient(ctx, socketPath, authorizer)
+client, err := httpclient.NewSPIFFEHTTPClient(ctx, httpclient.ClientConfig{
+    SocketPath:       socketPath,
+    ServerAuthorizer: authorizer,
+})
 defer client.Close()
 
 resp, err := client.Get(ctx, url)

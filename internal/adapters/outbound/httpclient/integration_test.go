@@ -130,7 +130,10 @@ func TestClientAllHTTPMethods(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Create client
-	client, err := NewSPIFFEHTTPClient(ctx, socketPath, tlsconfig.AuthorizeAny())
+	client, err := NewSPIFFEHTTPClient(ctx, ClientConfig{
+		SocketPath:       socketPath,
+		ServerAuthorizer: tlsconfig.AuthorizeAny(),
+	})
 	require.NoError(t, err, "Failed to create client")
 	defer client.Close()
 
@@ -293,7 +296,10 @@ func TestClientTimeout(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Create client with short timeout
-	client, err := NewSPIFFEHTTPClient(ctx, socketPath, tlsconfig.AuthorizeAny())
+	client, err := NewSPIFFEHTTPClient(ctx, ClientConfig{
+		SocketPath:       socketPath,
+		ServerAuthorizer: tlsconfig.AuthorizeAny(),
+	})
 	require.NoError(t, err, "Failed to create client")
 	defer client.Close()
 

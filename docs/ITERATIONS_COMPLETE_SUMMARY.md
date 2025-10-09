@@ -625,7 +625,7 @@ Authenticated client: spiffe://example.org/client
 ┌──────────────────────────────────────────────────────────────┐
 │                     Client Application                        │
 │                                                               │
-│  httpclient.NewSPIFFEHTTPClient(ctx, socket, authorizer)     │
+│  httpclient.NewSPIFFEHTTPClient(ctx, ClientConfig{...})      │
 │       ↓                                                       │
 │  client.Get(ctx, "https://server:8443/api/hello")            │
 └───────────────────────┬──────────────────────────────────────┘
@@ -646,7 +646,7 @@ Authenticated client: spiffe://example.org/client
 ┌──────────────────────────────────────────────────────────────┐
 │                     Server Application                        │
 │                                                               │
-│  httpapi.NewHTTPServer(ctx, ":8443", socket, authorizer)     │
+│  httpapi.NewHTTPServer(ctx, ServerConfig{...})               │
 │       ↓                                                       │
 │  server.RegisterHandler("/api/hello", handler)               │
 │       ↓                                                       │
