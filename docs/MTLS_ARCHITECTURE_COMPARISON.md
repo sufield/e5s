@@ -305,11 +305,15 @@ internal/identityserver/
 ```go
 // Application handles authorization after authentication
 func handler(w http.ResponseWriter, r *http.Request) {
-    clientID, _ := httpapi.GetSPIFFEID(r)
+    clientID, ok := httpapi.GetSPIFFEID(r)
+    if !ok {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
 
     // Application authorization (not in library)
     if !myAuthz.Check(clientID, "read", "resource") {
-        http.Error(w, "Forbidden", 403)
+        http.Error(w, "Forbidden", http.StatusForbidden)
         return
     }
 
@@ -452,14 +456,19 @@ cfg := identityserver.Config{
     HTTP:        struct{ Address string; ReadHeaderTimeout time.Duration }{":8443", 10 * time.Second},
 }
 
-server, _ := identityserver.New(ctx, cfg)
+server, err := identityserver.New(ctx, cfg)
+if err != nil {
+    log.Fatalf("Failed to create server: %v", err)
+}
 defer server.Close()
 
 server.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
     w.Write([]byte("Success!!!"))
 }))
 
-server.Start(ctx)
+if err := server.Start(ctx); err != nil {
+    log.Fatalf("Failed to start server: %v", err)
+}
 ```
 
 ---

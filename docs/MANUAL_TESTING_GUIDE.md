@@ -569,7 +569,10 @@ func main() {
         // ... configuration
     }
 
-    client, _ := httpclient.NewSPIFFEClient(ctx, cfg)
+    client, err := httpclient.NewSPIFFEClient(ctx, cfg)
+    if err != nil {
+        log.Fatalf("Failed to create client: %v", err)
+    }
     defer client.Close()
 
     // Run 100 concurrent requests
@@ -580,7 +583,12 @@ func main() {
         wg.Add(1)
         go func() {
             defer wg.Done()
-            client.Get(ctx, "https://localhost:8443/health")
+            resp, err := client.Get(ctx, "https://localhost:8443/health")
+            if err != nil {
+                log.Printf("Request failed: %v", err)
+                return
+            }
+            resp.Body.Close()
         }()
     }
 

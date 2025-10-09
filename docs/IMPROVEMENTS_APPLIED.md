@@ -193,13 +193,19 @@ All changes are **backward compatible**:
 Users can now optionally use `GetMux()`:
 
 ```go
-server, _ := identityserver.NewSPIFFEServer(ctx, cfg)
+server, err := identityserver.NewSPIFFEServer(ctx, cfg)
+if err != nil {
+    log.Fatalf("Failed to create server: %v", err)
+}
+defer server.Close()
 
 // NEW: Direct mux access for advanced use
 mux := server.GetMux()
 mux.HandleFunc("/debug/", debugHandler)  // Add handlers directly
 
-server.Start(ctx)
+if err := server.Start(ctx); err != nil {
+    log.Fatalf("Failed to start server: %v", err)
+}
 ```
 
 ## Files Modified
@@ -224,7 +230,11 @@ server.Start(ctx)
 ### Using GetMux() for Custom Middleware
 
 ```go
-server, _ := identityserver.NewSPIFFEServer(ctx, cfg)
+server, err := identityserver.NewSPIFFEServer(ctx, cfg)
+if err != nil {
+    log.Fatalf("Failed to create server: %v", err)
+}
+defer server.Close()
 
 // Get direct mux access
 mux := server.GetMux()
@@ -233,19 +243,33 @@ mux := server.GetMux()
 mux.Handle("/metrics", promhttp.Handler())
 mux.HandleFunc("/debug/pprof/", pprof.Index)
 
-server.Start(ctx)
+if err := server.Start(ctx); err != nil {
+    log.Fatalf("Failed to start server: %v", err)
+}
 ```
 
 ### Start() Idempotency
 
 ```go
-server, _ := identityserver.NewSPIFFEServer(ctx, cfg)
+server, err := identityserver.NewSPIFFEServer(ctx, cfg)
+if err != nil {
+    log.Fatalf("Failed to create server: %v", err)
+}
+defer server.Close()
 
 // First call - starts server
-go server.Start(ctx)
+go func() {
+    if err := server.Start(ctx); err != nil {
+        log.Printf("Server error: %v", err)
+    }
+}()
 
 // Second call - no-op (protected by sync.Once)
-go server.Start(ctx)  // Safe, won't panic or start twice
+go func() {
+    if err := server.Start(ctx); err != nil {
+        log.Printf("Server error: %v", err)
+    }
+}()  // Safe, won't panic or start twice
 ```
 
 ## References

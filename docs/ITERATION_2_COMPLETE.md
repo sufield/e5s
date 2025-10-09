@@ -227,13 +227,37 @@ The client (Iteration 2) works seamlessly with the server (Iteration 1):
 
 ```go
 // Server (Iteration 1)
-server, _ := httpapi.NewHTTPServer(ctx, ":8443", socketPath, tlsconfig.AuthorizeAny())
-server.RegisterHandler("/api/hello", helloHandler)
-server.Start(ctx)
+server, err := httpapi.NewHTTPServer(ctx, ":8443", socketPath, tlsconfig.AuthorizeAny())
+if err != nil {
+    log.Fatalf("Failed to create server: %v", err)
+}
+defer server.Stop(ctx)
+
+server.RegisterHandler("/api/hello", func(w http.ResponseWriter, r *http.Request) {
+    clientID, ok := httpapi.GetSPIFFEID(r)
+    if !ok {
+        http.Error(w, "No client identity", http.StatusUnauthorized)
+        return
+    }
+    fmt.Fprintf(w, "Hello, %s!\n", clientID.String())
+})
+
+if err := server.Start(ctx); err != nil {
+    log.Fatalf("Failed to start server: %v", err)
+}
 
 // Client (Iteration 2)
-client, _ := httpclient.NewSPIFFEHTTPClient(ctx, socketPath, tlsconfig.AuthorizeAny())
-resp, _ := client.Get(ctx, "https://localhost:8443/api/hello")
+client, err := httpclient.NewSPIFFEHTTPClient(ctx, socketPath, tlsconfig.AuthorizeAny())
+if err != nil {
+    log.Fatalf("Failed to create client: %v", err)
+}
+defer client.Close()
+
+resp, err := client.Get(ctx, "https://localhost:8443/api/hello")
+if err != nil {
+    log.Fatalf("Request failed: %v", err)
+}
+defer resp.Body.Close()
 ```
 
 Both client and server:

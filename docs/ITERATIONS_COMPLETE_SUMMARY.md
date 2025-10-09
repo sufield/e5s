@@ -651,7 +651,11 @@ Authenticated client: spiffe://example.org/client
 │  server.RegisterHandler("/api/hello", handler)               │
 │       ↓                                                       │
 │  func handler(w, r) {                                        │
-│      clientID, _ := httpapi.GetSPIFFEID(r)                   │
+│      clientID, ok := httpapi.GetSPIFFEID(r)                  │
+│      if !ok {                                                │
+│          http.Error(w, "Unauthorized", 401)                  │
+│          return                                              │
+│      }                                                        │
 │      // Handle authenticated request                         │
 │  }                                                            │
 └──────────────────────────────────────────────────────────────┘
