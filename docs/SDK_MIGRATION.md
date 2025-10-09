@@ -1,8 +1,17 @@
-# go-spiffe SDK Migration Guide
+# go-spiffe SDK Integration Guide
+
+> **✅ STATUS: Migration Complete!**
+> The mTLS adapters (`httpapi` and `httpclient`) already use the real `go-spiffe` SDK v2.6.0.
+> This guide explains the dual-mode architecture: production SDK vs educational in-memory implementation.
 
 ## Overview
 
-This codebase uses the `IdentityClient` interface to abstract SPIRE Workload API operations. The interface is designed to match `go-spiffe` SDK's signature exactly, enabling seamless migration from in-memory implementation to real SDK.
+This codebase demonstrates **two implementations** side-by-side:
+
+1. **Production mTLS** (`httpapi`/`httpclient`) - Uses real `go-spiffe` SDK v2.6.0
+2. **Educational demo** (`cmd/agent`/`cmd/workload`) - Uses in-memory implementation
+
+The `IdentityClient` interface abstracts SPIRE Workload API operations, allowing both implementations to coexist through hexagonal architecture.
 
 ## Current Architecture
 
