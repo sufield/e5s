@@ -49,7 +49,9 @@ These examples show how to:
 
 - **[server/main.go](server/main.go)** - mTLS HTTP server using `httpapi` adapter
 - **[client/main.go](client/main.go)** - mTLS HTTP client using `httpclient` adapter
-- **[README.md](README.md)** - This file
+- **[README.md](README.md)** - This file (overview and local development)
+- **[KUBERNETES.md](KUBERNETES.md)** - Kubernetes deployment guide
+- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Troubleshooting guide
 
 ## Prerequisites
 
@@ -145,7 +147,7 @@ Authenticated client: spiffe://example.org/client
 
 ### Option 2: Run in Kubernetes
 
-See [Kubernetes Deployment](#kubernetes-deployment) section below.
+See the [Kubernetes Deployment Guide](KUBERNETES.md) for detailed instructions on deploying to Kubernetes with Minikube.
 
 ## Configuration
 
@@ -294,117 +296,14 @@ if len(segments) >= 2 {
 
 ## Kubernetes Deployment
 
-### Deployment Manifests
+For complete Kubernetes deployment instructions including:
+- Deployment manifests (server and client)
+- Building images for Minikube and remote registries
+- Workload registration with SPIRE
+- Advanced configuration (ConfigMaps, Secrets, replicas)
+- Verification and cleanup
 
-#### Server Deployment
-
-```yaml
-# server-deployment.yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: mtls-server
-  namespace: default
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: mtls-server
-  template:
-    metadata:
-      labels:
-        app: mtls-server
-    spec:
-      containers:
-      - name: server
-        image: mtls-server:latest
-        ports:
-        - containerPort: 8443
-          name: https
-        env:
-        - name: SPIRE_AGENT_SOCKET
-          value: "unix:///spire-agent-socket/api.sock"
-        - name: SERVER_ADDRESS
-          value: ":8443"
-        volumeMounts:
-        - name: spire-agent-socket
-          mountPath: /spire-agent-socket
-          readOnly: true
-      volumes:
-      - name: spire-agent-socket
-        hostPath:
-          path: /run/spire/sockets
-          type: Directory
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: mtls-server
-  namespace: default
-spec:
-  selector:
-    app: mtls-server
-  ports:
-  - port: 8443
-    targetPort: 8443
-    name: https
-```
-
-#### Client Job
-
-```yaml
-# client-job.yaml
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: mtls-client
-  namespace: default
-spec:
-  template:
-    metadata:
-      labels:
-        app: mtls-client
-    spec:
-      containers:
-      - name: client
-        image: mtls-client:latest
-        env:
-        - name: SPIRE_AGENT_SOCKET
-          value: "unix:///spire-agent-socket/api.sock"
-        - name: SERVER_URL
-          value: "https://mtls-server:8443"
-        volumeMounts:
-        - name: spire-agent-socket
-          mountPath: /spire-agent-socket
-          readOnly: true
-      volumes:
-      - name: spire-agent-socket
-        hostPath:
-          path: /run/spire/sockets
-          type: Directory
-      restartPolicy: OnFailure
-```
-
-### Deploying to Kubernetes
-
-```bash
-# Build and load images into Minikube
-eval $(minikube docker-env)
-
-# Build server image
-docker build -t mtls-server:latest -f examples/mtls-adapters/server/Dockerfile .
-
-# Build client image
-docker build -t mtls-client:latest -f examples/mtls-adapters/client/Dockerfile .
-
-# Deploy
-kubectl apply -f examples/mtls-adapters/k8s/server-deployment.yaml
-kubectl apply -f examples/mtls-adapters/k8s/client-job.yaml
-
-# View logs
-kubectl logs -l app=mtls-server
-kubectl logs job/mtls-client
-```
+See the **[Kubernetes Deployment Guide](KUBERNETES.md)**.
 
 ## Testing Identity Mismatch
 
@@ -422,65 +321,13 @@ ALLOWED_CLIENT_ID="spiffe://example.org/specific-client" ./bin/mtls-server
 
 ## Troubleshooting
 
-### "Failed to create X509Source: context deadline exceeded"
+Having issues? See the **[Troubleshooting Guide](TROUBLESHOOTING.md)** for detailed solutions to common problems:
 
-**Problem**: Cannot connect to SPIRE agent socket.
-
-**Solution**:
-1. Check SPIRE agent is running
-2. Verify socket path is correct
-3. Check file permissions
-
-```bash
-# Check socket exists
-ls -la /tmp/spire-agent/public/api.sock
-
-# Check SPIRE agent is running
-ps aux | grep spire-agent
-```
-
-### "No identity issued" or "no such registration entry"
-
-**Problem**: Workload not registered in SPIRE.
-
-**Solution**: Register the workload:
-```bash
-spire-server entry create \
-  -spiffeID spiffe://example.org/myservice \
-  -parentID spiffe://example.org/agent \
-  -selector unix:uid:$(id -u)
-
-# Verify registration
-spire-server entry show
-```
-
-### "TLS handshake failed"
-
-**Problem**: mTLS authentication failed.
-
-**Possible causes**:
-1. Client and server not in same trust domain
-2. Server's `ALLOWED_CLIENT_ID` doesn't match client
-3. Client's `EXPECTED_SERVER_ID` doesn't match server
-4. SVID expired (check SPIRE server logs)
-
-**Solution**:
-```bash
-# Check both can fetch SVIDs
-SPIRE_AGENT_SOCKET=unix:///tmp/spire-agent/public/api.sock \
-  spire-agent api fetch x509
-
-# Check authorizer configuration matches
-```
-
-### Connection Refused
-
-**Problem**: Server not reachable.
-
-**Solution**:
-1. Verify server is running: `ps aux | grep mtls-server`
-2. Check server address: `netstat -tlnp | grep 8443`
-3. In Kubernetes: `kubectl get svc mtls-server`
+- Connection issues (socket access, connection refused)
+- SPIRE agent issues (registration, permissions)
+- TLS handshake failures (authentication, certificate validation)
+- Kubernetes-specific issues (pod access, image pull errors)
+- Debugging tips and tools
 
 ## Security Considerations
 
@@ -531,6 +378,11 @@ func handler(w http.ResponseWriter, r *http.Request) {
 - Implement metrics and monitoring
 - Add more complex multi-service examples
 - Configure SPIRE federation for multi-cluster
+
+## Additional Documentation
+
+- **[KUBERNETES.md](KUBERNETES.md)** - Complete Kubernetes deployment guide with manifests, building images, and workload registration
+- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Comprehensive troubleshooting guide for common issues
 
 ## References
 
