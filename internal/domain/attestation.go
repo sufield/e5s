@@ -1,5 +1,13 @@
 package domain
 
+// NOTE: This file (attestation.go) is primarily used by the in-memory implementation.
+// In production deployments using real SPIRE, attestation is handled by SPIRE Agent/Server.
+// However, this file must remain included in production builds because:
+// 1. AttestationService.MatchWorkloadToMapper() provides selector matching domain logic
+// 2. NodeAttestationResult and WorkloadAttestationResult use SelectorSet (required type)
+// 3. These types complete the domain model vocabulary (see doc.go for full domain overview)
+// Production code delegates all attestation to external SPIRE infrastructure.
+
 // NodeAttestationResult represents the result of node attestation
 type NodeAttestationResult struct {
 	node      *Node

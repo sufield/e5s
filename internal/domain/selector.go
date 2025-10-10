@@ -1,5 +1,14 @@
 package domain
 
+// NOTE: This file (selector.go) is primarily used by the in-memory implementation.
+// In production deployments using real SPIRE, selector matching is delegated to SPIRE Server.
+// However, this file must remain included in production builds because:
+// 1. The spire.SPIREClient.Attest() method returns domain.SelectorSet
+// 2. Domain types (Node, IdentityMapper) reference SelectorSet
+// 3. Factory interfaces (AdapterFactory.SeedRegistry) use domain.IdentityMapper
+// While production code paths don't actively use selector matching logic,
+// the types are part of the domain model and adapter interfaces.
+
 import (
 	"fmt"
 	"strings"

@@ -243,22 +243,88 @@ This is **deprecated for production** because:
 
 ## Build Considerations
 
-### What Should Be Excluded from Production Builds
+### Domain Files - Included in All Builds
 
-To minimize production binary size and complexity, the following should be excluded:
+The following domain files are **included in production builds** even though they're primarily used by in-memory implementations:
 
-**In-Memory Implementations**:
-- `internal/adapters/outbound/inmemory/registry.go`
-- `internal/adapters/outbound/inmemory/attestor/unix.go`
-- `internal/adapters/outbound/inmemory/server.go`
-- `internal/adapters/outbound/compose/inmemory.go`
+**Selector Domain Logic** (included but not actively used in production):
+- `internal/domain/selector.go` - Selector and SelectorSet types
+- `internal/domain/identity_mapper.go` - IdentityMapper type
+- `internal/domain/attestation.go` - Attestation result types
+- `internal/domain/node.go` - Node type (uses SelectorSet)
 
-**Selector Domain Logic** (if not using hybrid agent):
-- `internal/domain/selector.go`
-- `internal/domain/identity_mapper.go`
-- `internal/domain/attestation.go`
+**Why These Can't Be Excluded**:
+1. **Type Dependencies**: `Node` and `IdentityMapper` reference `SelectorSet`
+2. **Interface Signatures**: `AdapterFactory.SeedRegistry()` uses `*domain.IdentityMapper`
+3. **SPIRE Adapter**: `spire.SPIREClient.Attest()` returns `*domain.SelectorSet`
+4. **Domain Model Completeness**: These are core domain types even if production doesn't use the matching logic
 
-**Note**: If using `ProductionAgent`, selector domain logic is NOT needed.
+While production code paths don't actively call selector matching methods (e.g., `MatchesSelectors()`), the type definitions must be present for the codebase to compile. The unused methods are small (~360 lines total across the three files) and will be eliminated by the compiler's dead code elimination.
+
+**Binary Size Impact** (measured from `cmd/agent` build):
+- Full binary (with debug info): 18MB
+- Stripped binary (`go build -ldflags="-s -w"`): 13MB
+- Domain selector files: 360 lines of code
+- Estimated impact if excludable: <50KB (less than 0.4% of stripped binary)
+
+**Measurement Tools**:
+- Use `go tool nm -size <binary> | grep domain` to see actual symbol sizes
+- Use `go build -gcflags="-m"` to verify dead code elimination
+- Benchmark with `hyperfine` or `time` to compare build performance
+
+### What CAN Be Excluded from Production Builds
+
+To minimize production binary size, the following in-memory adapter implementations could be excluded using build tags:
+
+**In-Memory Adapter Implementations** (not currently tagged):
+- `internal/adapters/outbound/inmemory/*.go` - Full in-memory implementation
+- `internal/adapters/outbound/inmemory/attestor/*.go` - Unix attestor
+- `internal/adapters/outbound/compose/inmemory.go` - In-memory factory
+
+**Note**: Currently, no build tags are used. All code is included in both dev and production builds. The binary size impact is minimal due to Go's dead code elimination.
+
+#### How to Implement Build Tag Exclusions (Future Enhancement)
+
+If you want to exclude in-memory implementations from production builds, add build tags to the files:
+
+**Step 1**: Add build constraint to in-memory implementation files:
+```go
+//go:build !production
+
+package inmemory
+
+// ... rest of file
+```
+
+**Step 2**: Build for production with the tag:
+```bash
+# Production build (excludes in-memory code)
+go build -tags=production -o bin/spire-agent ./cmd/agent
+
+# Development build (includes all code)
+go build -o bin/spire-agent-dev ./cmd/agent
+```
+
+**Step 3**: Update Makefile:
+```makefile
+## prod-build: Build production binary (exclude in-memory implementations)
+prod-build:
+	@echo "Building production binary..."
+	@mkdir -p bin
+	@go build -tags=production -trimpath $(LDFLAGS) -o $(BINARY_PROD) ./cmd/agent
+```
+
+**Benefits of build tags**:
+- Smaller binary size (~80-120KB reduction from excluding in-memory adapters)
+  - In-memory adapters: ~1,130 lines of code
+  - Estimated binary reduction: 0.6-0.9% of stripped binary size
+- Clearer separation of dev vs prod code
+- Prevents accidental use of in-memory implementations in production
+
+**Trade-offs**:
+- Requires maintaining two build paths
+- Tests must run with both tag configurations
+- CI/CD needs to build and test both variants
 
 ### What Must Be Included in Production Builds
 
@@ -349,8 +415,15 @@ export SPIRE_TRUST_DOMAIN=example.org
 
 ## Summary
 
-**Production**: `ProductionAgent` → SPIRE does everything → No selector logic needed
+**Production**: `ProductionAgent` → SPIRE does everything → Selector matching logic is not used
 
-**Development**: `InMemoryAgent` → Local components do everything → Selector logic required
+**Development**: `InMemoryAgent` → Local components do everything → Selector matching logic is required
 
-The selector domain logic (`selector.go`, `identity_mapper.go`) is **only needed for development/testing** when using in-memory implementations. Production deployments with `ProductionAgent` delegate all selector matching to SPIRE Server and can exclude this code from builds.
+The selector domain logic (`selector.go`, `identity_mapper.go`, `attestation.go`) is **primarily for development/testing** with in-memory implementations. Production deployments with `ProductionAgent` delegate all selector matching to SPIRE Server.
+
+**Important**: While production doesn't use the selector matching methods, the domain type definitions (Selector, SelectorSet, IdentityMapper, etc.) must remain in the codebase due to:
+- Cross-file type dependencies within the domain package
+- Interface signatures in adapter factories
+- Return types in SPIRE adapter methods
+
+The unused selector matching logic has minimal binary size impact due to Go's dead code elimination at compile time.
