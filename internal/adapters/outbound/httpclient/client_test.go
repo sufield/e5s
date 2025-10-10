@@ -307,7 +307,7 @@ func TestSPIFFEHTTPClient_Close(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Second close should also succeed (idempotent)
-	err = client.Close()
+	_ = client.Close()
 	// May return error if source is already closed, that's okay
 }
 

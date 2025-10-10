@@ -279,16 +279,15 @@ func TestCLI_Run_ExpiredIdentityHandling(t *testing.T) {
 	expiredNamespace := domain.NewIdentityCredentialFromComponents(td, "/expired")
 	expiredDoc := domain.NewIdentityDocumentFromComponents(
 		expiredNamespace,
-		domain.IdentityDocumentTypeX509,
 		nil,                      // cert
 		nil,                      // privateKey
 		nil,                      // chain
 		time.Unix(1000000000, 0), // Expired (Jan 9, 2001)
 	)
 	expiredIdentity := &ports.Identity{
-		Name:              "expired",
+		Name:               "expired",
 		IdentityCredential: expiredNamespace,
-		IdentityDocument:  expiredDoc,
+		IdentityDocument:   expiredDoc,
 	}
 
 	// Attempt message exchange with expired identity should fail

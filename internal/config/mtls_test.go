@@ -21,7 +21,7 @@ http:
   port: 9443
   timeout: 60s
   authentication:
-    policy: trust-domain
+    peer_verification: trust-domain
     trust_domain: example.org
 
 spire:
@@ -39,7 +39,7 @@ spire:
 	assert.True(t, cfg.HTTP.Enabled)
 	assert.Equal(t, 9443, cfg.HTTP.Port)
 	assert.Equal(t, 60*time.Second, cfg.HTTP.Timeout)
-	assert.Equal(t, "trust-domain", cfg.HTTP.Auth.Policy)
+	assert.Equal(t, "trust-domain", cfg.HTTP.Auth.PeerVerification)
 	assert.Equal(t, "example.org", cfg.HTTP.Auth.TrustDomain)
 	assert.Equal(t, "unix:///custom/path/api.sock", cfg.SPIRE.SocketPath)
 	assert.Equal(t, "example.org", cfg.SPIRE.TrustDomain)
@@ -75,7 +75,7 @@ func TestLoadFromEnv(t *testing.T) {
 	origSocket := os.Getenv("SPIRE_AGENT_SOCKET")
 	origTrust := os.Getenv("SPIRE_TRUST_DOMAIN")
 	origAddress := os.Getenv("HTTP_ADDRESS")
-	origPolicy := os.Getenv("AUTH_POLICY")
+	origPeerVerification := os.Getenv("AUTH_PEER_VERIFICATION")
 	origAllowedID := os.Getenv("ALLOWED_CLIENT_ID")
 
 	// Clean up env vars after test
@@ -83,7 +83,7 @@ func TestLoadFromEnv(t *testing.T) {
 		os.Setenv("SPIRE_AGENT_SOCKET", origSocket)
 		os.Setenv("SPIRE_TRUST_DOMAIN", origTrust)
 		os.Setenv("HTTP_ADDRESS", origAddress)
-		os.Setenv("AUTH_POLICY", origPolicy)
+		os.Setenv("AUTH_PEER_VERIFICATION", origPeerVerification)
 		os.Setenv("ALLOWED_CLIENT_ID", origAllowedID)
 	}()
 
@@ -91,16 +91,17 @@ func TestLoadFromEnv(t *testing.T) {
 	os.Setenv("SPIRE_AGENT_SOCKET", "unix:///test/socket")
 	os.Setenv("SPIRE_TRUST_DOMAIN", "test.org")
 	os.Setenv("HTTP_ADDRESS", ":9999")
-	os.Setenv("AUTH_POLICY", "specific-id")
+	os.Setenv("AUTH_PEER_VERIFICATION", "specific-id")
 	os.Setenv("ALLOWED_CLIENT_ID", "spiffe://test.org/client")
 
-	cfg := LoadFromEnv()
+	cfg, err := LoadFromEnv()
+	require.NoError(t, err)
 	require.NotNil(t, cfg)
 
 	assert.Equal(t, "unix:///test/socket", cfg.SPIRE.SocketPath)
 	assert.Equal(t, "test.org", cfg.SPIRE.TrustDomain)
 	assert.Equal(t, ":9999", cfg.HTTP.Address)
-	assert.Equal(t, "specific-id", cfg.HTTP.Auth.Policy)
+	assert.Equal(t, "specific-id", cfg.HTTP.Auth.PeerVerification)
 	assert.Equal(t, "spiffe://test.org/client", cfg.HTTP.Auth.AllowedID)
 }
 
@@ -112,7 +113,7 @@ func TestEnvOverrides(t *testing.T) {
 http:
   address: ":8443"
   authentication:
-    policy: any
+    peer_verification: any
 
 spire:
   socket_path: unix:///default/api.sock
@@ -144,7 +145,7 @@ func TestApplyDefaults(t *testing.T) {
 	assert.Equal(t, "example.org", cfg.SPIRE.TrustDomain)
 	assert.Equal(t, ":8443", cfg.HTTP.Address)
 	assert.Equal(t, 30*time.Second, cfg.HTTP.Timeout)
-	assert.Equal(t, "any", cfg.HTTP.Auth.Policy)
+	assert.Equal(t, "any", cfg.HTTP.Auth.PeerVerification)
 }
 
 func TestApplyDefaults_PortToAddress(t *testing.T) {
@@ -164,7 +165,7 @@ func TestValidate_Valid(t *testing.T) {
 		cfg  *MTLSConfig
 	}{
 		{
-			name: "any policy",
+			name: "any peer verification",
 			cfg: &MTLSConfig{
 				SPIRE: SPIREConfig{
 					SocketPath:  "unix:///test/socket",
@@ -172,13 +173,13 @@ func TestValidate_Valid(t *testing.T) {
 				},
 				HTTP: HTTPConfig{
 					Auth: AuthConfig{
-						Policy: "any",
+						PeerVerification: "any",
 					},
 				},
 			},
 		},
 		{
-			name: "trust-domain policy",
+			name: "trust-domain peer verification",
 			cfg: &MTLSConfig{
 				SPIRE: SPIREConfig{
 					SocketPath:  "unix:///test/socket",
@@ -186,14 +187,14 @@ func TestValidate_Valid(t *testing.T) {
 				},
 				HTTP: HTTPConfig{
 					Auth: AuthConfig{
-						Policy:      "trust-domain",
-						TrustDomain: "test.org",
+						PeerVerification: "trust-domain",
+						TrustDomain:      "test.org",
 					},
 				},
 			},
 		},
 		{
-			name: "specific-id policy",
+			name: "specific-id peer verification",
 			cfg: &MTLSConfig{
 				SPIRE: SPIREConfig{
 					SocketPath:  "unix:///test/socket",
@@ -201,14 +202,14 @@ func TestValidate_Valid(t *testing.T) {
 				},
 				HTTP: HTTPConfig{
 					Auth: AuthConfig{
-						Policy:    "specific-id",
-						AllowedID: "spiffe://test.org/client",
+						PeerVerification: "specific-id",
+						AllowedID:        "spiffe://test.org/client",
 					},
 				},
 			},
 		},
 		{
-			name: "one-of policy",
+			name: "one-of peer verification",
 			cfg: &MTLSConfig{
 				SPIRE: SPIREConfig{
 					SocketPath:  "unix:///test/socket",
@@ -216,8 +217,8 @@ func TestValidate_Valid(t *testing.T) {
 				},
 				HTTP: HTTPConfig{
 					Auth: AuthConfig{
-						Policy:     "one-of",
-						AllowedIDs: []string{"spiffe://test.org/client1", "spiffe://test.org/client2"},
+						PeerVerification: "one-of",
+						AllowedIDs:       []string{"spiffe://test.org/client1", "spiffe://test.org/client2"},
 					},
 				},
 			},
@@ -257,7 +258,7 @@ func TestValidate_Invalid(t *testing.T) {
 			expectedErr: "trust_domain is required",
 		},
 		{
-			name: "invalid policy",
+			name: "invalid peer verification",
 			cfg: &MTLSConfig{
 				SPIRE: SPIREConfig{
 					SocketPath:  "unix:///test/socket",
@@ -265,11 +266,11 @@ func TestValidate_Invalid(t *testing.T) {
 				},
 				HTTP: HTTPConfig{
 					Auth: AuthConfig{
-						Policy: "invalid-policy",
+						PeerVerification: "invalid-policy",
 					},
 				},
 			},
-			expectedErr: "invalid auth policy",
+			expectedErr: "invalid peer_verification",
 		},
 		{
 			name: "specific-id without allowed_id",
@@ -280,7 +281,7 @@ func TestValidate_Invalid(t *testing.T) {
 				},
 				HTTP: HTTPConfig{
 					Auth: AuthConfig{
-						Policy: "specific-id",
+						PeerVerification: "specific-id",
 					},
 				},
 			},
@@ -295,7 +296,7 @@ func TestValidate_Invalid(t *testing.T) {
 				},
 				HTTP: HTTPConfig{
 					Auth: AuthConfig{
-						Policy: "one-of",
+						PeerVerification: "one-of",
 					},
 				},
 			},
@@ -332,7 +333,8 @@ func TestHTTPEnabledEnvVar(t *testing.T) {
 
 			os.Setenv("HTTP_ENABLED", tt.value)
 
-			cfg := LoadFromEnv()
+			cfg, err := LoadFromEnv()
+			require.NoError(t, err)
 			assert.Equal(t, tt.expected, cfg.HTTP.Enabled)
 		})
 	}

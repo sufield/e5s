@@ -1,5 +1,14 @@
 package domain_test
 
+// TrustDomain Invariant Tests
+//
+// These tests verify domain invariants for the TrustDomain value object.
+// Invariants are properties that must always hold true, regardless of input.
+//
+// Run these tests with:
+//
+//	go test ./internal/domain/... -v -run TestTrustDomain_Invariant
+
 import (
 	"testing"
 
@@ -7,31 +16,20 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// TestTrustDomain_Invariant_NameNeverEmpty tests the invariant:
-// "Name is never empty after construction"
-func TestTrustDomain_Invariant_NameNeverEmpty(t *testing.T) {
+// TestTrustDomain_Invariant_StringNeverEmpty tests the invariants:
+// - "Name is never empty after construction"
+// - "String() never returns empty string for valid TrustDomain"
+func TestTrustDomain_Invariant_StringNeverEmpty(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name           string
-		inputName      string
-		expectNonEmpty bool
+		name      string
+		inputName string
 	}{
-		{
-			name:           "valid trust domain name",
-			inputName:      "example.org",
-			expectNonEmpty: true,
-		},
-		{
-			name:           "valid trust domain with subdomain",
-			inputName:      "prod.example.org",
-			expectNonEmpty: true,
-		},
-		{
-			name:           "single character name",
-			inputName:      "x",
-			expectNonEmpty: true,
-		},
+		{"standard domain", "example.org"},
+		{"subdomain", "prod.example.org"},
+		{"single char", "x"},
+		{"with dash", "my-domain.com"},
 	}
 
 	for _, tt := range tests {
@@ -41,52 +39,43 @@ func TestTrustDomain_Invariant_NameNeverEmpty(t *testing.T) {
 			// Act
 			td := domain.NewTrustDomainFromName(tt.inputName)
 
-			// Assert invariant: name is never empty
+			// Assert invariant: String() never returns empty
 			assert.NotNil(t, td)
-			assert.NotEmpty(t, td.String(), "Invariant violated: TrustDomain.String() returned empty string")
-			assert.Equal(t, tt.inputName, td.String())
+			str := td.String()
+			assert.NotEmpty(t, str, "Invariant violated: String() returned empty string")
+			assert.Greater(t, len(str), 0, "Invariant violated: String() length must be > 0")
+			assert.Equal(t, tt.inputName, str)
 		})
 	}
 }
 
-// TestTrustDomain_Invariant_EqualsNilSafe tests the invariant:
-// "Equals() returns false for nil input, never panics"
-func TestTrustDomain_Invariant_EqualsNilSafe(t *testing.T) {
-	t.Parallel()
-
-	// Arrange
-	td := domain.NewTrustDomainFromName("example.org")
-
-	// Act & Assert invariant: Equals(nil) returns false, never panics
-	assert.NotPanics(t, func() {
-		result := td.Equals(nil)
-		assert.False(t, result, "Invariant violated: Equals(nil) should return false")
-	})
-}
-
-// TestTrustDomain_Invariant_EqualsReflexive tests the invariant:
-// "Equals() is reflexive: td.Equals(td) == true"
-func TestTrustDomain_Invariant_EqualsReflexive(t *testing.T) {
+// TestTrustDomain_Invariant_EqualsNilSafeAndReflexive tests the invariants:
+// - "Equals() returns false for nil input, never panics"
+// - "Equals() is reflexive: td.Equals(td) == true"
+func TestTrustDomain_Invariant_EqualsNilSafeAndReflexive(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name      string
-		inputName string
+		name string
+		td   *domain.TrustDomain
 	}{
-		{"simple name", "example.org"},
-		{"subdomain", "prod.example.org"},
-		{"single char", "x"},
+		{"simple name", domain.NewTrustDomainFromName("example.org")},
+		{"subdomain", domain.NewTrustDomainFromName("prod.example.org")},
+		{"single char", domain.NewTrustDomainFromName("x")},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			// Arrange
-			td := domain.NewTrustDomainFromName(tt.inputName)
+			// Assert invariant: Equals(nil) returns false, never panics
+			assert.NotPanics(t, func() {
+				result := tt.td.Equals(nil)
+				assert.False(t, result, "Invariant violated: Equals(nil) should return false")
+			})
 
 			// Assert invariant: reflexive property
-			assert.True(t, td.Equals(td), "Invariant violated: Equals() is not reflexive")
+			assert.True(t, tt.td.Equals(tt.td), "Invariant violated: Equals() is not reflexive")
 		})
 	}
 }
@@ -139,32 +128,35 @@ func TestTrustDomain_Invariant_EqualsTransitive(t *testing.T) {
 	assert.True(t, td1.Equals(td3), "Invariant violated: Equals() is not transitive")
 }
 
-// TestTrustDomain_Invariant_StringNeverEmpty tests the invariant:
-// "String() never returns empty string for valid TrustDomain"
-func TestTrustDomain_Invariant_StringNeverEmpty(t *testing.T) {
+// TestTrustDomain_Invariant_IsZero tests the invariants:
+// - "IsZero() returns true for nil or empty trust domain, false otherwise"
+// - "IsZero() never panics, even on nil receiver"
+func TestTrustDomain_Invariant_IsZero(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name      string
-		inputName string
+		name       string
+		td         *domain.TrustDomain
+		expectZero bool
 	}{
-		{"standard domain", "example.org"},
-		{"subdomain", "prod.example.org"},
-		{"single char", "x"},
-		{"with dash", "my-domain.com"},
+		{"nil trust domain", nil, true},
+		{"empty name", domain.NewTrustDomainFromName(""), true},
+		{"valid domain", domain.NewTrustDomainFromName("example.org"), false},
+		{"single char", domain.NewTrustDomainFromName("x"), false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			// Arrange
-			td := domain.NewTrustDomainFromName(tt.inputName)
+			// Assert invariant: IsZero() never panics
+			assert.NotPanics(t, func() {
+				result := tt.td.IsZero()
 
-			// Assert invariant: String() never returns empty
-			str := td.String()
-			assert.NotEmpty(t, str, "Invariant violated: String() returned empty string")
-			assert.Greater(t, len(str), 0, "Invariant violated: String() length must be > 0")
+				// Assert invariant: IsZero() correctly identifies uninitialized state
+				assert.Equal(t, tt.expectZero, result,
+					"Invariant violated: IsZero() returned unexpected value")
+			}, "Invariant violated: IsZero() panicked")
 		})
 	}
 }

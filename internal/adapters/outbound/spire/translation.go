@@ -28,7 +28,6 @@ func TranslateX509SVIDToIdentityDocument(svid *x509svid.SVID) (*domain.IdentityD
 	// Create identity document from SVID components
 	return domain.NewIdentityDocumentFromComponents(
 		identityCredential,
-		domain.IdentityDocumentTypeX509,
 		svid.Certificates[0], // Leaf certificate
 		svid.PrivateKey,
 		svid.Certificates, // Full chain including leaf

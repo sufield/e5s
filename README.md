@@ -392,16 +392,18 @@ type IdentityCredential struct {
 ### IdentityDocument (SVID)
 
 ```go
-// IdentityDocument represents an X.509 SVID or JWT SVID
+// IdentityDocument represents an X.509 SVID
+// Note: This implementation is X.509-only. JWT SVIDs are not supported.
 type IdentityDocument struct {
     identityCredential *IdentityCredential
-    documentType      IdentityDocumentType
-    certificate       *x509.Certificate  // X.509 only
-    privateKey        *rsa.PrivateKey    // X.509 only
-    certificateChain  []*x509.Certificate
-    expiresAt         time.Time
+    certificate        *x509.Certificate
+    privateKey         *rsa.PrivateKey
+    certificateChain   []*x509.Certificate
+    expiresAt          time.Time
 }
 ```
+
+**Why X.509-only?** Focus on simplicity and the primary use case (mTLS). JWT can be added via adapters if needed without changing the domain model.
 
 ### Selector
 

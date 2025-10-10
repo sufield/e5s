@@ -18,8 +18,8 @@ func TestIdentityDocumentValidator_Validate(t *testing.T) {
 	validator := inmemory.NewIdentityDocumentValidator(nil)
 	td := domain.NewTrustDomainFromName("example.org")
 	expected := domain.NewIdentityCredentialFromComponents(td, "/workload")
-	validDoc := domain.NewIdentityDocumentFromComponents(expected, domain.IdentityDocumentTypeX509, nil, nil, nil, time.Now().Add(1*time.Hour))
-	expiredDoc := domain.NewIdentityDocumentFromComponents(expected, domain.IdentityDocumentTypeX509, nil, nil, nil, time.Now().Add(-1*time.Hour))
+	validDoc := domain.NewIdentityDocumentFromComponents(expected, nil, nil, nil, time.Now().Add(1*time.Hour))
+	expiredDoc := domain.NewIdentityDocumentFromComponents(expected, nil, nil, nil, time.Now().Add(-1*time.Hour))
 
 	// Valid
 	err := validator.Validate(ctx, validDoc, expected)

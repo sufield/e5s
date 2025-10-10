@@ -1,6 +1,13 @@
 package domain_test
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"math/big"
+	"net/url"
 	"testing"
 	"time"
 
@@ -22,7 +29,6 @@ func TestIdentityDocument_Invariant_NamespaceNeverNil(t *testing.T) {
 	// Act
 	doc := domain.NewIdentityDocumentFromComponents(
 		credential,
-		domain.IdentityDocumentTypeX509,
 		nil, // cert
 		nil, // privateKey
 		nil, // chain
@@ -51,7 +57,6 @@ func TestIdentityDocument_Invariant_IsExpiredMonotonic(t *testing.T) {
 
 	doc := domain.NewIdentityDocumentFromComponents(
 		credential,
-		domain.IdentityDocumentTypeX509,
 		nil, nil, nil,
 		expiresAt,
 	)
@@ -98,7 +103,6 @@ func TestIdentityDocument_Invariant_IsValidEqualsNotExpired(t *testing.T) {
 			credential := domain.NewIdentityCredentialFromComponents(td, "/workload")
 			doc := domain.NewIdentityDocumentFromComponents(
 				credential,
-				domain.IdentityDocumentTypeX509,
 				nil, nil, nil,
 				tt.expiresAt,
 			)
@@ -135,7 +139,6 @@ func TestIdentityDocument_Invariant_ExpirationTimeCheck(t *testing.T) {
 			credential := domain.NewIdentityCredentialFromComponents(td, "/workload")
 			doc := domain.NewIdentityDocumentFromComponents(
 				credential,
-				domain.IdentityDocumentTypeX509,
 				nil, nil, nil,
 				tt.expiresAt,
 			)
@@ -145,43 +148,6 @@ func TestIdentityDocument_Invariant_ExpirationTimeCheck(t *testing.T) {
 			assert.Equal(t, currentlyExpired, doc.IsExpired(),
 				"Invariant violated: IsExpired() must match time.Now().After(expiresAt)")
 			assert.Equal(t, tt.expectedExpired, doc.IsExpired())
-		})
-	}
-}
-
-// TestIdentityDocument_Invariant_TypePreservation tests the invariant:
-// "Document type is preserved after construction"
-func TestIdentityDocument_Invariant_TypePreservation(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name    string
-		docType domain.IdentityDocumentType
-	}{
-		{"X509 type", domain.IdentityDocumentTypeX509},
-		{"JWT type", domain.IdentityDocumentTypeJWT},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			// Arrange
-			td := domain.NewTrustDomainFromName("example.org")
-			credential := domain.NewIdentityCredentialFromComponents(td, "/workload")
-			expiresAt := time.Unix(2000000000, 0) // May 18, 2033 - fixed future time
-
-			// Act
-			doc := domain.NewIdentityDocumentFromComponents(
-				credential,
-				tt.docType,
-				nil, nil, nil,
-				expiresAt,
-			)
-
-			// Assert invariant: type is preserved
-			assert.Equal(t, tt.docType, doc.Type(),
-				"Invariant violated: document type was not preserved")
 		})
 	}
 }
@@ -198,62 +164,124 @@ func TestIdentityDocument_Invariant_Immutability(t *testing.T) {
 
 	doc := domain.NewIdentityDocumentFromComponents(
 		credential,
-		domain.IdentityDocumentTypeX509,
 		nil, nil, nil,
 		expiresAt,
 	)
 
 	// Store initial values
 	initialNamespace := doc.IdentityCredential()
-	initialType := doc.Type()
 	initialExpiresAt := doc.ExpiresAt()
 
 	// Call getters multiple times (no time.Sleep needed - using fixed time)
 	// If document were mutable, values could change between calls
 	secondNamespace := doc.IdentityCredential()
-	secondType := doc.Type()
 	secondExpiresAt := doc.ExpiresAt()
 
 	// Assert invariant: all fields unchanged (immutable)
 	assert.Equal(t, initialNamespace, secondNamespace,
 		"Invariant violated: identityCredential was modified")
-	assert.Equal(t, initialType, secondType,
-		"Invariant violated: type was modified")
 	assert.Equal(t, initialExpiresAt, secondExpiresAt,
 		"Invariant violated: expiresAt was modified")
 
 	// Verify exact values match construction parameters
 	assert.Equal(t, credential, doc.IdentityCredential())
-	assert.Equal(t, domain.IdentityDocumentTypeX509, doc.Type())
 	assert.Equal(t, expiresAt, doc.ExpiresAt())
 }
 
-// TestIdentityDocument_Invariant_JWTHasNilCrypto tests the invariant:
-// "For JWT documents, cert/privateKey/chain are nil"
-func TestIdentityDocument_Invariant_JWTHasNilCrypto(t *testing.T) {
+// TestIdentityDocument_Invariant_X509ComponentsNonNil tests the invariant:
+// "Certificate, PrivateKey, and Chain are non-nil for valid X.509 documents"
+func TestIdentityDocument_Invariant_X509ComponentsNonNil(t *testing.T) {
 	t.Parallel()
 
-	// Arrange - Use fixed time for determinism
+	// Arrange - Create valid X.509 document with real certificate components
 	td := domain.NewTrustDomainFromName("example.org")
 	credential := domain.NewIdentityCredentialFromComponents(td, "/workload")
 	expiresAt := time.Unix(2000000000, 0) // May 18, 2033 - fixed future time
 
-	// Act - Create JWT document
+	// Create a mock certificate for testing X.509 components
+	// Note: In real usage, this would come from SPIRE or in-memory provider
+	mockCert := generateMockCertificate(t)
+	mockPrivateKey := generateMockPrivateKey(t)
+	mockChain := []*x509.Certificate{mockCert}
+
+	// Act - Create document with X.509 components
 	doc := domain.NewIdentityDocumentFromComponents(
 		credential,
-		domain.IdentityDocumentTypeJWT,
-		nil, // cert should be nil for JWT
-		nil, // privateKey should be nil for JWT
-		nil, // chain should be nil for JWT
+		mockCert,
+		mockPrivateKey,
+		mockChain,
 		expiresAt,
 	)
 
-	// Assert invariant: JWT documents have nil crypto material
-	assert.Nil(t, doc.Certificate(),
-		"Invariant violated: JWT document should have nil Certificate")
-	assert.Nil(t, doc.PrivateKey(),
-		"Invariant violated: JWT document should have nil PrivateKey")
-	assert.Nil(t, doc.Chain(),
-		"Invariant violated: JWT document should have nil Chain")
-	assert.Equal(t, domain.IdentityDocumentTypeJWT, doc.Type())
+	// Assert invariant: All X.509 components are non-nil
+	assert.NotNil(t, doc.Certificate(),
+		"Invariant violated: Certificate() returned nil for X.509 document")
+	assert.NotNil(t, doc.PrivateKey(),
+		"Invariant violated: PrivateKey() returned nil for X.509 document")
+	assert.NotNil(t, doc.Chain(),
+		"Invariant violated: Chain() returned nil for X.509 document")
+	assert.NotEmpty(t, doc.Chain(),
+		"Invariant violated: Chain() returned empty slice for X.509 document")
+
+	// Verify exact components match construction parameters
+	assert.Equal(t, mockCert, doc.Certificate())
+	assert.Equal(t, mockPrivateKey, doc.PrivateKey())
+	assert.Equal(t, mockChain, doc.Chain())
+
+	// Verify certificate contains SPIFFE ID in URI SAN (more authentic)
+	assert.NotEmpty(t, doc.Certificate().URIs,
+		"Certificate should contain URI SAN for SPIFFE ID")
+	if len(doc.Certificate().URIs) > 0 {
+		assert.Equal(t, "spiffe", doc.Certificate().URIs[0].Scheme,
+			"URI SAN should use spiffe:// scheme")
+		assert.Contains(t, doc.Certificate().URIs[0].String(), "example.org",
+			"URI SAN should contain trust domain")
+	}
+}
+
+// Helper functions for generating mock X.509 components for testing
+
+// generateMockPrivateKey creates a mock ECDSA private key for testing.
+// Returns *ecdsa.PrivateKey which implements crypto.PrivateKey interface.
+func generateMockPrivateKey(t *testing.T) *ecdsa.PrivateKey {
+	t.Helper()
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err, "Failed to generate mock private key")
+	return privateKey
+}
+
+// generateMockCertificate creates a mock X.509 certificate for testing.
+// The certificate includes a SPIFFE ID (spiffe://example.org/workload) in the URI SAN extension,
+// making it more authentic to real SPIRE-issued X.509-SVIDs.
+// The private key used is crypto.PrivateKey (*ecdsa.PrivateKey).
+func generateMockCertificate(t *testing.T) *x509.Certificate {
+	t.Helper()
+
+	// Create a self-signed certificate for testing with SPIFFE ID
+	privateKey := generateMockPrivateKey(t) // crypto.PrivateKey (*ecdsa.PrivateKey)
+
+	// Create SPIFFE ID URI for Subject Alternative Name
+	spiffeID, err := url.Parse("spiffe://example.org/workload")
+	require.NoError(t, err, "Failed to parse SPIFFE ID")
+
+	template := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject: pkix.Name{
+			CommonName: "test-workload",
+		},
+		NotBefore:             time.Unix(1000000000, 0), // January 9, 2001
+		NotAfter:              time.Unix(2000000000, 0), // May 18, 2033
+		KeyUsage:              x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		BasicConstraintsValid: true,
+		URIs:                  []*url.URL{spiffeID}, // SPIFFE ID as URI SAN
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, template, template, &privateKey.PublicKey, privateKey)
+	require.NoError(t, err, "Failed to create mock certificate")
+
+	cert, err := x509.ParseCertificate(certDER)
+	require.NoError(t, err, "Failed to parse mock certificate")
+
+	return cert
 }

@@ -4,40 +4,11 @@ package domain
 // In production deployments using real SPIRE, attestation is handled by SPIRE Agent/Server.
 // However, this file must remain included in production builds because:
 // 1. AttestationService.MatchWorkloadToMapper() provides selector matching domain logic
-// 2. NodeAttestationResult and WorkloadAttestationResult use SelectorSet (required type)
+// 2. WorkloadAttestationResult uses SelectorSet (required type)
 // 3. These types complete the domain model vocabulary (see doc.go for full domain overview)
 // Production code delegates all attestation to external SPIRE infrastructure.
-
-// NodeAttestationResult represents the result of node attestation
-type NodeAttestationResult struct {
-	node      *Node
-	selectors *SelectorSet
-	attested  bool
-}
-
-// NewNodeAttestationResult creates a new node attestation result
-func NewNodeAttestationResult(node *Node, selectors *SelectorSet, attested bool) *NodeAttestationResult {
-	return &NodeAttestationResult{
-		node:      node,
-		selectors: selectors,
-		attested:  attested,
-	}
-}
-
-// Node returns the attested node
-func (r *NodeAttestationResult) Node() *Node {
-	return r.node
-}
-
-// Selectors returns the node selectors
-func (r *NodeAttestationResult) Selectors() *SelectorSet {
-	return r.selectors
-}
-
-// Attested returns whether attestation succeeded
-func (r *NodeAttestationResult) Attested() bool {
-	return r.attested
-}
+//
+// NOTE: NodeAttestationResult has been moved to node_attestation.go with !production build tag.
 
 // WorkloadAttestationResult represents the result of workload attestation
 type WorkloadAttestationResult struct {

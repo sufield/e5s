@@ -5,15 +5,7 @@ import (
 	"time"
 )
 
-// IdentityDocumentType represents the format of the identity document
-type IdentityDocumentType string
-
-const (
-	IdentityDocumentTypeX509 IdentityDocumentType = "x509"
-	IdentityDocumentTypeJWT  IdentityDocumentType = "jwt"
-)
-
-// IdentityDocument represents a verifiable identity document for a workload
+// IdentityDocument represents an X.509-based verifiable identity document (SVID) for a workload.
 // This is a minimal domain type that holds document data without crypto/parsing logic.
 // Creation and validation delegated to IdentityDocumentProvider port (implemented in adapters).
 //
@@ -21,40 +13,34 @@ const (
 // (ParseX509SVID, validation, chain-of-trust) by moving that to an adapter.
 // The domain only models the concept of an identity document with expiration.
 //
-// For X.509 identity documents, the certificate/key/chain are stored for use by adapters
-// (e.g., TLS handshakes, message signing). Domain doesn't validate these directly.
+// The certificate/key/chain are stored for use by adapters (e.g., TLS handshakes,
+// message signing). Domain doesn't validate these directly.
 //
-// Naming: "IdentityDocument" is more inclusive than "IdentityCertificate" (which implies
-// X.509 bias) - it encompasses both X.509 and JWT formats while remaining self-explanatory
-// and domain-focused, especially for collaborators unfamiliar with SPIFFE terminology.
+// Note: This implementation is X.509-only. JWT SVIDs are not supported.
 type IdentityDocument struct {
-	identityCredential    *IdentityCredential
-	identityDocumentType IdentityDocumentType
-	cert                 *x509.Certificate // X.509 only - stored for adapter use
-	privateKey           interface{}       // X.509 only - crypto.Signer or crypto.PrivateKey
-	chain                []*x509.Certificate
-	expiresAt            time.Time
+	identityCredential *IdentityCredential
+	cert               *x509.Certificate
+	privateKey         interface{} // crypto.Signer or crypto.PrivateKey
+	chain              []*x509.Certificate
+	expiresAt          time.Time
 }
 
-// NewIdentityDocumentFromComponents creates an identity document from already-validated components.
-// This is used by the IdentityDocumentProvider adapter after document/key validation.
-// For X.509: cert, privateKey, chain must be provided; expiresAt extracted from cert
-// For JWT: cert/privateKey/chain are nil; expiresAt from JWT claims
+// NewIdentityDocumentFromComponents creates an X.509 identity document from already-validated components.
+// This is used by the IdentityDocumentProvider adapter after certificate/key validation.
+// The cert, privateKey, and chain must be provided; expiresAt is extracted from cert.
 func NewIdentityDocumentFromComponents(
 	identityCredential *IdentityCredential,
-	identityDocumentType IdentityDocumentType,
 	cert *x509.Certificate,
 	privateKey interface{},
 	chain []*x509.Certificate,
 	expiresAt time.Time,
 ) *IdentityDocument {
 	return &IdentityDocument{
-		identityCredential:    identityCredential,
-		identityDocumentType: identityDocumentType,
-		cert:                 cert,
-		privateKey:           privateKey,
-		chain:                chain,
-		expiresAt:            expiresAt,
+		identityCredential: identityCredential,
+		cert:               cert,
+		privateKey:         privateKey,
+		chain:              chain,
+		expiresAt:          expiresAt,
 	}
 }
 
@@ -63,22 +49,17 @@ func (id *IdentityDocument) IdentityCredential() *IdentityCredential {
 	return id.identityCredential
 }
 
-// Type returns the identity document type (X.509 or JWT)
-func (id *IdentityDocument) Type() IdentityDocumentType {
-	return id.identityDocumentType
-}
-
-// Certificate returns the X.509 certificate (nil for JWT identity documents)
+// Certificate returns the X.509 certificate
 func (id *IdentityDocument) Certificate() *x509.Certificate {
 	return id.cert
 }
 
-// PrivateKey returns the private key (nil for JWT identity documents)
+// PrivateKey returns the private key
 func (id *IdentityDocument) PrivateKey() interface{} {
 	return id.privateKey
 }
 
-// Chain returns the certificate chain (nil for JWT identity documents)
+// Chain returns the certificate chain
 func (id *IdentityDocument) Chain() []*x509.Certificate {
 	return id.chain
 }

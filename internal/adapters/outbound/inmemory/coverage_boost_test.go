@@ -341,7 +341,6 @@ func TestIdentityDocumentValidator_Validate_NilExpectedID(t *testing.T) {
 	credential := domain.NewIdentityCredentialFromComponents(td, "/workload")
 	doc := domain.NewIdentityDocumentFromComponents(
 		credential,
-		domain.IdentityDocumentTypeX509,
 		server.GetCA(),
 		nil, nil,
 		time.Unix(2000000000, 0), // Future expiry
@@ -368,7 +367,6 @@ func TestIdentityDocumentValidator_Validate_ExpiredDocument(t *testing.T) {
 	// Create expired document
 	doc := domain.NewIdentityDocumentFromComponents(
 		credential,
-		domain.IdentityDocumentTypeX509,
 		nil, nil, nil,
 		time.Unix(1000000000, 0), // Past expiry
 	)
@@ -395,7 +393,6 @@ func TestIdentityDocumentValidator_Validate_MismatchedNamespace(t *testing.T) {
 	// Create document with namespace1
 	doc := domain.NewIdentityDocumentFromComponents(
 		namespace1,
-		domain.IdentityDocumentTypeX509,
 		nil, nil, nil,
 		time.Unix(2000000000, 0), // Future expiry
 	)
@@ -430,7 +427,6 @@ func TestIdentityDocumentValidator_Validate_Success(t *testing.T) {
 	// Create valid document
 	doc := domain.NewIdentityDocumentFromComponents(
 		credential,
-		domain.IdentityDocumentTypeX509,
 		nil, nil, nil,
 		time.Unix(2000000000, 0), // Future expiry
 	)

@@ -7,8 +7,8 @@ import (
 // Identity represents a verified identity
 type Identity struct {
 	IdentityCredential *domain.IdentityCredential // Identity format (URI-formatted identifier)
-	Name              string                    // Human-readable name
-	IdentityDocument  *domain.IdentityDocument  // X.509 or JWT identity document
+	Name               string                     // Human-readable name
+	IdentityDocument   *domain.IdentityDocument   // X.509 or JWT identity document
 }
 
 // ProcessIdentity represents process-level identity attributes for attestation (maps to domain.Workload).

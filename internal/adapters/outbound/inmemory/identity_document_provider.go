@@ -92,7 +92,6 @@ func (p *InMemoryIdentityDocumentProvider) CreateX509IdentityDocument(
 	// Create domain identity certificate from validated components
 	return domain.NewIdentityDocumentFromComponents(
 		identityCredential,
-		domain.IdentityDocumentTypeX509,
 		cert,
 		privateKey,
 		[]*x509.Certificate{caCertX509},
@@ -120,24 +119,22 @@ func (p *InMemoryIdentityDocumentProvider) ValidateIdentityDocument(
 		return fmt.Errorf("%w: expected %s, got %s", domain.ErrIdentityDocumentMismatch, expectedID.String(), cert.IdentityCredential().String())
 	}
 
-	// For X.509, check certificate validity window
-	if cert.Type() == domain.IdentityDocumentTypeX509 {
-		x509Cert := cert.Certificate()
-		if x509Cert == nil {
-			return fmt.Errorf("%w: X.509 identity certificate missing certificate", domain.ErrIdentityDocumentInvalid)
-		}
-
-		now := time.Now()
-		if now.Before(x509Cert.NotBefore) || now.After(x509Cert.NotAfter) {
-			return domain.ErrIdentityDocumentExpired
-		}
-
-		// In real implementation with SDK:
-		// - Verify certificate chain with trust bundle
-		// - Check signature validity
-		// - Validate identity credential in certificate URIs
-		// Example: x509svid.Verify(cert, chain, bundle)
+	// Check X.509 certificate validity window
+	x509Cert := cert.Certificate()
+	if x509Cert == nil {
+		return fmt.Errorf("%w: X.509 identity certificate missing certificate", domain.ErrIdentityDocumentInvalid)
 	}
+
+	now := time.Now()
+	if now.Before(x509Cert.NotBefore) || now.After(x509Cert.NotAfter) {
+		return domain.ErrIdentityDocumentExpired
+	}
+
+	// In real implementation with SDK:
+	// - Verify certificate chain with trust bundle
+	// - Check signature validity
+	// - Validate identity credential in certificate URIs
+	// Example: x509svid.Verify(cert, chain, bundle)
 
 	return nil
 }

@@ -1,19 +1,25 @@
+//go:build !production
+
 package domain
+
+// NOTE: This file (node.go) is ONLY used by the in-memory implementation.
+// In production deployments using real SPIRE, node attestation is handled by SPIRE Server.
+// This file is excluded from production builds via build tag.
 
 // Node represents the host machine or environment where the agent and workloads run
 // Its identity is verified via node attestation
 type Node struct {
 	identityCredential *IdentityCredential
-	selectors         *SelectorSet
-	attested          bool
+	selectors          *SelectorSet
+	attested           bool
 }
 
 // NewNode creates a new node
 func NewNode(identityCredential *IdentityCredential) *Node {
 	return &Node{
 		identityCredential: identityCredential,
-		selectors:         NewSelectorSet(),
-		attested:          false,
+		selectors:          NewSelectorSet(),
+		attested:           false,
 	}
 }
 

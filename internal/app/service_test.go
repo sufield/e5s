@@ -90,7 +90,7 @@ func TestIdentityService_ExchangeMessage_NilSenderNamespace(t *testing.T) {
 
 	fromID := ports.Identity{
 		IdentityCredential: nil, // Invalid: nil credential
-		Name:              "client",
+		Name:               "client",
 	}
 	toID := createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(1*time.Hour))
 
@@ -115,7 +115,7 @@ func TestIdentityService_ExchangeMessage_NilReceiverNamespace(t *testing.T) {
 	fromID := createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(1*time.Hour))
 	toID := ports.Identity{
 		IdentityCredential: nil, // Invalid: nil credential
-		Name:              "server",
+		Name:               "server",
 	}
 
 	// Act
@@ -182,8 +182,8 @@ func TestIdentityService_ExchangeMessage_NilSenderDocument(t *testing.T) {
 	td := domain.NewTrustDomainFromName("example.org")
 	fromID := &ports.Identity{
 		IdentityCredential: domain.NewIdentityCredentialFromComponents(td, "/client"),
-		Name:              "client",
-		IdentityDocument:  nil, // Invalid: nil document
+		Name:               "client",
+		IdentityDocument:   nil, // Invalid: nil document
 	}
 	toID := createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(1*time.Hour))
 
@@ -209,8 +209,8 @@ func TestIdentityService_ExchangeMessage_NilReceiverDocument(t *testing.T) {
 	fromID := createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(1*time.Hour))
 	toID := &ports.Identity{
 		IdentityCredential: domain.NewIdentityCredentialFromComponents(td, "/server"),
-		Name:              "server",
-		IdentityDocument:  nil, // Invalid: nil document
+		Name:               "server",
+		IdentityDocument:   nil, // Invalid: nil document
 	}
 
 	// Act
@@ -370,10 +370,9 @@ func createValidIdentity(t *testing.T, spiffeID string, expiresAt time.Time) *po
 
 	return &ports.Identity{
 		IdentityCredential: identityCredential,
-		Name:              "test-identity",
+		Name:               "test-identity",
 		IdentityDocument: domain.NewIdentityDocumentFromComponents(
 			identityCredential,
-			domain.IdentityDocumentTypeX509,
 			nil, // cert
 			nil, // privateKey
 			nil, // chain

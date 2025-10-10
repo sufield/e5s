@@ -10,7 +10,7 @@ import (
 
 // InMemoryAgent is an in-memory implementation of SPIRE agent
 type InMemoryAgent struct {
-	identityCredential   *domain.IdentityCredential
+	identityCredential  *domain.IdentityCredential
 	trustDomain         *domain.TrustDomain
 	server              *InMemoryServer
 	registry            ports.IdentityMapperRegistry
@@ -37,7 +37,7 @@ func NewInMemoryAgent(
 	}
 
 	agent := &InMemoryAgent{
-		identityCredential:   identityCredential,
+		identityCredential:  identityCredential,
 		trustDomain:         server.GetTrustDomain(),
 		server:              server,
 		registry:            registry,
@@ -67,8 +67,8 @@ func (a *InMemoryAgent) initializeAgentIdentity(ctx context.Context) error {
 
 	a.agentIdentity = &ports.Identity{
 		IdentityCredential: a.identityCredential,
-		Name:              "agent",
-		IdentityDocument:  agentDoc,
+		Name:               "agent",
+		IdentityDocument:   agentDoc,
 	}
 
 	return nil
@@ -120,8 +120,8 @@ func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload port
 	// Step 5: Return identity with document
 	return &ports.Identity{
 		IdentityCredential: mapper.IdentityCredential(),
-		Name:              extractNameFromIdentityCredential(mapper.IdentityCredential()),
-		IdentityDocument:  doc,
+		Name:               extractNameFromIdentityCredential(mapper.IdentityCredential()),
+		IdentityDocument:   doc,
 	}, nil
 }
 

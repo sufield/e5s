@@ -39,7 +39,7 @@ func TestExchangeMessage_Invariant_RequiresNonNilNamespaces(t *testing.T) {
 			name: "sender credential nil - violates invariant",
 			from: ports.Identity{
 				IdentityCredential: nil, // Nil credential
-				Name:              "client",
+				Name:               "client",
 			},
 			to:        *createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(1*time.Hour)),
 			wantError: true,
@@ -50,7 +50,7 @@ func TestExchangeMessage_Invariant_RequiresNonNilNamespaces(t *testing.T) {
 			from: *createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(1*time.Hour)),
 			to: ports.Identity{
 				IdentityCredential: nil, // Nil credential
-				Name:              "server",
+				Name:               "server",
 			},
 			wantError: true,
 			wantErr:   domain.ErrInvalidIdentityCredential,

@@ -170,7 +170,6 @@ func TestTranslateX509SVIDToIdentityDocument(t *testing.T) {
 
 	assert.NotNil(t, doc)
 	assert.Equal(t, "spiffe://example.org/workload", doc.IdentityCredential().String())
-	assert.Equal(t, domain.IdentityDocumentTypeX509, doc.Type())
 	assert.NotNil(t, doc.Certificate())
 	assert.NotNil(t, doc.PrivateKey())
 	assert.True(t, doc.IsValid())

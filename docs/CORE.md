@@ -82,12 +82,18 @@ A mapping that associates a SPIFFE ID with a set of selectors, defining the cond
 
 SPIFFE Verifiable Identity Document - the issued identity artifact provided to workloads for authentication and authorization.
 
-**Formats**:
-- X.509 (certificate-based)
-- JWT (token-based)
+**Format**: X.509 (certificate-based)
 
-**Components** (X.509):
-- SPIFFE ID
+**Note**: This implementation is **X.509-only**. JWT SVIDs are not supported by design.
+
+**Why X.509-only?**
+- **Simplicity**: X.509 is the primary SPIFFE format for mTLS and service mesh use cases
+- **Focus**: Reduces complexity by supporting one well-tested format
+- **Extensibility**: JWT can be added via adapters if needed in future (without domain changes)
+- **Production-ready**: go-spiffe SDK's X.509 support is mature and battle-tested
+
+**Components**:
+- SPIFFE ID (identity credential, embedded in certificate)
 - X.509 certificate
 - Private key
 - Certificate chain

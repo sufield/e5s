@@ -6,7 +6,7 @@
 # - SPIRE_TRUST_DOMAIN overrides spire.trust_domain
 # - HTTP_ADDRESS overrides http.address
 # - HTTP_ENABLED overrides http.enabled
-# - AUTH_POLICY overrides http.authentication.policy
+# - AUTH_PEER_VERIFICATION overrides http.authentication.peer_verification
 # - ALLOWED_CLIENT_ID overrides http.authentication.allowed_id
 # - EXPECTED_SERVER_ID overrides http.authentication.allowed_id (for clients)
 # - AUTH_TRUST_DOMAIN overrides http.authentication.trust_domain
@@ -29,12 +29,12 @@ http:
   # NOTE: This library only handles AUTHENTICATION (identity verification)
   # Authorization (access control) is the application's responsibility
   authentication:
-    # Policy options:
+    # Peer verification options:
     # - "any": Accept any authenticated client/server from SPIRE
     # - "trust-domain": Accept clients/servers from specific trust domain
     # - "specific-id": Accept only a specific SPIFFE ID
     # - "one-of": Accept one of multiple specific SPIFFE IDs
-    policy: trust-domain
+    peer_verification: trust-domain
 
     # Trust domain for "trust-domain" policy
     # If not specified, uses spire.trust_domain
@@ -69,7 +69,7 @@ spire:
 #   enabled: true
 #   address: ":8443"
 #   authentication:
-#     policy: any
+#     peer_verification: any
 # spire:
 #   socket_path: unix:///tmp/spire-agent/public/api.sock
 #   trust_domain: example.org
@@ -79,7 +79,7 @@ spire:
 #   enabled: true
 #   address: ":8443"
 #   authentication:
-#     policy: specific-id
+#     peer_verification: specific-id
 #     allowed_id: spiffe://example.org/service/client
 # spire:
 #   socket_path: unix:///var/run/spire/agent.sock
@@ -90,7 +90,7 @@ spire:
 #   enabled: true
 #   address: ":8443"
 #   authentication:
-#     policy: trust-domain
+#     peer_verification: trust-domain
 #     trust_domain: production.example.org
 # spire:
 #   socket_path: unix:///var/run/spire/agent.sock
@@ -101,7 +101,7 @@ spire:
 #   enabled: true
 #   address: ":8443"
 #   authentication:
-#     policy: one-of
+#     peer_verification: one-of
 #     allowed_ids:
 #       - spiffe://example.org/gateway/instance-1
 #       - spiffe://example.org/gateway/instance-2
@@ -116,7 +116,7 @@ spire:
 #   address: ":8443"
 #   timeout: 60s
 #   authentication:
-#     policy: trust-domain
+#     peer_verification: trust-domain
 #     trust_domain: k8s.example.org
 # spire:
 #   socket_path: unix:///spire-agent-socket/api.sock

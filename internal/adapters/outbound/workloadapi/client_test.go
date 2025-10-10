@@ -178,10 +178,10 @@ func TestClient_FetchX509SVID_TableDriven(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name       string
-		setupServer   func(t *testing.T) (string, func())
-		wantError     bool
-		wantErrMsg string
+		name        string
+		setupServer func(t *testing.T) (string, func())
+		wantError   bool
+		wantErrMsg  string
 	}{
 		{
 			name: "server returns 500",

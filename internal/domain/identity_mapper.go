@@ -12,8 +12,8 @@ package domain
 // This shifts focus to the "mapping" intent—clearly expressing how selectors map to identities.
 type IdentityMapper struct {
 	identityCredential *IdentityCredential
-	selectors         *SelectorSet
-	parentID          *IdentityCredential // Parent identity credential (e.g., agent ID)
+	selectors          *SelectorSet
+	parentID           *IdentityCredential // Parent identity credential (e.g., agent ID)
 }
 
 // NewIdentityMapper creates a new identity mapper
@@ -29,7 +29,7 @@ func NewIdentityMapper(identityCredential *IdentityCredential, selectors *Select
 
 	return &IdentityMapper{
 		identityCredential: identityCredential,
-		selectors:         selectors,
+		selectors:          selectors,
 	}, nil
 }
 

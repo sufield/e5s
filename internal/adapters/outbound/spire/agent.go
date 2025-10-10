@@ -12,10 +12,10 @@ import (
 // This agent does NOT do local selector matching or attestation.
 // It fully delegates to SPIRE Server's registration entries and workload attestation.
 type Agent struct {
-	client              *SPIREClient
-	credentialParser    ports.IdentityCredentialParser
-	agentIdentity       *ports.Identity
-	agentSpiffeID       string
+	client           *SPIREClient
+	credentialParser ports.IdentityCredentialParser
+	agentIdentity    *ports.Identity
+	agentSpiffeID    string
 }
 
 // NewAgent creates a new SPIRE agent that fully delegates to external SPIRE
@@ -53,7 +53,7 @@ func NewAgent(
 		agentIdentity: &ports.Identity{
 			IdentityCredential: agentIdentityCredential,
 			IdentityDocument:   agentDoc,
-			Name:              "spire-agent",
+			Name:               "spire-agent",
 		},
 		agentSpiffeID: agentSpiffeID,
 	}, nil
@@ -78,9 +78,9 @@ func (a *Agent) GetIdentity(ctx context.Context) (*ports.Identity, error) {
 //
 // IMPORTANT: This does NOT do local attestation or selector matching.
 // SPIRE Server performs:
-//   1. Workload attestation (via SPIRE Agent)
-//   2. Selector matching against registration entries (in SPIRE Server)
-//   3. SVID issuance for the matched identity
+//  1. Workload attestation (via SPIRE Agent)
+//  2. Selector matching against registration entries (in SPIRE Server)
+//  3. SVID issuance for the matched identity
 //
 // This agent simply requests the SVID from SPIRE Workload API, which handles everything.
 func (a *Agent) FetchIdentityDocument(ctx context.Context, workload ports.ProcessIdentity) (*ports.Identity, error) {
@@ -108,7 +108,7 @@ func (a *Agent) FetchIdentityDocument(ctx context.Context, workload ports.Proces
 	identity := &ports.Identity{
 		IdentityCredential: identityCredential,
 		IdentityDocument:   doc,
-		Name:              extractNameFromCredential(identityCredential),
+		Name:               extractNameFromCredential(identityCredential),
 	}
 
 	return identity, nil
