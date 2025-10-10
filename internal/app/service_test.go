@@ -1,5 +1,16 @@
 package app_test
 
+// Identity Service Tests
+//
+// These tests verify the IdentityService application layer implementation.
+// Tests cover message exchange between identities, credential validation,
+// document expiration checks, and error handling for invalid inputs.
+//
+// Run these tests with:
+//
+//	go test ./internal/app/... -v -run TestIdentityService
+//	go test ./internal/app/... -cover
+
 import (
 	"context"
 	"testing"

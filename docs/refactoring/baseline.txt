@@ -1,0 +1,32 @@
+Fri Oct 10 02:52:30 PM EDT 2025
+
+=== File Sizes (Top 20) ===
+ 17272 total
+   936 ./internal/adapters/outbound/inmemory/coverage_boost_test.go
+   523 ./internal/adapters/inbound/httpapi/identity_test.go
+   417 ./internal/adapters/outbound/inmemory/registry_invariants_test.go
+   415 ./internal/adapters/outbound/workloadapi/client_test.go
+   412 ./internal/config/mtls_extended_test.go
+   399 ./internal/adapters/inbound/workloadapi/server_test.go
+   382 ./internal/app/service_test.go
+   377 ./internal/domain/selector_invariants_test.go
+   364 ./internal/config/mtls.go
+   357 ./internal/app/service_invariants_test.go
+   341 ./internal/config/mtls_test.go
+   338 ./internal/adapters/outbound/httpclient/client_test.go
+   333 ./internal/adapters/inbound/httpapi/server_test.go
+   331 ./test/e2e/e2e_test.go
+   318 ./internal/adapters/outbound/httpclient/integration_test.go
+   307 ./internal/adapters/inbound/cli/cli_test.go
+   304 ./internal/adapters/outbound/inmemory/attestor/unix_test.go
+   294 ./internal/domain/identity_credential_invariants_test.go
+   294 ./internal/controlplane/adapters/helm/install_dev.go
+
+=== Cyclomatic Complexity (>15) ===
+26 config (*MTLSConfig).Validate internal/config/mtls.go:255:1
+24 config applyEnvOverrides internal/config/mtls.go:107:1
+
+=== Test Coverage ===
+total:													(statements)				44.6%
+
+=== Test Execution Time ===

@@ -1,5 +1,16 @@
 package app_test
 
+// Identity Service Invariant Tests
+//
+// These tests verify domain invariants for the IdentityService ExchangeMessage operation.
+// Invariants tested: non-nil credentials requirement, valid (non-expired) documents,
+// no partial results on error, input preservation, success guarantees, idempotency.
+//
+// Run these tests with:
+//
+//	go test ./internal/app/... -v -run TestExchangeMessage_Invariant
+//	go test ./internal/app/... -cover
+
 import (
 	"context"
 	"testing"

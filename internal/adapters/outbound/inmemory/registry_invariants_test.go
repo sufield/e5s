@@ -1,5 +1,16 @@
 package inmemory_test
 
+// InMemory Registry Invariant Tests
+//
+// These tests verify domain invariants for the InMemory identity mapper registry.
+// Invariants tested: immutability after sealing, duplicate rejection, read-only operations,
+// AND selector logic, and state transitions (unsealed → sealed).
+//
+// Run these tests with:
+//
+//	go test ./internal/adapters/outbound/inmemory/... -v -run TestRegistry_Invariant
+//	go test ./internal/adapters/outbound/inmemory/... -cover
+
 import (
 	"context"
 	"testing"

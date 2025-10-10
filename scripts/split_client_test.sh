@@ -1,11 +1,32 @@
+#!/bin/bash
+
+# Split workloadapi client_test.go into focused files
+# Week 3, Days 1-2
+
+set -e
+
+ORIG="internal/adapters/outbound/workloadapi/client_test.go"
+BACKUP="internal/adapters/outbound/workloadapi/client_test.go.bak"
+
+# Backup original
+cp "$ORIG" "$BACKUP"
+
+echo "Creating client_integration_test.go..."
+cat > internal/adapters/outbound/workloadapi/client_integration_test.go << 'EOF'
 package workloadapi_test
+
+// Workload API Client Integration Tests
+//
+// These tests verify end-to-end client behavior with a real server.
+// Tests use full application bootstrap with inmemory adapters.
+//
+// Run these tests with:
+//
+//	go test ./internal/adapters/outbound/workloadapi/... -v -run TestClient.*Success
+//	go test ./internal/adapters/outbound/workloadapi/... -cover
 
 import (
 	"context"
-	"encoding/json"
-	"net"
-	"net/http"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -15,7 +36,6 @@ import (
 	"github.com/pocket/hexagon/spire/internal/adapters/outbound/inmemory"
 	wlapi "github.com/pocket/hexagon/spire/internal/adapters/outbound/workloadapi"
 	"github.com/pocket/hexagon/spire/internal/app"
-	"github.com/pocket/hexagon/spire/internal/ports"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -53,6 +73,63 @@ func TestClient_FetchX509SVID_Success(t *testing.T) {
 	assert.NotEmpty(t, resp.GetX509SVID())
 	assert.Greater(t, resp.GetExpiresAt(), int64(0))
 }
+
+// TestClient_FetchX509SVIDWithConfig_Success tests mTLS fetch
+func TestClient_FetchX509SVIDWithConfig_Success(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	// Start real server
+	loader := inmemory.NewInMemoryConfig()
+	factory := compose.NewInMemoryAdapterFactory()
+	application, err := app.Bootstrap(ctx, loader, factory)
+	require.NoError(t, err)
+
+	socketPath := filepath.Join(t.TempDir(), "test.sock")
+	server := workloadapi.NewServer(application.IdentityClientService, socketPath)
+	err = server.Start(ctx)
+	require.NoError(t, err)
+	defer server.Stop(ctx)
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Create client with nil TLS config (should fallback to regular fetch)
+	client := wlapi.NewClient(socketPath)
+	resp, err := client.FetchX509SVIDWithConfig(ctx, nil)
+	require.NoError(t, err)
+	assert.NotNil(t, resp)
+}
+EOF
+
+echo "Creating client_errors_test.go..."
+cat > internal/adapters/outbound/workloadapi/client_errors_test.go << 'EOF'
+package workloadapi_test
+
+// Workload API Client Error Handling Tests
+//
+// These tests verify client behavior with various error conditions including
+// server errors, invalid responses, socket errors, and timeouts.
+//
+// Run these tests with:
+//
+//	go test ./internal/adapters/outbound/workloadapi/... -v -run TestClient.*Error
+//	go test ./internal/adapters/outbound/workloadapi/... -v -run TestClient_FetchX509SVID_TableDriven
+//	go test ./internal/adapters/outbound/workloadapi/... -cover
+
+import (
+	"context"
+	"encoding/json"
+	"net"
+	"net/http"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	wlapi "github.com/pocket/hexagon/spire/internal/adapters/outbound/workloadapi"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
 
 // TestClient_FetchX509SVID_ServerError tests server error handling
 func TestClient_FetchX509SVID_ServerError(t *testing.T) {
@@ -135,42 +212,6 @@ func TestClient_FetchX509SVID_SocketNotFound(t *testing.T) {
 
 	_, err := client.FetchX509SVID(ctx)
 	assert.Error(t, err)
-}
-
-// TestClient_FetchX509SVIDWithConfig_Success tests mTLS fetch
-func TestClient_FetchX509SVIDWithConfig_Success(t *testing.T) {
-	t.Parallel()
-	ctx := context.Background()
-
-	// Start real server
-	loader := inmemory.NewInMemoryConfig()
-	factory := compose.NewInMemoryAdapterFactory()
-	application, err := app.Bootstrap(ctx, loader, factory)
-	require.NoError(t, err)
-
-	socketPath := filepath.Join(t.TempDir(), "test.sock")
-	server := workloadapi.NewServer(application.IdentityClientService, socketPath)
-	err = server.Start(ctx)
-	require.NoError(t, err)
-	defer server.Stop(ctx)
-
-	time.Sleep(100 * time.Millisecond)
-
-	// Create client with nil TLS config (should fallback to regular fetch)
-	client := wlapi.NewClient(socketPath)
-	resp, err := client.FetchX509SVIDWithConfig(ctx, nil)
-	require.NoError(t, err)
-	assert.NotNil(t, resp)
-}
-
-// TestClient_NewClient tests constructor
-func TestClient_NewClient(t *testing.T) {
-	t.Parallel()
-
-	socketPath := "/tmp/test.sock"
-	client := wlapi.NewClient(socketPath)
-
-	assert.NotNil(t, client)
 }
 
 // TestClient_FetchX509SVID_TableDriven tests various scenarios
@@ -288,50 +329,6 @@ func TestClient_FetchX509SVID_TableDriven(t *testing.T) {
 	}
 }
 
-// TestX509SVIDResponse_Methods tests response accessor methods
-func TestX509SVIDResponse_Methods(t *testing.T) {
-	t.Parallel()
-
-	resp := &wlapi.X509SVIDResponse{
-		SPIFFEID:  "spiffe://example.org/test",
-		X509SVID:  "PEM data",
-		ExpiresAt: 1234567890,
-	}
-
-	assert.Equal(t, "spiffe://example.org/test", resp.GetSPIFFEID())
-	assert.Equal(t, "PEM data", resp.GetX509SVID())
-	assert.Equal(t, int64(1234567890), resp.GetExpiresAt())
-	assert.Equal(t, "spiffe://example.org/test", resp.ToIdentity())
-}
-
-// TestX509SVIDResponse_NilSafety tests nil response safety
-func TestX509SVIDResponse_NilSafety(t *testing.T) {
-	t.Parallel()
-
-	var resp *wlapi.X509SVIDResponse
-
-	assert.Empty(t, resp.GetSPIFFEID())
-	assert.Empty(t, resp.GetX509SVID())
-	assert.Equal(t, int64(0), resp.GetExpiresAt())
-	assert.Empty(t, resp.ToIdentity())
-}
-
-// TestClient_ImplementsPort verifies Client implements WorkloadAPIClient interface
-func TestClient_ImplementsPort(t *testing.T) {
-	t.Parallel()
-
-	client := wlapi.NewClient("/tmp/test.sock")
-	var _ ports.WorkloadAPIClient = client
-}
-
-// TestX509SVIDResponse_ImplementsPort verifies response implements interface
-func TestX509SVIDResponse_ImplementsPort(t *testing.T) {
-	t.Parallel()
-
-	resp := &wlapi.X509SVIDResponse{}
-	var _ ports.X509SVIDResponse = resp
-}
-
 // TestClient_ContextTimeout tests context timeout handling
 func TestClient_ContextTimeout(t *testing.T) {
 	t.Parallel()
@@ -361,6 +358,114 @@ func TestClient_ContextTimeout(t *testing.T) {
 
 	_, err = client.FetchX509SVID(ctx)
 	assert.Error(t, err)
+}
+EOF
+
+echo "Creating client_response_test.go..."
+cat > internal/adapters/outbound/workloadapi/client_response_test.go << 'EOF'
+package workloadapi_test
+
+// Workload API Response Tests
+//
+// These tests verify X509SVIDResponse accessor methods and nil safety.
+// Tests cover GetSPIFFEID, GetX509SVID, GetExpiresAt, ToIdentity, and nil handling.
+//
+// Run these tests with:
+//
+//	go test ./internal/adapters/outbound/workloadapi/... -v -run TestX509SVIDResponse
+//	go test ./internal/adapters/outbound/workloadapi/... -cover
+
+import (
+	"testing"
+
+	wlapi "github.com/pocket/hexagon/spire/internal/adapters/outbound/workloadapi"
+	"github.com/stretchr/testify/assert"
+)
+
+// TestX509SVIDResponse_Methods tests response accessor methods
+func TestX509SVIDResponse_Methods(t *testing.T) {
+	t.Parallel()
+
+	resp := &wlapi.X509SVIDResponse{
+		SPIFFEID:  "spiffe://example.org/test",
+		X509SVID:  "PEM data",
+		ExpiresAt: 1234567890,
+	}
+
+	assert.Equal(t, "spiffe://example.org/test", resp.GetSPIFFEID())
+	assert.Equal(t, "PEM data", resp.GetX509SVID())
+	assert.Equal(t, int64(1234567890), resp.GetExpiresAt())
+	assert.Equal(t, "spiffe://example.org/test", resp.ToIdentity())
+}
+
+// TestX509SVIDResponse_NilSafety tests nil response safety
+func TestX509SVIDResponse_NilSafety(t *testing.T) {
+	t.Parallel()
+
+	var resp *wlapi.X509SVIDResponse
+
+	assert.Empty(t, resp.GetSPIFFEID())
+	assert.Empty(t, resp.GetX509SVID())
+	assert.Equal(t, int64(0), resp.GetExpiresAt())
+	assert.Empty(t, resp.ToIdentity())
+}
+EOF
+
+echo "Creating client_compliance_test.go..."
+cat > internal/adapters/outbound/workloadapi/client_compliance_test.go << 'EOF'
+package workloadapi_test
+
+// Workload API Client Compliance Tests
+//
+// These tests verify client constructor, interface compliance, and concurrency behavior.
+// Tests cover ports.WorkloadAPIClient implementation and concurrent request handling.
+//
+// Run these tests with:
+//
+//	go test ./internal/adapters/outbound/workloadapi/... -v -run TestClient_NewClient
+//	go test ./internal/adapters/outbound/workloadapi/... -v -run TestClient_ImplementsPort
+//	go test ./internal/adapters/outbound/workloadapi/... -v -run TestClient_ConcurrentRequests
+//	go test ./internal/adapters/outbound/workloadapi/... -cover
+
+import (
+	"context"
+	"encoding/json"
+	"net"
+	"net/http"
+	"path/filepath"
+	"testing"
+	"time"
+
+	wlapi "github.com/pocket/hexagon/spire/internal/adapters/outbound/workloadapi"
+	"github.com/pocket/hexagon/spire/internal/ports"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// TestClient_NewClient tests constructor
+func TestClient_NewClient(t *testing.T) {
+	t.Parallel()
+
+	socketPath := "/tmp/test.sock"
+	client := wlapi.NewClient(socketPath)
+
+	assert.NotNil(t, client)
+}
+
+// TestClient_ImplementsPort verifies Client implements WorkloadAPIClient interface
+func TestClient_ImplementsPort(t *testing.T) {
+	t.Parallel()
+
+	client := wlapi.NewClient("/tmp/test.sock")
+	var _ ports.WorkloadAPIClient = client
+}
+
+// TestX509SVIDResponse_ImplementsPort verifies response implements interface
+func TestX509SVIDResponse_ImplementsPort(t *testing.T) {
+	t.Parallel()
+
+	resp := &wlapi.X509SVIDResponse{}
+	var _ ports.X509SVIDResponse = resp
 }
 
 // TestClient_ConcurrentRequests tests concurrent request handling
@@ -413,3 +518,17 @@ func TestClient_ConcurrentRequests(t *testing.T) {
 		}
 	}
 }
+EOF
+
+echo "Removing original client_test.go..."
+rm "$ORIG"
+
+echo "✅ Split complete!"
+echo ""
+echo "Created files:"
+echo "  - client_integration_test.go (integration tests with real server)"
+echo "  - client_errors_test.go (error handling and edge cases)"
+echo "  - client_response_test.go (response object tests)"
+echo "  - client_compliance_test.go (interface compliance and concurrency)"
+echo ""
+echo "Original backed up to: $BACKUP"

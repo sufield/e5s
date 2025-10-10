@@ -1,7 +1,11 @@
 .PHONY: test test-verbose test-race test-coverage test-coverage-html test-short \
 	clean help prereqs check-prereqs build prod-build dev-build test-prod-build \
 	helm-lint helm-template minikube-up minikube-down minikube-status \
-	minikube-delete ci-test ci-build verify verify-spire test-integration test-prod-binary
+	minikube-delete ci-test ci-build verify verify-spire test-integration test-prod-binary \
+	refactor-baseline refactor-compare refactor-check refactor-install-tools refactor-clean
+
+# Use bash for consistency across platforms
+SHELL := /bin/bash
 
 # Default target
 .DEFAULT_GOAL := help
@@ -218,6 +222,99 @@ ci-build: check-prereqs prod-build dev-build test-prod-build
 	@echo "======================================"
 	@echo "✓ All builds completed successfully!"
 	@echo "======================================"
+
+## refactor-install-tools: Install refactoring analysis tools
+refactor-install-tools:
+	@echo "Installing refactoring analysis tools..."
+	@go install github.com/fzipp/gocyclo/cmd/gocyclo@latest
+	@go install github.com/uudashr/gocognit/cmd/gocognit@latest
+	@go install golang.org/x/tools/cmd/goimports@latest
+	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	@echo "✓ Tools installed successfully"
+
+## refactor-baseline: Generate refactoring baseline metrics
+refactor-baseline:
+	@echo "Generating refactoring baseline..."
+	@mkdir -p docs/refactoring
+	@$(shell date) > docs/refactoring/baseline.txt
+	@echo "\n=== File Sizes (Top 20) ===" >> docs/refactoring/baseline.txt
+	@find . -name "*.go" -not -path "./vendor/*" -not -path "./.git/*" | \
+		xargs wc -l | sort -rn | head -20 >> docs/refactoring/baseline.txt
+	@echo "\n=== Cyclomatic Complexity (>15) ===" >> docs/refactoring/baseline.txt
+	@gocyclo -over 15 . >> docs/refactoring/baseline.txt 2>&1 || echo "  (gocyclo not installed - run 'make refactor-install-tools')"
+	@echo "\n=== Test Coverage ===" >> docs/refactoring/baseline.txt
+	@go test ./... -coverprofile=docs/refactoring/coverage_before.out > /dev/null 2>&1
+	@go tool cover -func=docs/refactoring/coverage_before.out | tail -1 >> docs/refactoring/baseline.txt
+	@echo "\n=== Test Execution Time ===" >> docs/refactoring/baseline.txt
+	@{ time go test ./... > /dev/null 2>&1; } 2>> docs/refactoring/baseline.txt || true
+	@echo "\nBaseline saved to docs/refactoring/baseline.txt"
+	@cat docs/refactoring/baseline.txt
+
+## refactor-compare: Compare before/after refactoring metrics
+refactor-compare:
+	@echo "Comparing refactoring results..."
+	@if [ ! -f docs/refactoring/baseline.txt ]; then \
+		echo "Error: Run 'make refactor-baseline' first to generate baseline"; \
+		exit 1; \
+	fi
+	@mkdir -p docs/refactoring
+	@$(shell date) > docs/refactoring/comparison.txt
+	@echo "\n=== FILE SIZES COMPARISON ===" >> docs/refactoring/comparison.txt
+	@echo "\nTop 5 BEFORE:" >> docs/refactoring/comparison.txt
+	@grep -A 5 "File Sizes" docs/refactoring/baseline.txt | tail -5 >> docs/refactoring/comparison.txt
+	@echo "\nTop 5 AFTER:" >> docs/refactoring/comparison.txt
+	@find . -name "*.go" -not -path "./vendor/*" -not -path "./.git/*" | \
+		xargs wc -l | sort -rn | head -5 >> docs/refactoring/comparison.txt
+	@echo "\n=== COVERAGE COMPARISON ===" >> docs/refactoring/comparison.txt
+	@go test ./... -coverprofile=docs/refactoring/coverage_after.out > /dev/null 2>&1
+	@echo "\nBEFORE:" >> docs/refactoring/comparison.txt
+	@grep "total:" docs/refactoring/baseline.txt >> docs/refactoring/comparison.txt || echo "  (coverage data not found in baseline)"
+	@echo "\nAFTER:" >> docs/refactoring/comparison.txt
+	@go tool cover -func=docs/refactoring/coverage_after.out | tail -1 >> docs/refactoring/comparison.txt
+	@echo "\n=== SUMMARY ===" >> docs/refactoring/comparison.txt
+	@echo "\nComparison saved to docs/refactoring/comparison.txt"
+	@cat docs/refactoring/comparison.txt
+
+## refactor-check: Run all refactoring validation checks
+refactor-check:
+	@echo "Running refactoring checks..."
+	@echo "\n→ Running tests..."
+	@go test ./... -v -count=1 || (echo "✗ Tests failed" && exit 1)
+	@echo "\n→ Running staticcheck..."
+	@staticcheck ./... || (echo "✗ Staticcheck failed" && exit 1)
+	@echo "\n→ Running go vet..."
+	@go vet ./... || (echo "✗ Go vet failed" && exit 1)
+	@echo "\n→ Checking imports..."
+	@goimports -l . | (! grep .) || (echo "⚠ WARNING: Some files need goimports formatting" && goimports -l .)
+	@echo "\n→ Running golangci-lint..."
+	@golangci-lint run --timeout=5m || echo "⚠ WARNING: golangci-lint found issues"
+	@echo "\n→ Checking cyclomatic complexity..."
+	@if [ -n "$${STRICT}" ]; then \
+		gocyclo -over 15 . && (echo "✗ FAIL: High complexity detected in strict mode" && exit 1) || echo "✓ Complexity OK"; \
+	else \
+		gocyclo -over 15 . && echo "⚠ WARNING: High complexity detected" || echo "✓ Complexity OK"; \
+	fi
+	@echo "\n→ Checking file sizes..."
+	@LARGE_FILES=$$(find . -name "*.go" -not -path "./vendor/*" | xargs wc -l | awk '$$1 > 500 {print}' | wc -l); \
+		if [ $$LARGE_FILES -gt 0 ]; then \
+			if [ -n "$${STRICT}" ]; then \
+				echo "✗ FAIL: $$LARGE_FILES file(s) exceed 500 lines in strict mode"; \
+				find . -name "*.go" -not -path "./vendor/*" | xargs wc -l | awk '$$1 > 500 {print "  ", $$0}'; \
+				exit 1; \
+			else \
+				echo "⚠ WARNING: $$LARGE_FILES file(s) exceed 500 lines"; \
+				find . -name "*.go" -not -path "./vendor/*" | xargs wc -l | awk '$$1 > 500 {print "  ", $$0}'; \
+			fi \
+		else \
+			echo "✓ All files under 500 lines"; \
+		fi
+	@echo "\n✅ All checks passed"
+
+## refactor-clean: Remove generated refactoring files
+refactor-clean:
+	@echo "Cleaning refactoring files..."
+	@rm -rf docs/refactoring/
+	@echo "✓ Refactoring files cleaned"
 
 ## help: Show this help message
 help:

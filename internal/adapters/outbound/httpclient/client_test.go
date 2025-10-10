@@ -1,5 +1,17 @@
 package httpclient
 
+// SPIFFE HTTP Client Tests
+//
+// These tests verify the SPIFFE-enabled HTTP client implementation for mTLS connections.
+// Tests cover client construction, configuration validation, default settings, timeout
+// customization, and HTTP method helpers (GET, POST, PUT, DELETE, PATCH).
+//
+// Run these tests with:
+//
+//	go test ./internal/adapters/outbound/httpclient/... -v
+//	go test ./internal/adapters/outbound/httpclient/... -run TestSPIFFEHTTPClient -v
+//	go test ./internal/adapters/outbound/httpclient/... -cover
+
 import (
 	"context"
 	"io"

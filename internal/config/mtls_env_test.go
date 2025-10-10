@@ -1,5 +1,17 @@
 package config
 
+// Environment Override Tests
+//
+// These tests verify environment variable parsing and override behavior for
+// mTLS configuration. Tests cover invalid values, boolean parsing, comma-separated
+// ID lists, and timeout overrides.
+//
+// Run these tests with:
+//
+//	go test ./internal/config/... -v -run TestEnvOverrides
+//	go test ./internal/config/... -v -run TestParseBool
+//	go test ./internal/config/... -cover
+
 import (
 	"os"
 	"testing"
@@ -233,136 +245,6 @@ func TestEnvOverrides_CommaSeparatedIDs(t *testing.T) {
 	}
 }
 
-// TestValidate_EnhancedChecks tests the new validation rules
-func TestValidate_EnhancedChecks(t *testing.T) {
-	tests := []struct {
-		name    string
-		config  *MTLSConfig
-		wantErr string
-	}{
-		{
-			name: "invalid socket path - no unix prefix",
-			config: &MTLSConfig{
-				SPIRE: SPIREConfig{
-					SocketPath:  "/tmp/socket",
-					TrustDomain: "example.org",
-				},
-			},
-			wantErr: "must start with 'unix://'",
-		},
-		{
-			name: "http enabled without address",
-			config: &MTLSConfig{
-				SPIRE: SPIREConfig{
-					SocketPath:  "unix:///tmp/socket",
-					TrustDomain: "example.org",
-				},
-				HTTP: HTTPConfig{
-					Enabled: true,
-					Address: "",
-				},
-			},
-			wantErr: "http.address is required when http.enabled is true",
-		},
-		{
-			name: "trust domain with scheme",
-			config: &MTLSConfig{
-				SPIRE: SPIREConfig{
-					SocketPath:  "unix:///tmp/socket",
-					TrustDomain: "https://example.org",
-				},
-			},
-			wantErr: "must not contain scheme",
-		},
-		{
-			name: "trust domain with path",
-			config: &MTLSConfig{
-				SPIRE: SPIREConfig{
-					SocketPath:  "unix:///tmp/socket",
-					TrustDomain: "example.org/path",
-				},
-			},
-			wantErr: "must not contain path",
-		},
-		{
-			name: "port too high",
-			config: &MTLSConfig{
-				SPIRE: SPIREConfig{
-					SocketPath:  "unix:///tmp/socket",
-					TrustDomain: "example.org",
-				},
-				HTTP: HTTPConfig{
-					Port: 70000,
-				},
-			},
-			wantErr: "must be between",
-		},
-		{
-			name: "negative timeout",
-			config: &MTLSConfig{
-				SPIRE: SPIREConfig{
-					SocketPath:  "unix:///tmp/socket",
-					TrustDomain: "example.org",
-				},
-				HTTP: HTTPConfig{
-					Timeout: -5 * time.Second,
-				},
-			},
-			wantErr: "must be positive",
-		},
-		{
-			name: "invalid SPIFFE ID format",
-			config: &MTLSConfig{
-				SPIRE: SPIREConfig{
-					SocketPath:  "unix:///tmp/socket",
-					TrustDomain: "example.org",
-				},
-				HTTP: HTTPConfig{
-					Auth: AuthConfig{
-						PeerVerification: "specific-id",
-						AllowedID:        "https://example.org/service",
-					},
-				},
-			},
-			wantErr: "must be a valid SPIFFE ID",
-		},
-		{
-			name: "invalid SPIFFE ID in allowed_ids array",
-			config: &MTLSConfig{
-				SPIRE: SPIREConfig{
-					SocketPath:  "unix:///tmp/socket",
-					TrustDomain: "example.org",
-				},
-				HTTP: HTTPConfig{
-					Auth: AuthConfig{
-						PeerVerification: "one-of",
-						AllowedIDs: []string{
-							"spiffe://example.org/service1",
-							"http://example.org/service2", // Invalid
-						},
-					},
-				},
-			},
-			wantErr: "allowed_ids[1]",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Apply defaults first (unless we're testing the enabled/address case)
-			// The "http enabled without address" test should not apply defaults
-			// because applyDefaults would set a default address
-			if tt.name != "http enabled without address" {
-				applyDefaults(tt.config)
-			}
-
-			err := tt.config.Validate()
-			require.Error(t, err)
-			assert.Contains(t, err.Error(), tt.wantErr)
-		})
-	}
-}
-
 // TestTimeoutOverrides tests all timeout environment variables
 func TestTimeoutOverrides(t *testing.T) {
 	// Save original values
@@ -397,16 +279,4 @@ func TestTimeoutOverrides(t *testing.T) {
 	assert.Equal(t, 60*time.Second, cfg.HTTP.ReadTimeout)
 	assert.Equal(t, 50*time.Second, cfg.HTTP.WriteTimeout)
 	assert.Equal(t, 180*time.Second, cfg.HTTP.IdleTimeout)
-}
-
-// TestDefaults_AllTimeouts tests that all timeout defaults are applied
-func TestDefaults_AllTimeouts(t *testing.T) {
-	cfg := &MTLSConfig{}
-	applyDefaults(cfg)
-
-	assert.Equal(t, DefaultHTTPTimeout, cfg.HTTP.Timeout)
-	assert.Equal(t, DefaultReadHeaderTimeout, cfg.HTTP.ReadHeaderTimeout)
-	assert.Equal(t, DefaultReadTimeout, cfg.HTTP.ReadTimeout)
-	assert.Equal(t, DefaultWriteTimeout, cfg.HTTP.WriteTimeout)
-	assert.Equal(t, DefaultIdleTimeout, cfg.HTTP.IdleTimeout)
 }

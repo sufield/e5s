@@ -1,5 +1,17 @@
 package domain_test
 
+// Selector Invariant Tests
+//
+// These tests verify domain invariants for Selector and SelectorSet value objects.
+// Invariants tested: key/value non-empty, format consistency, parsing rules,
+// equality properties (reflexive, symmetric, transitive), set uniqueness.
+//
+// Run these tests with:
+//
+//	go test ./internal/domain/... -v -run TestSelector_Invariant
+//	go test ./internal/domain/... -v -run TestSelectorSet_Invariant
+//	go test ./internal/domain/... -cover
+
 import (
 	"testing"
 

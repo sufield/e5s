@@ -1,0 +1,27 @@
+Fri Oct 10 03:17:05 PM EDT 2025
+
+=== FILE SIZES COMPARISON ===
+
+Top 5 BEFORE:
+ 17272 total
+   936 ./internal/adapters/outbound/inmemory/coverage_boost_test.go
+   523 ./internal/adapters/inbound/httpapi/identity_test.go
+   417 ./internal/adapters/outbound/inmemory/registry_invariants_test.go
+   415 ./internal/adapters/outbound/workloadapi/client_test.go
+
+Top 5 AFTER:
+ 17484 total
+   535 ./internal/adapters/inbound/httpapi/identity_test.go
+   428 ./internal/adapters/outbound/inmemory/registry_invariants_test.go
+   427 ./internal/adapters/outbound/workloadapi/client_test.go
+   424 ./internal/config/mtls_extended_test.go
+
+=== COVERAGE COMPARISON ===
+
+BEFORE:
+total:													(statements)				44.6%
+
+AFTER:
+total:													(statements)				45.1%
+
+=== SUMMARY ===

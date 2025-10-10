@@ -1,5 +1,17 @@
 package config
 
+// mTLS Configuration Tests
+//
+// These tests verify mTLS configuration loading, validation, defaults, and overrides.
+// Tests cover file-based loading, environment variable overrides, validation rules,
+// and peer verification policies (any, trust-domain, specific-id, one-of).
+//
+// Run these tests with:
+//
+//	go test ./internal/config/... -v
+//	go test ./internal/config/... -run TestLoadFromFile -v
+//	go test ./internal/config/... -cover
+
 import (
 	"os"
 	"path/filepath"
