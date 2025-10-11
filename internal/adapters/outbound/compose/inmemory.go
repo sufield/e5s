@@ -57,8 +57,17 @@ func (f *InMemoryAdapterFactory) CreateIdentityDocumentValidator(bundleProvider 
 	return inmemory.NewIdentityDocumentValidator(bundleProvider)
 }
 
-func (f *InMemoryAdapterFactory) CreateServer(ctx context.Context, trustDomain string, trustDomainParser ports.TrustDomainParser, docProvider ports.IdentityDocumentProvider) (ports.IdentityServer, error) {
+// CreateDevelopmentServer creates an in-memory server for development/testing.
+// Unlike production, this implementation needs full control over document provider
+// because it manages certificate issuance locally.
+func (f *InMemoryAdapterFactory) CreateDevelopmentServer(ctx context.Context, trustDomain string, trustDomainParser ports.TrustDomainParser, docProvider ports.IdentityDocumentProvider) (ports.IdentityServer, error) {
 	return inmemory.NewInMemoryServer(ctx, trustDomain, trustDomainParser, docProvider)
+}
+
+// CreateServer creates an in-memory server (implements ProductionServerFactory).
+// For inmemory, this delegates to CreateDevelopmentServer since the implementation is the same.
+func (f *InMemoryAdapterFactory) CreateServer(ctx context.Context, trustDomain string, trustDomainParser ports.TrustDomainParser, docProvider ports.IdentityDocumentProvider) (ports.IdentityServer, error) {
+	return f.CreateDevelopmentServer(ctx, trustDomain, trustDomainParser, docProvider)
 }
 
 func (f *InMemoryAdapterFactory) CreateAttestor() ports.WorkloadAttestor {
@@ -72,7 +81,10 @@ func (f *InMemoryAdapterFactory) RegisterWorkloadUID(attestorInterface ports.Wor
 	}
 }
 
-func (f *InMemoryAdapterFactory) CreateAgent(
+// CreateDevelopmentAgent creates an in-memory agent for development/testing.
+// Unlike production, this implementation requires all dependencies because it
+// manages registry, attestation, and identity issuance locally.
+func (f *InMemoryAdapterFactory) CreateDevelopmentAgent(
 	ctx context.Context,
 	spiffeID string,
 	server ports.IdentityServer,
@@ -88,6 +100,39 @@ func (f *InMemoryAdapterFactory) CreateAgent(
 	}
 
 	return inmemory.NewInMemoryAgent(ctx, spiffeID, concreteServer, registry, attestorInterface, parser, docProvider)
+}
+
+// CreateAgent creates an in-memory agent with all dependencies.
+// This is the legacy method kept for backward compatibility with code that uses the old signature.
+func (f *InMemoryAdapterFactory) CreateAgent(
+	ctx context.Context,
+	spiffeID string,
+	server ports.IdentityServer,
+	registry ports.IdentityMapperRegistry,
+	attestorInterface ports.WorkloadAttestor,
+	parser ports.IdentityCredentialParser,
+	docProvider ports.IdentityDocumentProvider,
+) (ports.Agent, error) {
+	return f.CreateDevelopmentAgent(ctx, spiffeID, server, registry, attestorInterface, parser, docProvider)
+}
+
+// CreateProductionAgent implements ProductionAgentFactory for inmemory.
+// This is provided for interface compatibility, but inmemory agents always need
+// full dependencies (registry, attestor, etc.), so this method is intentionally
+// not the primary way to create inmemory agents - use CreateDevelopmentAgent instead.
+//
+// This implementation creates an agent with nil dependencies for server/registry/attestor,
+// which will likely fail at runtime. Callers should use CreateDevelopmentAgent with
+// proper dependencies.
+func (f *InMemoryAdapterFactory) CreateProductionAgent(
+	ctx context.Context,
+	spiffeID string,
+	parser ports.IdentityCredentialParser,
+) (ports.Agent, error) {
+	// For inmemory, we need all dependencies, but ProductionAgentFactory doesn't provide them.
+	// This is a design limitation - inmemory should use CreateDevelopmentAgent.
+	// We return an error to make this explicit.
+	return nil, fmt.Errorf("inmemory agents require full dependencies; use CreateDevelopmentAgent instead")
 }
 
 // SeedRegistry seeds the registry with an identity mapper (configuration, not runtime)

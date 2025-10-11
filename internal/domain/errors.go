@@ -125,3 +125,26 @@ var (
 	// Used by: domain.Node validation
 	ErrNodeInvalid = errors.New("node validation failed")
 )
+
+// Error checking helpers
+// These provide idiomatic error checking using errors.Is
+
+// IsIdentityDocumentInvalid checks if the error is ErrIdentityDocumentInvalid
+func IsIdentityDocumentInvalid(err error) bool {
+	return errors.Is(err, ErrIdentityDocumentInvalid)
+}
+
+// IsIdentityDocumentMismatch checks if the error is ErrIdentityDocumentMismatch
+func IsIdentityDocumentMismatch(err error) bool {
+	return errors.Is(err, ErrIdentityDocumentMismatch)
+}
+
+// IsCertificateChainInvalid checks if the error is ErrCertificateChainInvalid
+func IsCertificateChainInvalid(err error) bool {
+	return errors.Is(err, ErrCertificateChainInvalid)
+}
+
+// IsInvalidIdentityCredential checks if the error is ErrInvalidIdentityCredential
+func IsInvalidIdentityCredential(err error) bool {
+	return errors.Is(err, ErrInvalidIdentityCredential)
+}

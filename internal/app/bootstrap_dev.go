@@ -83,7 +83,8 @@ func Bootstrap(ctx context.Context, configLoader ports.ConfigLoader, factory por
 	factory.SealRegistry(registry)
 
 	// Step 10: Initialize SPIRE agent with registry
-	agent, err := factory.CreateAgent(ctx, config.AgentSpiffeID, server, registry, attestor, parser, docProvider)
+	// Development uses CreateDevelopmentAgent with full signature (all dependencies)
+	agent, err := factory.CreateDevelopmentAgent(ctx, config.AgentSpiffeID, server, registry, attestor, parser, docProvider)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SPIRE agent: %w", err)
 	}

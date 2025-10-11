@@ -4,19 +4,52 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/pocket/hexagon/spire/internal/adapters/outbound/inmemory"
 	"github.com/pocket/hexagon/spire/internal/adapters/outbound/spire"
 	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
-// SPIREAdapterFactory provides production SPIRE implementations of adapters
-// Uses external SPIRE infrastructure instead of in-memory implementations
+// SPIREAdapterFactory provides production SPIRE implementations of adapters.
+// This factory composes:
+//   - SPIRE infrastructure components (Client, Server, Agent) for heavy operations
+//   - SDK-based parsers (TrustDomainParser, IdentityCredentialParser) for validation
+//   - Lightweight validator (IdentityDocumentProvider) for certificate checks
+//
+// Design Note: In production SPIRE deployments:
+//   - Certificate creation happens on SPIRE Server (not in agent/workload)
+//   - Certificate validation uses basic checks (time, identity match)
+//   - Future: Implement full chain verification using x509svid.Verify from go-spiffe SDK
+//
+// The factory implements ports.CoreAdapterFactory for production use.
 type SPIREAdapterFactory struct {
 	config *spire.Config
 	client *spire.SPIREClient
 }
 
-// NewSPIREAdapterFactory creates the factory for production SPIRE adapters
+// NewSPIREAdapterFactory creates the factory for production SPIRE adapters.
+//
+// This factory connects to external SPIRE infrastructure (SPIRE Agent via Workload API)
+// and provides adapters that delegate to SPIRE for identity operations.
+//
+// Example:
+//
+//	factory, err := compose.NewSPIREAdapterFactory(ctx, &spire.Config{
+//	    SocketPath: "/tmp/spire-agent/public/api.sock",
+//	})
+//	if err != nil {
+//	    return fmt.Errorf("failed to create factory: %w", err)
+//	}
+//	defer factory.Close()
+//
+//	parser := factory.CreateTrustDomainParser()
+//	trustDomain, err := parser.FromString(ctx, "example.org")
+//
+// Parameters:
+//   - ctx: Context for client initialization (timeout, cancellation)
+//   - cfg: SPIRE client configuration (socket path, timeout)
+//
+// Returns:
+//   - *SPIREAdapterFactory: The factory for creating production adapters
+//   - error: Non-nil if config is invalid or SPIRE client creation fails
 func NewSPIREAdapterFactory(ctx context.Context, cfg *spire.Config) (*SPIREAdapterFactory, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("config cannot be nil")
@@ -35,57 +68,126 @@ func NewSPIREAdapterFactory(ctx context.Context, cfg *spire.Config) (*SPIREAdapt
 }
 
 // CreateTrustDomainParser creates a trust domain parser
-// Uses in-memory parser which wraps go-spiffe SDK
+// Uses SPIRE SDK-based parser for production-grade validation
 func (f *SPIREAdapterFactory) CreateTrustDomainParser() ports.TrustDomainParser {
-	return inmemory.NewInMemoryTrustDomainParser()
+	return spire.NewTrustDomainParser()
 }
 
 // CreateIdentityCredentialParser creates an identity credential parser
-// Uses in-memory parser which wraps go-spiffe SDK
+// Uses SPIRE SDK-based parser for production-grade validation
 func (f *SPIREAdapterFactory) CreateIdentityCredentialParser() ports.IdentityCredentialParser {
-	return inmemory.NewInMemoryIdentityCredentialParser()
+	return spire.NewIdentityCredentialParser()
 }
 
-// CreateIdentityDocumentProvider creates an identity document provider
-// For production, document creation is handled by SPIRE Server
-// We use in-memory provider for validation logic
+// CreateIdentityDocumentProvider creates an identity document provider.
+//
+// Design Note: In production SPIRE deployments, this provider is used only for
+// validation (time checks, identity matching). Document **creation** happens on
+// SPIRE Server, not in the agent/workload.
+//
+// This implementation uses the go-spiffe SDK's x509svid.Verify for production-grade validation:
+//   - Full chain-of-trust verification against trust bundles
+//   - Signature validation
+//   - Certificate expiration checks
+//   - SPIFFE ID extraction and validation from URI SAN
+//
+// The bundle source is obtained from the SPIRE Workload API client, which maintains
+// up-to-date trust bundles including federated trust domains.
+//
+// Returns an SDK-based provider with full security validation for production use.
 func (f *SPIREAdapterFactory) CreateIdentityDocumentProvider() ports.IdentityDocumentProvider {
-	return inmemory.NewInMemoryIdentityDocumentProvider()
+	// Use SDK-based validator with bundle source from Workload API
+	// SPIREClient implements x509bundle.Source interface via GetX509BundleForTrustDomain
+	return spire.NewSDKDocumentProvider(f.client)
 }
 
-// CreateServer creates a SPIRE-backed server
+// CreateServer creates a SPIRE-backed identity server.
+//
+// The server delegates to external SPIRE Server for certificate issuance.
+// In production, this connects to SPIRE Server via the Workload API client.
+//
+// Parameters:
+//   - ctx: Context for server initialization
+//   - trustDomain: Trust domain this server manages (e.g., "example.org")
+//   - trustDomainParser: Parser for trust domain validation
+//   - docProvider: Document provider (unused in production; SPIRE Server handles issuance)
+//
+// Returns:
+//   - ports.IdentityServer: SPIRE-backed server implementation
+//   - error: Non-nil if trust domain is invalid or server creation fails
 func (f *SPIREAdapterFactory) CreateServer(
 	ctx context.Context,
 	trustDomain string,
 	trustDomainParser ports.TrustDomainParser,
 	docProvider ports.IdentityDocumentProvider,
 ) (ports.IdentityServer, error) {
+	// Validate trust domain before creating server
+	if trustDomain == "" {
+		return nil, fmt.Errorf("trust domain cannot be empty")
+	}
+
 	return spire.NewServer(ctx, f.client, trustDomain, trustDomainParser)
 }
 
-// CreateAgent creates a SPIRE-backed production agent
-// This agent fully delegates to external SPIRE for registry and attestation
-func (f *SPIREAdapterFactory) CreateAgent(
+// CreateProductionAgent creates a SPIRE-backed production agent.
+//
+// The agent delegates to external SPIRE Agent/Server for all identity operations:
+//   - Workload attestation (via SPIRE Agent platform attestors)
+//   - Identity credential issuance (via SPIRE Server registration entries)
+//   - SVID fetching (via Workload API)
+//
+// This method implements ProductionAgentFactory with a clean signature that only
+// includes parameters actually used in production. Unlike development implementations,
+// SPIRE handles registry, attestation, and server operations externally.
+//
+// Parameters:
+//   - ctx: Context for agent initialization (timeout, cancellation)
+//   - spiffeID: Agent's own SPIFFE ID (e.g., "spiffe://example.org/agent/host")
+//   - parser: Identity credential parser for ID validation
+//
+// Returns:
+//   - ports.Agent: SPIRE-backed agent implementation
+//   - error: Non-nil if SPIFFE ID is invalid or agent creation fails
+func (f *SPIREAdapterFactory) CreateProductionAgent(
 	ctx context.Context,
 	spiffeID string,
-	server ports.IdentityServer,
-	registry ports.IdentityMapperRegistry,
-	attestorInterface ports.WorkloadAttestor,
 	parser ports.IdentityCredentialParser,
-	docProvider ports.IdentityDocumentProvider,
 ) (ports.Agent, error) {
-	// Use Agent which delegates everything to SPIRE
-	// Registry and attestor parameters are ignored (they're nil in production)
+	// Validate SPIFFE ID before creating agent
+	if spiffeID == "" {
+		return nil, fmt.Errorf("SPIFFE ID cannot be empty")
+	}
+
+	// Delegate to SPIRE Agent which handles all identity operations
 	return spire.NewAgent(ctx, f.client, spiffeID, parser)
 }
 
-// Close closes the SPIRE client connection
+// Close closes the SPIRE client connection and releases resources.
+//
+// This should be called when the factory is no longer needed, typically
+// in a defer statement after factory creation:
+//
+//	factory, err := compose.NewSPIREAdapterFactory(ctx, cfg)
+//	if err != nil {
+//	    return err
+//	}
+//	defer factory.Close()
+//
+// Returns an error if closing the client fails. The error can be safely
+// ignored in most cases as it only affects cleanup logging.
 func (f *SPIREAdapterFactory) Close() error {
 	if f.client != nil {
-		return f.client.Close()
+		if err := f.client.Close(); err != nil {
+			return fmt.Errorf("failed to close SPIRE client: %w", err)
+		}
 	}
 	return nil
 }
 
-// Verify SPIREAdapterFactory implements only CoreAdapterFactory (not the full composite)
-var _ ports.CoreAdapterFactory = (*SPIREAdapterFactory)(nil)
+// Verify SPIREAdapterFactory implements the segregated interfaces correctly
+var (
+	_ ports.BaseAdapterFactory        = (*SPIREAdapterFactory)(nil)
+	_ ports.ProductionServerFactory   = (*SPIREAdapterFactory)(nil)
+	_ ports.ProductionAgentFactory    = (*SPIREAdapterFactory)(nil)
+	_ ports.CoreAdapterFactory        = (*SPIREAdapterFactory)(nil) // Composite of above
+)

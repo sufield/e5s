@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/pocket/hexagon/spire/internal/domain"
+	"github.com/spiffe/go-spiffe/v2/bundle/x509bundle"
+	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
 )
 
@@ -77,4 +79,32 @@ func (c *SPIREClient) GetTrustDomain() string {
 // GetSocketPath returns the configured socket path
 func (c *SPIREClient) GetSocketPath() string {
 	return c.socketPath
+}
+
+// GetWorkloadAPIClient returns the underlying workloadapi.Client for advanced operations.
+// This can be used to access bundle sources for certificate validation.
+func (c *SPIREClient) GetWorkloadAPIClient() *workloadapi.Client {
+	return c.client
+}
+
+// GetX509BundleForTrustDomain fetches the X.509 bundle for a trust domain.
+// This implements the x509bundle.Source interface requirement for certificate validation.
+func (c *SPIREClient) GetX509BundleForTrustDomain(td spiffeid.TrustDomain) (*x509bundle.Bundle, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+	defer cancel()
+
+	// Fetch all bundles from Workload API
+	bundleSet, err := c.client.FetchX509Bundles(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch X.509 bundles: %w", err)
+	}
+
+	// Get bundle for specific trust domain
+	// GetX509BundleForTrustDomain returns (bundle, error) in newer SDK versions
+	bundle, err := bundleSet.GetX509BundleForTrustDomain(td)
+	if err != nil {
+		return nil, fmt.Errorf("trust bundle not found for domain %s: %w", td, err)
+	}
+
+	return bundle, nil
 }

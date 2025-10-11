@@ -12,16 +12,21 @@ import (
 // These interfaces are excluded from production builds via build tag.
 // Production builds use only CoreAdapterFactory (defined in outbound.go).
 
-// DevelopmentAdapterFactory extends CoreAdapterFactory with development-specific adapters.
+// DevelopmentAdapterFactory extends BaseAdapterFactory with development-specific adapters.
 // These methods create in-memory implementations for local attestation and registry.
 // Production implementations don't need these as they delegate to external SPIRE.
 //
 // NOTE: This interface is ONLY available in development builds.
 // Production code should depend on CoreAdapterFactory only.
 type DevelopmentAdapterFactory interface {
-	CoreAdapterFactory
+	BaseAdapterFactory
 	CreateRegistry() IdentityMapperRegistry
 	CreateAttestor() WorkloadAttestor
+	// CreateDevelopmentServer creates an in-memory server with full control over dependencies.
+	CreateDevelopmentServer(ctx context.Context, trustDomain string, trustDomainParser TrustDomainParser, docProvider IdentityDocumentProvider) (IdentityServer, error)
+	// CreateDevelopmentAgent creates an in-memory agent with full control over dependencies.
+	// Requires all parameters because in-memory implementation manages registry, attestation, and issuance locally.
+	CreateDevelopmentAgent(ctx context.Context, spiffeID string, server IdentityServer, registry IdentityMapperRegistry, attestor WorkloadAttestor, parser IdentityCredentialParser, docProvider IdentityDocumentProvider) (Agent, error)
 }
 
 // RegistryConfigurator provides registry configuration operations.

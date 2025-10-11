@@ -34,14 +34,17 @@ func Bootstrap(ctx context.Context, configLoader ports.ConfigLoader, factory por
 	docProvider := factory.CreateIdentityDocumentProvider()
 
 	// Step 5: Initialize SPIRE server (connects to external SPIRE Server)
+	// Note: In production, the server is optional - agents can work independently via Workload API
 	server, err := factory.CreateServer(ctx, config.TrustDomain, trustDomainParser, docProvider)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SPIRE server: %w", err)
 	}
+	_ = server // Server is created for potential future use but not currently needed by agent
 
 	// Step 6: Initialize SPIRE agent (connects to external SPIRE Agent)
-	// In production: registry and attestor are nil (handled by external SPIRE)
-	agent, err := factory.CreateAgent(ctx, config.AgentSpiffeID, server, nil, nil, parser, docProvider)
+	// Production uses CreateProductionAgent with clean signature (only essential params)
+	// Registry and attestor are handled by external SPIRE Server/Agent
+	agent, err := factory.CreateProductionAgent(ctx, config.AgentSpiffeID, parser)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SPIRE agent: %w", err)
 	}
