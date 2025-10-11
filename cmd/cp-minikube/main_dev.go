@@ -79,7 +79,7 @@ func main() {
 }
 
 func runUp(ctx context.Context) error {
-	fmt.Println("=== Starting Minikube Infrastructure ===\n")
+	fmt.Println("=== Starting Minikube Infrastructure ===")
 
 	if err := wiring.BootstrapMinikubeInfra(ctx); err != nil {
 		return fmt.Errorf("failed to bootstrap infrastructure: %w", err)
@@ -98,7 +98,7 @@ func runUp(ctx context.Context) error {
 }
 
 func runDown(ctx context.Context) error {
-	fmt.Println("=== Stopping Minikube Infrastructure ===\n")
+	fmt.Println("=== Stopping Minikube Infrastructure ===")
 
 	if err := wiring.DestroyMinikubeInfra(ctx); err != nil {
 		return fmt.Errorf("failed to destroy infrastructure: %w", err)

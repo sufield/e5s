@@ -1,3 +1,5 @@
+//go:build dev
+
 package app_test
 
 import (

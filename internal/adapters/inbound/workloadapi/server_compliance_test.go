@@ -1,3 +1,5 @@
+//go:build dev
+
 package workloadapi_test
 
 // Workload API Server Compliance Tests
