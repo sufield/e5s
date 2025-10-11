@@ -5,9 +5,16 @@
 # - SPIRE_AGENT_SOCKET overrides spire.socket_path
 # - SPIRE_TRUST_DOMAIN overrides spire.trust_domain
 # - HTTP_ADDRESS overrides http.address
+# - HTTP_PORT overrides http.port
 # - HTTP_ENABLED overrides http.enabled
+# - HTTP_TIMEOUT overrides http.timeout
+# - HTTP_READ_HEADER_TIMEOUT overrides http.read_header_timeout
+# - HTTP_READ_TIMEOUT overrides http.read_timeout
+# - HTTP_WRITE_TIMEOUT overrides http.write_timeout
+# - HTTP_IDLE_TIMEOUT overrides http.idle_timeout
 # - AUTH_PEER_VERIFICATION overrides http.authentication.peer_verification
 # - ALLOWED_CLIENT_ID overrides http.authentication.allowed_id
+# - ALLOWED_IDS overrides http.authentication.allowed_ids (comma-separated)
 # - EXPECTED_SERVER_ID overrides http.authentication.allowed_id (for clients)
 # - AUTH_TRUST_DOMAIN overrides http.authentication.trust_domain
 
@@ -22,8 +29,27 @@ http:
   # Or specify full address (takes precedence over port)
   address: ":8443"
 
-  # Request timeout
+  # Client request timeout (how long to wait for server response)
   timeout: 30s
+
+  # Server-side timeouts (security and performance tuning)
+  # These protect against slow client attacks and resource exhaustion
+
+  # ReadHeaderTimeout: Maximum time to read request headers
+  # Prevents Slowloris attacks (clients sending headers very slowly)
+  read_header_timeout: 10s
+
+  # ReadTimeout: Maximum time to read entire request (headers + body)
+  # Prevents clients from holding connections open indefinitely
+  read_timeout: 30s
+
+  # WriteTimeout: Maximum time to write response
+  # Prevents slow clients from blocking server resources
+  write_timeout: 30s
+
+  # IdleTimeout: Maximum time to wait for next request on keep-alive connections
+  # Closes idle connections to free resources
+  idle_timeout: 120s
 
   # Authentication configuration
   # NOTE: This library only handles AUTHENTICATION (identity verification)

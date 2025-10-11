@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pocket/hexagon/spire/internal/config"
 	"github.com/spiffe/go-spiffe/v2/spiffetls"
 	"github.com/spiffe/go-spiffe/v2/spiffetls/tlsconfig"
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
@@ -57,16 +58,16 @@ func NewHTTPServer(ctx context.Context, cfg ServerConfig) (*HTTPServer, error) {
 
 	// Apply defaults for timeouts
 	if cfg.ReadHeaderTimeout == 0 {
-		cfg.ReadHeaderTimeout = 10 * time.Second
+		cfg.ReadHeaderTimeout = config.DefaultReadHeaderTimeout
 	}
 	if cfg.ReadTimeout == 0 {
-		cfg.ReadTimeout = 30 * time.Second
+		cfg.ReadTimeout = config.DefaultReadTimeout
 	}
 	if cfg.WriteTimeout == 0 {
-		cfg.WriteTimeout = 30 * time.Second
+		cfg.WriteTimeout = config.DefaultWriteTimeout
 	}
 	if cfg.IdleTimeout == 0 {
-		cfg.IdleTimeout = 120 * time.Second
+		cfg.IdleTimeout = config.DefaultIdleTimeout
 	}
 
 	// Create X.509 source from SPIRE Workload API

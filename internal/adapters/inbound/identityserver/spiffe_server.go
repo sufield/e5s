@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pocket/hexagon/spire/internal/config"
 	"github.com/pocket/hexagon/spire/internal/ports"
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	"github.com/spiffe/go-spiffe/v2/spiffetls"
@@ -44,16 +45,16 @@ func NewSPIFFEServer(ctx context.Context, cfg ports.MTLSConfig) (ports.MTLSServe
 
 	// Apply defaults
 	if cfg.HTTP.Address == "" {
-		cfg.HTTP.Address = ":8443"
+		cfg.HTTP.Address = config.DefaultHTTPAddress
 	}
 	if cfg.HTTP.ReadHeaderTimeout <= 0 {
-		cfg.HTTP.ReadHeaderTimeout = 10 * time.Second
+		cfg.HTTP.ReadHeaderTimeout = config.DefaultReadHeaderTimeout
 	}
 	if cfg.HTTP.WriteTimeout <= 0 {
-		cfg.HTTP.WriteTimeout = 30 * time.Second
+		cfg.HTTP.WriteTimeout = config.DefaultWriteTimeout
 	}
 	if cfg.HTTP.IdleTimeout <= 0 {
-		cfg.HTTP.IdleTimeout = 120 * time.Second
+		cfg.HTTP.IdleTimeout = config.DefaultIdleTimeout
 	}
 
 	// Build the X509 source from the local SPIRE Agent

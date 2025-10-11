@@ -2,9 +2,9 @@
 // and identity documents, abstracting from infrastructure dependencies.
 package domain
 
-// NOTE: This file (selector.go) is primarily used by the in-memory implementation.
+// NOTE: Selector types and matching logic are primarily used by in-memory implementations.
 // In production deployments using real SPIRE, selector matching is delegated to SPIRE Server.
-// However, this file must remain included in production builds because:
+// However, these types must remain in production builds because:
 // 1. The spire.SPIREClient.Attest() method returns domain.SelectorSet
 // 2. Domain types (Node, IdentityMapper) reference SelectorSet
 // 3. Factory interfaces (AdapterFactory.SeedRegistry) use domain.IdentityMapper
@@ -16,28 +16,45 @@ import (
 	"strings"
 )
 
-// SelectorType represents the category of selector
-type SelectorType string
-
-const (
-	SelectorTypeNode     SelectorType = "node"
-	SelectorTypeWorkload SelectorType = "workload"
-)
-
-// Selector represents a key-value pair used to match workload or node attributes
-// Examples: unix:uid:1001, k8s:namespace:default
+// Selector represents a key-value pair used to match workload or node attributes.
+// Selectors are immutable after creation and are used by SPIRE for workload attestation.
+//
+// Format: type:key:value
+//
+// Examples:
+//   - unix:uid:1001 (workload selector for UID)
+//   - k8s:namespace:default (workload selector for K8s namespace)
+//   - k8s:pod:ns:default:name (multi-colon value support)
+//   - aws:instance-type:t2.micro (node selector for instance type)
+//
+// SPIRE uses selectors to map workload/node properties to SPIFFE identities.
+// During attestation, SPIRE Agent collects selectors about the workload,
+// then SPIRE Server matches them against registration entries to determine
+// which identity (SPIFFE ID) should be issued.
 type Selector struct {
 	selectorType SelectorType
 	key          string
 	value        string
-	formatted    string
+	formatted    string // Pre-computed string representation for performance
 }
 
-// NewSelector creates a new selector with the given type, key, and value.
-// Returns ErrEmptyKey if key is empty, ErrEmptyValue if value is empty.
+// NewSelector creates a new selector with validation.
+//
+// Parameters:
+//   - selectorType: The category of selector (node or workload)
+//   - key: The selector attribute name (e.g., "uid", "namespace")
+//   - value: The selector attribute value (e.g., "1000", "default")
+//
+// Returns:
+//   - ErrEmptyKey if key is empty
+//   - ErrEmptyValue if value is empty
 //
 // Example:
-//   NewSelector(SelectorTypeWorkload, "uid", "1000") → "workload:uid:1000"
+//   selector, err := NewSelector(SelectorTypeWorkload, "uid", "1000")
+//   if err != nil {
+//       return err
+//   }
+//   // selector.String() == "workload:uid:1000"
 func NewSelector(selectorType SelectorType, key, value string) (*Selector, error) {
 	if key == "" {
 		return nil, fmt.Errorf("%w", ErrEmptyKey)
@@ -55,13 +72,25 @@ func NewSelector(selectorType SelectorType, key, value string) (*Selector, error
 	}, nil
 }
 
-// ParseSelector parses a selector from string format (key:value).
-// Handles multi-colon values consistently with ParseSelectorFromString.
-// Returns ErrInvalidFormat if format is invalid, ErrEmptyKey or ErrEmptyValue if components are empty.
+// ParseSelector parses a selector from "key:value" format with explicit type.
+// Handles multi-colon values consistently (e.g., "user:server:prod" → value="server:prod").
+//
+// This is useful when the selector type is known from context (e.g., parsing
+// workload-specific configuration where all selectors are workload-type).
+//
+// Format: key:value (type provided separately)
+//
+// Returns:
+//   - ErrInvalidFormat if format is invalid
+//   - ErrEmptyKey if key is empty
+//   - ErrEmptyValue if value is empty
 //
 // Example:
-//   ParseSelector(SelectorTypeWorkload, "uid:1000") → "workload:uid:1000"
-//   ParseSelector(SelectorTypeWorkload, "user:server:prod") → "workload:user:server:prod"
+//   selector, err := ParseSelector(SelectorTypeWorkload, "uid:1000")
+//   // selector: workload:uid:1000
+//
+//   selector, err := ParseSelector(SelectorTypeWorkload, "user:server:prod")
+//   // selector: workload:user:server:prod (value="server:prod")
 func ParseSelector(selectorType SelectorType, s string) (*Selector, error) {
 	if s == "" {
 		return nil, fmt.Errorf("%w: input string is empty", ErrInvalidFormat)
@@ -92,13 +121,28 @@ func ParseSelector(selectorType SelectorType, s string) (*Selector, error) {
 	}, nil
 }
 
-// ParseSelectorFromString parses a full selector string like "workload:uid:1001".
-// Handles multi-colon values like "workload:pod:ns:default:podname".
-// Returns ErrInvalidFormat if format is invalid.
+// ParseSelectorFromString parses a full selector string in "type:key:value" format.
+// Handles multi-colon values correctly (e.g., "workload:pod:ns:default:podname").
+//
+// This is the primary parsing function when receiving selector strings from
+// external sources (config files, SPIRE Server, etc.) where the full format
+// including type is present.
+//
+// Format: type:key:value
+//
+// Returns:
+//   - ErrInvalidFormat if format is invalid
+//   - ErrEmptyKey if key is empty
+//   - ErrEmptyValue if value is empty
 //
 // Example:
-//   ParseSelectorFromString("workload:uid:1000") → Selector{Type: "workload", Key: "uid", Value: "1000"}
-//   ParseSelectorFromString("workload:pod:ns:default:name") → Selector{Type: "workload", Key: "pod", Value: "ns:default:name"}
+//   selector, err := ParseSelectorFromString("workload:uid:1000")
+//   // selector.Type() == SelectorTypeWorkload
+//   // selector.Key() == "uid"
+//   // selector.Value() == "1000"
+//
+//   selector, err := ParseSelectorFromString("workload:pod:ns:default:name")
+//   // selector.Value() == "ns:default:name" (multi-colon support)
 func ParseSelectorFromString(s string) (*Selector, error) {
 	if s == "" {
 		return nil, fmt.Errorf("%w: input string is empty", ErrInvalidFormat)
@@ -117,28 +161,61 @@ func ParseSelectorFromString(s string) (*Selector, error) {
 	return NewSelector(selectorType, key, value)
 }
 
-// String returns the selector in formatted string
+// String returns the selector in formatted string representation.
+// The format is always "type:key:value" for consistency.
+//
+// Example:
+//   selector.String() // "workload:uid:1000"
 func (s *Selector) String() string {
 	return s.formatted
 }
 
-// Type returns the selector type
+// Type returns the selector type (node or workload).
+//
+// Example:
+//   if selector.Type() == SelectorTypeWorkload {
+//       // Process workload selector
+//   }
 func (s *Selector) Type() SelectorType {
 	return s.selectorType
 }
 
-// Key returns the selector key
+// Key returns the selector key (e.g., "uid", "namespace", "pod").
+//
+// Example:
+//   switch selector.Key() {
+//   case "uid":
+//       // Process UID selector
+//   case "namespace":
+//       // Process namespace selector
+//   }
 func (s *Selector) Key() string {
 	return s.key
 }
 
-// Value returns the selector value
+// Value returns the selector value (e.g., "1000", "default").
+// For selectors with multi-colon values, this returns the full value
+// with colons preserved (e.g., "ns:default:podname").
+//
+// Example:
+//   uid := selector.Value() // "1000"
 func (s *Selector) Value() string {
 	return s.value
 }
 
-// Equals checks if two selectors are equal using field-by-field comparison.
+// Equals performs field-by-field comparison of two selectors.
 // Returns false if either selector is nil.
+//
+// Two selectors are considered equal if they have the same type, key, and value.
+// This is used for deduplication in SelectorSet and for matching operations.
+//
+// Example:
+//   s1, _ := ParseSelectorFromString("workload:uid:1000")
+//   s2, _ := ParseSelectorFromString("workload:uid:1000")
+//   s1.Equals(s2) // true
+//
+//   s3, _ := ParseSelectorFromString("workload:uid:1001")
+//   s1.Equals(s3) // false
 func (s *Selector) Equals(other *Selector) bool {
 	if s == nil || other == nil {
 		return false
@@ -146,73 +223,4 @@ func (s *Selector) Equals(other *Selector) bool {
 	return s.selectorType == other.selectorType &&
 		s.key == other.key &&
 		s.value == other.value
-}
-
-// SelectorSet represents a collection of unique selectors.
-// Uses map internally for O(1) Contains/Add operations.
-type SelectorSet struct {
-	// Map key is the formatted selector string for fast lookup
-	selectors map[string]*Selector
-}
-
-// NewSelectorSet creates a new selector set with the given selectors.
-// Nil selectors are ignored. Duplicates are automatically deduplicated.
-func NewSelectorSet(selectors ...*Selector) *SelectorSet {
-	ss := &SelectorSet{selectors: make(map[string]*Selector)}
-	for _, s := range selectors {
-		if s != nil {
-			ss.selectors[s.formatted] = s
-		}
-	}
-	return ss
-}
-
-// Add adds a selector to the set.
-// Ensures uniqueness - duplicates are not added.
-// Nil selectors are ignored.
-// Time complexity: O(1)
-func (ss *SelectorSet) Add(selector *Selector) {
-	if selector != nil {
-		ss.selectors[selector.formatted] = selector
-	}
-}
-
-// Contains checks if the set contains a selector.
-// Returns false for nil selectors.
-// Time complexity: O(1)
-func (ss *SelectorSet) Contains(selector *Selector) bool {
-	if selector == nil {
-		return false
-	}
-	_, ok := ss.selectors[selector.formatted]
-	return ok
-}
-
-// Len returns the number of selectors in the set.
-// Time complexity: O(1)
-func (ss *SelectorSet) Len() int {
-	return len(ss.selectors)
-}
-
-// All returns all selectors as a slice.
-// Returns a new slice to prevent external mutation (DDD immutability).
-// The order of selectors is non-deterministic (map iteration order).
-// Time complexity: O(n)
-func (ss *SelectorSet) All() []*Selector {
-	result := make([]*Selector, 0, len(ss.selectors))
-	for _, s := range ss.selectors {
-		result = append(result, s)
-	}
-	return result
-}
-
-// Strings returns all selectors as formatted strings.
-// The order of strings is non-deterministic (map iteration order).
-// Time complexity: O(n)
-func (ss *SelectorSet) Strings() []string {
-	result := make([]string, 0, len(ss.selectors))
-	for formatted := range ss.selectors {
-		result = append(result, formatted)
-	}
-	return result
 }
