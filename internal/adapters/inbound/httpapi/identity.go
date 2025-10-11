@@ -1,12 +1,28 @@
+// Package httpapi provides SPIFFE-aware HTTP utilities and middlewares for
+// context-based identity handling. It offers safe extraction of SPIFFE IDs from
+// authenticated mTLS requests and composable middlewares for authorization.
+//
+// All functions assume mTLS middleware has populated the request context with
+// the authenticated client's SPIFFE ID.
 package httpapi
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
+)
+
+// Sentinel errors for identity operations.
+var (
+	// ErrNoSPIFFEID indicates no SPIFFE ID is present in the request context.
+	ErrNoSPIFFEID = errors.New("no SPIFFE ID in request context")
+
+	// ErrInvalidRequest indicates the request or context is nil.
+	ErrInvalidRequest = errors.New("invalid request or context")
 )
 
 // contextKey is the type for context keys to avoid collisions.
@@ -16,6 +32,7 @@ const spiffeIDKey contextKey = "spiffe-id"
 
 // GetSPIFFEID extracts the authenticated client SPIFFE ID from request context.
 // Returns the ID and true if present, zero value and false otherwise.
+// Returns false if request or context is nil.
 //
 // Example:
 //
@@ -28,11 +45,18 @@ const spiffeIDKey contextKey = "spiffe-id"
 //	    // Use clientID for application logic
 //	}
 func GetSPIFFEID(r *http.Request) (spiffeid.ID, bool) {
-	id, ok := r.Context().Value(spiffeIDKey).(spiffeid.ID)
+	if r == nil {
+		return spiffeid.ID{}, false
+	}
+	ctx := r.Context()
+	if ctx == nil {
+		return spiffeid.ID{}, false
+	}
+	id, ok := ctx.Value(spiffeIDKey).(spiffeid.ID)
 	return id, ok
 }
 
-// MustGetSPIFFEID extracts the SPIFFE ID or panics.
+// MustGetSPIFFEID extracts the SPIFFE ID or panics with ErrNoSPIFFEID.
 // Use only in handlers where mTLS middleware guarantees ID presence.
 //
 // Example:
@@ -44,7 +68,7 @@ func GetSPIFFEID(r *http.Request) (spiffeid.ID, bool) {
 func MustGetSPIFFEID(r *http.Request) spiffeid.ID {
 	id, ok := GetSPIFFEID(r)
 	if !ok {
-		panic("SPIFFE ID not found in request context")
+		panic(ErrNoSPIFFEID)
 	}
 	return id
 }
