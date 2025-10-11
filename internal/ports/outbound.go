@@ -83,14 +83,6 @@ type Agent interface {
 	FetchIdentityDocument(ctx context.Context, workload ProcessIdentity) (*Identity, error)
 }
 
-// IdentityDocumentValidator validates identity documents using SDK verification logic
-// This port abstracts SDK-specific identity document validation (chain-of-trust, expiration, etc.)
-type IdentityDocumentValidator interface {
-	// Validate verifies an identity document is valid and matches the expected identity credential
-	// This may use go-spiffe SDK's ParseAndVerify or similar validation logic
-	Validate(ctx context.Context, doc *domain.IdentityDocument, expectedID *domain.IdentityCredential) error
-}
-
 // TrustDomainParser parses and validates trust domain strings
 // This port abstracts SDK-specific trust domain parsing (e.g., go-spiffe's spiffeid.TrustDomainFromString)
 // to avoid duplicating SDK logic in the domain layer.
@@ -156,13 +148,11 @@ type TrustBundleProvider interface {
 	GetBundleForIdentity(ctx context.Context, identityCredential *domain.IdentityCredential) ([]byte, error)
 }
 
-// IdentityDocumentProvider creates and manages identity documents
-// This port abstracts SDK-specific identity document creation/validation (e.g., go-spiffe's x509svid package)
-// to avoid duplicating SDK logic in the domain layer.
+// IdentityDocumentCreator creates identity documents (X.509 SVIDs).
+// This port abstracts SDK-specific identity document creation (e.g., go-spiffe's x509svid package).
 //
-// Design Note: The go-spiffe SDK provides mature IdentityDocument handling:
+// Design Note: The go-spiffe SDK provides mature document creation:
 // - x509svid.ParseX509SVID(certBytes, keyBytes) for DER parsing
-// - x509svid.Verify(cert, chain, bundle) for chain-of-trust validation
 // - Proper crypto.Signer handling for private keys
 // By using this port:
 // - Real implementation can use SDK for proper document handling
@@ -170,37 +160,80 @@ type TrustBundleProvider interface {
 //
 // Error Contract:
 // - CreateX509IdentityDocument returns domain.ErrIdentityDocumentInvalid for invalid inputs
-// - ValidateIdentityDocument returns domain.ErrIdentityDocumentExpired for expired documents
-// - ValidateIdentityDocument returns domain.ErrIdentityDocumentMismatch for namespace mismatch
-// - ValidateIdentityDocument returns domain.ErrCertificateChainInvalid for chain validation failure
-// - Domain remains crypto-agnostic (only holds result data)
-//
-// Naming: "IdentityDocumentProvider" is more inclusive than "CertificateProvider" (encompasses
-// both X.509 and JWT formats) while remaining self-explanatory and domain-focused.
-type IdentityDocumentProvider interface {
+type IdentityDocumentCreator interface {
 	// CreateX509IdentityDocument creates an X.509 identity document with certificate and private key
 	// Generates certificate signed by CA, extracts expiration, returns domain.IdentityDocument
 	// In real implementation: uses SDK's x509svid.Parse or manual x509.CreateCertificate
 	CreateX509IdentityDocument(ctx context.Context, identityCredential *domain.IdentityCredential, caCert interface{}, caKey interface{}) (*domain.IdentityDocument, error)
+}
+
+// IdentityDocumentValidator validates identity documents.
+// This port abstracts SDK-specific identity document validation (e.g., go-spiffe's x509svid verification).
+//
+// Design Note: The go-spiffe SDK provides mature validation:
+// - x509svid.Verify(cert, chain, bundle) for chain-of-trust validation
+//
+// Error Contract:
+// - ValidateIdentityDocument returns domain.ErrIdentityDocumentExpired for expired documents
+// - ValidateIdentityDocument returns domain.ErrIdentityDocumentMismatch for identity mismatch
+// - ValidateIdentityDocument returns domain.ErrCertificateChainInvalid for chain validation failure
+type IdentityDocumentValidator interface {
 	// ValidateIdentityDocument performs full identity document validation (time, chain-of-trust, signature)
 	// Checks identity credential match, expiration, and optionally bundle verification
 	// Returns domain sentinel errors (ErrIdentityDocumentExpired, ErrIdentityDocumentInvalid, ErrIdentityDocumentMismatch)
 	ValidateIdentityDocument(ctx context.Context, doc *domain.IdentityDocument, expectedID *domain.IdentityCredential) error
 }
 
-// AdapterFactory is the outbound port for creating concrete adapters.
-// This allows swapping implementations (in-memory, real SPIRE, etc.) at bootstrap.
-// Includes seeding methods for registry (configuration only, called during startup).
-type AdapterFactory interface {
-	CreateRegistry() IdentityMapperRegistry
+// IdentityDocumentProvider combines creation and validation of identity documents.
+// This composite interface is provided for adapters that implement both responsibilities.
+//
+// Naming: "IdentityDocumentProvider" is more inclusive than "CertificateProvider" (encompasses
+// both X.509 and JWT formats) while remaining self-explanatory and domain-focused.
+type IdentityDocumentProvider interface {
+	IdentityDocumentCreator
+	IdentityDocumentValidator
+}
+
+// CoreAdapterFactory provides essential adapter creation methods.
+// All adapter implementations (development and production) must provide these.
+type CoreAdapterFactory interface {
 	CreateTrustDomainParser() TrustDomainParser
 	CreateIdentityCredentialParser() IdentityCredentialParser
 	CreateIdentityDocumentProvider() IdentityDocumentProvider
 	CreateServer(ctx context.Context, trustDomain string, trustDomainParser TrustDomainParser, docProvider IdentityDocumentProvider) (IdentityServer, error)
-	CreateAttestor() WorkloadAttestor
-	RegisterWorkloadUID(attestor WorkloadAttestor, uid int, selector string)
 	CreateAgent(ctx context.Context, spiffeID string, server IdentityServer, registry IdentityMapperRegistry, attestor WorkloadAttestor, parser IdentityCredentialParser, docProvider IdentityDocumentProvider) (Agent, error)
-	// Seeding operations (configuration, not runtime - called only during bootstrap)
+}
+
+// DevelopmentAdapterFactory extends CoreAdapterFactory with development-specific adapters.
+// These methods create in-memory implementations for local attestation and registry.
+// Production implementations don't need these as they delegate to external SPIRE.
+type DevelopmentAdapterFactory interface {
+	CoreAdapterFactory
+	CreateRegistry() IdentityMapperRegistry
+	CreateAttestor() WorkloadAttestor
+}
+
+// RegistryConfigurator provides registry configuration operations.
+// Only used during bootstrap to seed identity mappers (like SPIRE registration entries).
+// Production implementations that use external SPIRE Server don't need this.
+type RegistryConfigurator interface {
 	SeedRegistry(registry IdentityMapperRegistry, ctx context.Context, mapper *domain.IdentityMapper) error
 	SealRegistry(registry IdentityMapperRegistry)
+}
+
+// AttestorConfigurator provides attestor configuration operations.
+// Only used during bootstrap to register workload UIDs for in-memory attestation.
+// Production implementations that use SPIRE Agent don't need this.
+type AttestorConfigurator interface {
+	RegisterWorkloadUID(attestor WorkloadAttestor, uid int, selector string)
+}
+
+// AdapterFactory is the composite interface for complete adapter factory functionality.
+// Development implementations provide all capabilities.
+// Production implementations only implement CoreAdapterFactory.
+type AdapterFactory interface {
+	CoreAdapterFactory
+	DevelopmentAdapterFactory
+	RegistryConfigurator
+	AttestorConfigurator
 }

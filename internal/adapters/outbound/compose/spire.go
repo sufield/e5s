@@ -6,7 +6,6 @@ import (
 
 	"github.com/pocket/hexagon/spire/internal/adapters/outbound/inmemory"
 	"github.com/pocket/hexagon/spire/internal/adapters/outbound/spire"
-	"github.com/pocket/hexagon/spire/internal/domain"
 	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
@@ -33,15 +32,6 @@ func NewSPIREAdapterFactory(ctx context.Context, cfg *spire.Config) (*SPIREAdapt
 		config: cfg,
 		client: client,
 	}, nil
-}
-
-// CreateRegistry creates an identity mapper registry
-// PRODUCTION NOTE: In production mode with SPIRE, the registry is managed by SPIRE Server.
-// This method is not used when using ProductionAgent.
-// Returns nil to indicate registry is external.
-func (f *SPIREAdapterFactory) CreateRegistry() ports.IdentityMapperRegistry {
-	// Production uses SPIRE Server's registration entries, not in-memory registry
-	return nil
 }
 
 // CreateTrustDomainParser creates a trust domain parser
@@ -73,21 +63,6 @@ func (f *SPIREAdapterFactory) CreateServer(
 	return spire.NewServer(ctx, f.client, trustDomain, trustDomainParser)
 }
 
-// CreateAttestor creates a workload attestor
-// PRODUCTION NOTE: In production mode with SPIRE, attestation is handled by SPIRE Agent.
-// This method is not used when using ProductionAgent.
-// Returns nil to indicate attestation is external.
-func (f *SPIREAdapterFactory) CreateAttestor() ports.WorkloadAttestor {
-	// Production uses SPIRE Agent for workload attestation, not local attestor
-	return nil
-}
-
-// RegisterWorkloadUID registers a workload UID with the attestor
-// PRODUCTION NOTE: Not used in production mode - SPIRE Server manages registration entries
-func (f *SPIREAdapterFactory) RegisterWorkloadUID(attestorInterface ports.WorkloadAttestor, uid int, selector string) {
-	// No-op in production mode - SPIRE Server handles workload registration
-}
-
 // CreateAgent creates a SPIRE-backed production agent
 // This agent fully delegates to external SPIRE for registry and attestation
 func (f *SPIREAdapterFactory) CreateAgent(
@@ -104,21 +79,6 @@ func (f *SPIREAdapterFactory) CreateAgent(
 	return spire.NewAgent(ctx, f.client, spiffeID, parser)
 }
 
-// SeedRegistry seeds the registry with an identity mapper
-// PRODUCTION NOTE: Not used in production - SPIRE Server manages registration entries
-// Registration entries should be created via SPIRE Server API or CLI
-func (f *SPIREAdapterFactory) SeedRegistry(registry ports.IdentityMapperRegistry, ctx context.Context, mapper *domain.IdentityMapper) error {
-	// No-op in production - registry is managed by SPIRE Server
-	// Registration entries are created using: spire-server entry create
-	return nil
-}
-
-// SealRegistry marks the registry as immutable after seeding
-// PRODUCTION NOTE: Not used in production - SPIRE Server manages registry lifecycle
-func (f *SPIREAdapterFactory) SealRegistry(registry ports.IdentityMapperRegistry) {
-	// No-op in production - SPIRE Server manages registry
-}
-
 // Close closes the SPIRE client connection
 func (f *SPIREAdapterFactory) Close() error {
 	if f.client != nil {
@@ -127,4 +87,5 @@ func (f *SPIREAdapterFactory) Close() error {
 	return nil
 }
 
-var _ ports.AdapterFactory = (*SPIREAdapterFactory)(nil)
+// Verify SPIREAdapterFactory implements only CoreAdapterFactory (not the full composite)
+var _ ports.CoreAdapterFactory = (*SPIREAdapterFactory)(nil)

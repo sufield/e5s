@@ -32,7 +32,7 @@ func TestIdentityDocumentValidator_Validate_NilDocument(t *testing.T) {
 	credential := domain.NewIdentityCredentialFromComponents(td, "/workload")
 
 	// Act - Pass nil document
-	err := validator.Validate(ctx, nil, credential)
+	err := validator.ValidateIdentityDocument(ctx, nil, credential)
 
 	// Assert
 	assert.Error(t, err)
@@ -63,7 +63,7 @@ func TestIdentityDocumentValidator_Validate_NilExpectedID(t *testing.T) {
 	)
 
 	// Act - Pass nil expected ID
-	err = validator.Validate(ctx, doc, nil)
+	err = validator.ValidateIdentityDocument(ctx, doc, nil)
 
 	// Assert
 	assert.Error(t, err)
@@ -88,7 +88,7 @@ func TestIdentityDocumentValidator_Validate_ExpiredDocument(t *testing.T) {
 	)
 
 	// Act
-	err := validator.Validate(ctx, doc, credential)
+	err := validator.ValidateIdentityDocument(ctx, doc, credential)
 
 	// Assert
 	assert.Error(t, err)
@@ -114,7 +114,7 @@ func TestIdentityDocumentValidator_Validate_MismatchedNamespace(t *testing.T) {
 	)
 
 	// Act - Validate against different namespace2
-	err := validator.Validate(ctx, doc, namespace2)
+	err := validator.ValidateIdentityDocument(ctx, doc, namespace2)
 
 	// Assert
 	assert.Error(t, err)
@@ -148,7 +148,7 @@ func TestIdentityDocumentValidator_Validate_Success(t *testing.T) {
 	)
 
 	// Act
-	err = validator.Validate(ctx, doc, credential)
+	err = validator.ValidateIdentityDocument(ctx, doc, credential)
 
 	// Assert - Should succeed
 	assert.NoError(t, err)

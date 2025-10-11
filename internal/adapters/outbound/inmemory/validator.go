@@ -27,9 +27,9 @@ func NewIdentityDocumentValidator(bundleProvider ports.TrustBundleProvider) *Ide
 	}
 }
 
-// Validate checks if an identity certificate is valid for the given identity credential
+// ValidateIdentityDocument checks if an identity certificate is valid for the given identity credential
 // This is the anti-corruption layer between domain and SDK validation logic
-func (v *IdentityDocumentValidator) Validate(ctx context.Context, cert *domain.IdentityDocument, expectedID *domain.IdentityCredential) error {
+func (v *IdentityDocumentValidator) ValidateIdentityDocument(ctx context.Context, cert *domain.IdentityDocument, expectedID *domain.IdentityCredential) error {
 	if cert == nil {
 		return fmt.Errorf("%w: identity document cannot be nil", domain.ErrIdentityDocumentInvalid)
 	}

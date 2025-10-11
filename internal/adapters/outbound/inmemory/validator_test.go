@@ -22,17 +22,17 @@ func TestIdentityDocumentValidator_Validate(t *testing.T) {
 	expiredDoc := domain.NewIdentityDocumentFromComponents(expected, nil, nil, nil, time.Now().Add(-1*time.Hour))
 
 	// Valid
-	err := validator.Validate(ctx, validDoc, expected)
+	err := validator.ValidateIdentityDocument(ctx, validDoc, expected)
 	require.NoError(t, err)
 
 	// Expired
-	err = validator.Validate(ctx, expiredDoc, expected)
+	err = validator.ValidateIdentityDocument(ctx, expiredDoc, expected)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "expired")
 
 	// Mismatch namespace
 	wrongNS := domain.NewIdentityCredentialFromComponents(domain.NewTrustDomainFromName("other.org"), "/workload")
-	err = validator.Validate(ctx, validDoc, wrongNS)
+	err = validator.ValidateIdentityDocument(ctx, validDoc, wrongNS)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "mismatch")
 }
