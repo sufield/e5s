@@ -28,7 +28,10 @@ func main() {
 	fmt.Printf("Connecting to: %s\n\n", socketPath)
 
 	// Create Workload API client
-	client := workloadapi.NewClient(socketPath)
+	client, err := workloadapi.NewClient(socketPath, nil)
+	if err != nil {
+		log.Fatalf("Failed to create client: %v", err)
+	}
 
 	// Fetch X.509 SVID
 	fmt.Println("Fetching X.509 SVID from agent...")

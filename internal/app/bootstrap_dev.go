@@ -39,7 +39,7 @@ func Bootstrap(ctx context.Context, configLoader ports.ConfigLoader, factory por
 	docProvider := factory.CreateIdentityDocumentProvider()
 
 	// Step 6: Initialize SPIRE server
-	server, err := factory.CreateServer(ctx, config.TrustDomain, trustDomainParser, docProvider)
+	server, err := factory.CreateDevelopmentServer(ctx, config.TrustDomain, trustDomainParser, docProvider)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SPIRE server: %w", err)
 	}

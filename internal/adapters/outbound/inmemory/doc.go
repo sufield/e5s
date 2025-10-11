@@ -78,9 +78,9 @@
 // The compose AdapterFactory creates these concrete implementations and is
 // used by the application's bootstrapper. Typical usage in examples:
 //   - factory := compose.NewInMemoryAdapterFactory()
-//   - server := factory.CreateServer(...)
+//   - server, _ := factory.CreateDevelopmentServer(ctx, trustDomain, parser, docProvider)
 //   - registry := factory.CreateRegistry()
-//   - agent, _ := factory.CreateAgent(...)
+//   - agent, _ := factory.CreateDevelopmentAgent(ctx, spiffeID, server, registry, attestor, parser, docProvider)
 //
 // Keep adapter-specific logic out of the core domain; these are bridge
 // implementations that translate platform details into domain objects.

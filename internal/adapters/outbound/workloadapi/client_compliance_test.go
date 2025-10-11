@@ -32,7 +32,8 @@ func TestClient_NewClient(t *testing.T) {
 	t.Parallel()
 
 	socketPath := "/tmp/test.sock"
-	client := wlapi.NewClient(socketPath)
+	client, err := wlapi.NewClient(socketPath, nil)
+	require.NoError(t, err)
 
 	assert.NotNil(t, client)
 }
@@ -41,7 +42,8 @@ func TestClient_NewClient(t *testing.T) {
 func TestClient_ImplementsPort(t *testing.T) {
 	t.Parallel()
 
-	client := wlapi.NewClient("/tmp/test.sock")
+	client, err := wlapi.NewClient("/tmp/test.sock", nil)
+	require.NoError(t, err)
 	var _ ports.WorkloadAPIClient = client
 }
 
@@ -79,7 +81,8 @@ func TestClient_ConcurrentRequests(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 
-	client := wlapi.NewClient(socketPath)
+	client, err := wlapi.NewClient(socketPath, nil)
+	require.NoError(t, err)
 
 	// Send multiple concurrent requests
 	const numRequests = 20

@@ -47,7 +47,8 @@ func TestClient_FetchX509SVID_Success(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Create client and fetch SVID
-	client := wlapi.NewClient(socketPath)
+	client, err := wlapi.NewClient(socketPath, nil)
+	require.NoError(t, err)
 
 	// Mock the UID to match registered workload (since we're running as current user)
 	// In production, the server would extract this via SO_PEERCRED
@@ -61,8 +62,8 @@ func TestClient_FetchX509SVID_Success(t *testing.T) {
 	assert.Greater(t, resp.GetExpiresAt(), int64(0))
 }
 
-// TestClient_FetchX509SVIDWithConfig_Success tests mTLS fetch
-func TestClient_FetchX509SVIDWithConfig_Success(t *testing.T) {
+// TestClient_FetchX509SVIDWithConfig_NilConfig tests error on nil TLS config
+func TestClient_FetchX509SVIDWithConfig_NilConfig(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
@@ -80,9 +81,11 @@ func TestClient_FetchX509SVIDWithConfig_Success(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
-	// Create client with nil TLS config (should fallback to regular fetch)
-	client := wlapi.NewClient(socketPath)
-	resp, err := client.FetchX509SVIDWithConfig(ctx, nil)
+	// Create client with nil TLS config (should error, not fallback)
+	client, err := wlapi.NewClient(socketPath, nil)
 	require.NoError(t, err)
-	assert.NotNil(t, resp)
+	resp, err := client.FetchX509SVIDWithConfig(ctx, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, wlapi.ErrInvalidArgument)
+	assert.Nil(t, resp)
 }

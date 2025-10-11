@@ -1,0 +1,18 @@
+# gopls configuration for SPIRE project
+# This configuration ensures gopls can analyze both production and dev-tagged files
+
+# Build configuration
+build:
+  # Include the 'dev' build tag so gopls can analyze development-only files
+  # Files with //go:build dev will be visible in the IDE
+  buildFlags: ["-tags=dev"]
+
+  # Environment variables for build
+  env:
+    GOFLAGS: "-tags=dev"
+
+# UI/Editor settings
+ui:
+  semanticTokens: true
+  completion:
+    usePlaceholders: true

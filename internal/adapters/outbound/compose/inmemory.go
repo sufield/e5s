@@ -97,39 +97,6 @@ func (f *InMemoryAdapterFactory) CreateDevelopmentAgent(
 	return inmemory.NewInMemoryAgent(ctx, spiffeID, concreteServer, registry, attestorInterface, parser, docProvider)
 }
 
-// CreateAgent creates an in-memory agent with all dependencies.
-// This is the legacy method kept for backward compatibility with code that uses the old signature.
-func (f *InMemoryAdapterFactory) CreateAgent(
-	ctx context.Context,
-	spiffeID string,
-	server ports.IdentityServer,
-	registry ports.IdentityMapperRegistry,
-	attestorInterface ports.WorkloadAttestor,
-	parser ports.IdentityCredentialParser,
-	docProvider ports.IdentityDocumentProvider,
-) (ports.Agent, error) {
-	return f.CreateDevelopmentAgent(ctx, spiffeID, server, registry, attestorInterface, parser, docProvider)
-}
-
-// CreateProductionAgent implements ProductionAgentFactory for inmemory.
-// This is provided for interface compatibility, but inmemory agents always need
-// full dependencies (registry, attestor, etc.), so this method is intentionally
-// not the primary way to create inmemory agents - use CreateDevelopmentAgent instead.
-//
-// This implementation creates an agent with nil dependencies for server/registry/attestor,
-// which will likely fail at runtime. Callers should use CreateDevelopmentAgent with
-// proper dependencies.
-func (f *InMemoryAdapterFactory) CreateProductionAgent(
-	ctx context.Context,
-	spiffeID string,
-	parser ports.IdentityCredentialParser,
-) (ports.Agent, error) {
-	// For inmemory, we need all dependencies, but ProductionAgentFactory doesn't provide them.
-	// This is a design limitation - inmemory should use CreateDevelopmentAgent.
-	// We return an error to make this explicit.
-	return nil, fmt.Errorf("inmemory agents require full dependencies; use CreateDevelopmentAgent instead")
-}
-
 // SeedRegistry seeds the registry with an identity mapper (configuration, not runtime)
 // This is called only during bootstrap - uses Seed() method on concrete type
 func (f *InMemoryAdapterFactory) SeedRegistry(registry ports.IdentityMapperRegistry, ctx context.Context, mapper *domain.IdentityMapper) error {

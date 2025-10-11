@@ -65,11 +65,9 @@ func TestServer_ConcurrentRequests(t *testing.T) {
 
 	for i := 0; i < numRequests; i++ {
 		go func(uid int) {
+			// Server uses SO_PEERCRED to extract real credentials from kernel
+			// No headers needed - credentials are kernel-verified
 			httpReq, _ := http.NewRequestWithContext(ctx, http.MethodGet, "http://unix/svid/x509", nil)
-			httpReq.Header.Set("X-Spire-Caller-UID", fmt.Sprintf("%d", 1001+uid%2))
-			httpReq.Header.Set("X-Spire-Caller-PID", fmt.Sprintf("%d", 12345+uid))
-			httpReq.Header.Set("X-Spire-Caller-GID", "1001")
-			httpReq.Header.Set("X-Spire-Caller-Path", "/usr/bin/test")
 
 			resp, err := client.Do(httpReq)
 			if err != nil {

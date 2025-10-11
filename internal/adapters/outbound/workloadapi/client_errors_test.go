@@ -54,12 +54,13 @@ func TestClient_FetchX509SVID_ServerError(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// Create client
-	client := wlapi.NewClient(socketPath)
+	client, err := wlapi.NewClient(socketPath, nil)
+	require.NoError(t, err)
 
 	// Attempt fetch
 	_, err = client.FetchX509SVID(context.Background())
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "server returned error 500")
+	assert.Contains(t, err.Error(), "status 500")
 }
 
 // TestClient_FetchX509SVID_InvalidResponse tests invalid JSON response handling
@@ -86,11 +87,12 @@ func TestClient_FetchX509SVID_InvalidResponse(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 
-	client := wlapi.NewClient(socketPath)
+	client, err := wlapi.NewClient(socketPath, nil)
+	require.NoError(t, err)
 
 	_, err = client.FetchX509SVID(context.Background())
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to decode response")
+	assert.Contains(t, err.Error(), "decode failed")
 }
 
 // TestClient_FetchX509SVID_SocketNotFound tests connection error handling
@@ -100,12 +102,13 @@ func TestClient_FetchX509SVID_SocketNotFound(t *testing.T) {
 	// Use non-existent socket path
 	socketPath := "/tmp/nonexistent-spire-socket-12345.sock"
 
-	client := wlapi.NewClient(socketPath)
+	client, err := wlapi.NewClient(socketPath, nil)
+	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
-	_, err := client.FetchX509SVID(ctx)
+	_, err = client.FetchX509SVID(ctx)
 	assert.Error(t, err)
 }
 
@@ -134,7 +137,7 @@ func TestClient_FetchX509SVID_TableDriven(t *testing.T) {
 				return socketPath, func() { ts.Close(); listener.Close() }
 			},
 			wantError:  true,
-			wantErrMsg: "server returned error 500",
+			wantErrMsg: "status 500",
 		},
 		{
 			name: "server returns 404",
@@ -151,7 +154,7 @@ func TestClient_FetchX509SVID_TableDriven(t *testing.T) {
 				return socketPath, func() { ts.Close(); listener.Close() }
 			},
 			wantError:  true,
-			wantErrMsg: "server returned error 404",
+			wantErrMsg: "status 404",
 		},
 		{
 			name: "server returns invalid JSON",
@@ -168,7 +171,7 @@ func TestClient_FetchX509SVID_TableDriven(t *testing.T) {
 				return socketPath, func() { ts.Close(); listener.Close() }
 			},
 			wantError:  true,
-			wantErrMsg: "failed to decode response",
+			wantErrMsg: "decode failed",
 		},
 		{
 			name: "server returns valid response",
@@ -204,7 +207,8 @@ func TestClient_FetchX509SVID_TableDriven(t *testing.T) {
 
 			time.Sleep(50 * time.Millisecond)
 
-			client := wlapi.NewClient(socketPath)
+			client, err := wlapi.NewClient(socketPath, nil)
+	require.NoError(t, err)
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
 
@@ -245,7 +249,8 @@ func TestClient_ContextTimeout(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 
-	client := wlapi.NewClient(socketPath)
+	client, err := wlapi.NewClient(socketPath, nil)
+	require.NoError(t, err)
 
 	// Context with very short timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
@@ -253,4 +258,98 @@ func TestClient_ContextTimeout(t *testing.T) {
 
 	_, err = client.FetchX509SVID(ctx)
 	assert.Error(t, err)
+}
+
+// TestNewClient_SocketPathValidation tests NewClient socket path validation
+func TestNewClient_SocketPathValidation(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		socketPath   string
+		wantError    bool
+		wantErrorMsg string
+	}{
+		{
+			name:       "valid absolute path",
+			socketPath: "/tmp/spire-agent/public/api.sock",
+			wantError:  false,
+		},
+		{
+			name:       "valid with unix:// prefix",
+			socketPath: "unix:///tmp/spire-agent/public/api.sock",
+			wantError:  false,
+		},
+		{
+			name:         "empty path",
+			socketPath:   "",
+			wantError:    true,
+			wantErrorMsg: "socket path must be an absolute path",
+		},
+		{
+			name:         "relative path",
+			socketPath:   "relative/path.sock",
+			wantError:    true,
+			wantErrorMsg: "socket path must be an absolute path",
+		},
+		{
+			name:         "only unix:// prefix without path",
+			socketPath:   "unix://",
+			wantError:    true,
+			wantErrorMsg: "socket path must be an absolute path",
+		},
+		{
+			name:         "unix:// with relative path",
+			socketPath:   "unix://relative/path.sock",
+			wantError:    true,
+			wantErrorMsg: "socket path must be an absolute path",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			client, err := wlapi.NewClient(tt.socketPath, nil)
+
+			if tt.wantError {
+				assert.Error(t, err)
+				assert.Nil(t, client)
+				assert.ErrorIs(t, err, wlapi.ErrInvalidSocketPath)
+				if tt.wantErrorMsg != "" {
+					assert.Contains(t, err.Error(), tt.wantErrorMsg)
+				}
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, client)
+			}
+		})
+	}
+}
+
+// TestNewClient_OptsDefaults tests that NewClient applies default options
+func TestNewClient_OptsDefaults(t *testing.T) {
+	t.Parallel()
+
+	// Test with nil opts
+	client, err := wlapi.NewClient("/tmp/test.sock", nil)
+	require.NoError(t, err)
+	assert.NotNil(t, client)
+
+	// Test with partial opts (timeout only)
+	opts := &wlapi.ClientOpts{
+		Timeout: 60 * time.Second,
+	}
+	client, err = wlapi.NewClient("/tmp/test.sock", opts)
+	require.NoError(t, err)
+	assert.NotNil(t, client)
+
+	// Test with full opts
+	opts = &wlapi.ClientOpts{
+		Timeout:  60 * time.Second,
+		Endpoint: "http://unix/custom/endpoint",
+	}
+	client, err = wlapi.NewClient("/tmp/test.sock", opts)
+	require.NoError(t, err)
+	assert.NotNil(t, client)
 }

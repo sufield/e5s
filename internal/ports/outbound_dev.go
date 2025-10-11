@@ -50,22 +50,25 @@ type AttestorConfigurator interface {
 	RegisterWorkloadUID(attestor WorkloadAttestor, uid int, selector string)
 }
 
-// AdapterFactory is the composite interface for complete adapter factory functionality.
-// Development implementations provide all capabilities.
-// Production implementations only implement CoreAdapterFactory.
+// AdapterFactory is the composite interface for complete in-memory adapter factory functionality.
+// This interface is for development-only implementations that manage all components in-memory.
 //
 // NOTE: This composite interface is ONLY available in development builds.
-// Production code should use CoreAdapterFactory interface.
+// Production code should use CoreAdapterFactory interface (defined in outbound.go).
+//
+// Design Note: This interface does NOT include CoreAdapterFactory (which includes ProductionAgentFactory)
+// because in-memory implementations are inherently development-only and don't make sense for
+// production agent creation that requires minimal parameters.
 //
 // Usage in development:
 //   factory := compose.NewInMemoryAdapterFactory()
-//   var _ ports.AdapterFactory = factory  // Implements all 4 interfaces
+//   var _ ports.AdapterFactory = factory  // Implements dev interfaces
 //
 // Usage in production:
 //   factory := compose.NewSPIREAdapterFactory(...)
-//   var _ ports.CoreAdapterFactory = factory  // Implements only core
+//   var _ ports.CoreAdapterFactory = factory  // Implements production interfaces
 type AdapterFactory interface {
-	CoreAdapterFactory
+	BaseAdapterFactory
 	DevelopmentAdapterFactory
 	RegistryConfigurator
 	AttestorConfigurator

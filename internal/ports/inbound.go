@@ -22,7 +22,7 @@ type IdentityClient interface {
 	// FetchX509SVIDWithConfig fetches an X.509 SVID with custom TLS configuration
 	// Enables mTLS authentication when connecting to the Workload API server
 	// The tlsConfig parameter allows specifying client certificates for mutual authentication
-	// If tlsConfig is nil, behaves the same as FetchX509SVID (backward compatible)
+	// If tlsConfig is nil, returns an error (tlsConfig is required for this method)
 	FetchX509SVIDWithConfig(ctx context.Context, tlsConfig *tls.Config) (*Identity, error)
 }
 

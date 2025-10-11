@@ -218,11 +218,25 @@ size-compare:
 ## Troubleshooting
 
 ### gopls/IDE Issues
-If your editor shows "undefined" errors for development-only code:
+If your editor shows "undefined" errors or "No packages found" for development-only code (files with `//go:build dev`), you need to configure gopls to use the `dev` build tag.
 
-**VS Code (settings.json):**
+**Global Configuration (gopls.yaml):**
+The project includes a `gopls.yaml` file at the repository root:
+```yaml
+# gopls configuration for SPIRE project
+build:
+  buildFlags: ["-tags=dev"]
+  env:
+    GOFLAGS: "-tags=dev"
+```
+
+This configuration is automatically used by gopls and should fix most IDE issues.
+
+**VS Code (.vscode/settings.json):**
+The project also includes VS Code-specific settings:
 ```json
 {
+  "go.buildTags": "dev",
   "gopls": {
     "build.buildFlags": ["-tags=dev"]
   }
@@ -239,6 +253,11 @@ require('lspconfig').gopls.setup({
   }
 })
 ```
+
+**After changing configuration:**
+1. Reload your IDE/editor window
+2. Restart the gopls language server
+3. Run `Go: Restart Language Server` (VS Code) or `:LspRestart` (Neovim)
 
 ### Verification Commands
 ```bash
