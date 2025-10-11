@@ -50,13 +50,8 @@
 //
 //   - trust_bundle_provider.go
 //     InMemoryTrustBundleProvider: returns the CA bundle used for document
-//     validation in the demo environment. Used by the IdentityDocumentValidator
-//     to verify certificate chains if desired.
-//
-//   - validator.go
-//     InMemoryIdentityDocumentValidator: validates identity documents against
-//     the provided trust bundle. In the walking skeleton this is intentionally
-//     lightweight.
+//     validation in the demo environment. Can be used to verify certificate
+//     chains if needed by external components.
 //
 //   - config.go
 //     Provides a simple in-memory ConfigLoader used by CLI and examples to

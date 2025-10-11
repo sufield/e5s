@@ -52,11 +52,6 @@ func (f *InMemoryAdapterFactory) CreateTrustBundleProvider(server ports.Identity
 	return inmemory.NewInMemoryTrustBundleProvider([]*x509.Certificate{caCert})
 }
 
-func (f *InMemoryAdapterFactory) CreateIdentityDocumentValidator(bundleProvider ports.TrustBundleProvider) ports.IdentityDocumentValidator {
-	// Create validator with optional bundle provider for chain verification
-	return inmemory.NewIdentityDocumentValidator(bundleProvider)
-}
-
 // CreateDevelopmentServer creates an in-memory server for development/testing.
 // Unlike production, this implementation needs full control over document provider
 // because it manages certificate issuance locally.
