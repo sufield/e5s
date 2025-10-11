@@ -204,36 +204,15 @@ type CoreAdapterFactory interface {
 	CreateAgent(ctx context.Context, spiffeID string, server IdentityServer, registry IdentityMapperRegistry, attestor WorkloadAttestor, parser IdentityCredentialParser, docProvider IdentityDocumentProvider) (Agent, error)
 }
 
-// DevelopmentAdapterFactory extends CoreAdapterFactory with development-specific adapters.
-// These methods create in-memory implementations for local attestation and registry.
-// Production implementations don't need these as they delegate to external SPIRE.
-type DevelopmentAdapterFactory interface {
-	CoreAdapterFactory
-	CreateRegistry() IdentityMapperRegistry
-	CreateAttestor() WorkloadAttestor
-}
-
-// RegistryConfigurator provides registry configuration operations.
-// Only used during bootstrap to seed identity mappers (like SPIRE registration entries).
-// Production implementations that use external SPIRE Server don't need this.
-type RegistryConfigurator interface {
-	SeedRegistry(registry IdentityMapperRegistry, ctx context.Context, mapper *domain.IdentityMapper) error
-	SealRegistry(registry IdentityMapperRegistry)
-}
-
-// AttestorConfigurator provides attestor configuration operations.
-// Only used during bootstrap to register workload UIDs for in-memory attestation.
-// Production implementations that use SPIRE Agent don't need this.
-type AttestorConfigurator interface {
-	RegisterWorkloadUID(attestor WorkloadAttestor, uid int, selector string)
-}
-
-// AdapterFactory is the composite interface for complete adapter factory functionality.
-// Development implementations provide all capabilities.
-// Production implementations only implement CoreAdapterFactory.
-type AdapterFactory interface {
-	CoreAdapterFactory
-	DevelopmentAdapterFactory
-	RegistryConfigurator
-	AttestorConfigurator
-}
+// NOTE: Development-only adapter factory interfaces are defined in outbound_dev.go
+// and are excluded from production builds via build tag (//go:build !production).
+// To build for production: go build -tags production ./...
+//
+// Available in development builds only:
+// - DevelopmentAdapterFactory - extends CoreAdapterFactory with CreateRegistry, CreateAttestor
+// - RegistryConfigurator - provides SeedRegistry, SealRegistry
+// - AttestorConfigurator - provides RegisterWorkloadUID
+// - AdapterFactory - composite of all 4 interfaces
+//
+// Production implementations should implement CoreAdapterFactory only.
+// Development implementations implement the full AdapterFactory composite.

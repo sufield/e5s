@@ -21,13 +21,21 @@ type WorkloadAPIConfig struct {
 
 // SPIFFEConfig holds SPIFFE identity verification configuration (shared for client/server).
 type SPIFFEConfig struct {
-	AllowedPeerID string // e.g., "spiffe://example.org/peer"
+	// AllowedPeerID restricts to specific SPIFFE ID (exact match)
+	// Example: "spiffe://example.org/client"
+	AllowedPeerID string
+
+	// AllowedTrustDomain restricts to specific trust domain (any ID in domain)
+	// Example: "example.org"
+	// If both are empty, any authenticated peer from the same trust domain is allowed
+	AllowedTrustDomain string
 }
 
 // HTTPConfig holds HTTP server/client configuration.
 type HTTPConfig struct {
 	Address           string        // e.g., ":8443"
 	ReadHeaderTimeout time.Duration // e.g., 10 * time.Second (prevents Slowloris)
+	ReadTimeout       time.Duration // e.g., 30 * time.Second
 	WriteTimeout      time.Duration // e.g., 30 * time.Second
 	IdleTimeout       time.Duration // e.g., 120 * time.Second
 	Timeout           time.Duration // Client-specific timeout, e.g., 30 * time.Second
@@ -60,4 +68,24 @@ type MTLSClient interface {
 	Post(ctx context.Context, url, contentType string, body io.Reader) (*http.Response, error)
 	// Close releases resources (X509Source, connections, etc.).
 	Close() error
+}
+
+// DefaultMTLSConfig returns a configuration with reasonable defaults.
+func DefaultMTLSConfig() MTLSConfig {
+	return MTLSConfig{
+		WorkloadAPI: WorkloadAPIConfig{
+			SocketPath: "unix:///tmp/spire-agent/public/api.sock",
+		},
+		SPIFFE: SPIFFEConfig{
+			AllowedPeerID:      "", // Allow any authenticated peer
+			AllowedTrustDomain: "",
+		},
+		HTTP: HTTPConfig{
+			Address:           ":8443",
+			ReadHeaderTimeout: 10 * time.Second,
+			ReadTimeout:       30 * time.Second,
+			WriteTimeout:      30 * time.Second,
+			IdleTimeout:       120 * time.Second,
+		},
+	}
 }

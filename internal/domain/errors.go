@@ -40,6 +40,18 @@ var (
 	// ErrSelectorInvalid indicates selector format is invalid
 	// Used by: domain.ParseSelectorFromString
 	ErrSelectorInvalid = errors.New("invalid selector format")
+
+	// ErrEmptyKey indicates the selector key is empty
+	// Used by: domain.NewSelector, domain.ParseSelector
+	ErrEmptyKey = errors.New("selector key cannot be empty")
+
+	// ErrEmptyValue indicates the selector value is empty
+	// Used by: domain.NewSelector, domain.ParseSelector
+	ErrEmptyValue = errors.New("selector value cannot be empty")
+
+	// ErrInvalidFormat indicates the selector string format is incorrect
+	// Used by: domain.ParseSelector, domain.ParseSelectorFromString
+	ErrInvalidFormat = errors.New("invalid selector format")
 )
 
 // Identity document errors

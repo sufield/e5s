@@ -10,7 +10,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/pocket/hexagon/spire/internal/identityserver"
+	"github.com/pocket/hexagon/spire/internal/adapters/inbound/identityserver"
+	"github.com/pocket/hexagon/spire/internal/ports"
 	"github.com/spiffe/go-spiffe/v2/spiffetls"
 )
 
@@ -19,7 +20,7 @@ func main() {
 
 	// Create identity server configuration
 	// Using defaults: socket path, address, timeouts
-	cfg := identityserver.DefaultConfig()
+	cfg := ports.DefaultMTLSConfig()
 
 	// Optionally override from environment
 	if socketPath := os.Getenv("SPIRE_AGENT_SOCKET"); socketPath != "" {
@@ -32,14 +33,14 @@ func main() {
 	// Optionally restrict to specific client SPIFFE ID
 	// If not set, any client from the trust domain is allowed
 	if allowedClientID := os.Getenv("ALLOWED_CLIENT_ID"); allowedClientID != "" {
-		cfg.SPIFFE.AllowedClientID = allowedClientID
+		cfg.SPIFFE.AllowedPeerID = allowedClientID
 	}
 
 	log.Printf("Starting mTLS server with configuration:")
 	log.Printf("  Socket: %s", cfg.WorkloadAPI.SocketPath)
 	log.Printf("  Address: %s", cfg.HTTP.Address)
-	if cfg.SPIFFE.AllowedClientID != "" {
-		log.Printf("  Allowed client: %s", cfg.SPIFFE.AllowedClientID)
+	if cfg.SPIFFE.AllowedPeerID != "" {
+		log.Printf("  Allowed client: %s", cfg.SPIFFE.AllowedPeerID)
 	} else {
 		log.Printf("  Allowed client: any from trust domain")
 	}
@@ -49,7 +50,7 @@ func main() {
 	// - Connect to SPIRE agent
 	// - Fetch server's X.509 SVID
 	// - Configure mTLS with client authentication
-	server, err := identityserver.New(ctx, cfg)
+	server, err := identityserver.NewSPIFFEServer(ctx, cfg)
 	if err != nil {
 		log.Fatalf("Failed to create identity server: %v", err)
 	}

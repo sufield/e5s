@@ -1,3 +1,5 @@
+//go:build dev
+
 package compose
 
 import (
@@ -13,6 +15,9 @@ import (
 
 // InMemoryAdapterFactory provides in-memory implementations of all adapters
 // Implements the AdapterFactory port for in-memory/walking skeleton mode
+//
+// NOTE: This file is excluded from production builds via build tag.
+// Production deployments use SPIREAdapterFactory (defined in spire.go) instead.
 type InMemoryAdapterFactory struct{}
 
 // NewInMemoryAdapterFactory creates the factory for in-memory adapters
