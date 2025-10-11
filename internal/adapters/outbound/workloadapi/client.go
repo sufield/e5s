@@ -1,3 +1,5 @@
+// client.go contains the WorkloadAPIClient implementation.
+//
 // Package workloadapi provides a production-ready client adapter for the SPIFFE Workload API.
 //
 // This adapter enables workloads to fetch their identity documents (X.509 SVIDs)
@@ -10,18 +12,19 @@
 //   - Configurable timeouts and endpoints
 //
 // Workload Attestation (Production-Ready):
-//   This implementation uses kernel-level credential passing for secure workload attestation.
-//   The companion server extracts process credentials (PID, UID, GID) using SO_PEERCRED on Linux,
-//   which provides kernel-verified identity that cannot be forged by the caller.
 //
-//   Platform Support:
-//     - Linux: SO_PEERCRED (fully implemented and production-ready)
-//     - Other platforms: Requires platform-specific implementation (getpeereid, getpeerucred, etc.)
+//	This implementation uses kernel-level credential passing for secure workload attestation.
+//	The companion server extracts process credentials (PID, UID, GID) using SO_PEERCRED on Linux,
+//	which provides kernel-verified identity that cannot be forged by the caller.
 //
-//   Security Guarantee:
-//     Unlike header-based or other user-space attestation mechanisms, SO_PEERCRED credentials
-//     are verified by the kernel and cannot be spoofed. This provides the same security level
-//     as production SPIRE deployments.
+//	Platform Support:
+//	  - Linux: SO_PEERCRED (fully implemented and production-ready)
+//	  - Other platforms: Requires platform-specific implementation (getpeereid, getpeerucred, etc.)
+//
+//	Security Guarantee:
+//	  Unlike header-based or other user-space attestation mechanisms, SO_PEERCRED credentials
+//	  are verified by the kernel and cannot be spoofed. This provides the same security level
+//	  as production SPIRE deployments.
 //
 // Example Usage:
 //
@@ -42,7 +45,6 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -51,40 +53,6 @@ import (
 	"time"
 
 	"github.com/pocket/hexagon/spire/internal/ports"
-)
-
-// Constants for configuration defaults
-const (
-	// DefaultTimeout is the default HTTP client timeout for Workload API requests
-	DefaultTimeout = 30 * time.Second
-
-	// DefaultSVIDEndpoint is the default HTTP endpoint for X.509 SVID fetches
-	DefaultSVIDEndpoint = "http://unix/svid/x509"
-
-	// MaxErrorBodySize limits how much of error response body we read
-	MaxErrorBodySize = 4096
-)
-
-// Header constants removed - workload attestation now uses SO_PEERCRED
-// The server extracts kernel-verified credentials automatically via Unix socket peer credentials.
-// No headers are needed or sent by the client for attestation.
-
-// Sentinel errors for inspectable error handling
-var (
-	// ErrInvalidSocketPath indicates the socket path is invalid or empty
-	ErrInvalidSocketPath = errors.New("socket path must be an absolute path starting with '/'")
-
-	// ErrInvalidArgument indicates an invalid argument was provided to a method
-	ErrInvalidArgument = errors.New("invalid argument")
-
-	// ErrFetchFailed indicates the SVID fetch operation failed
-	ErrFetchFailed = errors.New("failed to fetch X.509 SVID from Workload API")
-
-	// ErrInvalidResponse indicates the server returned an invalid or malformed response
-	ErrInvalidResponse = errors.New("invalid response from Workload API server")
-
-	// ErrServerError indicates the server returned an error status code
-	ErrServerError = errors.New("workload API server returned error")
 )
 
 // ClientOpts contains optional configuration for the Workload API client
@@ -322,100 +290,7 @@ func (c *Client) FetchX509SVIDWithConfig(ctx context.Context, tlsConfig *tls.Con
 	return &svidResp, nil
 }
 
-// X509SVIDResponse is the response format for X.509 SVID requests.
-//
-// This struct represents the identity document returned by the Workload API server,
-// containing the workload's SPIFFE ID, X.509 certificate (SVID), and expiration time.
-//
-// JSON Format:
-//
-//	{
-//	  "spiffe_id": "spiffe://example.org/workload",
-//	  "x509_svid": "-----BEGIN CERTIFICATE-----\n...",
-//	  "expires_at": 1704067200
-//	}
-//
-// Thread Safety: X509SVIDResponse is safe for concurrent reads after creation.
-type X509SVIDResponse struct {
-	// SPIFFEID is the workload's SPIFFE ID (e.g., "spiffe://example.org/workload")
-	SPIFFEID string `json:"spiffe_id"`
-
-	// X509SVID is the PEM-encoded X.509 certificate (leaf certificate)
-	X509SVID string `json:"x509_svid"`
-
-	// ExpiresAt is the certificate expiration time as Unix timestamp (seconds since epoch)
-	ExpiresAt int64 `json:"expires_at"`
-}
-
-// Validate checks that the response contains all required fields with valid values.
-//
-// Returns:
-//   - error: Non-nil if validation fails (empty SPIFFE ID, missing SVID, invalid expiration)
-func (r *X509SVIDResponse) Validate() error {
-	if r.SPIFFEID == "" {
-		return errors.New("SPIFFE ID cannot be empty")
-	}
-	if !strings.HasPrefix(r.SPIFFEID, "spiffe://") {
-		return fmt.Errorf("invalid SPIFFE ID format: must start with 'spiffe://': got %q", r.SPIFFEID)
-	}
-	if r.X509SVID == "" {
-		return errors.New("X.509 SVID certificate cannot be empty")
-	}
-	if r.ExpiresAt <= 0 {
-		return fmt.Errorf("invalid expiration timestamp: must be positive: got %d", r.ExpiresAt)
-	}
-	return nil
-}
-
-// ToIdentity converts the response to a SPIFFE ID string.
-//
-// This is a convenience method for internal conversion to ports.Identity.
-// Returns empty string if response is nil.
-func (r *X509SVIDResponse) ToIdentity() string {
-	if r == nil {
-		return ""
-	}
-	return r.SPIFFEID
-}
-
-// GetSPIFFEID returns the workload's SPIFFE ID.
-//
-// Returns empty string if response is nil (nil-safe for defensive programming).
-func (r *X509SVIDResponse) GetSPIFFEID() string {
-	if r == nil {
-		return ""
-	}
-	return r.SPIFFEID
-}
-
-// GetX509SVID returns the PEM-encoded X.509 SVID certificate.
-//
-// The certificate is the leaf certificate in PEM format, which includes the
-// SPIFFE ID in the URI SAN (Subject Alternative Name) extension.
-//
-// Returns empty string if response is nil (nil-safe).
-func (r *X509SVIDResponse) GetX509SVID() string {
-	if r == nil {
-		return ""
-	}
-	return r.X509SVID
-}
-
-// GetExpiresAt returns the certificate expiration time as Unix timestamp.
-//
-// The timestamp represents seconds since Unix epoch (January 1, 1970 UTC).
-// Callers should compare against time.Now().Unix() to check validity.
-//
-// Returns 0 if response is nil (nil-safe).
-func (r *X509SVIDResponse) GetExpiresAt() int64 {
-	if r == nil {
-		return 0
-	}
-	return r.ExpiresAt
-}
-
 // Compile-time interface compliance verification
 var (
-	_ ports.X509SVIDResponse   = (*X509SVIDResponse)(nil)
-	_ ports.WorkloadAPIClient  = (*Client)(nil)
+	_ ports.WorkloadAPIClient = (*Client)(nil)
 )

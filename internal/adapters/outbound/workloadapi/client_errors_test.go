@@ -181,7 +181,7 @@ func TestClient_FetchX509SVID_TableDriven(t *testing.T) {
 				ts := &http.Server{
 					Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 						resp := wlapi.X509SVIDResponse{
-							SPIFFEID:  "spiffe://example.org/workload",
+							SPIFFEID:  wlapi.SpiffePrefix + "example.org/workload",
 							X509SVID:  "PEM certificate data",
 							ExpiresAt: time.Now().Add(24 * time.Hour).Unix(),
 						}
@@ -208,7 +208,7 @@ func TestClient_FetchX509SVID_TableDriven(t *testing.T) {
 			time.Sleep(50 * time.Millisecond)
 
 			client, err := wlapi.NewClient(socketPath, nil)
-	require.NoError(t, err)
+			require.NoError(t, err)
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
 

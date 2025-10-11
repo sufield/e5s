@@ -68,7 +68,7 @@ func TestClient_ConcurrentRequests(t *testing.T) {
 	ts := &http.Server{
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			resp := wlapi.X509SVIDResponse{
-				SPIFFEID:  "spiffe://example.org/workload",
+				SPIFFEID:  wlapi.SpiffePrefix + "example.org/workload",
 				X509SVID:  "cert",
 				ExpiresAt: time.Now().Unix(),
 			}

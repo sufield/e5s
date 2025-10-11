@@ -22,15 +22,16 @@ func TestX509SVIDResponse_Methods(t *testing.T) {
 	t.Parallel()
 
 	resp := &wlapi.X509SVIDResponse{
-		SPIFFEID:  "spiffe://example.org/test",
+		SPIFFEID:  wlapi.SpiffePrefix + "example.org/test",
 		X509SVID:  "PEM data",
 		ExpiresAt: 1234567890,
 	}
 
-	assert.Equal(t, "spiffe://example.org/test", resp.GetSPIFFEID())
+	expectedID := wlapi.SpiffePrefix + "example.org/test"
+	assert.Equal(t, expectedID, resp.GetSPIFFEID())
 	assert.Equal(t, "PEM data", resp.GetX509SVID())
 	assert.Equal(t, int64(1234567890), resp.GetExpiresAt())
-	assert.Equal(t, "spiffe://example.org/test", resp.ToIdentity())
+	assert.Equal(t, expectedID, resp.ToIdentity())
 }
 
 // TestX509SVIDResponse_NilSafety tests nil response safety
