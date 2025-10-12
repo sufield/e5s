@@ -43,29 +43,29 @@ func TestNewHTTPServer_MissingAddress(t *testing.T) {
 
 	authorizer := tlsconfig.AuthorizeAny()
 
-	server, err := NewHTTPServer(ctx, ServerConfig{Address: "", SocketPath: "unix:///tmp/socket", Authorizer: authorizer})
+	server, err := NewHTTPServer(ctx, ServerConfig{Address: "", X509SourceProvider: &WorkloadAPISourceProvider{SocketPath: "unix:///tmp/socket"}, Authorizer: authorizer})
 
 	require.Error(t, err)
 	assert.Nil(t, server)
 	assert.Contains(t, err.Error(), "address is required")
 }
 
-func TestNewHTTPServer_MissingSocketPath(t *testing.T) {
+func TestNewHTTPServer_MissingX509SourceProvider(t *testing.T) {
 	ctx := context.Background()
 
 	authorizer := tlsconfig.AuthorizeAny()
 
-	server, err := NewHTTPServer(ctx, ServerConfig{Address: ":8443", SocketPath: "", Authorizer: authorizer})
+	server, err := NewHTTPServer(ctx, ServerConfig{Address: ":8443", X509SourceProvider: nil, Authorizer: authorizer})
 
 	require.Error(t, err)
 	assert.Nil(t, server)
-	assert.Contains(t, err.Error(), "socket path is required")
+	assert.Contains(t, err.Error(), "X509SourceProvider is required")
 }
 
 func TestNewHTTPServer_MissingAuthorizer(t *testing.T) {
 	ctx := context.Background()
 
-	server, err := NewHTTPServer(ctx, ServerConfig{Address: ":8443", SocketPath: "unix:///tmp/socket", Authorizer: nil})
+	server, err := NewHTTPServer(ctx, ServerConfig{Address: ":8443", X509SourceProvider: &WorkloadAPISourceProvider{SocketPath: "unix:///tmp/socket"}, Authorizer: nil})
 
 	require.Error(t, err)
 	assert.Nil(t, server)

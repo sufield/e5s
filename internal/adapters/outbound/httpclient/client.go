@@ -8,14 +8,55 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spiffe/go-spiffe/v2/bundle/x509bundle"
 	"github.com/spiffe/go-spiffe/v2/spiffetls/tlsconfig"
+	"github.com/spiffe/go-spiffe/v2/svid/x509svid"
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
 )
 
+// X509SourceProvider defines how to obtain an X509Source
+// Implementations can create from SPIRE Workload API (production) or in-memory (testing)
+type X509SourceProvider interface {
+	// GetX509Source returns an X509Source for mTLS configuration
+	GetX509Source(ctx context.Context) (x509svid.Source, x509bundle.Source, io.Closer, error)
+}
+
+// WorkloadAPISourceProvider creates X509Source from SPIRE Workload API (production)
+type WorkloadAPISourceProvider struct {
+	SocketPath string
+}
+
+// GetX509Source implements X509SourceProvider for production SPIRE Workload API
+func (p *WorkloadAPISourceProvider) GetX509Source(ctx context.Context) (x509svid.Source, x509bundle.Source, io.Closer, error) {
+	x509Source, err := workloadapi.NewX509Source(
+		ctx,
+		workloadapi.WithClientOptions(
+			workloadapi.WithAddr(p.SocketPath),
+		),
+	)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to create X509Source: %w", err)
+	}
+	// workloadapi.X509Source implements both x509svid.Source and x509bundle.Source
+	return x509Source, x509Source, x509Source, nil
+}
+
+// InMemorySourceProvider wraps in-memory X509Source (testing/development)
+type InMemorySourceProvider struct {
+	SVIDSource   x509svid.Source
+	BundleSource x509bundle.Source
+}
+
+// GetX509Source implements X509SourceProvider for in-memory mode
+func (p *InMemorySourceProvider) GetX509Source(ctx context.Context) (x509svid.Source, x509bundle.Source, io.Closer, error) {
+	// In-memory sources don't need cleanup
+	return p.SVIDSource, p.BundleSource, io.NopCloser(nil), nil
+}
+
 // ClientConfig contains configuration for creating an HTTP client with mTLS.
 type ClientConfig struct {
-	// SocketPath is the SPIRE agent socket path (e.g., "unix:///tmp/spire-agent/public/api.sock")
-	SocketPath string
+	// X509SourceProvider provides the X509Source (production or in-memory)
+	X509SourceProvider X509SourceProvider
 
 	// ServerAuthorizer verifies server identity (use tlsconfig.AuthorizeAny(), AuthorizeID(), etc.)
 	ServerAuthorizer tlsconfig.Authorizer
@@ -41,19 +82,15 @@ type TransportConfig struct {
 
 // SPIFFEHTTPClient is an HTTP client that uses X.509 SVIDs for mTLS authentication.
 type SPIFFEHTTPClient struct {
-	client     *http.Client
-	x509Source *workloadapi.X509Source
+	client *http.Client
+	closer io.Closer
 }
 
 // NewSPIFFEHTTPClient creates an mTLS HTTP client.
-//
-// IMPORTANT: The X509Source is created with context.Background() to ensure stable lifetime.
-// The source will remain active until Close() is called, regardless of the input ctx lifetime.
-// The input ctx is used only for the initial connection to the Workload API.
 func NewSPIFFEHTTPClient(ctx context.Context, cfg ClientConfig) (*SPIFFEHTTPClient, error) {
 	// Validate required fields
-	if cfg.SocketPath == "" {
-		return nil, fmt.Errorf("socket path is required")
+	if cfg.X509SourceProvider == nil {
+		return nil, fmt.Errorf("X509SourceProvider is required")
 	}
 	if cfg.ServerAuthorizer == nil {
 		return nil, fmt.Errorf("server authorizer is required (e.g., tlsconfig.AuthorizeMemberOf)")
@@ -73,25 +110,18 @@ func NewSPIFFEHTTPClient(ctx context.Context, cfg ClientConfig) (*SPIFFEHTTPClie
 		cfg.Transport.IdleConnTimeout = 90 * time.Second
 	}
 
-	// Create X.509 source from SPIRE Workload API
-	// Use context.Background() to decouple source lifetime from caller's potentially short-lived ctx.
-	// The source will be explicitly closed via Close() method.
-	x509Source, err := workloadapi.NewX509Source(
-		context.Background(),
-		workloadapi.WithClientOptions(
-			workloadapi.WithAddr(cfg.SocketPath),
-		),
-	)
+	// Get X509Source from provider (production or in-memory)
+	svidSource, bundleSource, closer, err := cfg.X509SourceProvider.GetX509Source(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("create X509Source: %w", err)
+		return nil, fmt.Errorf("failed to get X509Source: %w", err)
 	}
 
 	// Create mTLS client configuration
 	// - Client presents its SVID to server
 	// - Server must present valid SVID matching authorizer
 	tlsConfig := tlsconfig.MTLSClientConfig(
-		x509Source,           // SVID source (client certificate)
-		x509Source,           // Bundle source (trusted CAs)
+		svidSource,           // SVID source (client certificate)
+		bundleSource,         // Bundle source (trusted CAs)
 		cfg.ServerAuthorizer, // Server identity verification
 	)
 
@@ -116,8 +146,8 @@ func NewSPIFFEHTTPClient(ctx context.Context, cfg ClientConfig) (*SPIFFEHTTPClie
 	}
 
 	return &SPIFFEHTTPClient{
-		client:     client,
-		x509Source: x509Source,
+		client: client,
+		closer: closer,
 	}, nil
 }
 
@@ -183,8 +213,8 @@ func (c *SPIFFEHTTPClient) Do(req *http.Request) (*http.Response, error) {
 // Closes the X509Source first to stop new TLS handshakes, then closes idle connections.
 func (c *SPIFFEHTTPClient) Close() error {
 	// Close X509Source first (stops SVID fetching and rotation, prevents new TLS handshakes)
-	if c.x509Source != nil {
-		if err := c.x509Source.Close(); err != nil {
+	if c.closer != nil {
+		if err := c.closer.Close(); err != nil {
 			return fmt.Errorf("close X509Source: %w", err)
 		}
 	}

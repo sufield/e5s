@@ -51,21 +51,21 @@ func TestNewSPIFFEHTTPClient_ValidConfig(t *testing.T) {
 	assert.Equal(t, 30*time.Second, client.client.Timeout)
 }
 
-func TestNewSPIFFEHTTPClient_MissingSocketPath(t *testing.T) {
+func TestNewSPIFFEHTTPClient_MissingX509SourceProvider(t *testing.T) {
 	ctx := context.Background()
 	authorizer := tlsconfig.AuthorizeAny()
 
-	client, err := NewSPIFFEHTTPClient(ctx, ClientConfig{SocketPath: "", ServerAuthorizer: authorizer})
+	client, err := NewSPIFFEHTTPClient(ctx, ClientConfig{X509SourceProvider: nil, ServerAuthorizer: authorizer})
 
 	require.Error(t, err)
 	assert.Nil(t, client)
-	assert.Contains(t, err.Error(), "socket path is required")
+	assert.Contains(t, err.Error(), "X509SourceProvider is required")
 }
 
 func TestNewSPIFFEHTTPClient_MissingAuthorizer(t *testing.T) {
 	ctx := context.Background()
 
-	client, err := NewSPIFFEHTTPClient(ctx, ClientConfig{SocketPath: "unix:///tmp/socket", ServerAuthorizer: nil})
+	client, err := NewSPIFFEHTTPClient(ctx, ClientConfig{X509SourceProvider: &WorkloadAPISourceProvider{SocketPath: "unix:///tmp/socket"}, ServerAuthorizer: nil})
 
 	require.Error(t, err)
 	assert.Nil(t, client)
