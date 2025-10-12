@@ -47,7 +47,10 @@ type RegistryConfigurator interface {
 // NOTE: This interface is ONLY available in development builds.
 // In production, SPIRE Agent handles workload attestation via platform attestors.
 type AttestorConfigurator interface {
-	RegisterWorkloadUID(attestor WorkloadAttestor, uid int, selector string)
+	// RegisterWorkloadUID registers a UID with the attestor if it supports dev-mode registration.
+	// Returns true if registration succeeded, false if the attestor doesn't support registration.
+	// Callers can assert the boolean in tests to ensure registration worked.
+	RegisterWorkloadUID(attestor WorkloadAttestor, uid int, selector string) bool
 }
 
 // AdapterFactory is the composite interface for complete in-memory adapter factory functionality.
