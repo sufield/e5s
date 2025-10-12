@@ -22,7 +22,7 @@ func TestNewHTTPServer_ValidConfig(t *testing.T) {
 	// Skip if SPIRE_AGENT_SOCKET not set
 	cfg := ServerConfig{
 		Address:    ":18443",
-		SocketPath: "unix:///tmp/spire-agent/public/api.sock",
+		X509SourceProvider: &WorkloadAPISourceProvider{SocketPath: "unix:///tmp/spire-agent/public/api.sock"},
 		Authorizer: tlsconfig.AuthorizeAny(),
 	}
 
@@ -162,7 +162,7 @@ func TestWrapHandler_NoTLS(t *testing.T) {
 	socketPath := "unix:///tmp/spire-agent/public/api.sock"
 	authorizer := tlsconfig.AuthorizeAny()
 
-	server, err := NewHTTPServer(ctx, ServerConfig{Address: ":18444", SocketPath: socketPath, Authorizer: authorizer})
+	server, err := NewHTTPServer(ctx, ServerConfig{Address: ":18444", X509SourceProvider: &WorkloadAPISourceProvider{SocketPath: socketPath}, Authorizer: authorizer})
 	if err != nil {
 		t.Skipf("Skipping test - SPIRE agent not available: %v", err)
 		return
@@ -198,7 +198,7 @@ func TestRegisterHandler(t *testing.T) {
 	socketPath := "unix:///tmp/spire-agent/public/api.sock"
 	authorizer := tlsconfig.AuthorizeAny()
 
-	server, err := NewHTTPServer(ctx, ServerConfig{Address: ":18445", SocketPath: socketPath, Authorizer: authorizer})
+	server, err := NewHTTPServer(ctx, ServerConfig{Address: ":18445", X509SourceProvider: &WorkloadAPISourceProvider{SocketPath: socketPath}, Authorizer: authorizer})
 	if err != nil {
 		t.Skipf("Skipping test - SPIRE agent not available: %v", err)
 		return
@@ -235,7 +235,7 @@ func TestGetMux(t *testing.T) {
 	socketPath := "unix:///tmp/spire-agent/public/api.sock"
 	authorizer := tlsconfig.AuthorizeAny()
 
-	server, err := NewHTTPServer(ctx, ServerConfig{Address: ":18446", SocketPath: socketPath, Authorizer: authorizer})
+	server, err := NewHTTPServer(ctx, ServerConfig{Address: ":18446", X509SourceProvider: &WorkloadAPISourceProvider{SocketPath: socketPath}, Authorizer: authorizer})
 	if err != nil {
 		t.Skipf("Skipping test - SPIRE agent not available: %v", err)
 		return
@@ -253,7 +253,7 @@ func TestStop_MultipleCallsIdempotent(t *testing.T) {
 	socketPath := "unix:///tmp/spire-agent/public/api.sock"
 	authorizer := tlsconfig.AuthorizeAny()
 
-	server, err := NewHTTPServer(ctx, ServerConfig{Address: ":18447", SocketPath: socketPath, Authorizer: authorizer})
+	server, err := NewHTTPServer(ctx, ServerConfig{Address: ":18447", X509SourceProvider: &WorkloadAPISourceProvider{SocketPath: socketPath}, Authorizer: authorizer})
 	if err != nil {
 		t.Skipf("Skipping test - SPIRE agent not available: %v", err)
 		return
@@ -274,7 +274,7 @@ func TestWrapHandler_ExtractsIdentity(t *testing.T) {
 	socketPath := "unix:///tmp/spire-agent/public/api.sock"
 	authorizer := tlsconfig.AuthorizeAny()
 
-	server, err := NewHTTPServer(ctx, ServerConfig{Address: ":18448", SocketPath: socketPath, Authorizer: authorizer})
+	server, err := NewHTTPServer(ctx, ServerConfig{Address: ":18448", X509SourceProvider: &WorkloadAPISourceProvider{SocketPath: socketPath}, Authorizer: authorizer})
 	if err != nil {
 		t.Skipf("Skipping test - SPIRE agent not available: %v", err)
 		return
@@ -307,7 +307,7 @@ func ExampleHTTPServer_RegisterHandler() {
 
 	server, err := NewHTTPServer(ctx, ServerConfig{
 		Address:    ":8443",
-		SocketPath: "unix:///tmp/spire-agent/public/api.sock",
+		X509SourceProvider: &WorkloadAPISourceProvider{SocketPath: "unix:///tmp/spire-agent/public/api.sock"},
 		Authorizer: authorizer,
 	})
 	if err != nil {
