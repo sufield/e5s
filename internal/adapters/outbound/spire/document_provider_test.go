@@ -286,6 +286,115 @@ func TestSDKDocumentProvider_ValidateIdentityDocument_BundleNotFound(t *testing.
 	}
 }
 
+func TestSDKDocumentProvider_ValidateIdentityDocument_EmptyChain(t *testing.T) {
+	provider := &SDKDocumentProvider{bundleSource: nil}
+
+	ctx := context.Background()
+	trustDomain := domain.NewTrustDomainFromName("example.org")
+	identityCredential := domain.NewIdentityCredentialFromComponents(trustDomain, "/test")
+
+	// Create document with empty chain
+	doc := domain.NewIdentityDocumentFromComponents(
+		identityCredential,
+		nil,
+		nil,
+		[]*x509.Certificate{}, // Empty chain
+		time.Now().Add(1*time.Hour),
+	)
+
+	err := provider.ValidateIdentityDocument(ctx, doc, identityCredential)
+	if err == nil {
+		t.Fatal("expected error for empty certificate chain")
+	}
+
+	if !domain.IsIdentityDocumentInvalid(err) {
+		t.Errorf("expected ErrIdentityDocumentInvalid, got: %v", err)
+	}
+}
+
+func TestSDKDocumentProvider_ValidateIdentityDocument_WrongTrustDomain(t *testing.T) {
+	// Setup: Bundle source with only one trust domain
+	td1 := spiffeid.RequireTrustDomainFromString("example.org")
+	caCert, caKey := createTestCA(t)
+	bundle := x509bundle.FromX509Authorities(td1, []*x509.Certificate{caCert})
+	bundleSource := &mockBundleSource{
+		bundles: map[spiffeid.TrustDomain]*x509bundle.Bundle{
+			td1: bundle,
+		},
+	}
+
+	provider := NewSDKDocumentProvider(bundleSource)
+
+	// Create document for different trust domain
+	trustDomain := domain.NewTrustDomainFromName("other.org")
+	identityCredential := domain.NewIdentityCredentialFromComponents(trustDomain, "/test")
+
+	// Create minimal chain (will fail bundle lookup for other.org)
+	spiffeIDStr := "spiffe://other.org/test"
+	svidCert, svidKey := createTestSVID(t, caCert, caKey, spiffeIDStr)
+
+	doc := domain.NewIdentityDocumentFromComponents(
+		identityCredential,
+		svidCert,
+		svidKey,
+		[]*x509.Certificate{svidCert},
+		svidCert.NotAfter,
+	)
+
+	// Test: Should fail with bundle not found for wrong trust domain
+	ctx := context.Background()
+	err := provider.ValidateIdentityDocument(ctx, doc, identityCredential)
+	if err == nil {
+		t.Fatal("expected error for wrong trust domain (no bundle)")
+	}
+
+	if !domain.IsCertificateChainInvalid(err) {
+		t.Errorf("expected ErrCertificateChainInvalid, got: %v", err)
+	}
+}
+
+func TestSDKDocumentProvider_ValidateIdentityDocument_WrongSPIFFEID(t *testing.T) {
+	// Setup: Create CA and SVID
+	caCert, caKey := createTestCA(t)
+	spiffeID1 := "spiffe://example.org/workload1"
+	svidCert1, svidKey1 := createTestSVID(t, caCert, caKey, spiffeID1)
+
+	// Create bundle
+	td := spiffeid.RequireTrustDomainFromString("example.org")
+	bundle := x509bundle.FromX509Authorities(td, []*x509.Certificate{caCert})
+	bundleSource := &mockBundleSource{
+		bundles: map[spiffeid.TrustDomain]*x509bundle.Bundle{
+			td: bundle,
+		},
+	}
+
+	provider := NewSDKDocumentProvider(bundleSource)
+
+	// Create document with spiffeID1
+	trustDomain := domain.NewTrustDomainFromName("example.org")
+	actualID := domain.NewIdentityCredentialFromComponents(trustDomain, "/workload1")
+	expectedID := domain.NewIdentityCredentialFromComponents(trustDomain, "/workload2")
+
+	doc := domain.NewIdentityDocumentFromComponents(
+		actualID,
+		svidCert1,
+		svidKey1,
+		[]*x509.Certificate{svidCert1, caCert},
+		svidCert1.NotAfter,
+	)
+
+	// Test: Validation should fail before SDK verification (domain-level mismatch)
+	ctx := context.Background()
+	err := provider.ValidateIdentityDocument(ctx, doc, expectedID)
+	if err == nil {
+		t.Fatal("expected error for SPIFFE ID mismatch")
+	}
+
+	if !domain.IsIdentityDocumentMismatch(err) {
+		t.Errorf("expected ErrIdentityDocumentMismatch, got: %v", err)
+	}
+}
+
 func TestSDKDocumentProvider_InterfaceCompliance(t *testing.T) {
 	// Compile-time check
 	var _ = NewSDKDocumentProvider(nil)

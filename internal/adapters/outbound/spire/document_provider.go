@@ -2,7 +2,6 @@ package spire
 
 import (
 	"context"
-	"crypto/x509"
 	"fmt"
 
 	"github.com/pocket/hexagon/spire/internal/domain"
@@ -109,45 +108,43 @@ func (p *SDKDocumentProvider) ValidateIdentityDocument(
 	}
 
 	// Step 4: Extract certificate chain for SDK verification
-	cert := doc.Certificate()
-	if cert == nil {
-		return fmt.Errorf("%w: certificate missing from identity document", domain.ErrIdentityDocumentInvalid)
-	}
-
-	// Build full chain: [leaf, intermediates...]
-	// Note: doc.Chain() already includes leaf, so use as-is
 	chain := doc.Chain()
 	if len(chain) == 0 {
 		return fmt.Errorf("%w: certificate chain is empty", domain.ErrIdentityDocumentInvalid)
 	}
 
-	// Step 5: Parse expected SPIFFE ID for bundle lookup
+	// Step 5: Parse trust domain for bundle lookup
+	// Avoid redundant string round-trip by parsing once
 	trustDomain, err := spiffeid.TrustDomainFromString(expectedID.TrustDomain().String())
 	if err != nil {
-		return fmt.Errorf("%w: invalid trust domain: %v", domain.ErrInvalidTrustDomain, err)
+		return fmt.Errorf("%w: %w", domain.ErrInvalidTrustDomain, err)
 	}
 
-	// Step 6: Fetch trust bundle for the identity's trust domain
-	bundle, err := p.bundleSource.GetX509BundleForTrustDomain(trustDomain)
-	if err != nil {
-		return fmt.Errorf("%w: failed to get trust bundle for %s: %v",
-			domain.ErrCertificateChainInvalid,
-			trustDomain.String(),
-			err)
-	}
-
-	// Step 7: SDK chain-of-trust verification
-	// This performs:
-	// - Full x509 path validation
-	// - Signature verification against bundle CAs
+	// Step 6: SDK chain-of-trust verification
+	// x509svid.Verify performs:
+	// - Full x509 path validation against bundle source
+	// - Signature verification against trust domain CAs
 	// - SPIFFE ID extraction from URI SAN
 	// - Expiration validation
-	verifiedID, verifiedChains, err := x509svid.Verify(chain, bundle)
+	//
+	// Note: SDK's Verify accepts bundleSource directly (not individual bundle)
+	// and handles trust domain lookup internally
+	verifiedID, verifiedChains, err := x509svid.Verify(chain, p.bundleSource)
 	if err != nil {
 		return fmt.Errorf("%w: chain verification failed: %v", domain.ErrCertificateChainInvalid, err)
 	}
 
-	// Step 8: Verify extracted SPIFFE ID matches expected
+	// Step 7: Verify extracted SPIFFE ID matches expected
+	// Compare trust domains first (fast fail)
+	if verifiedID.TrustDomain().String() != trustDomain.String() {
+		return fmt.Errorf("%w: verified trust domain %s does not match expected %s",
+			domain.ErrIdentityDocumentMismatch,
+			verifiedID.TrustDomain().String(),
+			trustDomain.String())
+	}
+
+	// Full SPIFFE ID comparison
+	// Note: String comparison is appropriate here as SDK normalizes SPIFFE IDs
 	if verifiedID.String() != expectedID.String() {
 		return fmt.Errorf("%w: verified SPIFFE ID %s does not match expected %s",
 			domain.ErrIdentityDocumentMismatch,
@@ -155,21 +152,12 @@ func (p *SDKDocumentProvider) ValidateIdentityDocument(
 			expectedID.String())
 	}
 
-	// Step 9: Verification successful
-	// verifiedChains contains the validated certificate chains
-	_ = verifiedChains // Available for additional validation if needed
+	// Step 8: Verification successful
+	// verifiedChains contains validated certificate chains (available for future policy checks)
+	_ = verifiedChains
 
 	return nil
 }
 
 // Compile-time interface verification
 var _ ports.IdentityDocumentProvider = (*SDKDocumentProvider)(nil)
-
-// Helper: ConvertX509CertificatesToChain converts []*x509.Certificate to [][]*x509.Certificate
-// for compatibility with SDK verification APIs that expect chains of chains.
-func ConvertX509CertificatesToChain(certs []*x509.Certificate) [][]*x509.Certificate {
-	if len(certs) == 0 {
-		return nil
-	}
-	return [][]*x509.Certificate{certs}
-}
