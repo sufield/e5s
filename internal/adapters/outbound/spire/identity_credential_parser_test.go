@@ -31,6 +31,23 @@ func TestIdentityCredentialParser_ParseFromString(t *testing.T) {
 			wantError: false,
 		},
 		{
+			name:      "root SPIFFE ID (no path)",
+			input:     "spiffe://example.org",
+			wantID:    "spiffe://example.org/",
+			wantError: false,
+		},
+		{
+			name:      "whitespace trimmed",
+			input:     "  spiffe://example.org/host  ",
+			wantID:    "spiffe://example.org/host",
+			wantError: false,
+		},
+		{
+			name:      "whitespace only",
+			input:     "   ",
+			wantError: true,
+		},
+		{
 			name:      "empty identity credential",
 			input:     "",
 			wantError: true,
@@ -100,8 +117,14 @@ func TestIdentityCredentialParser_ParseFromPath(t *testing.T) {
 			wantError: false,
 		},
 		{
-			name:      "root path",
+			name:      "root path with slash",
 			path:      "/",
+			wantID:    "spiffe://example.org/",
+			wantError: false,
+		},
+		{
+			name:      "empty path (root ID)",
+			path:      "",
 			wantID:    "spiffe://example.org/",
 			wantError: false,
 		},
@@ -109,6 +132,36 @@ func TestIdentityCredentialParser_ParseFromPath(t *testing.T) {
 			name:      "complex path",
 			path:      "/workload/app",
 			wantID:    "spiffe://example.org/workload/app",
+			wantError: false,
+		},
+		{
+			name:      "double slashes normalized",
+			path:      "//svc//a",
+			wantID:    "spiffe://example.org/svc/a",
+			wantError: false,
+		},
+		{
+			name:      "multiple double slashes",
+			path:      "/workload//service//app",
+			wantID:    "spiffe://example.org/workload/service/app",
+			wantError: false,
+		},
+		{
+			name:      "whitespace trimmed",
+			path:      "  /host  ",
+			wantID:    "spiffe://example.org/host",
+			wantError: false,
+		},
+		{
+			name:      "whitespace trimmed from relative path",
+			path:      "  host  ",
+			wantID:    "spiffe://example.org/host",
+			wantError: false,
+		},
+		{
+			name:      "deep nested path",
+			path:      "/ns/production/workload/api/v1",
+			wantID:    "spiffe://example.org/ns/production/workload/api/v1",
 			wantError: false,
 		},
 	}
