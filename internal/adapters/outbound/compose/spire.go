@@ -6,6 +6,7 @@ import (
 
 	"github.com/pocket/hexagon/spire/internal/adapters/outbound/spire"
 	"github.com/pocket/hexagon/spire/internal/ports"
+	"github.com/spiffe/go-spiffe/v2/spiffeid"
 )
 
 // SPIREAdapterFactory provides production SPIRE implementations of adapters.
@@ -30,6 +31,10 @@ type SPIREAdapterFactory struct {
 // This factory connects to external SPIRE infrastructure (SPIRE Agent via Workload API)
 // and provides adapters that delegate to SPIRE for identity operations.
 //
+// IMPORTANT: The provided ctx must not be already canceled. The client's internal
+// sources are long-lived and will be closed via Close(). Prefer using a long-lived
+// context or context.Background() if you intend the factory to outlive the calling function.
+//
 // Example:
 //
 //	factory, err := compose.NewSPIREAdapterFactory(ctx, &spire.Config{
@@ -44,7 +49,7 @@ type SPIREAdapterFactory struct {
 //	trustDomain, err := parser.FromString(ctx, "example.org")
 //
 // Parameters:
-//   - ctx: Context for client initialization (timeout, cancellation)
+//   - ctx: Context for client initialization (must not be canceled; client is long-lived)
 //   - cfg: SPIRE client configuration (socket path, timeout)
 //
 // Returns:
@@ -94,8 +99,21 @@ func (f *SPIREAdapterFactory) CreateIdentityCredentialParser() ports.IdentityCre
 // The bundle source is obtained from the SPIRE Workload API client, which maintains
 // up-to-date trust bundles including federated trust domains.
 //
+// IMPORTANT: Requires f.client to implement x509bundle.Source via GetX509BundleForTrustDomain.
+//
 // Returns an SDK-based provider with full security validation for production use.
 func (f *SPIREAdapterFactory) CreateIdentityDocumentProvider() ports.IdentityDocumentProvider {
+	// Runtime safety check: ensure the client implements the bundle source interface
+	// This protects against future changes to SPIREClient that might break the contract
+	if f.client != nil {
+		if _, ok := any(f.client).(interface {
+			GetX509BundleForTrustDomain(spiffeid.TrustDomain) (interface{}, error)
+		}); !ok {
+			// This should never happen in production; fail fast with clear message
+			panic("SPIREClient no longer implements x509bundle.Source; update factory wiring")
+		}
+	}
+
 	// Use SDK-based validator with bundle source from Workload API
 	// SPIREClient implements x509bundle.Source interface via GetX509BundleForTrustDomain
 	return spire.NewSDKDocumentProvider(f.client)
@@ -110,7 +128,7 @@ func (f *SPIREAdapterFactory) CreateIdentityDocumentProvider() ports.IdentityDoc
 //   - ctx: Context for server initialization
 //   - trustDomain: Trust domain this server manages (e.g., "example.org")
 //   - trustDomainParser: Parser for trust domain validation
-//   - docProvider: Document provider (unused in production; SPIRE Server handles issuance)
+//   - docProvider: Document provider (IGNORED; SPIRE Server handles issuance; server only fetches/validates)
 //
 // Returns:
 //   - ports.IdentityServer: SPIRE-backed server implementation
@@ -119,11 +137,19 @@ func (f *SPIREAdapterFactory) CreateServer(
 	ctx context.Context,
 	trustDomain string,
 	trustDomainParser ports.TrustDomainParser,
-	docProvider ports.IdentityDocumentProvider,
+	_ ports.IdentityDocumentProvider, // unused; SPIRE issues SVIDs externally
 ) (ports.IdentityServer, error) {
-	// Validate trust domain before creating server
+	// Validate all required parameters
 	if trustDomain == "" {
 		return nil, fmt.Errorf("trust domain cannot be empty")
+	}
+	if trustDomainParser == nil {
+		return nil, fmt.Errorf("trust domain parser cannot be nil")
+	}
+
+	// Check for trust domain mismatch between factory client and requested domain
+	if clientTD := f.client.GetTrustDomain(); clientTD != "" && clientTD != trustDomain {
+		return nil, fmt.Errorf("trust domain mismatch: factory/client=%s, requested=%s", clientTD, trustDomain)
 	}
 
 	return spire.NewServer(ctx, f.client, trustDomain, trustDomainParser)
@@ -153,9 +179,12 @@ func (f *SPIREAdapterFactory) CreateProductionAgent(
 	spiffeID string,
 	parser ports.IdentityCredentialParser,
 ) (ports.Agent, error) {
-	// Validate SPIFFE ID before creating agent
+	// Validate all required parameters
 	if spiffeID == "" {
 		return nil, fmt.Errorf("SPIFFE ID cannot be empty")
+	}
+	if parser == nil {
+		return nil, fmt.Errorf("identity credential parser cannot be nil")
 	}
 
 	// Delegate to SPIRE Agent which handles all identity operations
