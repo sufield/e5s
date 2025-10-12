@@ -11,9 +11,9 @@ import (
 	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
-// InMemoryTrustDomainParser implements the TrustDomainParser port for in-memory walking skeleton
-// This provides simple string-based validation without SDK dependencies.
-// For a real implementation, this would use go-spiffe SDK's spiffeid.TrustDomainFromString.
+// InMemoryTrustDomainParser implements the TrustDomainParser port for deterministic fake (dev-only).
+// Returns a normalized trust domain string (lowercased).
+// Provides simple validation without cryptographic dependencies.
 type InMemoryTrustDomainParser struct{}
 
 // NewInMemoryTrustDomainParser creates a new in-memory trust domain parser
@@ -21,9 +21,13 @@ func NewInMemoryTrustDomainParser() ports.TrustDomainParser {
 	return &InMemoryTrustDomainParser{}
 }
 
-// FromString parses a trust domain from a string
-// Validates basic DNS format, ensures no scheme or path
-func (p *InMemoryTrustDomainParser) FromString(ctx context.Context, name string) (*domain.TrustDomain, error) {
+// FromString parses a trust domain from a string with basic validation.
+// Notes:
+// - ctx is unused (kept for interface parity).
+// - Input is trimmed and lowercased for normalization.
+// - Validates no scheme or path (trust domain should be just hostname).
+func (p *InMemoryTrustDomainParser) FromString(_ context.Context, name string) (*domain.TrustDomain, error) {
+	name = strings.TrimSpace(name)
 	if name == "" {
 		return nil, fmt.Errorf("inmemory: %w: trust domain name cannot be empty", domain.ErrInvalidTrustDomain)
 	}
@@ -36,14 +40,9 @@ func (p *InMemoryTrustDomainParser) FromString(ctx context.Context, name string)
 		return nil, fmt.Errorf("inmemory: %w: trust domain must not contain path", domain.ErrInvalidTrustDomain)
 	}
 
-	// In real implementation with SDK:
-	// td, err := spiffeid.TrustDomainFromString(name)
-	// if err != nil {
-	//     return nil, fmt.Errorf("inmemory: %w: %v", domain.ErrInvalidTrustDomain, err)
-	// }
-	// return domain.NewTrustDomainFromName(td.String()), nil
+	// Normalize: lowercase for case-insensitive matching
+	name = strings.ToLower(name)
 
-	// For walking skeleton: simple validation
 	return domain.NewTrustDomainFromName(name), nil
 }
 
