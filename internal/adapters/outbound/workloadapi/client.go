@@ -101,8 +101,8 @@ func NewClient(socketPath string, opts *ClientOpts) (*Client, error) {
 	// Strip unix:// prefix if present (for config compatibility)
 	socketPath = strings.TrimPrefix(socketPath, "unix://")
 
-	// Validate socket path
-	if socketPath == "" || !strings.HasPrefix(socketPath, "/") {
+	// Validate socket path (absolute paths or Linux abstract sockets)
+	if socketPath == "" || !(strings.HasPrefix(socketPath, "/") || strings.HasPrefix(socketPath, "@")) {
 		return nil, fmt.Errorf("%w: got %q", ErrInvalidSocketPath, socketPath)
 	}
 
@@ -180,9 +180,10 @@ func (c *Client) FetchX509SVID(ctx context.Context) (ports.X509SVIDResponse, err
 		return nil, fmt.Errorf("%w: status %d: %s", ErrServerError, resp.StatusCode, string(body))
 	}
 
-	// Parse and validate response
+	// Parse and validate response (limit body size to prevent oversized payloads)
 	var svidResp X509SVIDResponse
-	if err := json.NewDecoder(resp.Body).Decode(&svidResp); err != nil {
+	limitedBody := io.LimitReader(resp.Body, MaxResponseBodySize)
+	if err := json.NewDecoder(limitedBody).Decode(&svidResp); err != nil {
 		return nil, fmt.Errorf("%w: decode failed: %v", ErrInvalidResponse, err)
 	}
 
@@ -276,9 +277,10 @@ func (c *Client) FetchX509SVIDWithConfig(ctx context.Context, tlsConfig *tls.Con
 		return nil, fmt.Errorf("%w (mTLS): status %d: %s", ErrServerError, resp.StatusCode, string(body))
 	}
 
-	// Parse and validate response
+	// Parse and validate response (limit body size to prevent oversized payloads)
 	var svidResp X509SVIDResponse
-	if err := json.NewDecoder(resp.Body).Decode(&svidResp); err != nil {
+	limitedBody := io.LimitReader(resp.Body, MaxResponseBodySize)
+	if err := json.NewDecoder(limitedBody).Decode(&svidResp); err != nil {
 		return nil, fmt.Errorf("%w (mTLS): decode failed: %v", ErrInvalidResponse, err)
 	}
 

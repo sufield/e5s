@@ -67,10 +67,19 @@ func TestClient_ConcurrentRequests(t *testing.T) {
 	// Create test server
 	ts := &http.Server{
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			spiffeID := wlapi.SpiffePrefix + "example.org/workload"
+			expiresAt := time.Now().Add(24 * time.Hour)
+			certPEM, expiresTS, err := generateTestSPIFFECert(spiffeID, expiresAt)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(err.Error()))
+				return
+			}
+
 			resp := wlapi.X509SVIDResponse{
-				SPIFFEID:  wlapi.SpiffePrefix + "example.org/workload",
-				X509SVID:  "cert",
-				ExpiresAt: time.Now().Unix(),
+				SPIFFEID:  spiffeID,
+				X509SVID:  certPEM,
+				ExpiresAt: expiresTS,
 			}
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(resp)

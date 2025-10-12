@@ -3,7 +3,7 @@ package workloadapi_test
 // Workload API Response Tests
 //
 // These tests verify X509SVIDResponse accessor methods and nil safety.
-// Tests cover GetSPIFFEID, GetX509SVID, GetExpiresAt, ToIdentity, and nil handling.
+// Tests cover GetSPIFFEID, GetX509SVID, GetExpiresAt, and nil handling.
 //
 // Run these tests with:
 //
@@ -31,7 +31,6 @@ func TestX509SVIDResponse_Methods(t *testing.T) {
 	assert.Equal(t, expectedID, resp.GetSPIFFEID())
 	assert.Equal(t, "PEM data", resp.GetX509SVID())
 	assert.Equal(t, int64(1234567890), resp.GetExpiresAt())
-	assert.Equal(t, expectedID, resp.ToIdentity())
 }
 
 // TestX509SVIDResponse_NilSafety tests nil response safety
@@ -43,5 +42,4 @@ func TestX509SVIDResponse_NilSafety(t *testing.T) {
 	assert.Empty(t, resp.GetSPIFFEID())
 	assert.Empty(t, resp.GetX509SVID())
 	assert.Equal(t, int64(0), resp.GetExpiresAt())
-	assert.Empty(t, resp.ToIdentity())
 }

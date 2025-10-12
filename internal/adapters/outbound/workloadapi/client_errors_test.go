@@ -180,10 +180,19 @@ func TestClient_FetchX509SVID_TableDriven(t *testing.T) {
 				listener, _ := net.Listen("unix", socketPath)
 				ts := &http.Server{
 					Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						spiffeID := wlapi.SpiffePrefix + "example.org/workload"
+						expiresAt := time.Now().Add(24 * time.Hour)
+						certPEM, expiresTS, err := generateTestSPIFFECert(spiffeID, expiresAt)
+						if err != nil {
+							w.WriteHeader(http.StatusInternalServerError)
+							w.Write([]byte(err.Error()))
+							return
+						}
+
 						resp := wlapi.X509SVIDResponse{
-							SPIFFEID:  wlapi.SpiffePrefix + "example.org/workload",
-							X509SVID:  "PEM certificate data",
-							ExpiresAt: time.Now().Add(24 * time.Hour).Unix(),
+							SPIFFEID:  spiffeID,
+							X509SVID:  certPEM,
+							ExpiresAt: expiresTS,
 						}
 						w.Header().Set("Content-Type", "application/json")
 						w.WriteHeader(http.StatusOK)
@@ -284,25 +293,25 @@ func TestNewClient_SocketPathValidation(t *testing.T) {
 			name:         "empty path",
 			socketPath:   "",
 			wantError:    true,
-			wantErrorMsg: "socket path must be an absolute path",
+			wantErrorMsg: "invalid socket path",
 		},
 		{
 			name:         "relative path",
 			socketPath:   "relative/path.sock",
 			wantError:    true,
-			wantErrorMsg: "socket path must be an absolute path",
+			wantErrorMsg: "invalid socket path",
 		},
 		{
 			name:         "only unix:// prefix without path",
 			socketPath:   "unix://",
 			wantError:    true,
-			wantErrorMsg: "socket path must be an absolute path",
+			wantErrorMsg: "invalid socket path",
 		},
 		{
 			name:         "unix:// with relative path",
 			socketPath:   "unix://relative/path.sock",
 			wantError:    true,
-			wantErrorMsg: "socket path must be an absolute path",
+			wantErrorMsg: "invalid socket path",
 		},
 	}
 

@@ -41,7 +41,6 @@ type IdentityClientService interface {
 
 // X509SVIDResponse is the response format for X.509 SVID requests from the Workload API
 type X509SVIDResponse interface {
-	ToIdentity() string
 	GetSPIFFEID() string
 	GetX509SVID() string
 	GetExpiresAt() int64
