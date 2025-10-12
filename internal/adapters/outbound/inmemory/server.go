@@ -1,27 +1,32 @@
+//go:build dev
+
 package inmemory
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"fmt"
 	"math/big"
-	"sync"
 	"time"
 
 	"github.com/pocket/hexagon/spire/internal/domain"
 	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
-// InMemoryServer is an in-memory implementation of SPIRE server
+// Deterministic constants for fake - dev only
+var (
+	fakeTime   = time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	fakeSerial = big.NewInt(1)
+)
+
+// InMemoryServer is a deterministic fake SPIRE server (dev-only)
 type InMemoryServer struct {
 	trustDomain         *domain.TrustDomain
 	caCert              *x509.Certificate
 	caKey               *rsa.PrivateKey
 	certificateProvider ports.IdentityDocumentProvider
-	mu                  sync.RWMutex
 }
 
 // NewInMemoryServer creates a new in-memory SPIRE server
@@ -47,24 +52,18 @@ func NewInMemoryServer(ctx context.Context, trustDomainStr string, trustDomainPa
 }
 
 // IssueIdentity issues an X.509 identity document for an identity credential
-// No verification of registration - that's done by the agent during attestation/matching
 func (s *InMemoryServer) IssueIdentity(ctx context.Context, identityCredential *domain.IdentityCredential) (*domain.IdentityDocument, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// Validate inputs
 	if identityCredential == nil {
-		return nil, fmt.Errorf("%w: identity credential cannot be nil", domain.ErrIdentityDocumentInvalid)
+		return nil, fmt.Errorf("inmemory: %w: identity credential cannot be nil", domain.ErrIdentityDocumentInvalid)
 	}
 
 	if s.caCert == nil || s.caKey == nil {
-		return nil, fmt.Errorf("%w: CA certificate or key not initialized", domain.ErrCANotInitialized)
+		return nil, fmt.Errorf("inmemory: %w: CA not initialized", domain.ErrCANotInitialized)
 	}
 
-	// Use IdentityDocumentProvider port to create identity certificate (delegates certificate generation)
 	doc, err := s.certificateProvider.CreateX509IdentityDocument(ctx, identityCredential, s.caCert, s.caKey)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", domain.ErrServerUnavailable, err)
+		return nil, fmt.Errorf("inmemory: %w: %v", domain.ErrServerUnavailable, err)
 	}
 
 	return doc, nil
@@ -80,37 +79,59 @@ func (s *InMemoryServer) GetCA() *x509.Certificate {
 	return s.caCert
 }
 
+// generateCA creates a deterministic CA certificate for testing
 func generateCA(trustDomain string) (*x509.Certificate, *rsa.PrivateKey, error) {
-	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	// Use fixed test key (1024-bit minimum for Go crypto) - acceptable for fake/dev
+	privateKey, err := rsa.GenerateKey(&deterministicReader{state: 12345}, 1024)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("inmemory: key gen failed: %w", err)
 	}
 
-	serial, _ := rand.Int(rand.Reader, big.NewInt(1<<62))
 	template := &x509.Certificate{
-		SerialNumber: serial,
+		SerialNumber: fakeSerial,
 		Subject: pkix.Name{
-			CommonName: fmt.Sprintf("SPIRE CA for %s", trustDomain),
+			CommonName: fmt.Sprintf("Fake SPIRE CA %s", trustDomain),
 		},
-		NotBefore:             time.Now(),
-		NotAfter:              time.Now().Add(365 * 24 * time.Hour),
-		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		NotBefore:             fakeTime,
+		NotAfter:              fakeTime.Add(365 * 24 * time.Hour),
+		KeyUsage:              x509.KeyUsageCertSign,
 		IsCA:                  true,
 		BasicConstraintsValid: true,
 		MaxPathLen:            1,
 	}
 
-	certDER, err := x509.CreateCertificate(rand.Reader, template, template, &privateKey.PublicKey, privateKey)
+	certDER, err := x509.CreateCertificate(&deterministicReader{}, template, template, &privateKey.PublicKey, privateKey)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("inmemory: failed to create CA: %w", err)
 	}
 
 	cert, err := x509.ParseCertificate(certDER)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("inmemory: failed to parse CA: %w", err)
 	}
 
 	return cert, privateKey, nil
+}
+
+// deterministicReader provides deterministic "random" bytes for testing
+// Uses a simple LCG (Linear Congruential Generator) to provide deterministic but varied bytes
+type deterministicReader struct {
+	state uint64
+}
+
+func (r *deterministicReader) Read(p []byte) (n int, err error) {
+	// LCG parameters (same as used in glibc)
+	const (
+		a = 1103515245
+		c = 12345
+		m = 1 << 31
+	)
+
+	for i := range p {
+		r.state = (a*r.state + c) % m
+		p[i] = byte(r.state >> 16)
+	}
+	return len(p), nil
 }
 
 var _ ports.IdentityServer = (*InMemoryServer)(nil)

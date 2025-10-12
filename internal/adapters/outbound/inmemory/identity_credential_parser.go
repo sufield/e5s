@@ -1,3 +1,5 @@
+//go:build dev
+
 package inmemory
 
 import (
@@ -25,23 +27,23 @@ func NewInMemoryIdentityCredentialParser() ports.IdentityCredentialParser {
 // Example: spiffe://example.org/host
 func (p *InMemoryIdentityCredentialParser) ParseFromString(ctx context.Context, id string) (*domain.IdentityCredential, error) {
 	if id == "" {
-		return nil, fmt.Errorf("%w: identity credential cannot be empty", domain.ErrInvalidIdentityCredential)
+		return nil, fmt.Errorf("inmemory: %w: identity credential cannot be empty", domain.ErrInvalidIdentityCredential)
 	}
 
 	// Parse as URI
 	u, err := url.Parse(id)
 	if err != nil {
-		return nil, fmt.Errorf("%w: invalid URI format: %v", domain.ErrInvalidIdentityCredential, err)
+		return nil, fmt.Errorf("inmemory: %w: invalid URI format: %v", domain.ErrInvalidIdentityCredential, err)
 	}
 
 	// Validate scheme
 	if u.Scheme != "spiffe" {
-		return nil, fmt.Errorf("%w: must use 'spiffe' scheme, got: %s", domain.ErrInvalidIdentityCredential, u.Scheme)
+		return nil, fmt.Errorf("inmemory: %w: must use 'spiffe' scheme, got: %s", domain.ErrInvalidIdentityCredential, u.Scheme)
 	}
 
 	// Extract trust domain
 	if u.Host == "" {
-		return nil, fmt.Errorf("%w: must contain a trust domain", domain.ErrInvalidIdentityCredential)
+		return nil, fmt.Errorf("inmemory: %w: must contain a trust domain", domain.ErrInvalidIdentityCredential)
 	}
 
 	// Create trust domain from validated host (already checked for non-empty)
@@ -60,7 +62,7 @@ func (p *InMemoryIdentityCredentialParser) ParseFromString(ctx context.Context, 
 // ParseFromPath creates an identity credential from trust domain and path components
 func (p *InMemoryIdentityCredentialParser) ParseFromPath(ctx context.Context, trustDomain *domain.TrustDomain, path string) (*domain.IdentityCredential, error) {
 	if trustDomain == nil {
-		return nil, fmt.Errorf("%w: trust domain cannot be nil", domain.ErrInvalidIdentityCredential)
+		return nil, fmt.Errorf("inmemory: %w: trust domain cannot be nil", domain.ErrInvalidIdentityCredential)
 	}
 
 	// Ensure path starts with "/"

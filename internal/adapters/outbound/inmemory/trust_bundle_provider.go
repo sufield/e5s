@@ -1,3 +1,5 @@
+//go:build dev
+
 package inmemory
 
 import (
@@ -29,11 +31,11 @@ func NewInMemoryTrustBundleProvider(caCerts []*x509.Certificate) ports.TrustBund
 // Returns concatenated PEM blocks (multi-CA) matching go-spiffe bundle format
 func (p *InMemoryTrustBundleProvider) GetBundle(ctx context.Context, trustDomain *domain.TrustDomain) ([]byte, error) {
 	if trustDomain == nil {
-		return nil, fmt.Errorf("%w: trust domain cannot be nil", domain.ErrInvalidTrustDomain)
+		return nil, fmt.Errorf("inmemory: %w: trust domain cannot be nil", domain.ErrInvalidTrustDomain)
 	}
 
 	if len(p.caCerts) == 0 {
-		return nil, fmt.Errorf("%w: for trust domain %s", domain.ErrTrustBundleNotFound, trustDomain.String())
+		return nil, fmt.Errorf("inmemory: %w: for trust domain %s", domain.ErrTrustBundleNotFound, trustDomain.String())
 	}
 
 	// Encode multi-CA as concatenated PEM blocks (matches SDK bundle format)
@@ -53,7 +55,7 @@ func (p *InMemoryTrustBundleProvider) GetBundle(ctx context.Context, trustDomain
 // GetBundleForIdentity returns the trust bundle for an identity's trust domain
 func (p *InMemoryTrustBundleProvider) GetBundleForIdentity(ctx context.Context, identityCredential *domain.IdentityCredential) ([]byte, error) {
 	if identityCredential == nil {
-		return nil, fmt.Errorf("%w: identity credential cannot be nil", domain.ErrInvalidIdentityCredential)
+		return nil, fmt.Errorf("inmemory: %w: identity credential cannot be nil", domain.ErrInvalidIdentityCredential)
 	}
 
 	return p.GetBundle(ctx, identityCredential.TrustDomain())

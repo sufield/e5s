@@ -1,3 +1,5 @@
+//go:build dev
+
 package inmemory
 
 import (
@@ -33,7 +35,7 @@ func NewInMemoryAgent(
 	// Use parser port instead of domain constructor
 	identityCredential, err := parser.ParseFromString(ctx, agentSpiffeIDStr)
 	if err != nil {
-		return nil, fmt.Errorf("invalid agent identity credential: %w", err)
+		return nil, fmt.Errorf("inmemory: invalid agent identity credential: %w", err)
 	}
 
 	agent := &InMemoryAgent{
@@ -48,7 +50,7 @@ func NewInMemoryAgent(
 
 	// Initialize agent's own identity
 	if err := agent.initializeAgentIdentity(ctx); err != nil {
-		return nil, fmt.Errorf("failed to initialize agent identity: %w", err)
+		return nil, fmt.Errorf("inmemory: failed to initialize agent identity: %w", err)
 	}
 
 	return agent, nil
@@ -62,7 +64,7 @@ func (a *InMemoryAgent) initializeAgentIdentity(ctx context.Context) error {
 
 	agentDoc, err := a.certificateProvider.CreateX509IdentityDocument(ctx, a.identityCredential, caCert, caKey)
 	if err != nil {
-		return fmt.Errorf("failed to create agent identity document: %w", err)
+		return fmt.Errorf("inmemory: failed to create agent identity document: %w", err)
 	}
 
 	a.agentIdentity = &ports.Identity{
@@ -77,7 +79,7 @@ func (a *InMemoryAgent) initializeAgentIdentity(ctx context.Context) error {
 // GetIdentity returns the agent's own identity
 func (a *InMemoryAgent) GetIdentity(ctx context.Context) (*ports.Identity, error) {
 	if a.agentIdentity == nil {
-		return nil, fmt.Errorf("%w: agent identity not initialized", domain.ErrAgentUnavailable)
+		return nil, fmt.Errorf("inmemory: %w: agent identity not initialized", domain.ErrAgentUnavailable)
 	}
 	return a.agentIdentity, nil
 }
@@ -88,7 +90,7 @@ func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload port
 	// Step 1: Attest the workload to get selectors
 	selectorStrings, err := a.attestor.Attest(ctx, workload)
 	if err != nil {
-		return nil, fmt.Errorf("workload attestation failed: %w", err)
+		return nil, fmt.Errorf("inmemory: workload attestation failed: %w", err)
 	}
 
 	if len(selectorStrings) == 0 {
@@ -100,7 +102,7 @@ func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload port
 	for _, selStr := range selectorStrings {
 		selector, err := domain.ParseSelectorFromString(selStr)
 		if err != nil {
-			return nil, fmt.Errorf("invalid selector %s: %w", selStr, err)
+			return nil, fmt.Errorf("inmemory: invalid selector %s: %w", selStr, err)
 		}
 		selectorSet.Add(selector)
 	}
@@ -108,13 +110,13 @@ func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload port
 	// Step 3: Match selectors against registry (READ-ONLY operation)
 	mapper, err := a.registry.FindBySelectors(ctx, selectorSet)
 	if err != nil {
-		return nil, fmt.Errorf("no identity mapper found for selectors: %w", err)
+		return nil, fmt.Errorf("inmemory: no identity mapper found for selectors: %w", err)
 	}
 
 	// Step 4: Issue identity document from server
 	doc, err := a.server.IssueIdentity(ctx, mapper.IdentityCredential())
 	if err != nil {
-		return nil, fmt.Errorf("failed to issue identity document: %w", err)
+		return nil, fmt.Errorf("inmemory: failed to issue identity document: %w", err)
 	}
 
 	// Step 5: Return identity with document

@@ -1,3 +1,5 @@
+//go:build dev
+
 package inmemory
 
 import (
@@ -23,21 +25,21 @@ func NewInMemoryTrustDomainParser() ports.TrustDomainParser {
 // Validates basic DNS format, ensures no scheme or path
 func (p *InMemoryTrustDomainParser) FromString(ctx context.Context, name string) (*domain.TrustDomain, error) {
 	if name == "" {
-		return nil, fmt.Errorf("%w: trust domain name cannot be empty", domain.ErrInvalidTrustDomain)
+		return nil, fmt.Errorf("inmemory: %w: trust domain name cannot be empty", domain.ErrInvalidTrustDomain)
 	}
 
 	// Validate no scheme or path (trust domain should be just hostname)
 	if strings.Contains(name, "://") {
-		return nil, fmt.Errorf("%w: trust domain must not contain scheme", domain.ErrInvalidTrustDomain)
+		return nil, fmt.Errorf("inmemory: %w: trust domain must not contain scheme", domain.ErrInvalidTrustDomain)
 	}
 	if strings.Contains(name, "/") {
-		return nil, fmt.Errorf("%w: trust domain must not contain path", domain.ErrInvalidTrustDomain)
+		return nil, fmt.Errorf("inmemory: %w: trust domain must not contain path", domain.ErrInvalidTrustDomain)
 	}
 
 	// In real implementation with SDK:
 	// td, err := spiffeid.TrustDomainFromString(name)
 	// if err != nil {
-	//     return nil, fmt.Errorf("%w: %v", domain.ErrInvalidTrustDomain, err)
+	//     return nil, fmt.Errorf("inmemory: %w: %v", domain.ErrInvalidTrustDomain, err)
 	// }
 	// return domain.NewTrustDomainFromName(td.String()), nil
 

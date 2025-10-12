@@ -1,3 +1,5 @@
+//go:build dev
+
 // Package attestor contains in-memory implementations of node and workload
 // attestation used by the walking-skeleton and examples in this repository.
 //

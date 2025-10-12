@@ -1,19 +1,20 @@
+//go:build dev
+
 package inmemory
 
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"github.com/pocket/hexagon/spire/internal/domain"
 	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
-// InMemoryRegistry is a read-only registry seeded at startup with identity mappings
+// InMemoryRegistry is a deterministic fake registry seeded at startup with identity mappings (dev-only)
 // It implements the ports.IdentityMapperRegistry interface for runtime read operations
-// Seeding is done via internal seed() method called only during bootstrap
+// Seeding is done via internal Seed() method called only during bootstrap
+// No concurrency support needed - all access is sequential in test/dev mode
 type InMemoryRegistry struct {
-	mu      sync.RWMutex
 	mappers map[string]*domain.IdentityMapper // identityCredential.String() → IdentityMapper
 	sealed  bool                              // Prevents modifications after bootstrap
 }
@@ -31,16 +32,13 @@ func NewInMemoryRegistry() *InMemoryRegistry {
 // This is NOT part of the IdentityMapperRegistry interface - it's only for composition root seeding
 // Do not call this method from application services - it's infrastructure/configuration only
 func (r *InMemoryRegistry) Seed(ctx context.Context, mapper *domain.IdentityMapper) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
 	if r.sealed {
-		return fmt.Errorf("%w", domain.ErrRegistrySealed)
+		return fmt.Errorf("inmemory: %w", domain.ErrRegistrySealed)
 	}
 
 	idStr := mapper.IdentityCredential().String()
 	if _, exists := r.mappers[idStr]; exists {
-		return fmt.Errorf("identity mapper for %s already exists", idStr)
+		return fmt.Errorf("inmemory: identity mapper for %s already exists", idStr)
 	}
 
 	r.mappers[idStr] = mapper
@@ -50,8 +48,6 @@ func (r *InMemoryRegistry) Seed(ctx context.Context, mapper *domain.IdentityMapp
 // Seal marks the registry as immutable after bootstrap
 // Once sealed, no further seeding is allowed
 func (r *InMemoryRegistry) Seal() {
-	r.mu.Lock()
-	defer r.mu.Unlock()
 	r.sealed = true
 }
 
@@ -59,12 +55,9 @@ func (r *InMemoryRegistry) Seal() {
 // Uses AND logic: ALL mapper selectors must be present in the discovered selectors
 // This implements the core runtime operation: selectors → identity mapping
 func (r *InMemoryRegistry) FindBySelectors(ctx context.Context, selectors *domain.SelectorSet) (*domain.IdentityMapper, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
 	// Validate input
 	if selectors == nil || len(selectors.All()) == 0 {
-		return nil, fmt.Errorf("%w: selectors are nil or empty", domain.ErrInvalidSelectors)
+		return nil, fmt.Errorf("inmemory: %w: selectors are nil or empty", domain.ErrInvalidSelectors)
 	}
 
 	// Match selectors against all mappers
@@ -74,16 +67,13 @@ func (r *InMemoryRegistry) FindBySelectors(ctx context.Context, selectors *domai
 		}
 	}
 
-	return nil, fmt.Errorf("%w: no mapper matches selectors %v", domain.ErrNoMatchingMapper, selectors)
+	return nil, fmt.Errorf("inmemory: %w: no mapper matches selectors %v", domain.ErrNoMatchingMapper, selectors)
 }
 
 // ListAll returns all seeded identity mappers (READ-ONLY, for debugging/admin)
 func (r *InMemoryRegistry) ListAll(ctx context.Context) ([]*domain.IdentityMapper, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
 	if len(r.mappers) == 0 {
-		return nil, fmt.Errorf("%w: no mappers have been seeded", domain.ErrRegistryEmpty)
+		return nil, fmt.Errorf("inmemory: %w: no mappers have been seeded", domain.ErrRegistryEmpty)
 	}
 
 	mappers := make([]*domain.IdentityMapper, 0, len(r.mappers))

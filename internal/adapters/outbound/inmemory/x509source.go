@@ -1,3 +1,5 @@
+//go:build dev
+
 package inmemory
 
 import (
@@ -28,16 +30,16 @@ func NewInMemoryX509Source(
 	caBundle []*x509.Certificate,
 ) (*InMemoryX509Source, error) {
 	if identity == nil {
-		return nil, fmt.Errorf("identity is required")
+		return nil, fmt.Errorf("inmemory: identity is required")
 	}
 	if identity.IdentityDocument == nil {
-		return nil, fmt.Errorf("identity document is required")
+		return nil, fmt.Errorf("inmemory: identity document is required")
 	}
 	if trustDomain == nil {
-		return nil, fmt.Errorf("trust domain is required")
+		return nil, fmt.Errorf("inmemory: trust domain is required")
 	}
 	if len(caBundle) == 0 {
-		return nil, fmt.Errorf("CA bundle is required")
+		return nil, fmt.Errorf("inmemory: CA bundle is required")
 	}
 
 	return &InMemoryX509Source{
@@ -54,7 +56,7 @@ func (s *InMemoryX509Source) GetX509SVID() (*x509svid.SVID, error) {
 	// Parse SPIFFE ID from identity credential
 	spiffeID, err := spiffeid.FromString(s.identity.IdentityCredential.String())
 	if err != nil {
-		return nil, fmt.Errorf("invalid SPIFFE ID: %w", err)
+		return nil, fmt.Errorf("inmemory: invalid SPIFFE ID: %w", err)
 	}
 
 	// Get certificate and chain
@@ -72,7 +74,7 @@ func (s *InMemoryX509Source) GetX509SVID() (*x509svid.SVID, error) {
 	// Assert that private key implements crypto.Signer
 	signer, ok := privateKey.(crypto.Signer)
 	if !ok {
-		return nil, fmt.Errorf("private key does not implement crypto.Signer")
+		return nil, fmt.Errorf("inmemory: private key does not implement crypto.Signer")
 	}
 
 	return &x509svid.SVID{
@@ -86,7 +88,7 @@ func (s *InMemoryX509Source) GetX509SVID() (*x509svid.SVID, error) {
 func (s *InMemoryX509Source) GetX509BundleForTrustDomain(trustDomain spiffeid.TrustDomain) (*x509bundle.Bundle, error) {
 	// Check if requested trust domain matches ours
 	if trustDomain.String() != s.trustDomain.String() {
-		return nil, fmt.Errorf("trust domain %s not found (only %s is available)", trustDomain, s.trustDomain)
+		return nil, fmt.Errorf("inmemory: trust domain %s not found (only %s is available)", trustDomain, s.trustDomain)
 	}
 
 	// Create bundle from CA certificates
