@@ -4,6 +4,7 @@ package ports
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/pocket/hexagon/spire/internal/domain"
 )
@@ -11,6 +12,60 @@ import (
 // NOTE: This file contains development-only adapter factory interfaces.
 // These interfaces are excluded from production builds via build tag.
 // Production builds use only CoreAdapterFactory (defined in outbound.go).
+
+// DevelopmentServerConfig holds configuration for creating a development server.
+type DevelopmentServerConfig struct {
+	TrustDomain       string
+	TrustDomainParser TrustDomainParser
+	DocProvider       IdentityDocumentProvider
+}
+
+// Validate checks that all required fields are set.
+func (c *DevelopmentServerConfig) Validate() error {
+	if c.TrustDomain == "" {
+		return fmt.Errorf("trust domain cannot be empty")
+	}
+	if c.TrustDomainParser == nil {
+		return fmt.Errorf("trust domain parser cannot be nil")
+	}
+	if c.DocProvider == nil {
+		return fmt.Errorf("identity document provider cannot be nil")
+	}
+	return nil
+}
+
+// DevelopmentAgentConfig holds configuration for creating a development agent.
+type DevelopmentAgentConfig struct {
+	SPIFFEID    string
+	Server      IdentityServer
+	Registry    IdentityMapperRegistry
+	Attestor    WorkloadAttestor
+	Parser      IdentityCredentialParser
+	DocProvider IdentityDocumentProvider
+}
+
+// Validate checks that all required fields are set.
+func (c *DevelopmentAgentConfig) Validate() error {
+	if c.SPIFFEID == "" {
+		return fmt.Errorf("SPIFFE ID cannot be empty")
+	}
+	if c.Server == nil {
+		return fmt.Errorf("server cannot be nil")
+	}
+	if c.Registry == nil {
+		return fmt.Errorf("registry cannot be nil")
+	}
+	if c.Attestor == nil {
+		return fmt.Errorf("attestor cannot be nil")
+	}
+	if c.Parser == nil {
+		return fmt.Errorf("parser cannot be nil")
+	}
+	if c.DocProvider == nil {
+		return fmt.Errorf("identity document provider cannot be nil")
+	}
+	return nil
+}
 
 // DevelopmentAdapterFactory extends BaseAdapterFactory with development-specific adapters.
 // These methods create in-memory implementations for local attestation and registry.
@@ -23,10 +78,12 @@ type DevelopmentAdapterFactory interface {
 	CreateRegistry() IdentityMapperRegistry
 	CreateAttestor() WorkloadAttestor
 	// CreateDevelopmentServer creates an in-memory server with full control over dependencies.
-	CreateDevelopmentServer(ctx context.Context, trustDomain string, trustDomainParser TrustDomainParser, docProvider IdentityDocumentProvider) (IdentityServer, error)
+	// Uses configuration struct pattern to reduce parameter count (Go best practice).
+	CreateDevelopmentServer(ctx context.Context, cfg DevelopmentServerConfig) (IdentityServer, error)
 	// CreateDevelopmentAgent creates an in-memory agent with full control over dependencies.
-	// Requires all parameters because in-memory implementation manages registry, attestation, and issuance locally.
-	CreateDevelopmentAgent(ctx context.Context, spiffeID string, server IdentityServer, registry IdentityMapperRegistry, attestor WorkloadAttestor, parser IdentityCredentialParser, docProvider IdentityDocumentProvider) (Agent, error)
+	// Uses configuration struct pattern to reduce parameter count (Go best practice).
+	// Requires all config fields because in-memory implementation manages registry, attestation, and issuance locally.
+	CreateDevelopmentAgent(ctx context.Context, cfg DevelopmentAgentConfig) (Agent, error)
 }
 
 // RegistryConfigurator provides registry configuration operations.

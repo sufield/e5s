@@ -206,7 +206,7 @@ func TestHTTPMethods_RequestCreation(t *testing.T) {
 		fn          func() (*http.Response, error)
 	}{
 		{
-			name:   "GET request",
+			name:   "GET request with http URL (should fail)",
 			method: http.MethodGet,
 			url:    mockServer.URL,
 			fn: func() (*http.Response, error) {
@@ -214,7 +214,7 @@ func TestHTTPMethods_RequestCreation(t *testing.T) {
 			},
 		},
 		{
-			name:        "POST request",
+			name:        "POST request with http URL (should fail)",
 			method:      http.MethodPost,
 			url:         mockServer.URL,
 			body:        strings.NewReader("test body"),
@@ -224,7 +224,7 @@ func TestHTTPMethods_RequestCreation(t *testing.T) {
 			},
 		},
 		{
-			name:        "PUT request",
+			name:        "PUT request with http URL (should fail)",
 			method:      http.MethodPut,
 			url:         mockServer.URL,
 			body:        strings.NewReader("test body"),
@@ -234,7 +234,7 @@ func TestHTTPMethods_RequestCreation(t *testing.T) {
 			},
 		},
 		{
-			name:   "DELETE request",
+			name:   "DELETE request with http URL (should fail)",
 			method: http.MethodDelete,
 			url:    mockServer.URL,
 			fn: func() (*http.Response, error) {
@@ -242,7 +242,7 @@ func TestHTTPMethods_RequestCreation(t *testing.T) {
 			},
 		},
 		{
-			name:        "PATCH request",
+			name:        "PATCH request with http URL (should fail)",
 			method:      http.MethodPatch,
 			url:         mockServer.URL,
 			body:        strings.NewReader("test body"),
@@ -255,20 +255,13 @@ func TestHTTPMethods_RequestCreation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Note: These will fail with certificate errors because mockServer
-			// is not using mTLS, but we're testing request creation
+			// These should fail with HTTPS enforcement error
 			resp, err := tt.fn()
 
-			// We expect certificate errors since mockServer doesn't have mTLS
-			// This is fine - we're just testing that requests are created correctly
-			if err != nil {
-				// Certificate error is expected
-				assert.Contains(t, err.Error(), "certificate", "Expected certificate-related error")
-			} else if resp != nil {
-				defer resp.Body.Close()
-				// If somehow it worked (shouldn't with mTLS), verify response
-				assert.NotNil(t, resp)
-			}
+			// We expect HTTPS enforcement error since mockServer uses http://
+			require.Error(t, err, "Expected error for http:// URL")
+			assert.Contains(t, err.Error(), "mTLS client requires https URL", "Expected HTTPS enforcement error")
+			assert.Nil(t, resp, "Response should be nil when URL is rejected")
 		})
 	}
 }

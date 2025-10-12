@@ -75,24 +75,23 @@ func (f *InMemoryAdapterFactory) CreateTrustBundleProvider(server ports.Identity
 // CreateDevelopmentServer creates an in-memory server for development/testing.
 // Unlike production, this implementation needs full control over document provider
 // because it manages certificate issuance locally.
-func (f *InMemoryAdapterFactory) CreateDevelopmentServer(ctx context.Context, trustDomain string, trustDomainParser ports.TrustDomainParser, docProvider ports.IdentityDocumentProvider) (ports.IdentityServer, error) {
-	if trustDomain == "" {
-		return nil, fmt.Errorf("trust domain cannot be empty")
+// Uses configuration struct pattern to reduce parameter count (Go best practice).
+func (f *InMemoryAdapterFactory) CreateDevelopmentServer(ctx context.Context, cfg ports.DevelopmentServerConfig) (ports.IdentityServer, error) {
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid server config: %w", err)
 	}
-	if trustDomainParser == nil {
-		return nil, fmt.Errorf("trust domain parser cannot be nil")
-	}
-	if docProvider == nil {
-		return nil, fmt.Errorf("identity document provider cannot be nil")
-	}
-	return inmemory.NewInMemoryServer(ctx, trustDomain, trustDomainParser, docProvider)
+	return inmemory.NewInMemoryServer(ctx, cfg.TrustDomain, cfg.TrustDomainParser, cfg.DocProvider)
 }
 
 // CreateServer creates an in-memory server (implements ProductionServerFactory).
 // For inmemory, this delegates to CreateDevelopmentServer since the implementation is the same.
 func (f *InMemoryAdapterFactory) CreateServer(ctx context.Context, trustDomain string, trustDomainParser ports.TrustDomainParser, docProvider ports.IdentityDocumentProvider) (ports.IdentityServer, error) {
-	// Same validation as development server
-	return f.CreateDevelopmentServer(ctx, trustDomain, trustDomainParser, docProvider)
+	// Delegate to development server using config struct
+	return f.CreateDevelopmentServer(ctx, ports.DevelopmentServerConfig{
+		TrustDomain:       trustDomain,
+		TrustDomainParser: trustDomainParser,
+		DocProvider:       docProvider,
+	})
 }
 
 func (f *InMemoryAdapterFactory) CreateAttestor() ports.WorkloadAttestor {
@@ -119,29 +118,19 @@ func (f *InMemoryAdapterFactory) RegisterWorkloadUID(attestorInterface ports.Wor
 // CreateDevelopmentAgent creates an in-memory agent for development/testing.
 // Unlike production, this implementation requires all dependencies because it
 // manages registry, attestation, and identity issuance locally.
-func (f *InMemoryAdapterFactory) CreateDevelopmentAgent(
-	ctx context.Context,
-	spiffeID string,
-	server ports.IdentityServer,
-	registry ports.IdentityMapperRegistry,
-	attestorInterface ports.WorkloadAttestor,
-	parser ports.IdentityCredentialParser,
-	docProvider ports.IdentityDocumentProvider,
-) (ports.Agent, error) {
-	if spiffeID == "" {
-		return nil, fmt.Errorf("SPIFFE ID cannot be empty")
-	}
-	if server == nil || registry == nil || attestorInterface == nil || parser == nil || docProvider == nil {
-		return nil, fmt.Errorf("all arguments must be non-nil")
+// Uses configuration struct pattern to reduce parameter count (Go best practice).
+func (f *InMemoryAdapterFactory) CreateDevelopmentAgent(ctx context.Context, cfg ports.DevelopmentAgentConfig) (ports.Agent, error) {
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid agent config: %w", err)
 	}
 
 	// Need concrete types for agent creation
-	concreteServer, ok := server.(*inmemory.InMemoryServer)
+	concreteServer, ok := cfg.Server.(*inmemory.InMemoryServer)
 	if !ok {
-		return nil, fmt.Errorf("expected *inmemory.InMemoryServer, got %T", server)
+		return nil, fmt.Errorf("expected *inmemory.InMemoryServer, got %T", cfg.Server)
 	}
 
-	return inmemory.NewInMemoryAgent(ctx, spiffeID, concreteServer, registry, attestorInterface, parser, docProvider)
+	return inmemory.NewInMemoryAgent(ctx, cfg.SPIFFEID, concreteServer, cfg.Registry, cfg.Attestor, cfg.Parser, cfg.DocProvider)
 }
 
 // SeedRegistry seeds the registry with an identity mapper (configuration, not runtime)

@@ -39,7 +39,11 @@ func Bootstrap(ctx context.Context, configLoader ports.ConfigLoader, factory por
 	docProvider := factory.CreateIdentityDocumentProvider()
 
 	// Step 6: Initialize SPIRE server
-	server, err := factory.CreateDevelopmentServer(ctx, config.TrustDomain, trustDomainParser, docProvider)
+	server, err := factory.CreateDevelopmentServer(ctx, ports.DevelopmentServerConfig{
+		TrustDomain:       config.TrustDomain,
+		TrustDomainParser: trustDomainParser,
+		DocProvider:       docProvider,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SPIRE server: %w", err)
 	}
@@ -83,8 +87,15 @@ func Bootstrap(ctx context.Context, configLoader ports.ConfigLoader, factory por
 	factory.SealRegistry(registry)
 
 	// Step 10: Initialize SPIRE agent with registry
-	// Development uses CreateDevelopmentAgent with full signature (all dependencies)
-	agent, err := factory.CreateDevelopmentAgent(ctx, config.AgentSpiffeID, server, registry, attestor, parser, docProvider)
+	// Development uses CreateDevelopmentAgent with config struct (all dependencies)
+	agent, err := factory.CreateDevelopmentAgent(ctx, ports.DevelopmentAgentConfig{
+		SPIFFEID:    config.AgentSpiffeID,
+		Server:      server,
+		Registry:    registry,
+		Attestor:    attestor,
+		Parser:      parser,
+		DocProvider: docProvider,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SPIRE agent: %w", err)
 	}

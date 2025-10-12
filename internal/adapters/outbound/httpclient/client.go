@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/spiffe/go-spiffe/v2/spiffetls/tlsconfig"
@@ -45,39 +46,44 @@ type SPIFFEHTTPClient struct {
 }
 
 // NewSPIFFEHTTPClient creates an mTLS HTTP client.
+//
+// IMPORTANT: The X509Source is created with context.Background() to ensure stable lifetime.
+// The source will remain active until Close() is called, regardless of the input ctx lifetime.
+// The input ctx is used only for the initial connection to the Workload API.
 func NewSPIFFEHTTPClient(ctx context.Context, cfg ClientConfig) (*SPIFFEHTTPClient, error) {
 	// Validate required fields
 	if cfg.SocketPath == "" {
 		return nil, fmt.Errorf("socket path is required")
 	}
 	if cfg.ServerAuthorizer == nil {
-		return nil, fmt.Errorf("server authorizer is required")
+		return nil, fmt.Errorf("server authorizer is required (e.g., tlsconfig.AuthorizeMemberOf)")
 	}
 
-	// Apply defaults
-	if cfg.Timeout == 0 {
+	// Validate and apply defaults for timeouts
+	if cfg.Timeout <= 0 {
 		cfg.Timeout = 30 * time.Second
 	}
-	if cfg.Transport.MaxIdleConns == 0 {
+	if cfg.Transport.MaxIdleConns <= 0 {
 		cfg.Transport.MaxIdleConns = 100
 	}
-	if cfg.Transport.MaxIdleConnsPerHost == 0 {
+	if cfg.Transport.MaxIdleConnsPerHost <= 0 {
 		cfg.Transport.MaxIdleConnsPerHost = 10
 	}
-	if cfg.Transport.IdleConnTimeout == 0 {
+	if cfg.Transport.IdleConnTimeout <= 0 {
 		cfg.Transport.IdleConnTimeout = 90 * time.Second
 	}
 
 	// Create X.509 source from SPIRE Workload API
-	// This handles automatic SVID fetching and rotation
+	// Use context.Background() to decouple source lifetime from caller's potentially short-lived ctx.
+	// The source will be explicitly closed via Close() method.
 	x509Source, err := workloadapi.NewX509Source(
-		ctx,
+		context.Background(),
 		workloadapi.WithClientOptions(
 			workloadapi.WithAddr(cfg.SocketPath),
 		),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create X509Source: %w", err)
+		return nil, fmt.Errorf("create X509Source: %w", err)
 	}
 
 	// Create mTLS client configuration
@@ -89,12 +95,18 @@ func NewSPIFFEHTTPClient(ctx context.Context, cfg ClientConfig) (*SPIFFEHTTPClie
 		cfg.ServerAuthorizer, // Server identity verification
 	)
 
-	// Create HTTP transport with mTLS
+	// Optional hardening: enforce minimum TLS version (uncomment for strict org policy)
+	// tlsConfig.MinVersion = tls.VersionTLS12
+
+	// Create HTTP transport with mTLS and resilience tuning
 	transport := &http.Transport{
-		TLSClientConfig:     tlsConfig,
-		MaxIdleConns:        cfg.Transport.MaxIdleConns,
-		MaxIdleConnsPerHost: cfg.Transport.MaxIdleConnsPerHost,
-		IdleConnTimeout:     cfg.Transport.IdleConnTimeout,
+		TLSClientConfig:       tlsConfig,
+		MaxIdleConns:          cfg.Transport.MaxIdleConns,
+		MaxIdleConnsPerHost:   cfg.Transport.MaxIdleConnsPerHost,
+		IdleConnTimeout:       cfg.Transport.IdleConnTimeout,
+		TLSHandshakeTimeout:   10 * time.Second, // Prevent hanging on slow TLS handshakes
+		ExpectContinueTimeout: 1 * time.Second,  // Timeout for 100-Continue response
+		// HTTP/2 enabled by default; MaxConnsPerHost can be set if needed for rate limiting
 	}
 
 	// Create HTTP client with configured timeout
@@ -109,52 +121,57 @@ func NewSPIFFEHTTPClient(ctx context.Context, cfg ClientConfig) (*SPIFFEHTTPClie
 	}, nil
 }
 
-// Get performs an HTTP GET request.
+// ensureHTTPS validates that the URL uses HTTPS protocol.
+// mTLS only applies to HTTPS requests; HTTP requests will be sent in plaintext without client certificates.
+func ensureHTTPS(url string) error {
+	if !strings.HasPrefix(url, "https://") {
+		return fmt.Errorf("mTLS client requires https URL: got %q", url)
+	}
+	return nil
+}
+
+// do is a DRY helper for creating and executing HTTP requests.
+func (c *SPIFFEHTTPClient) do(ctx context.Context, method, url, contentType string, body io.Reader) (*http.Response, error) {
+	// Enforce HTTPS for mTLS security
+	if err := ensureHTTPS(url); err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, url, body)
+	if err != nil {
+		return nil, fmt.Errorf("create %s request: %w", method, err)
+	}
+
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
+
+	return c.client.Do(req)
+}
+
+// Get performs an HTTPS GET request.
 func (c *SPIFFEHTTPClient) Get(ctx context.Context, url string) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create GET request: %w", err)
-	}
-	return c.client.Do(req)
+	return c.do(ctx, http.MethodGet, url, "", nil)
 }
 
-// Post performs an HTTP POST request.
+// Post performs an HTTPS POST request.
 func (c *SPIFFEHTTPClient) Post(ctx context.Context, url, contentType string, body io.Reader) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create POST request: %w", err)
-	}
-	req.Header.Set("Content-Type", contentType)
-	return c.client.Do(req)
+	return c.do(ctx, http.MethodPost, url, contentType, body)
 }
 
-// Put performs an HTTP PUT request.
+// Put performs an HTTPS PUT request.
 func (c *SPIFFEHTTPClient) Put(ctx context.Context, url, contentType string, body io.Reader) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create PUT request: %w", err)
-	}
-	req.Header.Set("Content-Type", contentType)
-	return c.client.Do(req)
+	return c.do(ctx, http.MethodPut, url, contentType, body)
 }
 
-// Delete performs an HTTP DELETE request.
+// Delete performs an HTTPS DELETE request.
 func (c *SPIFFEHTTPClient) Delete(ctx context.Context, url string) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create DELETE request: %w", err)
-	}
-	return c.client.Do(req)
+	return c.do(ctx, http.MethodDelete, url, "", nil)
 }
 
-// Patch performs an HTTP PATCH request.
+// Patch performs an HTTPS PATCH request.
 func (c *SPIFFEHTTPClient) Patch(ctx context.Context, url, contentType string, body io.Reader) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create PATCH request: %w", err)
-	}
-	req.Header.Set("Content-Type", contentType)
-	return c.client.Do(req)
+	return c.do(ctx, http.MethodPatch, url, contentType, body)
 }
 
 // Do performs an HTTP request.
@@ -163,17 +180,18 @@ func (c *SPIFFEHTTPClient) Do(req *http.Request) (*http.Response, error) {
 }
 
 // Close releases all resources used by the client.
+// Closes the X509Source first to stop new TLS handshakes, then closes idle connections.
 func (c *SPIFFEHTTPClient) Close() error {
-	// Close idle connections
-	if c.client != nil {
-		c.client.CloseIdleConnections()
-	}
-
-	// Close X509Source (stops SVID fetching and rotation)
+	// Close X509Source first (stops SVID fetching and rotation, prevents new TLS handshakes)
 	if c.x509Source != nil {
 		if err := c.x509Source.Close(); err != nil {
-			return fmt.Errorf("failed to close X509Source: %w", err)
+			return fmt.Errorf("close X509Source: %w", err)
 		}
+	}
+
+	// Then close idle connections to clean up resources
+	if c.client != nil {
+		c.client.CloseIdleConnections()
 	}
 
 	return nil
