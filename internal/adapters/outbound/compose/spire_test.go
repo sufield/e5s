@@ -9,15 +9,14 @@ import (
 )
 
 // TestSPIREAdapterFactory_InterfaceCompliance verifies the factory implements
-// the segregated interface hierarchy correctly.
+// the production interface hierarchy correctly.
 func TestSPIREAdapterFactory_InterfaceCompliance(t *testing.T) {
 	// Skip actual instantiation (requires SPIRE infrastructure)
 	// Just verify compile-time interface compliance
 	var (
-		_ ports.BaseAdapterFactory      = (*SPIREAdapterFactory)(nil)
-		_ ports.ProductionServerFactory = (*SPIREAdapterFactory)(nil)
-		_ ports.ProductionAgentFactory  = (*SPIREAdapterFactory)(nil)
-		_ ports.CoreAdapterFactory      = (*SPIREAdapterFactory)(nil)
+		_ ports.BaseAdapterFactory     = (*SPIREAdapterFactory)(nil)
+		_ ports.ProductionAgentFactory = (*SPIREAdapterFactory)(nil)
+		_ ports.CoreAdapterFactory     = (*SPIREAdapterFactory)(nil)
 	)
 }
 
@@ -55,27 +54,8 @@ func TestSPIREAdapterFactory_CreateProductionAgent_EmptySpiffeID(t *testing.T) {
 	}
 }
 
-// TestSPIREAdapterFactory_CreateServer_EmptyTrustDomain verifies validation.
-func TestSPIREAdapterFactory_CreateServer_EmptyTrustDomain(t *testing.T) {
-	// Create a mock factory (without actual SPIRE client)
-	factory := &SPIREAdapterFactory{
-		config: &spire.Config{},
-		client: nil,
-	}
-
-	ctx := context.Background()
-	parser := factory.CreateTrustDomainParser()
-	docProvider := factory.CreateIdentityDocumentProvider()
-
-	_, err := factory.CreateServer(ctx, "", parser, docProvider)
-	if err == nil {
-		t.Fatal("expected error for empty trust domain, got nil")
-	}
-	expectedMsg := "trust domain cannot be empty"
-	if err.Error() != expectedMsg {
-		t.Errorf("expected error message %q, got %q", expectedMsg, err.Error())
-	}
-}
+// NOTE: CreateServer test removed - production SPIRE adapter no longer provides server.
+// Production workloads are clients only. For server functionality, use InMemoryAdapterFactory.
 
 // TestSPIREAdapterFactory_Close_NilClient verifies nil-safe close.
 func TestSPIREAdapterFactory_Close_NilClient(t *testing.T) {

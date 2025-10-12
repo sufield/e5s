@@ -5,9 +5,9 @@ package domain
 // NOTE: Selector types and matching logic are primarily used by in-memory implementations.
 // In production deployments using real SPIRE, selector matching is delegated to SPIRE Server.
 // However, these types must remain in production builds because:
-// 1. The spire.SPIREClient.Attest() method returns domain.SelectorSet
-// 2. Domain types (Node, IdentityMapper) reference SelectorSet
-// 3. Factory interfaces (AdapterFactory.SeedRegistry) use domain.IdentityMapper
+// 1. Domain types (Node, IdentityMapper) reference SelectorSet
+// 2. Factory interfaces (AdapterFactory.SeedRegistry) use domain.IdentityMapper
+// 3. In-memory attestors return selectors for development/testing
 // While production code paths don't actively use selector matching logic,
 // the types are part of the domain model and adapter interfaces.
 

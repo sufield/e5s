@@ -203,17 +203,11 @@ type BaseAdapterFactory interface {
 	CreateIdentityDocumentProvider() IdentityDocumentProvider
 }
 
-// ProductionServerFactory creates production-oriented identity servers.
-// Production implementations delegate to external SPIRE Server.
-type ProductionServerFactory interface {
-	BaseAdapterFactory
-	// CreateServer creates a server that delegates to external SPIRE infrastructure.
-	// In production, docProvider is typically unused (SPIRE Server handles issuance).
-	CreateServer(ctx context.Context, trustDomain string, trustDomainParser TrustDomainParser, docProvider IdentityDocumentProvider) (IdentityServer, error)
-}
-
 // ProductionAgentFactory creates production-oriented agents.
 // Production implementations delegate to external SPIRE Agent.
+//
+// Design Note: Production SPIRE workloads are clients only (via Workload API).
+// Real SPIRE Server runs as external infrastructure, not embedded in workload processes.
 type ProductionAgentFactory interface {
 	BaseAdapterFactory
 	// CreateProductionAgent creates an agent that delegates to external SPIRE.
@@ -221,14 +215,19 @@ type ProductionAgentFactory interface {
 	CreateProductionAgent(ctx context.Context, spiffeID string, parser IdentityCredentialParser) (Agent, error)
 }
 
-// CoreAdapterFactory combines production server and agent creation.
-// This is the primary interface for production SPIRE deployments.
+// CoreAdapterFactory is the primary interface for production SPIRE deployments.
+// Production workloads are clients that fetch their own identity via Workload API.
 //
-// Design Note: This interface is intentionally segregated from development
-// interfaces to avoid forcing production implementations to accept unused
-// parameters (e.g., registry, attestor) that only in-memory implementations need.
+// Design Note: This interface intentionally does NOT include server creation.
+// In production SPIRE deployments:
+//   - SPIRE Server runs as external infrastructure (separate process)
+//   - Workloads are clients that communicate via Workload API (unix socket)
+//   - Workloads cannot issue arbitrary identities (only fetch their own SVID)
+//
+// Server functionality is only needed for in-memory/development implementations
+// where the "server" runs locally within the process for testing.
 type CoreAdapterFactory interface {
-	ProductionServerFactory
+	BaseAdapterFactory
 	ProductionAgentFactory
 }
 

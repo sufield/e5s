@@ -132,31 +132,6 @@ func TestValidateJWTSVID(t *testing.T) {
 	assert.Error(t, err, "JWT validation should fail with wrong audience")
 }
 
-// TestAttestation tests workload attestation
-func TestAttestation(t *testing.T) {
-	ctx := context.Background()
-	config := getTestConfig()
-
-	client, err := spire.NewSPIREClient(ctx, *config)
-	require.NoError(t, err, "Failed to create SPIRE client")
-	defer client.Close()
-
-	// Attest current process
-	pid := int32(os.Getpid())
-	selectors, err := client.Attest(ctx, pid)
-	require.NoError(t, err, "Failed to attest workload")
-	require.NotNil(t, selectors, "Selectors should not be nil")
-
-	// Verify selectors contain expected information
-	selectorStrings := selectors.Strings()
-	assert.NotEmpty(t, selectorStrings, "Should have at least one selector")
-
-	t.Logf("Attestation selectors for PID %d:", pid)
-	for _, sel := range selectorStrings {
-		t.Logf("  - %s", sel)
-	}
-}
-
 // TestSPIREClientReconnect tests client can handle reconnection
 func TestSPIREClientReconnect(t *testing.T) {
 	ctx := context.Background()

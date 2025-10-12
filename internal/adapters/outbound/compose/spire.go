@@ -119,41 +119,10 @@ func (f *SPIREAdapterFactory) CreateIdentityDocumentProvider() ports.IdentityDoc
 	return spire.NewSDKDocumentProvider(f.client)
 }
 
-// CreateServer creates a SPIRE-backed identity server.
-//
-// The server delegates to external SPIRE Server for certificate issuance.
-// In production, this connects to SPIRE Server via the Workload API client.
-//
-// Parameters:
-//   - ctx: Context for server initialization
-//   - trustDomain: Trust domain this server manages (e.g., "example.org")
-//   - trustDomainParser: Parser for trust domain validation
-//   - docProvider: Document provider (IGNORED; SPIRE Server handles issuance; server only fetches/validates)
-//
-// Returns:
-//   - ports.IdentityServer: SPIRE-backed server implementation
-//   - error: Non-nil if trust domain is invalid or server creation fails
-func (f *SPIREAdapterFactory) CreateServer(
-	ctx context.Context,
-	trustDomain string,
-	trustDomainParser ports.TrustDomainParser,
-	_ ports.IdentityDocumentProvider, // unused; SPIRE issues SVIDs externally
-) (ports.IdentityServer, error) {
-	// Validate all required parameters
-	if trustDomain == "" {
-		return nil, fmt.Errorf("trust domain cannot be empty")
-	}
-	if trustDomainParser == nil {
-		return nil, fmt.Errorf("trust domain parser cannot be nil")
-	}
-
-	// Check for trust domain mismatch between factory client and requested domain
-	if clientTD := f.client.GetTrustDomain(); clientTD != "" && clientTD != trustDomain {
-		return nil, fmt.Errorf("trust domain mismatch: factory/client=%s, requested=%s", clientTD, trustDomain)
-	}
-
-	return spire.NewServer(ctx, f.client, trustDomain, trustDomainParser)
-}
+// NOTE: CreateServer has been removed from production SPIRE adapter.
+// Production SPIRE workloads are clients only - they fetch their own SVID via Workload API.
+// Real SPIRE Server runs as external infrastructure, not embedded in workload processes.
+// For development/testing with embedded server, use InMemoryAdapterFactory instead.
 
 // CreateProductionAgent creates a SPIRE-backed production agent.
 //
@@ -213,10 +182,9 @@ func (f *SPIREAdapterFactory) Close() error {
 	return nil
 }
 
-// Verify SPIREAdapterFactory implements the segregated interfaces correctly
+// Verify SPIREAdapterFactory implements the production interfaces correctly
 var (
-	_ ports.BaseAdapterFactory        = (*SPIREAdapterFactory)(nil)
-	_ ports.ProductionServerFactory   = (*SPIREAdapterFactory)(nil)
-	_ ports.ProductionAgentFactory    = (*SPIREAdapterFactory)(nil)
-	_ ports.CoreAdapterFactory        = (*SPIREAdapterFactory)(nil) // Composite of above
+	_ ports.BaseAdapterFactory     = (*SPIREAdapterFactory)(nil)
+	_ ports.ProductionAgentFactory = (*SPIREAdapterFactory)(nil)
+	_ ports.CoreAdapterFactory     = (*SPIREAdapterFactory)(nil) // Composite of above
 )
