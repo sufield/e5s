@@ -16,20 +16,22 @@ import (
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
 )
 
-// spiffeIDKey is the context key for storing SPIFFE ID
-type contextKey string
+// spiffeIDKey is the context key for storing SPIFFE ID.
+// Using an unexported struct type prevents collisions with other packages.
+type contextKey struct{}
 
-const spiffeIDKey contextKey = "spiffe-id"
+var spiffeIDKey = contextKey{}
 
 // spiffeServer implements ports.MTLSServer using go-spiffe SDK
 type spiffeServer struct {
-	cfg    ports.MTLSConfig
-	source *workloadapi.X509Source
-	srv    *http.Server
-	mux    *http.ServeMux
-	once   sync.Once
-	closed bool
-	mu     sync.Mutex
+	cfg       ports.MTLSConfig
+	source    *workloadapi.X509Source
+	srv       *http.Server
+	mux       *http.ServeMux
+	startOnce sync.Once
+	startErr  error
+	closed    bool
+	mu        sync.Mutex
 }
 
 // NewSPIFFEServer returns a Server that authenticates clients via SPIFFE ID
@@ -39,8 +41,9 @@ func NewSPIFFEServer(ctx context.Context, cfg ports.MTLSConfig) (ports.MTLSServe
 	if cfg.WorkloadAPI.SocketPath == "" {
 		return nil, fmt.Errorf("workload api socket path is required")
 	}
-	if cfg.SPIFFE.AllowedPeerID == "" {
-		return nil, fmt.Errorf("spiffe allowed peer id is required")
+	// Require at least one authorization policy
+	if cfg.SPIFFE.AllowedPeerID == "" && cfg.SPIFFE.AllowedTrustDomain == "" {
+		return nil, fmt.Errorf("at least one SPIFFE authorization policy required (AllowedPeerID or AllowedTrustDomain)")
 	}
 
 	// Apply defaults
@@ -50,11 +53,20 @@ func NewSPIFFEServer(ctx context.Context, cfg ports.MTLSConfig) (ports.MTLSServe
 	if cfg.HTTP.ReadHeaderTimeout <= 0 {
 		cfg.HTTP.ReadHeaderTimeout = config.DefaultReadHeaderTimeout
 	}
+	if cfg.HTTP.ReadTimeout <= 0 {
+		cfg.HTTP.ReadTimeout = config.DefaultReadTimeout
+	}
 	if cfg.HTTP.WriteTimeout <= 0 {
 		cfg.HTTP.WriteTimeout = config.DefaultWriteTimeout
 	}
 	if cfg.HTTP.IdleTimeout <= 0 {
 		cfg.HTTP.IdleTimeout = config.DefaultIdleTimeout
+	}
+	if cfg.HTTP.ShutdownTimeout <= 0 {
+		cfg.HTTP.ShutdownTimeout = 10 * time.Second
+	}
+	if cfg.HTTP.MaxHeaderBytes <= 0 {
+		cfg.HTTP.MaxHeaderBytes = 1 << 20 // 1 MB default
 	}
 
 	// Build the X509 source from the local SPIRE Agent
@@ -66,15 +78,31 @@ func NewSPIFFEServer(ctx context.Context, cfg ports.MTLSConfig) (ports.MTLSServe
 		return nil, fmt.Errorf("create X509Source: %w", err)
 	}
 
-	// Parse the client's expected SPIFFE ID
-	clientID, err := spiffeid.FromString(cfg.SPIFFE.AllowedPeerID)
-	if err != nil {
-		source.Close()
-		return nil, fmt.Errorf("parse allowed peer ID: %w", err)
+	// Build authorization policy based on configuration
+	var authorizer tlsconfig.Authorizer
+	if cfg.SPIFFE.AllowedPeerID != "" {
+		// Authorize specific SPIFFE ID (exact match)
+		clientID, err := spiffeid.FromString(cfg.SPIFFE.AllowedPeerID)
+		if err != nil {
+			source.Close()
+			return nil, fmt.Errorf("parse allowed peer ID: %w", err)
+		}
+		authorizer = tlsconfig.AuthorizeID(clientID)
+	} else if cfg.SPIFFE.AllowedTrustDomain != "" {
+		// Authorize any ID in trust domain
+		trustDomain, err := spiffeid.TrustDomainFromString(cfg.SPIFFE.AllowedTrustDomain)
+		if err != nil {
+			source.Close()
+			return nil, fmt.Errorf("parse allowed trust domain: %w", err)
+		}
+		authorizer = tlsconfig.AuthorizeMemberOf(trustDomain)
 	}
 
-	// mTLS server config: present our SVID, verify client ID
-	tlsCfg := tlsconfig.MTLSServerConfig(source, source, tlsconfig.AuthorizeID(clientID))
+	// mTLS server config: present our SVID, verify client identity
+	tlsCfg := tlsconfig.MTLSServerConfig(source, source, authorizer)
+	// Apply TLS hardening
+	tlsCfg.MinVersion = 0x0304 // TLS 1.3
+	tlsCfg.CipherSuites = nil  // nil = use Go's secure defaults (TLS 1.3 ignores this)
 
 	mux := http.NewServeMux()
 	server := &http.Server{
@@ -82,8 +110,10 @@ func NewSPIFFEServer(ctx context.Context, cfg ports.MTLSConfig) (ports.MTLSServe
 		Handler:           mux,
 		TLSConfig:         tlsCfg,
 		ReadHeaderTimeout: cfg.HTTP.ReadHeaderTimeout,
+		ReadTimeout:       cfg.HTTP.ReadTimeout,
 		WriteTimeout:      cfg.HTTP.WriteTimeout,
 		IdleTimeout:       cfg.HTTP.IdleTimeout,
+		MaxHeaderBytes:    cfg.HTTP.MaxHeaderBytes,
 	}
 
 	return &spiffeServer{
@@ -99,27 +129,46 @@ func (s *spiffeServer) Handle(pattern string, handler http.Handler) {
 	s.mux.Handle(pattern, s.wrapHandler(handler))
 }
 
-// Start begins serving HTTPS with identity-based mTLS
+// HandleFunc registers a function handler with automatic SPIFFE ID extraction (convenience method)
+func (s *spiffeServer) HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) {
+	s.mux.Handle(pattern, s.wrapHandler(http.HandlerFunc(handler)))
+}
+
+// Start begins serving HTTPS with identity-based mTLS.
+// Returns immediately after starting the server in a goroutine.
+// Startup errors (port bind failures) are captured and returned synchronously.
+// Use Shutdown() to gracefully stop the server.
 func (s *spiffeServer) Start(ctx context.Context) error {
-	var startErr error
-	s.once.Do(func() {
+	s.startOnce.Do(func() {
+		// Create a channel to capture startup errors (buffer size 1 for non-blocking send)
+		errCh := make(chan error, 1)
+
 		go func() {
 			log.Printf("Starting mTLS server on %s", s.cfg.HTTP.Address)
 			if err := s.srv.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
+				// Send error to channel (non-blocking if already closed)
+				select {
+				case errCh <- err:
+				default:
+				}
 				log.Printf("Server error: %v", err)
 			}
 		}()
-		<-ctx.Done()
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		if err := s.Shutdown(shutdownCtx); err != nil {
-			log.Printf("Shutdown error: %v", err)
+
+		// Wait briefly for startup errors (port binding failures happen immediately)
+		select {
+		case err := <-errCh:
+			s.startErr = fmt.Errorf("server startup failed: %w", err)
+		case <-time.After(100 * time.Millisecond):
+			// No error within 100ms, assume successful startup
+			s.startErr = nil
 		}
 	})
-	return startErr
+	return s.startErr
 }
 
-// Shutdown gracefully stops the server
+// Shutdown gracefully stops the server, waiting for active connections.
+// Uses ShutdownTimeout from config if ctx doesn't have its own deadline.
 func (s *spiffeServer) Shutdown(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -129,14 +178,23 @@ func (s *spiffeServer) Shutdown(ctx context.Context) error {
 	}
 
 	log.Println("Shutting down server...")
+
+	// If ctx has no deadline, apply ShutdownTimeout from config
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, s.cfg.HTTP.ShutdownTimeout)
+		defer cancel()
+	}
+
 	if err := s.srv.Shutdown(ctx); err != nil {
 		return fmt.Errorf("shutdown error: %w", err)
 	}
 
+	s.closed = true
 	return nil
 }
 
-// Close releases resources (X309Source, connections, etc.)
+// Close releases resources (X509Source, connections, etc.)
 func (s *spiffeServer) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -155,11 +213,6 @@ func (s *spiffeServer) Close() error {
 
 	log.Println("Server resources released")
 	return nil
-}
-
-// GetMux returns the underlying ServeMux for advanced use cases
-func (s *spiffeServer) GetMux() *http.ServeMux {
-	return s.mux
 }
 
 // wrapHandler adds SPIFFE ID extraction middleware to the handler

@@ -38,6 +38,8 @@ type HTTPConfig struct {
 	ReadTimeout       time.Duration // e.g., 30 * time.Second
 	WriteTimeout      time.Duration // e.g., 30 * time.Second
 	IdleTimeout       time.Duration // e.g., 120 * time.Second
+	ShutdownTimeout   time.Duration // e.g., 10 * time.Second (graceful shutdown deadline)
+	MaxHeaderBytes    int           // e.g., 1 << 20 (1 MB) - max header size
 	Timeout           time.Duration // Client-specific timeout, e.g., 30 * time.Second
 }
 
@@ -47,14 +49,16 @@ type MTLSServer interface {
 	// Handle registers an HTTP handler (same semantics as http.ServeMux).
 	// Handlers receive requests with authenticated SPIFFE ID in context.
 	Handle(pattern string, handler http.Handler)
+	// HandleFunc registers a function handler (convenience method).
+	// Handlers receive requests with authenticated SPIFFE ID in context.
+	HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request))
 	// Start begins serving HTTPS with identity-based mTLS.
+	// Returns immediately after starting the server. Use Shutdown() to stop.
 	Start(ctx context.Context) error
 	// Shutdown gracefully stops the server, waiting for active connections.
 	Shutdown(ctx context.Context) error
 	// Close releases resources (X509Source, connections, etc.).
 	Close() error
-	// GetMux returns the underlying ServeMux for advanced use.
-	GetMux() *http.ServeMux
 }
 
 // MTLSClient is the stable interface for an mTLS HTTP client.

@@ -24,24 +24,16 @@ func Bootstrap(ctx context.Context, configLoader ports.ConfigLoader, factory por
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Step 2: Initialize trust domain parser (abstracts SDK trust domain validation)
-	trustDomainParser := factory.CreateTrustDomainParser()
-
-	// Step 3: Initialize identity credential parser (abstracts SDK parsing logic)
+	// Step 2: Initialize parsers and providers (abstracts SDK logic)
+	_ = factory.CreateTrustDomainParser()         // Created but unused - available for future expansion
 	parser := factory.CreateIdentityCredentialParser()
+	_ = factory.CreateIdentityDocumentProvider() // Created but unused - available for future expansion
 
-	// Step 4: Initialize identity document provider (abstracts SDK document creation/validation)
-	docProvider := factory.CreateIdentityDocumentProvider()
+	// NOTE: Production SPIRE workloads are clients only (via Workload API).
+	// Real SPIRE Server runs as external infrastructure, not embedded in workload processes.
+	// For development/testing with embedded server, use dev build with AdapterFactory instead.
 
-	// Step 5: Initialize SPIRE server (connects to external SPIRE Server)
-	// Note: In production, the server is optional - agents can work independently via Workload API
-	server, err := factory.CreateServer(ctx, config.TrustDomain, trustDomainParser, docProvider)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create SPIRE server: %w", err)
-	}
-	_ = server // Server is created for potential future use but not currently needed by agent
-
-	// Step 6: Initialize SPIRE agent (connects to external SPIRE Agent)
+	// Step 3: Initialize SPIRE agent (connects to external SPIRE Agent)
 	// Production uses CreateProductionAgent with clean signature (only essential params)
 	// Registry and attestor are handled by external SPIRE Server/Agent
 	agent, err := factory.CreateProductionAgent(ctx, config.AgentSpiffeID, parser)
@@ -49,10 +41,10 @@ func Bootstrap(ctx context.Context, configLoader ports.ConfigLoader, factory por
 		return nil, fmt.Errorf("failed to create SPIRE agent: %w", err)
 	}
 
-	// Step 7: Initialize Identity Client service (server-side SVID issuance)
+	// Step 4: Initialize Identity Client service (server-side SVID issuance)
 	identityClientService := NewIdentityClientService(agent)
 
-	// Step 8: Initialize core service (demonstration use case)
+	// Step 5: Initialize core service (demonstration use case)
 	// In production: registry is nil (not used)
 	service := NewIdentityService(agent, nil)
 

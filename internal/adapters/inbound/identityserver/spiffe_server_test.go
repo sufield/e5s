@@ -43,7 +43,7 @@ func TestNewSPIFFEServer_MissingAllowedClientID(t *testing.T) {
 	server, err := NewSPIFFEServer(ctx, cfg)
 	require.Error(t, err)
 	assert.Nil(t, server)
-	assert.Contains(t, err.Error(), "allowed peer id is required")
+	assert.Contains(t, err.Error(), "authorization policy required")
 }
 
 func TestNewSPIFFEServer_InvalidClientID(t *testing.T) {
