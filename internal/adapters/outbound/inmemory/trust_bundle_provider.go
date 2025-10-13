@@ -3,6 +3,7 @@
 package inmemory
 
 import (
+	"bytes"
 	"context"
 	"crypto/x509"
 	"encoding/pem"
@@ -21,14 +22,34 @@ type InMemoryTrustBundleProvider struct {
 
 // NewInMemoryTrustBundleProvider creates a new in-memory trust bundle provider
 // Supports multi-CA for bundle alignment with go-spiffe SDK
+//
+// Defensive copy: Filters out nil entries and non-CA certificates to avoid
+// test setup errors. In dev mode, we skip non-CA certs rather than panic
+// to allow flexible test configurations.
 func NewInMemoryTrustBundleProvider(caCerts []*x509.Certificate) ports.TrustBundleProvider {
+	// Defensive copy to avoid external mutation and filter invalid entries
+	clone := make([]*x509.Certificate, 0, len(caCerts))
+	for _, c := range caCerts {
+		if c == nil {
+			continue // Skip nil entries (common test gotcha)
+		}
+		// Dev-only: Ensure it's marked as a CA to match expectation of a trust anchor
+		// We skip non-CAs rather than error to allow flexible test setups
+		if !c.IsCA {
+			continue // Skip non-CA certs
+		}
+		clone = append(clone, c)
+	}
 	return &InMemoryTrustBundleProvider{
-		caCerts: caCerts,
+		caCerts: clone,
 	}
 }
 
 // GetBundle returns the trust bundle (PEM-encoded CA certs) for a trust domain
 // Returns concatenated PEM blocks (multi-CA) matching go-spiffe bundle format
+//
+// Contract: Returns error if no bundle is available (consistent across dev components).
+// Callers should not interpret empty bundles as success - always an error or valid bundle.
 func (p *InMemoryTrustBundleProvider) GetBundle(ctx context.Context, trustDomain *domain.TrustDomain) ([]byte, error) {
 	if trustDomain == nil {
 		return nil, fmt.Errorf("inmemory: %w: trust domain cannot be nil", domain.ErrInvalidTrustDomain)
@@ -38,18 +59,24 @@ func (p *InMemoryTrustBundleProvider) GetBundle(ctx context.Context, trustDomain
 		return nil, fmt.Errorf("inmemory: %w: for trust domain %s", domain.ErrTrustBundleNotFound, trustDomain.String())
 	}
 
-	// Encode multi-CA as concatenated PEM blocks (matches SDK bundle format)
-	// This allows seamless swap to real bundle.Source in production
-	var bundlePEM []byte
+	// Use buffer for efficient PEM assembly (fewer allocations than append)
+	var buf bytes.Buffer
 	for _, cert := range p.caCerts {
-		pemBlock := &pem.Block{
+		if cert == nil {
+			continue // Skip nil entries defensively (shouldn't happen after constructor filtering)
+		}
+		_ = pem.Encode(&buf, &pem.Block{
 			Type:  "CERTIFICATE",
 			Bytes: cert.Raw,
-		}
-		bundlePEM = append(bundlePEM, pem.EncodeToMemory(pemBlock)...)
+		})
 	}
 
-	return bundlePEM, nil
+	// Ensure we have at least one valid cert after filtering
+	if buf.Len() == 0 {
+		return nil, fmt.Errorf("inmemory: %w: for trust domain %s (no usable certs)", domain.ErrTrustBundleNotFound, trustDomain.String())
+	}
+
+	return buf.Bytes(), nil
 }
 
 // GetBundleForIdentity returns the trust bundle for an identity's trust domain
