@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/x509"
 	"fmt"
+	"strings"
 
 	"github.com/pocket/hexagon/spire/internal/domain"
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
@@ -39,34 +40,41 @@ func (c *SPIREClient) FetchX509Bundle(ctx context.Context) ([]*x509.Certificate,
 	if err != nil {
 		return nil, fmt.Errorf("fetch X.509 context: %w", err)
 	}
+	if x509Ctx == nil || x509Ctx.Bundles == nil {
+		return nil, fmt.Errorf("%w: no bundles in X.509 context", domain.ErrTrustBundleNotFound)
+	}
+
+	set := x509Ctx.Bundles
+	bundleCount := set.Len()
 
 	// Determine target trust domain deterministically
 	var td spiffeid.TrustDomain
 	switch {
 	case c.trustDomain != "":
-		// Priority 1: Use configured trust domain
-		td, err = spiffeid.TrustDomainFromString(c.trustDomain)
+		// Priority 1: Use configured trust domain (normalize to lowercase)
+		td, err = spiffeid.TrustDomainFromString(strings.ToLower(c.trustDomain))
 		if err != nil {
 			return nil, fmt.Errorf("invalid configured trust domain %q: %w", c.trustDomain, err)
 		}
 	case x509Ctx.DefaultSVID() != nil:
 		// Priority 2: Use default SVID's trust domain
 		td = x509Ctx.DefaultSVID().ID.TrustDomain()
-	case len(x509Ctx.Bundles.Bundles()) == 1:
+	case bundleCount == 1:
 		// Priority 3: If exactly one bundle present, use that trust domain
-		td = x509Ctx.Bundles.Bundles()[0].TrustDomain()
+		bundles := set.Bundles()
+		if len(bundles) > 0 && bundles[0] != nil {
+			td = bundles[0].TrustDomain()
+		} else {
+			return nil, fmt.Errorf("%w: bundle set reports 1 bundle but none available", domain.ErrTrustBundleNotFound)
+		}
 	default:
 		// No way to determine trust domain
-		bundleCount := len(x509Ctx.Bundles.Bundles())
 		return nil, fmt.Errorf("%w: unable to determine trust domain (no default SVID, %d bundles)", domain.ErrTrustBundleNotFound, bundleCount)
 	}
 
 	// Get bundle for determined trust domain
-	bundle, err := x509Ctx.Bundles.GetX509BundleForTrustDomain(td)
-	if err != nil {
-		return nil, fmt.Errorf("get X.509 bundle for trust domain %q: %w", td.String(), err)
-	}
-	if bundle == nil {
+	bundle, ok := set.Get(td)
+	if !ok || bundle == nil {
 		return nil, fmt.Errorf("%w: %s", domain.ErrTrustBundleNotFound, td.String())
 	}
 
