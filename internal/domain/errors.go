@@ -79,16 +79,12 @@ var (
 
 // Attestation errors
 var (
-	// ErrNodeAttestationFailed indicates node attestation failed
-	// Used by: NodeAttestor.AttestNode
-	ErrNodeAttestationFailed = errors.New("node attestation failed")
-
 	// ErrWorkloadAttestationFailed indicates workload attestation failed
 	// Used by: WorkloadAttestor.Attest
 	ErrWorkloadAttestationFailed = errors.New("workload attestation failed")
 
 	// ErrNoAttestationData indicates no attestation data available
-	// Used by: WorkloadAttestor.Attest, NodeAttestor.AttestNode
+	// Used by: WorkloadAttestor.Attest
 	ErrNoAttestationData = errors.New("no attestation data available")
 
 	// ErrInvalidProcessIdentity indicates process identity is invalid or incomplete
@@ -120,10 +116,6 @@ var (
 	// ErrWorkloadInvalid indicates workload validation failed
 	// Used by: domain workload validation
 	ErrWorkloadInvalid = errors.New("workload validation failed")
-
-	// ErrNodeInvalid indicates node validation failed
-	// Used by: domain.Node validation
-	ErrNodeInvalid = errors.New("node validation failed")
 )
 
 // Error checking helpers

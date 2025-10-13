@@ -42,8 +42,6 @@ type WorkloadAttestor interface {
 	Attest(ctx context.Context, workload ProcessIdentity) ([]string, error)
 }
 
-// NOTE: NodeAttestor has been moved to node_attestor.go with !production build tag.
-// In production deployments using real SPIRE, node attestation is handled by SPIRE Server.
 
 // IdentityServer represents the identity server functionality
 //
