@@ -221,23 +221,34 @@ func TestGetIdentity_NotPresent(t *testing.T) {
 	assert.Equal(t, spiffeid.ID{}, id)
 }
 
-func TestMustGetIdentity_Present(t *testing.T) {
+func TestRequireIdentity_Present(t *testing.T) {
 	req := httptest.NewRequest("GET", "/test", nil)
 	testID := spiffeid.RequireFromString("spiffe://example.org/test")
 	ctx := context.WithValue(req.Context(), spiffeIDKey, testID)
 	req = req.WithContext(ctx)
 
-	id := MustGetIdentity(req)
+	id, err := RequireIdentity(req)
 
+	assert.NoError(t, err)
 	assert.Equal(t, testID, id)
 }
 
-func TestMustGetIdentity_Panics(t *testing.T) {
+func TestRequireIdentity_NotPresent(t *testing.T) {
 	req := httptest.NewRequest("GET", "/test", nil)
 
-	assert.Panics(t, func() {
-		MustGetIdentity(req)
-	})
+	id, err := RequireIdentity(req)
+
+	assert.Error(t, err)
+	assert.Equal(t, ErrNoSPIFFEID, err)
+	assert.Equal(t, spiffeid.ID{}, id)
+}
+
+func TestRequireIdentity_NilRequest(t *testing.T) {
+	id, err := RequireIdentity(nil)
+
+	assert.Error(t, err)
+	assert.Equal(t, ErrNoSPIFFEID, err)
+	assert.Equal(t, spiffeid.ID{}, id)
 }
 
 func TestWrapHandler_NoTLS(t *testing.T) {

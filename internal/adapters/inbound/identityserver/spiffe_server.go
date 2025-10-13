@@ -2,9 +2,13 @@ package identityserver
 
 import (
 	"context"
+	"crypto/tls"
+	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -14,6 +18,12 @@ import (
 	"github.com/spiffe/go-spiffe/v2/spiffetls"
 	"github.com/spiffe/go-spiffe/v2/spiffetls/tlsconfig"
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
+)
+
+// Sentinel errors for identity operations.
+var (
+	// ErrNoSPIFFEID indicates no SPIFFE ID is present in the request context.
+	ErrNoSPIFFEID = errors.New("SPIFFE ID not found in request context")
 )
 
 // contextKey is the type for context keys to prevent collisions.
@@ -30,7 +40,8 @@ type spiffeServer struct {
 	mux       *http.ServeMux
 	startOnce sync.Once
 	startErr  error
-	closed    bool
+	stopped   bool // HTTP server stopped
+	closed    bool // Resources closed
 	mu        sync.Mutex
 }
 
@@ -41,9 +52,12 @@ func New(ctx context.Context, cfg ports.MTLSConfig) (ports.MTLSServer, error) {
 	if cfg.WorkloadAPI.SocketPath == "" {
 		return nil, fmt.Errorf("workload api socket path is required")
 	}
-	// Require at least one authorization policy
+	// Require exactly one authorization policy (not both)
 	if cfg.SPIFFE.AllowedPeerID == "" && cfg.SPIFFE.AllowedTrustDomain == "" {
 		return nil, fmt.Errorf("at least one SPIFFE authorization policy required (AllowedPeerID or AllowedTrustDomain)")
+	}
+	if cfg.SPIFFE.AllowedPeerID != "" && cfg.SPIFFE.AllowedTrustDomain != "" {
+		return nil, fmt.Errorf("configure either AllowedPeerID or AllowedTrustDomain, not both")
 	}
 
 	// Apply defaults
@@ -90,7 +104,8 @@ func New(ctx context.Context, cfg ports.MTLSConfig) (ports.MTLSServer, error) {
 		authorizer = tlsconfig.AuthorizeID(clientID)
 	} else if cfg.SPIFFE.AllowedTrustDomain != "" {
 		// Authorize any ID in trust domain
-		trustDomain, err := spiffeid.TrustDomainFromString(cfg.SPIFFE.AllowedTrustDomain)
+		// Normalize trust domain to lowercase (SPIFFE trust domains are DNS-like)
+		trustDomain, err := spiffeid.TrustDomainFromString(strings.ToLower(cfg.SPIFFE.AllowedTrustDomain))
 		if err != nil {
 			source.Close()
 			return nil, fmt.Errorf("parse allowed trust domain: %w", err)
@@ -101,8 +116,8 @@ func New(ctx context.Context, cfg ports.MTLSConfig) (ports.MTLSServer, error) {
 	// mTLS server config: present our SVID, verify client identity
 	tlsCfg := tlsconfig.MTLSServerConfig(source, source, authorizer)
 	// Apply TLS hardening
-	tlsCfg.MinVersion = 0x0304 // TLS 1.3
-	tlsCfg.CipherSuites = nil  // nil = use Go's secure defaults (TLS 1.3 ignores this)
+	tlsCfg.MinVersion = tls.VersionTLS13 // TLS 1.3
+	tlsCfg.CipherSuites = nil            // nil = use Go's secure defaults (TLS 1.3 ignores this)
 
 	mux := http.NewServeMux()
 	server := &http.Server{
@@ -124,57 +139,56 @@ func New(ctx context.Context, cfg ports.MTLSConfig) (ports.MTLSServer, error) {
 	}, nil
 }
 
-// Handle registers an HTTP handler with automatic SPIFFE ID extraction
+// Handle registers an HTTP handler with automatic SPIFFE ID extraction.
+// Safe to call concurrently, but should be called before Start() for best practices.
 func (s *spiffeServer) Handle(pattern string, handler http.Handler) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.mux.Handle(pattern, s.wrapHandler(handler))
 }
 
-// HandleFunc registers a function handler with automatic SPIFFE ID extraction (convenience method)
+// HandleFunc registers a function handler with automatic SPIFFE ID extraction (convenience method).
+// Safe to call concurrently, but should be called before Start() for best practices.
 func (s *spiffeServer) HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) {
-	s.mux.Handle(pattern, s.wrapHandler(http.HandlerFunc(handler)))
+	s.Handle(pattern, http.HandlerFunc(handler))
 }
 
 // Start begins serving HTTPS with identity-based mTLS.
-// Returns immediately after starting the server in a goroutine.
-// Startup errors (port bind failures) are captured and returned synchronously.
+// Pre-binds the listener to detect port conflicts immediately, then serves in a goroutine.
 // Use Shutdown() to gracefully stop the server.
 func (s *spiffeServer) Start(ctx context.Context) error {
 	s.startOnce.Do(func() {
-		// Create a channel to capture startup errors (buffer size 1 for non-blocking send)
-		errCh := make(chan error, 1)
+		// Pre-bind the listener to detect port conflicts immediately
+		ln, e := net.Listen("tcp", s.cfg.HTTP.Address)
+		if e != nil {
+			s.startErr = fmt.Errorf("bind failed: %w", e)
+			return
+		}
 
+		log.Printf("Starting mTLS server on %s", s.cfg.HTTP.Address)
+
+		// Serve TLS in background using pre-bound listener
 		go func() {
-			log.Printf("Starting mTLS server on %s", s.cfg.HTTP.Address)
-			if err := s.srv.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
-				// Send error to channel (non-blocking if already closed)
-				select {
-				case errCh <- err:
-				default:
-				}
+			// ServeTLS manages TLS using the server's TLSConfig
+			if err := s.srv.ServeTLS(ln, "", ""); err != nil && err != http.ErrServerClosed {
 				log.Printf("Server error: %v", err)
 			}
 		}()
 
-		// Wait briefly for startup errors (port binding failures happen immediately)
-		select {
-		case err := <-errCh:
-			s.startErr = fmt.Errorf("server startup failed: %w", err)
-		case <-time.After(100 * time.Millisecond):
-			// No error within 100ms, assume successful startup
-			s.startErr = nil
-		}
+		s.startErr = nil
 	})
 	return s.startErr
 }
 
-// Shutdown gracefully stops the server, waiting for active connections.
+// Shutdown gracefully stops the HTTP server, waiting for active connections.
 // Uses ShutdownTimeout from config if ctx doesn't have its own deadline.
+// After Shutdown, you must call Close() to release resources (X509Source).
 func (s *spiffeServer) Shutdown(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.closed {
-		return nil
+	if s.stopped {
+		return nil // Already stopped
 	}
 
 	log.Println("Shutting down server...")
@@ -190,17 +204,19 @@ func (s *spiffeServer) Shutdown(ctx context.Context) error {
 		return fmt.Errorf("shutdown error: %w", err)
 	}
 
-	s.closed = true
+	s.stopped = true
 	return nil
 }
 
-// Close releases resources (X509Source, connections, etc.)
+// Close releases resources (X509Source).
+// Idempotent - safe to call multiple times.
+// Call this after Shutdown() to properly clean up, or use Stop() for convenience.
 func (s *spiffeServer) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if s.closed {
-		return nil
+		return nil // Already closed
 	}
 
 	s.closed = true
@@ -213,6 +229,21 @@ func (s *spiffeServer) Close() error {
 
 	log.Println("Server resources released")
 	return nil
+}
+
+// Stop is a convenience method that calls Shutdown() then Close().
+// Use this to perform a complete graceful shutdown with resource cleanup.
+//
+// Example:
+//
+//	if err := server.Stop(ctx); err != nil {
+//	    log.Printf("Error stopping server: %v", err)
+//	}
+func (s *spiffeServer) Stop(ctx context.Context) error {
+	if err := s.Shutdown(ctx); err != nil {
+		return err
+	}
+	return s.Close()
 }
 
 // wrapHandler adds SPIFFE ID extraction middleware to the handler
@@ -238,19 +269,36 @@ func (s *spiffeServer) wrapHandler(handler http.Handler) http.Handler {
 	})
 }
 
-// GetIdentity extracts the authenticated client identity from the request.
+// ContextWithIdentity adds a SPIFFE ID to the context.
+// Useful for testing or propagating identity in non-HTTP code.
+func ContextWithIdentity(ctx context.Context, id spiffeid.ID) context.Context {
+	return context.WithValue(ctx, spiffeIDKey, id)
+}
+
+// IdentityFromContext extracts the SPIFFE ID from the context.
 // Returns the identity and true if present, zero value and false otherwise.
-func GetIdentity(r *http.Request) (spiffeid.ID, bool) {
-	id, ok := r.Context().Value(spiffeIDKey).(spiffeid.ID)
+// Use this for non-HTTP code that needs to access the identity.
+func IdentityFromContext(ctx context.Context) (spiffeid.ID, bool) {
+	id, ok := ctx.Value(spiffeIDKey).(spiffeid.ID)
 	return id, ok
 }
 
-// MustGetIdentity extracts the identity or panics if not present.
-// Use only in handlers where authentication is guaranteed.
-func MustGetIdentity(r *http.Request) spiffeid.ID {
+// GetIdentity extracts the authenticated client identity from the request.
+// Returns the identity and true if present, zero value and false otherwise.
+// Returns false if request is nil.
+func GetIdentity(r *http.Request) (spiffeid.ID, bool) {
+	if r == nil {
+		return spiffeid.ID{}, false
+	}
+	return IdentityFromContext(r.Context())
+}
+
+// RequireIdentity extracts the authenticated client identity from the request.
+// Returns an error if the identity is not present or request is nil.
+func RequireIdentity(r *http.Request) (spiffeid.ID, error) {
 	id, ok := GetIdentity(r)
 	if !ok {
-		panic("identity not found in request context")
+		return spiffeid.ID{}, ErrNoSPIFFEID
 	}
-	return id
+	return id, nil
 }

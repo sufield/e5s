@@ -55,38 +55,7 @@ func (c *SPIREClient) FetchX509SVID(ctx context.Context) (*domain.IdentityDocume
 		}
 	}
 
-	// Validate certificate chain is present and valid
-	if len(svid.Certificates) == 0 || svid.Certificates[0] == nil {
-		return nil, fmt.Errorf("%w: empty or invalid certificate chain", domain.ErrIdentityDocumentInvalid)
-	}
-
-	// Validate private key is present (required for mTLS)
-	if svid.PrivateKey == nil {
-		return nil, fmt.Errorf("%w: private key missing", domain.ErrIdentityDocumentInvalid)
-	}
-
-	// Extract identity credential from SPIFFE ID
-	spiffeID := svid.ID
-	trustDomain := domain.NewTrustDomainFromName(spiffeID.TrustDomain().String())
-	path := spiffeID.Path()
-
-	// Handle empty path (root ID) - domain model uses "/" for root
-	if path == "" {
-		path = "/"
-	}
-
-	identityCredential := domain.NewIdentityCredentialFromComponents(trustDomain, path)
-
-	// Create identity document from SVID components
-	// Note: Private key is embedded for mTLS operations. If your design allows,
-	// consider keeping keys internal and exposing only sign/decrypt operations.
-	doc := domain.NewIdentityDocumentFromComponents(
-		identityCredential,
-		svid.Certificates[0], // Leaf certificate
-		svid.PrivateKey,      // Private key for mTLS
-		svid.Certificates,    // Full chain including leaf
-		svid.Certificates[0].NotAfter,
-	)
-
-	return doc, nil
+	// Convert SVID to domain IdentityDocument
+	// TranslateX509SVIDToIdentityDocument handles all validation (certs, private key)
+	return TranslateX509SVIDToIdentityDocument(svid)
 }
