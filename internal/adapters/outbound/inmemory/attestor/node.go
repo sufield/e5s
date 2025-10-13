@@ -1,4 +1,5 @@
 //go:build !production
+// +build !production
 
 package attestor
 
@@ -10,22 +11,15 @@ import (
 	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
-// InMemoryNodeAttestor is an in-memory implementation of node attestation
-// In a real SPIRE deployment, this would use platform-specific attestation:
-// - AWS: EC2 Instance Identity Document
-// - GCP: Instance Identity Token
-// - Azure: Managed Service Identity
-// - TPM: TPM-based attestation
-// - Join Token: Pre-shared token for initial bootstrap
-//
-// For the walking skeleton, this provides hardcoded attestation for demonstration
+// InMemoryNodeAttestor is a trivial dev-only attestor.
+// - No concurrency guards (dev only).
+// - No platform calls.
+// - No defaults: selectors must be registered explicitly.
 type InMemoryNodeAttestor struct {
-	trustDomain string
-	// nodeSelectors maps node SPIFFE IDs to their platform selectors
-	nodeSelectors map[string][]*domain.Selector
+	trustDomain   string
+	nodeSelectors map[string][]*domain.Selector // keyed by identityCredential.String()
 }
 
-// NewInMemoryNodeAttestor creates a new in-memory node attestor
 func NewInMemoryNodeAttestor(trustDomain string) *InMemoryNodeAttestor {
 	return &InMemoryNodeAttestor{
 		trustDomain:   trustDomain,
@@ -33,58 +27,41 @@ func NewInMemoryNodeAttestor(trustDomain string) *InMemoryNodeAttestor {
 	}
 }
 
-// RegisterNodeSelectors registers platform selectors for a node
-// In real SPIRE, these would be discovered during attestation (e.g., AWS region, instance tags)
-// The spiffeID parameter is the string representation of the node's IdentityCredential
+// RegisterNodeSelectors sets selectors for the given node SPIFFE ID string.
+// Overwrites any existing entry. Dev-only; no validation beyond non-empty ID.
 func (a *InMemoryNodeAttestor) RegisterNodeSelectors(spiffeID string, selectors []*domain.Selector) {
+	if spiffeID == "" {
+		return
+	}
 	a.nodeSelectors[spiffeID] = selectors
 }
 
-// AttestNode performs in-memory node attestation
-// Returns a domain.Node with selectors populated and marked as attested
-func (a *InMemoryNodeAttestor) AttestNode(ctx context.Context, identityCredential *domain.IdentityCredential) (*domain.Node, error) {
-	if identityCredential == nil {
+// AttestNode returns a Node marked attested with pre-registered selectors.
+// Fails if credential is nil, trust domain mismatches, or no selectors registered.
+func (a *InMemoryNodeAttestor) AttestNode(ctx context.Context, cred *domain.IdentityCredential) (*domain.Node, error) {
+	if cred == nil {
 		return nil, domain.ErrInvalidIdentityCredential
 	}
-
-	// Verify the node belongs to the correct trust domain
-	if identityCredential.TrustDomain().String() != a.trustDomain {
+	if cred.TrustDomain().String() != a.trustDomain {
 		return nil, fmt.Errorf("node trust domain mismatch: expected %s, got %s",
-			a.trustDomain, identityCredential.TrustDomain().String())
+			a.trustDomain, cred.TrustDomain().String())
 	}
 
-	// Create unattested node
-	node := domain.NewNode(identityCredential)
-
-	// In real SPIRE, this is where platform-specific attestation happens:
-	// 1. Agent provides attestation data (e.g., AWS IID signature)
-	// 2. Server validates attestation data with platform (e.g., AWS API)
-	// 3. Server extracts platform selectors (e.g., aws:instance-id:i-1234, aws:region:us-east-1)
-
-	// For in-memory walking skeleton, use pre-registered selectors or defaults
-	selectors := a.nodeSelectors[identityCredential.String()]
-	if len(selectors) == 0 {
-		// Default selectors for demonstration (node-level selectors)
-		defaultSelector, _ := domain.NewSelector(
-			domain.SelectorTypeNode,
-			"hostname",
-			"localhost",
-		)
-		selectors = []*domain.Selector{defaultSelector}
+	sels := a.nodeSelectors[cred.String()]
+	if len(sels) == 0 {
+		return nil, fmt.Errorf("no selectors registered for %s", cred.String())
 	}
 
-	// Build selector set
-	selectorSet := domain.NewSelectorSet()
-	for _, sel := range selectors {
-		selectorSet.Add(sel)
-	}
+	node := domain.NewNode(cred)
 
-	// Set selectors and mark as attested
-	node.SetSelectors(selectorSet)
+	set := domain.NewSelectorSet()
+	for _, s := range sels {
+		set.Add(s)
+	}
+	node.SetSelectors(set)
 	node.MarkAttested()
 
 	return node, nil
 }
 
-// Ensure InMemoryNodeAttestor implements the port
 var _ ports.NodeAttestor = (*InMemoryNodeAttestor)(nil)
