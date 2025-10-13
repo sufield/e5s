@@ -80,7 +80,7 @@ func TranslateSPIFFEIDToIdentityCredential(id spiffeid.ID) (*domain.IdentityCred
 // TranslateTrustDomainToSPIFFEID converts a domain TrustDomain to a go-spiffe TrustDomain
 func TranslateTrustDomainToSPIFFEID(trustDomain *domain.TrustDomain) (spiffeid.TrustDomain, error) {
 	if trustDomain == nil {
-		return spiffeid.TrustDomain{}, domain.ErrInvalidTrustDomain
+		return spiffeid.TrustDomain{}, fmt.Errorf("%w: nil trust domain", domain.ErrInvalidTrustDomain)
 	}
 
 	// Parse trust domain string into go-spiffe TrustDomain
