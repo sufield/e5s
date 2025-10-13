@@ -31,6 +31,10 @@ type InMemoryServer struct {
 
 // NewInMemoryServer creates a new in-memory SPIRE server
 func NewInMemoryServer(ctx context.Context, trustDomainStr string, trustDomainParser ports.TrustDomainParser, certProvider ports.IdentityDocumentProvider) (*InMemoryServer, error) {
+	if trustDomainParser == nil || certProvider == nil {
+		return nil, fmt.Errorf("inmemory: trustDomainParser and certProvider are required")
+	}
+
 	// Use TrustDomainParser port to validate and create trust domain
 	trustDomain, err := trustDomainParser.FromString(ctx, trustDomainStr)
 	if err != nil {
@@ -57,13 +61,19 @@ func (s *InMemoryServer) IssueIdentity(ctx context.Context, identityCredential *
 		return nil, fmt.Errorf("inmemory: %w: identity credential cannot be nil", domain.ErrIdentityDocumentInvalid)
 	}
 
+	// Enforce trust-domain parity (credential must match server's trust domain)
+	if identityCredential.TrustDomain().String() != s.trustDomain.String() {
+		return nil, fmt.Errorf("inmemory: %w: trust domain mismatch: server=%s credential=%s",
+			domain.ErrIdentityDocumentInvalid, s.trustDomain, identityCredential.TrustDomain())
+	}
+
 	if s.caCert == nil || s.caKey == nil {
 		return nil, fmt.Errorf("inmemory: %w: CA not initialized", domain.ErrCANotInitialized)
 	}
 
 	doc, err := s.certificateProvider.CreateX509IdentityDocument(ctx, identityCredential, s.caCert, s.caKey)
 	if err != nil {
-		return nil, fmt.Errorf("inmemory: %w: %v", domain.ErrServerUnavailable, err)
+		return nil, fmt.Errorf("inmemory: %w: %w", domain.ErrServerUnavailable, err)
 	}
 
 	return doc, nil
@@ -79,9 +89,15 @@ func (s *InMemoryServer) GetCA() *x509.Certificate {
 	return s.caCert
 }
 
+// GetCABundle returns the CA bundle (single-root in dev)
+func (s *InMemoryServer) GetCABundle() []*x509.Certificate {
+	return []*x509.Certificate{s.caCert}
+}
+
 // generateCA creates a deterministic CA certificate for testing
 func generateCA(trustDomain string) (*x509.Certificate, *rsa.PrivateKey, error) {
 	// Use fixed test key (1024-bit minimum for Go crypto) - acceptable for fake/dev
+	// Explicit PRNG seed for deterministic key generation
 	privateKey, err := rsa.GenerateKey(&deterministicReader{state: 12345}, 1024)
 	if err != nil {
 		return nil, nil, fmt.Errorf("inmemory: key gen failed: %w", err)
@@ -94,13 +110,14 @@ func generateCA(trustDomain string) (*x509.Certificate, *rsa.PrivateKey, error) 
 		},
 		NotBefore:             fakeTime,
 		NotAfter:              fakeTime.Add(365 * 24 * time.Hour),
-		KeyUsage:              x509.KeyUsageCertSign,
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
 		IsCA:                  true,
 		BasicConstraintsValid: true,
 		MaxPathLen:            1,
 	}
 
-	certDER, err := x509.CreateCertificate(&deterministicReader{}, template, template, &privateKey.PublicKey, privateKey)
+	// Explicit PRNG seed for deterministic certificate generation
+	certDER, err := x509.CreateCertificate(&deterministicReader{state: 67890}, template, template, &privateKey.PublicKey, privateKey)
 	if err != nil {
 		return nil, nil, fmt.Errorf("inmemory: failed to create CA: %w", err)
 	}
