@@ -60,7 +60,7 @@ func NewSDKDocumentProvider(bundleSource x509bundle.Source) ports.IdentityDocume
 // In production SPIRE deployments, certificates are issued by SPIRE Server
 // and fetched via Workload API. This method exists only for interface compliance.
 //
-// Returns domain.ErrIdentityDocumentInvalid wrapped with a clear message that
+// Returns domain.ErrNotSupported wrapped with a clear message that
 // this operation is not supported by the SDK provider.
 func (p *SDKDocumentProvider) CreateX509IdentityDocument(
 	ctx context.Context,
@@ -68,7 +68,7 @@ func (p *SDKDocumentProvider) CreateX509IdentityDocument(
 	caCert interface{},
 	caKey interface{},
 ) (*domain.IdentityDocument, error) {
-	return nil, fmt.Errorf("%w: certificate creation is delegated to SPIRE Server in production (not supported by SDK provider)", domain.ErrIdentityDocumentInvalid)
+	return nil, fmt.Errorf("%w: certificate creation in production (delegated to SPIRE Server)", domain.ErrNotSupported)
 }
 
 // ValidateIdentityDocument performs full X.509 SVID validation using go-spiffe SDK.

@@ -46,8 +46,7 @@ type Selector struct {
 //   - value: The selector attribute value (e.g., "1000", "default")
 //
 // Returns:
-//   - ErrEmptyKey if key is empty
-//   - ErrEmptyValue if value is empty
+//   - ErrSelectorInvalid (with context) if key or value is empty
 //
 // Example:
 //   selector, err := NewSelector(SelectorTypeWorkload, "uid", "1000")
@@ -57,10 +56,10 @@ type Selector struct {
 //   // selector.String() == "workload:uid:1000"
 func NewSelector(selectorType SelectorType, key, value string) (*Selector, error) {
 	if key == "" {
-		return nil, fmt.Errorf("%w", ErrEmptyKey)
+		return nil, fmt.Errorf("%w: key is empty", ErrSelectorInvalid)
 	}
 	if value == "" {
-		return nil, fmt.Errorf("%w", ErrEmptyValue)
+		return nil, fmt.Errorf("%w: value is empty", ErrSelectorInvalid)
 	}
 
 	formatted := fmt.Sprintf("%s:%s:%s", selectorType, key, value)
@@ -81,9 +80,7 @@ func NewSelector(selectorType SelectorType, key, value string) (*Selector, error
 // Format: key:value (type provided separately)
 //
 // Returns:
-//   - ErrInvalidFormat if format is invalid
-//   - ErrEmptyKey if key is empty
-//   - ErrEmptyValue if value is empty
+//   - ErrSelectorInvalid (with context) if format is invalid, key is empty, or value is empty
 //
 // Example:
 //   selector, err := ParseSelector(SelectorTypeWorkload, "uid:1000")
@@ -93,12 +90,12 @@ func NewSelector(selectorType SelectorType, key, value string) (*Selector, error
 //   // selector: workload:user:server:prod (value="server:prod")
 func ParseSelector(selectorType SelectorType, s string) (*Selector, error) {
 	if s == "" {
-		return nil, fmt.Errorf("%w: input string is empty", ErrInvalidFormat)
+		return nil, fmt.Errorf("%w: input string is empty", ErrSelectorInvalid)
 	}
 
 	parts := strings.Split(s, ":")
 	if len(parts) < 2 {
-		return nil, fmt.Errorf("%w: expected key:value format, got %s", ErrInvalidFormat, s)
+		return nil, fmt.Errorf("%w: expected key:value format, got %s", ErrSelectorInvalid, s)
 	}
 
 	key := parts[0]
@@ -106,10 +103,10 @@ func ParseSelector(selectorType SelectorType, s string) (*Selector, error) {
 	value := strings.Join(parts[1:], ":")
 
 	if key == "" {
-		return nil, fmt.Errorf("%w", ErrEmptyKey)
+		return nil, fmt.Errorf("%w: key is empty", ErrSelectorInvalid)
 	}
 	if value == "" {
-		return nil, fmt.Errorf("%w", ErrEmptyValue)
+		return nil, fmt.Errorf("%w: value is empty", ErrSelectorInvalid)
 	}
 
 	formatted := fmt.Sprintf("%s:%s", key, value)
@@ -131,9 +128,7 @@ func ParseSelector(selectorType SelectorType, s string) (*Selector, error) {
 // Format: type:key:value
 //
 // Returns:
-//   - ErrInvalidFormat if format is invalid
-//   - ErrEmptyKey if key is empty
-//   - ErrEmptyValue if value is empty
+//   - ErrSelectorInvalid (with context) if format is invalid, key is empty, or value is empty
 //
 // Example:
 //   selector, err := ParseSelectorFromString("workload:uid:1000")
@@ -145,12 +140,12 @@ func ParseSelector(selectorType SelectorType, s string) (*Selector, error) {
 //   // selector.Value() == "ns:default:name" (multi-colon support)
 func ParseSelectorFromString(s string) (*Selector, error) {
 	if s == "" {
-		return nil, fmt.Errorf("%w: input string is empty", ErrInvalidFormat)
+		return nil, fmt.Errorf("%w: input string is empty", ErrSelectorInvalid)
 	}
 
 	parts := strings.Split(s, ":")
 	if len(parts) < 3 {
-		return nil, fmt.Errorf("%w: expected type:key:value format, got %s", ErrInvalidFormat, s)
+		return nil, fmt.Errorf("%w: expected type:key:value format, got %s", ErrSelectorInvalid, s)
 	}
 
 	selectorType := SelectorType(parts[0])

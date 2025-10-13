@@ -113,8 +113,8 @@ func TestSDKDocumentProvider_CreateX509IdentityDocument_ReturnsError(t *testing.
 	}
 
 	// Should return domain sentinel error
-	if !domain.IsIdentityDocumentInvalid(err) {
-		t.Errorf("expected ErrIdentityDocumentInvalid, got: %v", err)
+	if !errors.Is(err, domain.ErrNotSupported) {
+		t.Errorf("expected ErrNotSupported, got: %v", err)
 	}
 }
 
@@ -167,8 +167,8 @@ func TestSDKDocumentProvider_ValidateIdentityDocument_NilDocument(t *testing.T) 
 		t.Fatal("expected error for nil document")
 	}
 
-	if !domain.IsIdentityDocumentInvalid(err) {
-		t.Errorf("expected ErrIdentityDocumentInvalid, got: %v", err)
+	if !domain.IsIdentityDocumentError(err) {
+		t.Errorf("expected identity document error, got: %v", err)
 	}
 }
 
@@ -193,7 +193,7 @@ func TestSDKDocumentProvider_ValidateIdentityDocument_NilExpectedID(t *testing.T
 		t.Fatal("expected error for nil expected ID")
 	}
 
-	if !domain.IsInvalidIdentityCredential(err) {
+	if !errors.Is(err, domain.ErrInvalidIdentityCredential) {
 		t.Errorf("expected ErrInvalidIdentityCredential, got: %v", err)
 	}
 }
@@ -289,7 +289,7 @@ func TestSDKDocumentProvider_ValidateIdentityDocument_IdentityMismatch(t *testin
 		t.Fatal("expected error for identity mismatch")
 	}
 
-	if !domain.IsIdentityDocumentMismatch(err) {
+	if !errors.Is(err, domain.ErrIdentityDocumentMismatch) {
 		t.Errorf("expected ErrIdentityDocumentMismatch, got: %v", err)
 	}
 }
@@ -325,7 +325,7 @@ func TestSDKDocumentProvider_ValidateIdentityDocument_BundleNotFound(t *testing.
 		t.Fatal("expected error for missing bundle")
 	}
 
-	if !domain.IsCertificateChainInvalid(err) {
+	if !errors.Is(err, domain.ErrCertificateChainInvalid) {
 		t.Errorf("expected ErrCertificateChainInvalid, got: %v", err)
 	}
 }
@@ -351,8 +351,8 @@ func TestSDKDocumentProvider_ValidateIdentityDocument_EmptyChain(t *testing.T) {
 		t.Fatal("expected error for empty certificate chain")
 	}
 
-	if !domain.IsIdentityDocumentInvalid(err) {
-		t.Errorf("expected ErrIdentityDocumentInvalid, got: %v", err)
+	if !domain.IsIdentityDocumentError(err) {
+		t.Errorf("expected identity document error, got: %v", err)
 	}
 }
 
@@ -392,7 +392,7 @@ func TestSDKDocumentProvider_ValidateIdentityDocument_WrongTrustDomain(t *testin
 		t.Fatal("expected error for wrong trust domain (no bundle)")
 	}
 
-	if !domain.IsCertificateChainInvalid(err) {
+	if !errors.Is(err, domain.ErrCertificateChainInvalid) {
 		t.Errorf("expected ErrCertificateChainInvalid, got: %v", err)
 	}
 }
@@ -434,7 +434,7 @@ func TestSDKDocumentProvider_ValidateIdentityDocument_WrongSPIFFEID(t *testing.T
 		t.Fatal("expected error for SPIFFE ID mismatch")
 	}
 
-	if !domain.IsIdentityDocumentMismatch(err) {
+	if !errors.Is(err, domain.ErrIdentityDocumentMismatch) {
 		t.Errorf("expected ErrIdentityDocumentMismatch, got: %v", err)
 	}
 }
