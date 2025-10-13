@@ -425,7 +425,92 @@ func (r *InMemoryRegistry) FindBySelectors(
 
 ---
 
-### 2. Bootstrap Flow
+### 2. CLI Demo Flow (Development Only)
+
+**Purpose**: Demonstrate hexagonal architecture without HTTP infrastructure
+
+**Important**: The CLI demo uses `InMemoryAgent` which is **NOT** used for HTTP mTLS examples. HTTP services use production `identityserver` adapter connecting to real SPIRE Workload API.
+
+#### CLI Demo Architecture
+
+```
+┌────────────────┐
+│  cmd/main.go   │  (CLI Entry Point - dev only, build tag: dev)
+└───────┬────────┘
+        │ 1. Bootstrap application with in-memory adapters
+        ▼
+┌────────────────────────────┐
+│  CLI Adapter               │  (Inbound Adapter)
+│  internal/adapters/        │  - Presentation layer only
+│  inbound/cli/              │  - Formats output
+│                            │  - Orchestrates demo flow
+└───────┬────────────────────┘
+        │ 2. c.application.Agent.FetchIdentityDocument(workload)
+        ▼
+┌────────────────────────────┐
+│  Application Layer         │  (Domain orchestration)
+│  internal/app/             │
+│  - Application struct      │
+│  - Holds Agent port        │
+└───────┬────────────────────┘
+        │ 3. Calls Agent port (outbound)
+        ▼
+┌────────────────────────────┐
+│  InMemoryAgent             │  (Outbound Adapter)
+│  internal/adapters/        │  - Implements ports.Agent interface
+│  outbound/inmemory/        │  - Infrastructure layer
+│  agent.go                  │  - Talks to InMemoryServer
+└───────┬────────────────────┘
+        │ 4. Attestation → Registry → Server
+        ▼
+┌────────────────────────────┐
+│  Infrastructure            │
+│  - WorkloadAttestor        │
+│  - Registry                │
+│  - Server (issues SVIDs)   │
+└────────────────────────────┘
+```
+
+#### Why Agent is in Outbound Adapters
+
+The agent is **correctly placed** as an outbound adapter because:
+
+1. **Direction of dependency**: CLI (inbound) → Application → Agent (outbound) → Infrastructure
+2. **Infrastructure-facing**: Agent talks to SPIRE Server (infrastructure), not to domain logic
+3. **Port implementation**: Agent implements `ports.Agent` interface (outbound port)
+4. **Hexagonal principle**: Inbound adapters drive the application, outbound adapters are driven by it
+
+**Flow**:
+```
+CLI (drives application)
+  ↓
+Application (orchestrates use cases)
+  ↓
+Agent Port (outbound interface)
+  ↓
+InMemoryAgent (outbound adapter implementation)
+  ↓
+InMemoryServer (simulated SPIRE infrastructure)
+```
+
+**Key Point**: Just because CLI calls it doesn't make it inbound. The agent is called BY the application to interact with infrastructure, making it outbound.
+
+#### CLI Demo vs HTTP mTLS
+
+| Aspect | CLI Demo | HTTP mTLS (Production) |
+|--------|----------|----------------------|
+| Entry Point | `cmd/main.go` | `examples/identityserver-example/main.go` |
+| Inbound Adapter | CLI (console) | identityserver (HTTP) |
+| Agent Used | InMemoryAgent | Production SPIRE Workload API |
+| Build Tag | `dev` | None (production code) |
+| Purpose | Architecture demo | Real mTLS communication |
+| Scope | Out of scope for "two services using mTLS" | **In scope** |
+
+**For HTTP mTLS**: Use `examples/identityserver-example/` and `examples/httpclient/` which connect to real SPIRE via Workload API. These do NOT use InMemoryAgent.
+
+---
+
+### 3. Bootstrap Flow
 
 **Flow**: main.go → Bootstrap → Create Dependencies → Wire Ports → Seed Registry → Seal
 
