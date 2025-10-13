@@ -85,8 +85,13 @@ func NewAgent(
 
 // GetIdentity returns the agent's own identity.
 //
-// Concurrency: Safe for concurrent use. Returns a defensive copy to prevent
-// external mutations of internal state.
+// Concurrency: Safe for concurrent use. Prevents refresh stampede by re-checking
+// after acquiring write lock. Returns a defensive copy to prevent external mutations.
+//
+// IMPORTANT - Immutability Note: The returned identity contains a shallow copy of
+// the ports.Identity struct. The nested domain.IdentityDocument is NOT deep-copied.
+// Callers MUST treat the returned identity and its document as immutable. Mutating
+// the returned identity may cause data races or undefined behavior.
 //
 // Lifecycle: First call performs initial SVID fetch. Subsequent calls return
 // cached identity, refreshing only when the document expires soon (within 20%
@@ -99,45 +104,57 @@ func NewAgent(
 // Returns error if:
 //   - Initial fetch fails (first call only)
 //   - Refresh fails for expiring document
+//   - Fetched document doesn't match expected SPIFFE ID
 func (a *Agent) GetIdentity(ctx context.Context) (*ports.Identity, error) {
 	// Fast path: check if refresh needed (read lock)
 	a.mu.RLock()
 	current := a.agentIdentity
-	a.mu.RUnlock()
-
-	// Check if we need to fetch/refresh
 	needsRefresh := current == nil ||
 		current.IdentityDocument == nil ||
 		expiresSoon(current.IdentityDocument)
+	a.mu.RUnlock()
 
 	if needsRefresh {
-		// Fetch fresh document
-		doc, err := a.client.FetchX509SVID(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("refresh agent identity: %w", err)
-		}
-
-		// Sanity check: Verify fetched document matches expected credential
-		// This catches configuration mismatches (e.g., wrong SPIFFE ID registered)
-		if !doc.IdentityCredential().Equals(current.IdentityCredential) {
-			return nil, fmt.Errorf("fetched document identity %s does not match expected %s",
-				doc.IdentityCredential().String(),
-				current.IdentityCredential.String())
-		}
-
-		// Update cached identity (write lock)
-		next := &ports.Identity{
-			IdentityCredential: current.IdentityCredential,
-			IdentityDocument:   doc,
-			Name:               current.Name,
-		}
+		// Slow path: acquire write lock and re-check to prevent stampede
 		a.mu.Lock()
-		a.agentIdentity = next
+
+		// Re-check after acquiring write lock - another goroutine may have refreshed
+		current = a.agentIdentity
+		needsRefresh = current == nil ||
+			current.IdentityDocument == nil ||
+			expiresSoon(current.IdentityDocument)
+
+		if needsRefresh {
+			// Fetch fresh document
+			doc, err := a.client.FetchX509SVID(ctx)
+			if err != nil {
+				a.mu.Unlock()
+				return nil, fmt.Errorf("refresh agent identity: %w", err)
+			}
+
+			// Sanity check: Verify fetched document matches expected credential
+			// This catches configuration mismatches (e.g., wrong SPIFFE ID registered)
+			if !doc.IdentityCredential().Equals(current.IdentityCredential) {
+				a.mu.Unlock()
+				return nil, fmt.Errorf("fetched document identity %s does not match expected %s",
+					doc.IdentityCredential().String(),
+					current.IdentityCredential.String())
+			}
+
+			// Update cached identity
+			a.agentIdentity = &ports.Identity{
+				IdentityCredential: current.IdentityCredential,
+				IdentityDocument:   doc,
+				Name:               current.Name,
+			}
+		}
+
+		// Get updated identity after potential refresh
+		current = a.agentIdentity
 		a.mu.Unlock()
-		current = next
 	}
 
-	// Return defensive copy to prevent caller mutations
+	// Return defensive shallow copy (document is immutable - see note above)
 	out := *current
 	return &out, nil
 }
@@ -148,6 +165,12 @@ func (a *Agent) GetIdentity(ctx context.Context) (*ports.Identity, error) {
 //
 // Example: If a cert is valid for 24 hours, it will be renewed after 19.2 hours
 // (80% elapsed), leaving a 4.8-hour buffer before expiration.
+//
+// Edge Cases Handled:
+//   - nil document or certificate → needs refresh
+//   - Already expired → needs refresh
+//   - Not yet valid (NotBefore in future >5min) → needs refresh (clock skew)
+//   - Zero or negative lifetime → needs refresh (malformed cert)
 func expiresSoon(doc *domain.IdentityDocument) bool {
 	if doc == nil {
 		return true
@@ -164,10 +187,23 @@ func expiresSoon(doc *domain.IdentityDocument) bool {
 		return true
 	}
 
-	total := cert.NotAfter.Sub(cert.NotBefore)
-	remaining := time.Until(cert.NotAfter)
+	now := time.Now()
 
-	// Renew when 20% or less of lifetime remains
+	// Guard against certs not yet valid (potential clock skew)
+	// Allow up to 5 minutes of skew (clocks slightly ahead), beyond that treat as needs refresh
+	if !now.After(cert.NotBefore) && cert.NotBefore.Sub(now) > 5*time.Minute {
+		return true // Not valid yet and far in the future
+	}
+
+	// Calculate total lifetime and remaining time
+	total := cert.NotAfter.Sub(cert.NotBefore)
+	if total <= 0 {
+		return true // Malformed cert (zero or negative lifetime)
+	}
+
+	remaining := cert.NotAfter.Sub(now)
+
+	// Renew when 20% or less of lifetime remains (80% elapsed)
 	return remaining <= total/5
 }
 

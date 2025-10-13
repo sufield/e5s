@@ -323,6 +323,74 @@ func TestGetIdentity_Concurrency(t *testing.T) {
 	assert.LessOrEqual(t, fetcher.getCallCount(), numGoroutines, "Should not fetch more than number of goroutines")
 }
 
+func TestGetIdentity_PreventsRefreshStampede(t *testing.T) {
+	ctx := context.Background()
+
+	// Create cert expiring soon (triggers refresh)
+	cert1, key1 := createTestCert(t, "spiffe://example.org/agent",
+		time.Now().Add(-23*time.Hour),
+		time.Now().Add(1*time.Hour)) // 4.17% remaining - triggers refresh
+
+	td := domain.NewTrustDomainFromName("example.org")
+	cred := domain.NewIdentityCredentialFromComponents(td, "/agent")
+	doc1 := domain.NewIdentityDocumentFromComponents(cred, cert1, key1, []*x509.Certificate{cert1}, cert1.NotAfter)
+
+	// Create fresh cert for renewal
+	cert2, key2 := createTestCert(t, "spiffe://example.org/agent",
+		time.Now().Add(-1*time.Hour),
+		time.Now().Add(24*time.Hour))
+	doc2 := domain.NewIdentityDocumentFromComponents(cred, cert2, key2, []*x509.Certificate{cert2}, cert2.NotAfter)
+
+	// Use long delay to simulate slow SPIRE server
+	fetcher := &mockX509Fetcher{svid: doc1, fetchDelay: 50 * time.Millisecond}
+	parser := &mockCredentialParser{}
+
+	agent, err := NewAgent(ctx, fetcher, "spiffe://example.org/agent", parser)
+	require.NoError(t, err)
+
+	// First call to load initial doc1 (expiring soon)
+	_, err = agent.GetIdentity(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 1, fetcher.getCallCount())
+
+	// Update fetcher to return fresh doc2
+	fetcher.mu.Lock()
+	fetcher.svid = doc2
+	fetcher.mu.Unlock()
+
+	// Now run concurrent GetIdentity calls while doc needs refresh
+	// Without stampede prevention, all goroutines would fetch concurrently
+	// With stampede prevention (double-check locking), only one goroutine should fetch
+	const numGoroutines = 10
+	var wg sync.WaitGroup
+	errors := make(chan error, numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := agent.GetIdentity(ctx)
+			if err != nil {
+				errors <- err
+			}
+		}()
+	}
+
+	wg.Wait()
+	close(errors)
+
+	// No errors should occur
+	for err := range errors {
+		t.Errorf("Concurrent GetIdentity failed: %v", err)
+	}
+
+	// With stampede prevention, should see exactly 2 fetches total:
+	// 1. Initial fetch
+	// 2. One refresh (other goroutines wait for the refresh to complete)
+	callCount := fetcher.getCallCount()
+	assert.Equal(t, 2, callCount, "Should prevent stampede: exactly 2 fetches (initial + one refresh)")
+}
+
 func TestFetchIdentityDocument_Success(t *testing.T) {
 	ctx := context.Background()
 
@@ -505,4 +573,57 @@ func TestExpiresSoon_ExactThreshold(t *testing.T) {
 
 	// At exactly 20%, should trigger renewal (<=)
 	assert.True(t, expiresSoon(doc), "Document at exactly 20% threshold should be expiring")
+}
+
+func TestExpiresSoon_ClockSkewWithinTolerance(t *testing.T) {
+	// Cert valid in near future (3 minutes from now) - within 5 minute tolerance
+	cert, key := createTestCert(t, "spiffe://example.org/test",
+		time.Now().Add(3*time.Minute),
+		time.Now().Add(24*time.Hour))
+
+	td := domain.NewTrustDomainFromName("example.org")
+	cred := domain.NewIdentityCredentialFromComponents(td, "/test")
+	doc := domain.NewIdentityDocumentFromComponents(cred, cert, key, []*x509.Certificate{cert}, cert.NotAfter)
+
+	// Within 5 minute skew tolerance, should not trigger refresh
+	assert.False(t, expiresSoon(doc), "Cert with NotBefore within 5min should be acceptable")
+}
+
+func TestExpiresSoon_ClockSkewBeyondTolerance(t *testing.T) {
+	// Cert valid far in future (10 minutes from now) - beyond 5 minute tolerance
+	cert, key := createTestCert(t, "spiffe://example.org/test",
+		time.Now().Add(10*time.Minute),
+		time.Now().Add(24*time.Hour))
+
+	td := domain.NewTrustDomainFromName("example.org")
+	cred := domain.NewIdentityCredentialFromComponents(td, "/test")
+	doc := domain.NewIdentityDocumentFromComponents(cred, cert, key, []*x509.Certificate{cert}, cert.NotAfter)
+
+	// Beyond 5 minute skew tolerance, should trigger refresh (suspicious)
+	assert.True(t, expiresSoon(doc), "Cert with NotBefore >5min in future should trigger refresh")
+}
+
+func TestExpiresSoon_ZeroLifetime(t *testing.T) {
+	// Malformed cert: NotBefore == NotAfter (zero lifetime)
+	now := time.Now()
+	cert, key := createTestCert(t, "spiffe://example.org/test", now, now)
+
+	td := domain.NewTrustDomainFromName("example.org")
+	cred := domain.NewIdentityCredentialFromComponents(td, "/test")
+	doc := domain.NewIdentityDocumentFromComponents(cred, cert, key, []*x509.Certificate{cert}, cert.NotAfter)
+
+	assert.True(t, expiresSoon(doc), "Cert with zero lifetime should trigger refresh")
+}
+
+func TestExpiresSoon_NegativeLifetime(t *testing.T) {
+	// Malformed cert: NotAfter before NotBefore (negative lifetime)
+	cert, key := createTestCert(t, "spiffe://example.org/test",
+		time.Now().Add(1*time.Hour),
+		time.Now().Add(-1*time.Hour)) // NotAfter before NotBefore!
+
+	td := domain.NewTrustDomainFromName("example.org")
+	cred := domain.NewIdentityCredentialFromComponents(td, "/test")
+	doc := domain.NewIdentityDocumentFromComponents(cred, cert, key, []*x509.Certificate{cert}, cert.NotAfter)
+
+	assert.True(t, expiresSoon(doc), "Cert with negative lifetime should trigger refresh")
 }
