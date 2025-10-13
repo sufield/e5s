@@ -93,14 +93,11 @@ func ParseSelector(selectorType SelectorType, s string) (*Selector, error) {
 		return nil, fmt.Errorf("%w: input string is empty", ErrSelectorInvalid)
 	}
 
-	parts := strings.Split(s, ":")
-	if len(parts) < 2 {
+	// Split into key and value once; allow multi-colon values
+	key, value, ok := strings.Cut(s, ":")
+	if !ok {
 		return nil, fmt.Errorf("%w: expected key:value format, got %s", ErrSelectorInvalid, s)
 	}
-
-	key := parts[0]
-	// Join remaining parts for values with colons (e.g., unix:user:server-workload)
-	value := strings.Join(parts[1:], ":")
 
 	if key == "" {
 		return nil, fmt.Errorf("%w: key is empty", ErrSelectorInvalid)
@@ -109,13 +106,8 @@ func ParseSelector(selectorType SelectorType, s string) (*Selector, error) {
 		return nil, fmt.Errorf("%w: value is empty", ErrSelectorInvalid)
 	}
 
-	formatted := fmt.Sprintf("%s:%s", key, value)
-	return &Selector{
-		selectorType: selectorType,
-		key:          key,
-		value:        value,
-		formatted:    formatted,
-	}, nil
+	// Delegate to NewSelector to ensure correct formatted "type:key:value"
+	return NewSelector(selectorType, key, value)
 }
 
 // ParseSelectorFromString parses a full selector string in "type:key:value" format.
@@ -143,17 +135,19 @@ func ParseSelectorFromString(s string) (*Selector, error) {
 		return nil, fmt.Errorf("%w: input string is empty", ErrSelectorInvalid)
 	}
 
-	parts := strings.Split(s, ":")
-	if len(parts) < 3 {
+	// Split type : rest
+	typ, rest, ok := strings.Cut(s, ":")
+	if !ok {
 		return nil, fmt.Errorf("%w: expected type:key:value format, got %s", ErrSelectorInvalid, s)
 	}
 
-	selectorType := SelectorType(parts[0])
-	key := parts[1]
-	// Join remaining parts for values with colons
-	value := strings.Join(parts[2:], ":")
+	// Split key : value (value can contain colons)
+	key, value, ok := strings.Cut(rest, ":")
+	if !ok {
+		return nil, fmt.Errorf("%w: expected type:key:value format, got %s", ErrSelectorInvalid, s)
+	}
 
-	return NewSelector(selectorType, key, value)
+	return NewSelector(SelectorType(typ), key, value)
 }
 
 // String returns the selector in formatted string representation.
@@ -218,4 +212,32 @@ func (s *Selector) Equals(other *Selector) bool {
 	return s.selectorType == other.selectorType &&
 		s.key == other.key &&
 		s.value == other.value
+}
+
+// MustNewSelector creates a new selector and panics on error.
+// This is useful for development, testing, and configuration where selector
+// strings are known to be valid at compile time.
+//
+// Example:
+//   selector := domain.MustNewSelector(SelectorTypeWorkload, "uid", "1000")
+func MustNewSelector(selectorType SelectorType, key, value string) *Selector {
+	s, err := NewSelector(selectorType, key, value)
+	if err != nil {
+		panic(err)
+	}
+	return s
+}
+
+// MustParseSelectorFromString parses a selector string and panics on error.
+// This is useful for development, testing, and configuration where selector
+// strings are known to be valid at compile time.
+//
+// Example:
+//   selector := domain.MustParseSelectorFromString("workload:uid:1000")
+func MustParseSelectorFromString(s string) *Selector {
+	sel, err := ParseSelectorFromString(s)
+	if err != nil {
+		panic(err)
+	}
+	return sel
 }
