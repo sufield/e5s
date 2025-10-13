@@ -17,7 +17,7 @@ import (
 
 // Deterministic constants for fake - dev only
 var (
-	fakeTime   = time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	fakeTime   = time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC)
 	fakeSerial = big.NewInt(1)
 )
 
