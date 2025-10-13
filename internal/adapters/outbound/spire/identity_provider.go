@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/pocket/hexagon/spire/internal/domain"
-	"github.com/spiffe/go-spiffe/v2/spiffeid"
 )
 
 // FetchX509SVID fetches an X.509 SVID from SPIRE and converts it to an IdentityDocument.
@@ -42,15 +41,12 @@ func (c *SPIREClient) FetchX509SVID(ctx context.Context) (*domain.IdentityDocume
 	// Select SVID deterministically:
 	// Prefer the SVID matching our configured trust domain if available
 	svid := x509Ctx.SVIDs[0] // Default to first
-	if c.trustDomain != "" {
-		tdWanted, tdErr := spiffeid.TrustDomainFromString(c.trustDomain)
-		if tdErr == nil {
-			// Scan for matching trust domain
-			for _, s := range x509Ctx.SVIDs {
-				if s.ID.TrustDomain() == tdWanted {
-					svid = s
-					break
-				}
+	if c.td.String() != "" {
+		// Scan for matching trust domain
+		for _, s := range x509Ctx.SVIDs {
+			if s.ID.TrustDomain() == c.td {
+				svid = s
+				break
 			}
 		}
 	}

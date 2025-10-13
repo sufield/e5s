@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/x509"
 	"fmt"
-	"strings"
 
 	"github.com/pocket/hexagon/spire/internal/domain"
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
@@ -13,7 +12,7 @@ import (
 // FetchX509Bundle returns the X.509 trust bundle for the chosen trust domain.
 //
 // Trust Domain Resolution (in priority order):
-//  1. Uses c.trustDomain if configured
+//  1. Uses c.td if configured
 //  2. Falls back to default SVID's trust domain if present
 //  3. If exactly one bundle is present, uses that trust domain
 //  4. Otherwise returns error
@@ -50,12 +49,9 @@ func (c *SPIREClient) FetchX509Bundle(ctx context.Context) ([]*x509.Certificate,
 	// Determine target trust domain deterministically
 	var td spiffeid.TrustDomain
 	switch {
-	case c.trustDomain != "":
-		// Priority 1: Use configured trust domain (normalize to lowercase)
-		td, err = spiffeid.TrustDomainFromString(strings.ToLower(c.trustDomain))
-		if err != nil {
-			return nil, fmt.Errorf("invalid configured trust domain %q: %w", c.trustDomain, err)
-		}
+	case c.td.String() != "":
+		// Priority 1: Use configured trust domain (already normalized)
+		td = c.td
 	case x509Ctx.DefaultSVID() != nil:
 		// Priority 2: Use default SVID's trust domain
 		td = x509Ctx.DefaultSVID().ID.TrustDomain()

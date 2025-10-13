@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -28,7 +29,7 @@ func TestNewSPIREClient_ValidConfig(t *testing.T) {
 	}
 
 	if client != nil {
-		assert.Equal(t, config.TrustDomain, client.trustDomain)
+		assert.Equal(t, config.TrustDomain, client.GetTrustDomain())
 		assert.Equal(t, config.SocketPath, client.socketPath)
 		assert.Equal(t, config.Timeout, client.timeout)
 		client.Close()
@@ -59,14 +60,18 @@ func TestNewSPIREClient_DefaultTimeout(t *testing.T) {
 
 func TestSPIREClient_GetMethods(t *testing.T) {
 	// Create client struct directly (without actual SPIRE connection)
+	td, err := spiffeid.TrustDomainFromString("example.org")
+	require.NoError(t, err)
+
 	client := &SPIREClient{
-		socketPath:  "unix:///tmp/test.sock",
-		trustDomain: "example.org",
-		timeout:     30 * time.Second,
-		client:      nil, // Will be nil for this test
+		socketPath: "unix:///tmp/test.sock",
+		td:         td,
+		timeout:    30 * time.Second,
+		client:     nil, // Will be nil for this test
 	}
 
 	assert.Equal(t, "example.org", client.GetTrustDomain())
+	assert.Equal(t, td, client.TrustDomain())
 	assert.Equal(t, "unix:///tmp/test.sock", client.GetSocketPath())
 }
 
@@ -213,12 +218,15 @@ func TestConfig_TimeoutValidation(t *testing.T) {
 }
 
 func TestSPIREClient_Close(t *testing.T) {
+	td, err := spiffeid.TrustDomainFromString("example.org")
+	require.NoError(t, err)
+
 	client := &SPIREClient{
-		socketPath:  "unix:///tmp/test.sock",
-		trustDomain: "example.org",
-		timeout:     30 * time.Second,
-		client:      nil,
-		source:      nil,
+		socketPath: "unix:///tmp/test.sock",
+		td:         td,
+		timeout:    30 * time.Second,
+		client:     nil,
+		source:     nil,
 	}
 
 	// Close should not panic even with nil client and source
@@ -226,4 +234,26 @@ func TestSPIREClient_Close(t *testing.T) {
 		err := client.Close()
 		assert.NoError(t, err, "Close with nil client/source should not error")
 	})
+}
+
+func TestSPIREClient_CloseIdempotent(t *testing.T) {
+	td, err := spiffeid.TrustDomainFromString("example.org")
+	require.NoError(t, err)
+
+	client := &SPIREClient{
+		socketPath: "unix:///tmp/test.sock",
+		td:         td,
+		timeout:    30 * time.Second,
+		client:     nil,
+		source:     nil,
+	}
+
+	// Close multiple times should be safe
+	err1 := client.Close()
+	err2 := client.Close()
+	err3 := client.Close()
+
+	assert.NoError(t, err1)
+	assert.NoError(t, err2)
+	assert.NoError(t, err3)
 }

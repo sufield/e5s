@@ -2,7 +2,9 @@ package spire
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/pocket/hexagon/spire/internal/domain"
@@ -22,12 +24,18 @@ import (
 // - Caches bundles and SVIDs in memory
 // - Automatically rotates certificates before expiration
 // - Avoids RPC overhead on every fetch operation
+//
+// Concurrency: Close() is safe to call multiple times concurrently using sync.Once.
 type SPIREClient struct {
 	client      *workloadapi.Client
 	source      *workloadapi.X509Source // Cached, auto-rotating source (preferred)
 	socketPath  string
-	trustDomain string
+	td          spiffeid.TrustDomain // Normalized trust domain (value type for safety)
 	timeout     time.Duration
+
+	// Close coordination
+	closeOnce sync.Once
+	closeErr  error
 }
 
 // Config holds configuration for the SPIRE client
@@ -101,40 +109,54 @@ func NewSPIREClient(ctx context.Context, cfg Config) (*SPIREClient, error) {
 	}
 
 	return &SPIREClient{
-		client:      client,
-		source:      source,
-		socketPath:  cfg.SocketPath,
-		trustDomain: td.String(), // Store normalized form
-		timeout:     cfg.Timeout,
+		client:     client,
+		source:     source,
+		socketPath: cfg.SocketPath,
+		td:         td, // Store as value type for safety
+		timeout:    cfg.Timeout,
 	}, nil
 }
 
 // Close closes the X509Source and Workload API client.
-// Both resources are closed, with source closed first.
-// Returns the first error encountered, if any.
+//
+// Idempotent: Safe to call multiple times concurrently. Uses sync.Once to ensure
+// resources are closed exactly once. Returns errors.Join of both close operations,
+// so you don't lose the second error if both fail.
+//
+// Concurrency: Thread-safe. Multiple goroutines can call Close concurrently without
+// data races. The first call performs the actual close, subsequent calls return the
+// cached result.
 func (c *SPIREClient) Close() error {
-	var err1, err2 error
+	c.closeOnce.Do(func() {
+		var err1, err2 error
 
-	// Close source first (it wraps the client)
-	if c.source != nil {
-		err1 = c.source.Close()
-	}
+		// Close source first (it wraps the client)
+		if c.source != nil {
+			err1 = c.source.Close()
+		}
 
-	// Then close underlying client
-	if c.client != nil {
-		err2 = c.client.Close()
-	}
+		// Then close underlying client
+		if c.client != nil {
+			err2 = c.client.Close()
+		}
 
-	// Return first error encountered
-	if err1 != nil {
-		return err1
-	}
-	return err2
+		// Join both errors (Go 1.20+)
+		c.closeErr = errors.Join(err1, err2)
+	})
+	return c.closeErr
 }
 
-// GetTrustDomain returns the configured trust domain
+// GetTrustDomain returns the configured trust domain as a string.
+// Returns the normalized (lowercase) form of the trust domain.
 func (c *SPIREClient) GetTrustDomain() string {
-	return c.trustDomain
+	return c.td.String()
+}
+
+// TrustDomain returns the configured trust domain as a spiffeid.TrustDomain value type.
+// Prefer this over GetTrustDomain() when working with go-spiffe APIs to avoid repeated
+// string parsing and enable safer type-checked comparisons.
+func (c *SPIREClient) TrustDomain() spiffeid.TrustDomain {
+	return c.td
 }
 
 // GetSocketPath returns the configured socket path
@@ -157,6 +179,17 @@ func (c *SPIREClient) GetWorkloadAPIClient() *workloadapi.Client {
 	return c.client
 }
 
+// Source returns the cached X509Source for read-only access.
+//
+// The X509Source provides cached, auto-rotating SVIDs and bundles. This is useful
+// for advanced integrations that expect an x509svid.Source or x509bundle.Source
+// interface without exposing the raw Workload API client.
+//
+// Returns nil if the source was not successfully created during NewSPIREClient.
+func (c *SPIREClient) Source() *workloadapi.X509Source {
+	return c.source
+}
+
 // GetX509BundleForTrustDomain fetches the X.509 bundle for a trust domain.
 // This implements the x509bundle.Source interface requirement for certificate validation.
 //
@@ -171,17 +204,20 @@ func (c *SPIREClient) GetWorkloadAPIClient() *workloadapi.Client {
 //   - Bundle containing root CA certificates for the trust domain
 //   - Error if trust domain has no bundle or fetch fails
 func (c *SPIREClient) GetX509BundleForTrustDomain(td spiffeid.TrustDomain) (*x509bundle.Bundle, error) {
-	// Prefer cached source (no RPC, auto-rotating)
-	// X509Source implements GetX509BundleForTrustDomain directly
-	if c.source != nil {
-		bundle, err := c.source.GetX509BundleForTrustDomain(td)
+	// Helper to unwrap bundle result with consistent error formatting
+	get := func(b *x509bundle.Bundle, err error) (*x509bundle.Bundle, error) {
 		if err != nil {
-			return nil, fmt.Errorf("trust bundle not found for domain %q: %w", td.String(), err)
+			return nil, fmt.Errorf("trust bundle not found for domain %q: %w", td, err)
 		}
-		if bundle == nil {
-			return nil, fmt.Errorf("trust bundle not found for domain %q", td.String())
+		if b == nil {
+			return nil, fmt.Errorf("trust bundle not found for domain %q", td)
 		}
-		return bundle, nil
+		return b, nil
+	}
+
+	// Prefer cached source (no RPC, auto-rotating)
+	if c.source != nil {
+		return get(c.source.GetX509BundleForTrustDomain(td))
 	}
 
 	// Fallback: Direct Workload API fetch (RPC per call)
@@ -193,15 +229,7 @@ func (c *SPIREClient) GetX509BundleForTrustDomain(td spiffeid.TrustDomain) (*x50
 		return nil, fmt.Errorf("fetch X.509 bundles: %w", err)
 	}
 
-	bundle, err := bundleSet.GetX509BundleForTrustDomain(td)
-	if err != nil {
-		return nil, fmt.Errorf("trust bundle not found for domain %q: %w", td.String(), err)
-	}
-	if bundle == nil {
-		return nil, fmt.Errorf("trust bundle not found for domain %q", td.String())
-	}
-
-	return bundle, nil
+	return get(bundleSet.GetX509BundleForTrustDomain(td))
 }
 
 // Compile-time assertion: SPIREClient implements x509bundle.Source
