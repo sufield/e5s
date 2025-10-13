@@ -5,7 +5,6 @@ package compose
 import (
 	"context"
 	"crypto/x509"
-	"fmt"
 
 	"github.com/pocket/hexagon/spire/internal/adapters/outbound/inmemory"
 	"github.com/pocket/hexagon/spire/internal/adapters/outbound/inmemory/attestor"
@@ -25,8 +24,35 @@ func NewInMemoryAdapterFactory() *InMemoryAdapterFactory {
 	return &InMemoryAdapterFactory{}
 }
 
-func (f *InMemoryAdapterFactory) CreateRegistry() ports.IdentityMapperRegistry {
-	return inmemory.NewInMemoryRegistry()
+func (f *InMemoryAdapterFactory) CreateRegistry(ctx context.Context, workloads []ports.WorkloadEntry, parser ports.IdentityCredentialParser) (*inmemory.InMemoryRegistry, error) {
+	registry := inmemory.NewInMemoryRegistry()
+
+	// Seed registry with workload configurations
+	for _, workload := range workloads {
+		identityCredential, err := parser.ParseFromString(ctx, workload.SpiffeID)
+		if err != nil {
+			return nil, err
+		}
+
+		selector, err := domain.ParseSelectorFromString(workload.Selector)
+		if err != nil {
+			return nil, err
+		}
+
+		selectorSet := domain.NewSelectorSet()
+		selectorSet.Add(selector)
+
+		mapper, err := domain.NewIdentityMapper(identityCredential, selectorSet)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := registry.Seed(ctx, mapper); err != nil {
+			return nil, err
+		}
+	}
+
+	return registry, nil
 }
 
 func (f *InMemoryAdapterFactory) CreateTrustDomainParser() ports.TrustDomainParser {
@@ -37,6 +63,17 @@ func (f *InMemoryAdapterFactory) CreateIdentityCredentialParser() ports.Identity
 	return inmemory.NewInMemoryIdentityCredentialParser()
 }
 
+// CreateIdentityDocumentValidator creates an identity document validator.
+// In-memory implementation provides both validation and creation, so this returns
+// the same provider instance that CreateIdentityDocumentProvider returns.
+// This satisfies BaseAdapterFactory interface (validator only).
+func (f *InMemoryAdapterFactory) CreateIdentityDocumentValidator() ports.IdentityDocumentValidator {
+	return inmemory.NewInMemoryIdentityDocumentProvider()
+}
+
+// CreateIdentityDocumentProvider creates a full identity document provider.
+// In-memory implementation needs creation capability for certificate generation.
+// This satisfies DevelopmentAdapterFactory interface (full provider).
 func (f *InMemoryAdapterFactory) CreateIdentityDocumentProvider() ports.IdentityDocumentProvider {
 	return inmemory.NewInMemoryIdentityDocumentProvider()
 }
@@ -72,84 +109,31 @@ func (f *InMemoryAdapterFactory) CreateTrustBundleProvider(server ports.Identity
 	return inmemory.NewInMemoryTrustBundleProvider(nil)
 }
 
-// CreateDevelopmentServer creates an in-memory server for development/testing.
-// Unlike production, this implementation needs full control over document provider
-// because it manages certificate issuance locally.
-// Uses configuration struct pattern to reduce parameter count (Go best practice).
-func (f *InMemoryAdapterFactory) CreateDevelopmentServer(ctx context.Context, cfg ports.DevelopmentServerConfig) (ports.IdentityServer, error) {
-	if err := cfg.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid server config: %w", err)
-	}
-	return inmemory.NewInMemoryServer(ctx, cfg.TrustDomain, cfg.TrustDomainParser, cfg.DocProvider)
+// CreateServer creates an in-memory server for development/testing.
+func (f *InMemoryAdapterFactory) CreateServer(ctx context.Context, trustDomain string, trustDomainParser ports.TrustDomainParser, docProvider ports.IdentityDocumentProvider) (*inmemory.InMemoryServer, error) {
+	return inmemory.NewInMemoryServer(ctx, trustDomain, trustDomainParser, docProvider)
 }
 
-// CreateServer creates an in-memory server (implements ProductionServerFactory).
-// For inmemory, this delegates to CreateDevelopmentServer since the implementation is the same.
-func (f *InMemoryAdapterFactory) CreateServer(ctx context.Context, trustDomain string, trustDomainParser ports.TrustDomainParser, docProvider ports.IdentityDocumentProvider) (ports.IdentityServer, error) {
-	// Delegate to development server using config struct
-	return f.CreateDevelopmentServer(ctx, ports.DevelopmentServerConfig{
-		TrustDomain:       trustDomain,
-		TrustDomainParser: trustDomainParser,
-		DocProvider:       docProvider,
-	})
-}
+func (f *InMemoryAdapterFactory) CreateAttestor(workloads []ports.WorkloadEntry) *attestor.UnixWorkloadAttestor {
+	a := attestor.NewUnixWorkloadAttestor()
 
-func (f *InMemoryAdapterFactory) CreateAttestor() ports.WorkloadAttestor {
-	return attestor.NewUnixWorkloadAttestor()
-}
-
-// uidRegistrar is a dev-only interface for registering UIDs in test/dev attestors.
-// This interface prevents brittle downcasts and makes registration success explicit.
-type uidRegistrar interface {
-	RegisterUID(uid int, selector string)
-}
-
-// RegisterWorkloadUID registers a UID with the attestor if it supports dev-mode registration.
-// Returns true if registration succeeded, false if the attestor doesn't support registration.
-// Callers can assert the boolean in tests to ensure registration worked.
-func (f *InMemoryAdapterFactory) RegisterWorkloadUID(attestorInterface ports.WorkloadAttestor, uid int, selector string) bool {
-	if r, ok := attestorInterface.(uidRegistrar); ok {
-		r.RegisterUID(uid, selector)
-		return true
-	}
-	return false
-}
-
-// CreateDevelopmentAgent creates an in-memory agent for development/testing.
-// Unlike production, this implementation requires all dependencies because it
-// manages registry, attestation, and identity issuance locally.
-// Uses configuration struct pattern to reduce parameter count (Go best practice).
-func (f *InMemoryAdapterFactory) CreateDevelopmentAgent(ctx context.Context, cfg ports.DevelopmentAgentConfig) (ports.Agent, error) {
-	if err := cfg.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid agent config: %w", err)
+	// Register UIDs from workload configurations
+	for _, workload := range workloads {
+		a.RegisterUID(workload.UID, workload.Selector)
 	}
 
-	// Need concrete types for agent creation
-	concreteServer, ok := cfg.Server.(*inmemory.InMemoryServer)
-	if !ok {
-		return nil, fmt.Errorf("expected *inmemory.InMemoryServer, got %T", cfg.Server)
-	}
-
-	return inmemory.NewInMemoryAgent(ctx, cfg.SPIFFEID, concreteServer, cfg.Registry, cfg.Attestor, cfg.Parser, cfg.DocProvider)
+	return a
 }
 
-// SeedRegistry seeds the registry with an identity mapper (configuration, not runtime)
-// This is called only during bootstrap - uses Seed() method on concrete type
-func (f *InMemoryAdapterFactory) SeedRegistry(registry ports.IdentityMapperRegistry, ctx context.Context, mapper *domain.IdentityMapper) error {
-	concreteRegistry, ok := registry.(*inmemory.InMemoryRegistry)
-	if !ok {
-		return fmt.Errorf("expected InMemoryRegistry for seeding")
-	}
-	return concreteRegistry.Seed(ctx, mapper)
+// CreateAgent creates an in-memory agent for development/testing.
+func (f *InMemoryAdapterFactory) CreateAgent(
+	ctx context.Context,
+	spiffeID string,
+	server *inmemory.InMemoryServer,
+	registry *inmemory.InMemoryRegistry,
+	attestor *attestor.UnixWorkloadAttestor,
+	parser ports.IdentityCredentialParser,
+	docProvider ports.IdentityDocumentProvider,
+) (ports.Agent, error) {
+	return inmemory.NewInMemoryAgent(ctx, spiffeID, server, registry, attestor, parser, docProvider)
 }
-
-// SealRegistry marks the registry as immutable after seeding
-// This prevents any further mutations - registry becomes read-only
-func (f *InMemoryAdapterFactory) SealRegistry(registry ports.IdentityMapperRegistry) {
-	concreteRegistry, ok := registry.(*inmemory.InMemoryRegistry)
-	if ok {
-		concreteRegistry.Seal()
-	}
-}
-
-var _ ports.AdapterFactory = (*InMemoryAdapterFactory)(nil)

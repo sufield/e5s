@@ -197,48 +197,44 @@ type IdentityDocumentProvider interface {
 // BaseAdapterFactory provides minimal adapter creation methods shared by all implementations.
 // This interface follows the Interface Segregation Principle by only including
 // methods that all implementations (dev and prod) actually use.
+//
+// Design Note: Returns IdentityDocumentValidator (not full Provider) because:
+// - Production implementations can only validate (SPIRE Server handles creation)
+// - Development implementations can create, but base interface serves both modes
+// - Follows Liskov Substitution Principle - all implementations can validate
 type BaseAdapterFactory interface {
 	CreateTrustDomainParser() TrustDomainParser
 	CreateIdentityCredentialParser() IdentityCredentialParser
-	CreateIdentityDocumentProvider() IdentityDocumentProvider
+	CreateIdentityDocumentValidator() IdentityDocumentValidator
 }
 
-// ProductionAgentFactory creates production-oriented agents.
-// Production implementations delegate to external SPIRE Agent.
+// AgentFactory creates SPIRE agents that delegate to external SPIRE infrastructure.
 //
-// Design Note: Production SPIRE workloads are clients only (via Workload API).
-// Real SPIRE Server runs as external infrastructure, not embedded in workload processes.
-type ProductionAgentFactory interface {
+// Design Note: SPIRE workloads are clients only (via Workload API).
+// SPIRE Server runs as external infrastructure, not embedded in workload processes.
+type AgentFactory interface {
 	BaseAdapterFactory
-	// CreateProductionAgent creates an agent that delegates to external SPIRE.
+	// CreateAgent creates an agent that delegates to external SPIRE.
 	// Only requires essential parameters - SPIRE handles registry, attestation, and issuance.
-	CreateProductionAgent(ctx context.Context, spiffeID string, parser IdentityCredentialParser) (Agent, error)
+	CreateAgent(ctx context.Context, spiffeID string, parser IdentityCredentialParser) (Agent, error)
 }
 
-// CoreAdapterFactory is the primary interface for production SPIRE deployments.
-// Production workloads are clients that fetch their own identity via Workload API.
+// AdapterFactory is the primary interface for SPIRE deployments.
+// Workloads are clients that fetch their own identity via Workload API.
 //
 // Design Note: This interface intentionally does NOT include server creation.
-// In production SPIRE deployments:
+// In SPIRE deployments:
 //   - SPIRE Server runs as external infrastructure (separate process)
 //   - Workloads are clients that communicate via Workload API (unix socket)
 //   - Workloads cannot issue arbitrary identities (only fetch their own SVID)
 //
 // Server functionality is only needed for in-memory/development implementations
 // where the "server" runs locally within the process for testing.
-type CoreAdapterFactory interface {
+type AdapterFactory interface {
 	BaseAdapterFactory
-	ProductionAgentFactory
+	AgentFactory
 }
 
-// NOTE: Development-only adapter factory interfaces are defined in outbound_dev.go
-// and are excluded from production builds via build tag (//go:build dev).
-//
-// Available in development builds only:
-// - DevelopmentAdapterFactory - extends BaseAdapterFactory with dev-specific methods
-// - RegistryConfigurator - provides SeedRegistry, SealRegistry
-// - AttestorConfigurator - provides RegisterWorkloadUID
-// - AdapterFactory - composite interface for full in-memory mode
-//
-// Production implementations should implement CoreAdapterFactory.
-// Development implementations implement the full AdapterFactory composite.
+// NOTE: Development mode uses concrete InMemoryAdapterFactory (no interfaces).
+// Dev-only code should be simple - interfaces only exist when substitution is needed.
+// SPIRE implementations implement AdapterFactory.

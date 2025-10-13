@@ -20,7 +20,7 @@ import (
 //   - Certificate validation uses basic checks (time, identity match)
 //   - Future: Implement full chain verification using x509svid.Verify from go-spiffe SDK
 //
-// The factory implements ports.CoreAdapterFactory for production use.
+// The factory implements ports.AdapterFactory for SPIRE deployments.
 type SPIREAdapterFactory struct {
 	config *spire.Config
 	client *spire.SPIREClient
@@ -89,15 +89,15 @@ func (f *SPIREAdapterFactory) CreateIdentityCredentialParser() ports.IdentityCre
 	return spire.NewIdentityCredentialParser()
 }
 
-// CreateIdentityDocumentProvider creates an identity document provider.
+// CreateIdentityDocumentValidator creates an identity document validator.
 //
 // Design Note: In production SPIRE deployments, workloads are **client-only**.
-// All certificate issuance and attestation happen in external SPIRE infrastructure:
+// All certificate issuance happens in external SPIRE infrastructure:
 //   - SPIRE Server issues SVIDs after validating registration entries
 //   - SPIRE Agent attests workloads and delivers SVIDs via Workload API
 //   - Workloads fetch their own SVIDs and verify peer certificates
 //
-// This provider handles **validation only** (not creation):
+// This validator handles **validation only** (not creation):
 //   - Full chain-of-trust verification against trust bundles (x509svid.Verify)
 //   - Signature validation
 //   - Certificate expiration checks
@@ -107,8 +107,8 @@ func (f *SPIREAdapterFactory) CreateIdentityCredentialParser() ports.IdentityCre
 // federated trust domains. SPIREClient implements x509bundle.Source, verified
 // at compile-time in the spire package.
 //
-// Returns an SDK-based provider with full security validation for production use.
-func (f *SPIREAdapterFactory) CreateIdentityDocumentProvider() ports.IdentityDocumentProvider {
+// Returns an SDK-based validator with full security validation for production use.
+func (f *SPIREAdapterFactory) CreateIdentityDocumentValidator() ports.IdentityDocumentValidator {
 	// SPIREClient implements x509bundle.Source (compile-time assertion in spire package)
 	// No runtime check needed - any breakage is caught at build time
 	return spire.NewSDKDocumentProvider(f.client)
@@ -119,16 +119,12 @@ func (f *SPIREAdapterFactory) CreateIdentityDocumentProvider() ports.IdentityDoc
 // Real SPIRE Server runs as external infrastructure, not embedded in workload processes.
 // For development/testing with embedded server, use InMemoryAdapterFactory instead.
 
-// CreateProductionAgent creates a SPIRE-backed production agent.
+// CreateAgent creates a SPIRE-backed agent.
 //
 // The agent delegates to external SPIRE Agent/Server for all identity operations:
 //   - Workload attestation (via SPIRE Agent platform attestors)
 //   - Identity credential issuance (via SPIRE Server registration entries)
 //   - SVID fetching (via Workload API)
-//
-// This method implements ProductionAgentFactory with a clean signature that only
-// includes parameters actually used in production. Unlike development implementations,
-// SPIRE handles registry, attestation, and server operations externally.
 //
 // Parameters:
 //   - ctx: Context for agent initialization (timeout, cancellation)
@@ -138,7 +134,7 @@ func (f *SPIREAdapterFactory) CreateIdentityDocumentProvider() ports.IdentityDoc
 // Returns:
 //   - ports.Agent: SPIRE-backed agent implementation
 //   - error: Non-nil if SPIFFE ID is invalid or agent creation fails
-func (f *SPIREAdapterFactory) CreateProductionAgent(
+func (f *SPIREAdapterFactory) CreateAgent(
 	ctx context.Context,
 	spiffeID string,
 	parser ports.IdentityCredentialParser,
@@ -191,9 +187,9 @@ func (f *SPIREAdapterFactory) Close() error {
 	return nil
 }
 
-// Verify SPIREAdapterFactory implements the production interfaces correctly
+// Verify SPIREAdapterFactory implements the interfaces correctly
 var (
-	_ ports.BaseAdapterFactory     = (*SPIREAdapterFactory)(nil)
-	_ ports.ProductionAgentFactory = (*SPIREAdapterFactory)(nil)
-	_ ports.CoreAdapterFactory     = (*SPIREAdapterFactory)(nil) // Composite of above
+	_ ports.BaseAdapterFactory = (*SPIREAdapterFactory)(nil)
+	_ ports.AgentFactory       = (*SPIREAdapterFactory)(nil)
+	_ ports.AdapterFactory     = (*SPIREAdapterFactory)(nil) // Composite of above
 )

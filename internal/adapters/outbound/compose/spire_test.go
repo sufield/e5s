@@ -9,14 +9,14 @@ import (
 )
 
 // TestSPIREAdapterFactory_InterfaceCompliance verifies the factory implements
-// the production interface hierarchy correctly.
+// the interface hierarchy correctly.
 func TestSPIREAdapterFactory_InterfaceCompliance(t *testing.T) {
 	// Skip actual instantiation (requires SPIRE infrastructure)
 	// Just verify compile-time interface compliance
 	var (
-		_ ports.BaseAdapterFactory     = (*SPIREAdapterFactory)(nil)
-		_ ports.ProductionAgentFactory = (*SPIREAdapterFactory)(nil)
-		_ ports.CoreAdapterFactory     = (*SPIREAdapterFactory)(nil)
+		_ ports.BaseAdapterFactory = (*SPIREAdapterFactory)(nil)
+		_ ports.AgentFactory       = (*SPIREAdapterFactory)(nil)
+		_ ports.AdapterFactory     = (*SPIREAdapterFactory)(nil)
 	)
 }
 
@@ -49,8 +49,8 @@ func TestNewSPIREAdapterFactory_EmptySocketPath(t *testing.T) {
 	}
 }
 
-// TestSPIREAdapterFactory_CreateProductionAgent_EmptySpiffeID verifies validation.
-func TestSPIREAdapterFactory_CreateProductionAgent_EmptySpiffeID(t *testing.T) {
+// TestSPIREAdapterFactory_CreateAgent_EmptySpiffeID verifies validation.
+func TestSPIREAdapterFactory_CreateAgent_EmptySpiffeID(t *testing.T) {
 	// Create a mock factory (without actual SPIRE client)
 	factory := &SPIREAdapterFactory{
 		config: &spire.Config{},
@@ -60,7 +60,7 @@ func TestSPIREAdapterFactory_CreateProductionAgent_EmptySpiffeID(t *testing.T) {
 	ctx := context.Background()
 	parser := factory.CreateIdentityCredentialParser()
 
-	_, err := factory.CreateProductionAgent(ctx, "", parser)
+	_, err := factory.CreateAgent(ctx, "", parser)
 	if err == nil {
 		t.Fatal("expected error for empty SPIFFE ID, got nil")
 	}
@@ -70,8 +70,8 @@ func TestSPIREAdapterFactory_CreateProductionAgent_EmptySpiffeID(t *testing.T) {
 	}
 }
 
-// TestSPIREAdapterFactory_CreateProductionAgent_InvalidSpiffeID verifies early SPIFFE ID parsing.
-func TestSPIREAdapterFactory_CreateProductionAgent_InvalidSpiffeID(t *testing.T) {
+// TestSPIREAdapterFactory_CreateAgent_InvalidSpiffeID verifies early SPIFFE ID parsing.
+func TestSPIREAdapterFactory_CreateAgent_InvalidSpiffeID(t *testing.T) {
 	factory := &SPIREAdapterFactory{
 		config: &spire.Config{},
 		client: nil,
@@ -81,7 +81,7 @@ func TestSPIREAdapterFactory_CreateProductionAgent_InvalidSpiffeID(t *testing.T)
 	parser := factory.CreateIdentityCredentialParser()
 
 	// Invalid SPIFFE ID (not a valid format)
-	_, err := factory.CreateProductionAgent(ctx, "not-a-valid-spiffe-id", parser)
+	_, err := factory.CreateAgent(ctx, "not-a-valid-spiffe-id", parser)
 	if err == nil {
 		t.Fatal("expected error for invalid SPIFFE ID, got nil")
 	}
@@ -148,10 +148,10 @@ func TestSPIREAdapterFactory_CreateParsers(t *testing.T) {
 		}
 	})
 
-	t.Run("CreateIdentityDocumentProvider", func(t *testing.T) {
-		provider := factory.CreateIdentityDocumentProvider()
-		if provider == nil {
-			t.Error("expected non-nil identity document provider")
+	t.Run("CreateIdentityDocumentValidator", func(t *testing.T) {
+		validator := factory.CreateIdentityDocumentValidator()
+		if validator == nil {
+			t.Error("expected non-nil identity document validator")
 		}
 	})
 }
