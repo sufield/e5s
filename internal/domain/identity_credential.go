@@ -1,64 +1,322 @@
 package domain
 
-// IdentityCredential represents a unique, URI-formatted identifier for a workload or agent
-// This is a minimal domain type that holds parsed identity data.
-// Parsing logic is delegated to IdentityCredentialParser port (implemented in adapters).
+import (
+	"encoding/json"
+	"fmt"
+	"strings"
+)
+
+// IdentityCredential is an immutable value object representing a unique,
+// URI-formatted identifier for a workload or agent.
 //
-// Format: <scheme>://<trust-domain>/<path>
-// Example: spiffe://example.org/host (SPIFFE-specific in adapters)
+// Components:
+//   - Trust domain: The namespace/authority for this identity
+//   - Path: The hierarchical identifier within the trust domain
+//   - URI: Canonical string representation (precomputed, immutable)
 //
-// Design Note: We avoid duplicating go-spiffe SDK's spiffeid.ID parsing/validation
-// logic by moving that to an adapter. The domain only models the concept of an
-// identity credential as a value object with trust domain and path components.
+// Format: spiffe://<trust-domain>/<path>
+// Example: spiffe://example.org/workload/server
 //
-// Naming: "IdentityCredential" emphasizes the structured, formatted nature of the identity
-// (scheme + domain + path) representing what is commonly known as a SPIFFE ID in SPIFFE terminology.
+// Design Philosophy:
+//   - Immutable: All fields computed once at construction, never modified
+//   - Normalized: Path normalized at construction (leading slash, collapsed //)
+//   - Zero-value safe: Provides IsZero() to detect uninitialized instances
+//   - Serializable: Implements json.Marshaler for ergonomics
+//
+// SPIFFE Context:
+//   This type models what SPIFFE calls a "SPIFFE ID". The scheme "spiffe://"
+//   is hardcoded as this service is SPIFFE-specific. Parsing and validation
+//   are delegated to IdentityCredentialParser port (implemented in adapters
+//   using go-spiffe SDK).
+//
+// Concurrency: Safe for concurrent use (immutable value object).
 type IdentityCredential struct {
 	trustDomain *TrustDomain
 	path        string
-	uri         string // Cached string representation
+	uri         string // Precomputed canonical representation
 }
 
-// NewIdentityCredentialFromComponents creates an IdentityCredential from already-parsed components.
-// This is used by the IdentityCredentialParser adapter after validation.
-// TrustDomain must not be nil, path defaults to "/" if empty.
+// NewIdentityCredentialFromComponents creates an IdentityCredential from
+// validated and normalized components.
+//
+// This constructor is typically called by IdentityCredentialParser adapters
+// after SDK validation. It performs final normalization and immutable construction.
+//
+// Validation:
+//   - trustDomain must be non-nil (panics if nil to catch programming errors early)
+//   - path is normalized: leading slash, collapsed //, root → "/"
+//   - URI precomputed from normalized components
+//
+// Path Normalization:
+//   - Empty string → "/"
+//   - "workload" → "/workload" (adds leading slash)
+//   - "//foo//bar" → "/foo/bar" (collapses multiple slashes)
+//   - Whitespace trimmed
+//
+// Examples:
+//   NewIdentityCredentialFromComponents(td, "/workload")     → spiffe://example.org/workload
+//   NewIdentityCredentialFromComponents(td, "")              → spiffe://example.org/
+//   NewIdentityCredentialFromComponents(td, "//foo//bar")    → spiffe://example.org/foo/bar
+//
+// Panics:
+//   - If trustDomain is nil (programming error, not runtime input validation)
+//
+// Concurrency: Safe for concurrent use (pure function, no shared state).
 func NewIdentityCredentialFromComponents(trustDomain *TrustDomain, path string) *IdentityCredential {
-	if path == "" {
-		path = "/"
+	// Guard: nil trust domain is a programming error, not runtime input error
+	// Adapters should validate inputs before calling this constructor
+	if trustDomain == nil {
+		panic(fmt.Errorf("%w: trust domain cannot be nil", ErrInvalidIdentityCredential))
 	}
-	// SPIFFE scheme hardcoded for this context; generalize in adapters if needed
-	uri := "spiffe://" + trustDomain.String() + path
+
+	// Normalize path to ensure canonical representation
+	norm := normalizePath(path)
+
+	// Precompute canonical URI (immutable, computed once)
+	// SPIFFE scheme is hardcoded as this service is SPIFFE-specific
+	uri := "spiffe://" + trustDomain.String() + norm
+
 	return &IdentityCredential{
 		trustDomain: trustDomain,
-		path:        path,
+		path:        norm,
 		uri:         uri,
 	}
 }
 
-// String returns the IdentityCredential as a URI string
+// normalizePath normalizes a path component for SPIFFE ID construction.
+//
+// Normalization Rules:
+//  1. Trim leading/trailing whitespace
+//  2. Empty or "/" → "/" (root identity)
+//  3. Ensure leading slash (e.g., "foo" → "/foo")
+//  4. Collapse multiple slashes (e.g., "//foo//bar" → "/foo/bar")
+//  5. Remove trailing slashes (e.g., "/foo/bar/" → "/foo/bar")
+//
+// This ensures canonical representation for equality checks and prevents
+// duplicate identities like "/foo" and "//foo" from being treated differently.
+//
+// Examples:
+//   normalizePath("")             → "/"
+//   normalizePath("  /  ")        → "/"
+//   normalizePath("/")            → "/"
+//   normalizePath("workload")     → "/workload"
+//   normalizePath("/workload")    → "/workload"
+//   normalizePath("//foo//bar")   → "/foo/bar"
+//   normalizePath("///foo///")    → "/foo"
+//   normalizePath("/foo/bar/")    → "/foo/bar"
+//
+// Note: Query parameters and fragments are not handled here as they're
+// invalid in SPIFFE IDs. Adapters using go-spiffe SDK reject such inputs
+// during parsing.
+func normalizePath(p string) string {
+	// Step 1: Trim whitespace
+	p = strings.TrimSpace(p)
+
+	// Step 2: Root identity (empty or single slash)
+	if p == "" || p == "/" {
+		return "/"
+	}
+
+	// Step 3: Ensure leading slash
+	if !strings.HasPrefix(p, "/") {
+		p = "/" + p
+	}
+
+	// Step 4: Collapse repeated slashes
+	// Loop instead of regex for simplicity and no regex dependency
+	for strings.Contains(p, "//") {
+		p = strings.ReplaceAll(p, "//", "/")
+	}
+
+	// Step 5: Remove trailing slashes (but preserve root "/")
+	p = strings.TrimRight(p, "/")
+	if p == "" {
+		return "/"
+	}
+
+	return p
+}
+
+// String returns the canonical SPIFFE ID URI.
+//
+// Format: spiffe://<trust-domain>/<path>
+//
+// This representation is precomputed at construction and never changes
+// (immutability contract).
+//
+// Example:
+//   id.String() // "spiffe://example.org/workload/server"
 func (i *IdentityCredential) String() string {
 	return i.uri
 }
 
-// TrustDomain returns the trust domain component
+// TrustDomain returns the trust domain component.
+//
+// The trust domain represents the namespace/authority for this identity.
+// Never returns nil for properly constructed instances.
+//
+// Example:
+//   id.TrustDomain().String() // "example.org"
 func (i *IdentityCredential) TrustDomain() *TrustDomain {
 	return i.trustDomain
 }
 
-// Path returns the path component
+// Path returns the normalized path component.
+//
+// The path is always normalized:
+//   - Leading slash present (except root which is "/")
+//   - No repeated slashes
+//   - Never empty (defaults to "/" for root identity)
+//
+// Example:
+//   id.Path() // "/workload/server"
 func (i *IdentityCredential) Path() string {
 	return i.path
 }
 
-// Equals checks if two IdentityCredentials are equal by comparing their URI strings
+// Equals checks if two IdentityCredentials are equal by comparing canonical URIs.
+//
+// Equality is based on canonical string representation, which ensures:
+//   - Case-insensitive trust domains (DNS names)
+//   - Normalized paths (no // differences)
+//   - Proper SPIFFE ID semantics
+//
+// Returns false if either instance is nil (nil-safe).
+//
+// Properties:
+//   - Reflexive: i.Equals(i) == true
+//   - Symmetric: i.Equals(j) == j.Equals(i)
+//   - Transitive: i.Equals(j) && j.Equals(k) → i.Equals(k)
+//   - Nil-safe: i.Equals(nil) == false (never panics)
+//
+// Example:
+//   id1 := NewIdentityCredentialFromComponents(td, "/workload")
+//   id2 := NewIdentityCredentialFromComponents(td, "/workload")
+//   id1.Equals(id2) // true
 func (i *IdentityCredential) Equals(other *IdentityCredential) bool {
-	if other == nil {
+	// Nil-safe check (both receiver and parameter)
+	if i == nil || other == nil {
 		return false
 	}
+	// Compare canonical URIs (handles trust domain case-insensitivity)
 	return i.uri == other.uri
 }
 
-// IsInTrustDomain checks if this IdentityCredential belongs to the given trust domain
+// IsInTrustDomain checks if this identity belongs to the given trust domain.
+//
+// Returns true if and only if the identity's trust domain equals the provided
+// trust domain. This is a convenience method equivalent to:
+//   i.TrustDomain().Equals(td)
+//
+// Example:
+//   id := NewIdentityCredentialFromComponents(td1, "/workload")
+//   id.IsInTrustDomain(td1) // true
+//   id.IsInTrustDomain(td2) // false
 func (i *IdentityCredential) IsInTrustDomain(td *TrustDomain) bool {
 	return i.trustDomain.Equals(td)
+}
+
+// IsZero checks if this IdentityCredential is uninitialized or invalid.
+//
+// Returns true if:
+//   - Instance is nil
+//   - Trust domain is nil (should never happen with NewIdentityCredentialFromComponents)
+//   - URI is empty (should never happen with proper construction)
+//
+// Use this to detect uninitialized values or programming errors.
+//
+// Example:
+//   var id *IdentityCredential
+//   id.IsZero() // true
+//
+//   id = NewIdentityCredentialFromComponents(td, "/workload")
+//   id.IsZero() // false
+func (i *IdentityCredential) IsZero() bool {
+	return i == nil || i.trustDomain == nil || i.uri == ""
+}
+
+// Key returns a string suitable for use as a map key or set member.
+//
+// The key is the canonical URI, which ensures proper deduplication and lookup
+// semantics in collections.
+//
+// Example:
+//   cache := make(map[string]*SomeData)
+//   cache[id.Key()] = data
+//   data, ok := cache[id.Key()]
+func (i *IdentityCredential) Key() string {
+	return i.uri
+}
+
+// MarshalJSON implements json.Marshaler for JSON serialization.
+//
+// The identity is serialized as its canonical URI string:
+//   {"identity": "spiffe://example.org/workload"}
+//
+// Returns error if the identity is zero-value (nil or invalid).
+//
+// Example:
+//   data, err := json.Marshal(id)
+//   // data: "spiffe://example.org/workload"
+func (i *IdentityCredential) MarshalJSON() ([]byte, error) {
+	if i.IsZero() {
+		return nil, fmt.Errorf("%w: cannot marshal zero-value identity credential", ErrInvalidIdentityCredential)
+	}
+	return json.Marshal(i.uri)
+}
+
+// UnmarshalJSON implements json.Unmarshaler for JSON deserialization.
+//
+// This method returns ErrNotSupported to enforce that parsing must go through
+// IdentityCredentialParser adapters which use go-spiffe SDK for proper validation.
+//
+// Rationale:
+//   - Keeps domain layer free of SPIFFE parsing logic
+//   - Ensures all parsing uses SDK validation (DNS, normalization, security)
+//   - Prevents creating invalid IdentityCredential instances via JSON
+//
+// To deserialize, use IdentityCredentialParser.ParseFromString() with the JSON string value.
+//
+// Example:
+//   // Don't do this:
+//   json.Unmarshal(data, &id) // Returns ErrNotSupported
+//
+//   // Do this instead:
+//   var uriString string
+//   json.Unmarshal(data, &uriString)
+//   id, err := parser.ParseFromString(ctx, uriString)
+func (i *IdentityCredential) UnmarshalJSON(data []byte) error {
+	return fmt.Errorf("%w: unmarshaling requires IdentityCredentialParser adapter", ErrNotSupported)
+}
+
+// MarshalText implements encoding.TextMarshaler for text serialization.
+//
+// The identity is serialized as its canonical URI string.
+// This is used by various Go encoding packages (YAML, TOML, etc.).
+//
+// Returns error if the identity is zero-value (nil or invalid).
+//
+// Example:
+//   text, err := id.MarshalText()
+//   // text: []byte("spiffe://example.org/workload")
+func (i *IdentityCredential) MarshalText() ([]byte, error) {
+	if i.IsZero() {
+		return nil, fmt.Errorf("%w: cannot marshal zero-value identity credential", ErrInvalidIdentityCredential)
+	}
+	return []byte(i.uri), nil
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler for text deserialization.
+//
+// This method returns ErrNotSupported for the same reasons as UnmarshalJSON:
+// parsing must go through IdentityCredentialParser adapters.
+//
+// Example:
+//   // Don't do this:
+//   id.UnmarshalText([]byte("spiffe://example.org/workload")) // Returns ErrNotSupported
+//
+//   // Do this instead:
+//   id, err := parser.ParseFromString(ctx, string(text))
+func (i *IdentityCredential) UnmarshalText(text []byte) error {
+	return fmt.Errorf("%w: unmarshaling requires IdentityCredentialParser adapter", ErrNotSupported)
 }
