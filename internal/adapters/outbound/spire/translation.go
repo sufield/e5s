@@ -72,13 +72,13 @@ func TranslateX509SVIDToIdentityDocument(svid *x509svid.SVID) (*domain.IdentityD
 	copy(chain, svid.Certificates)
 
 	// Create identity document from SVID components
+	// Note: expiresAt parameter removed - derived from leaf.NotAfter automatically
 	return domain.NewIdentityDocumentFromComponents(
 		identityCredential,
 		leaf,   // Leaf certificate
 		signer, // crypto.Signer for mTLS
 		chain,  // Full chain (leaf + intermediates)
-		leaf.NotAfter,
-	), nil
+	)
 }
 
 // publicKeyMatches compares two public keys for equality by DER-encoding their SubjectPublicKeyInfo.

@@ -164,7 +164,8 @@ func TestGetIdentity_LazyFetch(t *testing.T) {
 
 	td := domain.NewTrustDomainFromName("example.org")
 	cred := domain.NewIdentityCredentialFromComponents(td, "/agent")
-	doc := domain.NewIdentityDocumentFromComponents(cred, cert, key, []*x509.Certificate{cert}, cert.NotAfter)
+	doc, err := domain.NewIdentityDocumentFromComponents(cred, cert, key, []*x509.Certificate{cert})
+	require.NoError(t, err)
 
 	fetcher := &mockX509Fetcher{svid: doc}
 	parser := &mockCredentialParser{}
@@ -196,13 +197,15 @@ func TestGetIdentity_RenewsExpiringSoon(t *testing.T) {
 
 	td := domain.NewTrustDomainFromName("example.org")
 	cred := domain.NewIdentityCredentialFromComponents(td, "/agent")
-	doc1 := domain.NewIdentityDocumentFromComponents(cred, cert1, key1, []*x509.Certificate{cert1}, cert1.NotAfter)
+	doc1, err := domain.NewIdentityDocumentFromComponents(cred, cert1, key1, []*x509.Certificate{cert1})
+	require.NoError(t, err)
 
 	// Create fresh cert for renewal
 	cert2, key2 := createTestCert(t, "spiffe://example.org/agent",
 		time.Now().Add(-1*time.Hour),
 		time.Now().Add(24*time.Hour))
-	doc2 := domain.NewIdentityDocumentFromComponents(cred, cert2, key2, []*x509.Certificate{cert2}, cert2.NotAfter)
+	doc2, err := domain.NewIdentityDocumentFromComponents(cred, cert2, key2, []*x509.Certificate{cert2})
+	require.NoError(t, err)
 
 	fetcher := &mockX509Fetcher{svid: doc1}
 	parser := &mockCredentialParser{}
@@ -253,7 +256,8 @@ func TestGetIdentity_DefensiveCopy(t *testing.T) {
 
 	td := domain.NewTrustDomainFromName("example.org")
 	cred := domain.NewIdentityCredentialFromComponents(td, "/agent")
-	doc := domain.NewIdentityDocumentFromComponents(cred, cert, key, []*x509.Certificate{cert}, cert.NotAfter)
+	doc, err := domain.NewIdentityDocumentFromComponents(cred, cert, key, []*x509.Certificate{cert})
+	require.NoError(t, err)
 
 	fetcher := &mockX509Fetcher{svid: doc}
 	parser := &mockCredentialParser{}
@@ -285,7 +289,8 @@ func TestGetIdentity_Concurrency(t *testing.T) {
 
 	td := domain.NewTrustDomainFromName("example.org")
 	cred := domain.NewIdentityCredentialFromComponents(td, "/agent")
-	doc := domain.NewIdentityDocumentFromComponents(cred, cert, key, []*x509.Certificate{cert}, cert.NotAfter)
+	doc, err := domain.NewIdentityDocumentFromComponents(cred, cert, key, []*x509.Certificate{cert})
+	require.NoError(t, err)
 
 	fetcher := &mockX509Fetcher{svid: doc, fetchDelay: 10 * time.Millisecond}
 	parser := &mockCredentialParser{}
@@ -333,13 +338,15 @@ func TestGetIdentity_PreventsRefreshStampede(t *testing.T) {
 
 	td := domain.NewTrustDomainFromName("example.org")
 	cred := domain.NewIdentityCredentialFromComponents(td, "/agent")
-	doc1 := domain.NewIdentityDocumentFromComponents(cred, cert1, key1, []*x509.Certificate{cert1}, cert1.NotAfter)
+	doc1, err := domain.NewIdentityDocumentFromComponents(cred, cert1, key1, []*x509.Certificate{cert1})
+	require.NoError(t, err)
 
 	// Create fresh cert for renewal
 	cert2, key2 := createTestCert(t, "spiffe://example.org/agent",
 		time.Now().Add(-1*time.Hour),
 		time.Now().Add(24*time.Hour))
-	doc2 := domain.NewIdentityDocumentFromComponents(cred, cert2, key2, []*x509.Certificate{cert2}, cert2.NotAfter)
+	doc2, err := domain.NewIdentityDocumentFromComponents(cred, cert2, key2, []*x509.Certificate{cert2})
+	require.NoError(t, err)
 
 	// Use long delay to simulate slow SPIRE server
 	fetcher := &mockX509Fetcher{svid: doc1, fetchDelay: 50 * time.Millisecond}
@@ -400,7 +407,8 @@ func TestFetchIdentityDocument_Success(t *testing.T) {
 
 	td := domain.NewTrustDomainFromName("example.org")
 	cred := domain.NewIdentityCredentialFromComponents(td, "/workload")
-	doc := domain.NewIdentityDocumentFromComponents(cred, cert, key, []*x509.Certificate{cert}, cert.NotAfter)
+	doc, err := domain.NewIdentityDocumentFromComponents(cred, cert, key, []*x509.Certificate{cert})
+	require.NoError(t, err)
 
 	fetcher := &mockX509Fetcher{svid: doc}
 	parser := &mockCredentialParser{}
@@ -529,7 +537,8 @@ func TestExpiresSoon_Expired(t *testing.T) {
 
 	td := domain.NewTrustDomainFromName("example.org")
 	cred := domain.NewIdentityCredentialFromComponents(td, "/test")
-	doc := domain.NewIdentityDocumentFromComponents(cred, cert, key, []*x509.Certificate{cert}, cert.NotAfter)
+	doc, err := domain.NewIdentityDocumentFromComponents(cred, cert, key, []*x509.Certificate{cert})
+	require.NoError(t, err)
 
 	assert.True(t, expiresSoon(doc), "Expired document should be considered expiring")
 }
@@ -543,7 +552,8 @@ func TestExpiresSoon_NearExpiry(t *testing.T) {
 
 	td := domain.NewTrustDomainFromName("example.org")
 	cred := domain.NewIdentityCredentialFromComponents(td, "/test")
-	doc := domain.NewIdentityDocumentFromComponents(cred, cert, key, []*x509.Certificate{cert}, cert.NotAfter)
+	doc, err := domain.NewIdentityDocumentFromComponents(cred, cert, key, []*x509.Certificate{cert})
+	require.NoError(t, err)
 
 	assert.True(t, expiresSoon(doc), "Document with <20% lifetime remaining should be expiring")
 }
@@ -556,7 +566,8 @@ func TestExpiresSoon_Fresh(t *testing.T) {
 
 	td := domain.NewTrustDomainFromName("example.org")
 	cred := domain.NewIdentityCredentialFromComponents(td, "/test")
-	doc := domain.NewIdentityDocumentFromComponents(cred, cert, key, []*x509.Certificate{cert}, cert.NotAfter)
+	doc, err := domain.NewIdentityDocumentFromComponents(cred, cert, key, []*x509.Certificate{cert})
+	require.NoError(t, err)
 
 	assert.False(t, expiresSoon(doc), "Fresh document with >20% lifetime should not be expiring")
 }
@@ -569,7 +580,8 @@ func TestExpiresSoon_ExactThreshold(t *testing.T) {
 
 	td := domain.NewTrustDomainFromName("example.org")
 	cred := domain.NewIdentityCredentialFromComponents(td, "/test")
-	doc := domain.NewIdentityDocumentFromComponents(cred, cert, key, []*x509.Certificate{cert}, cert.NotAfter)
+	doc, err := domain.NewIdentityDocumentFromComponents(cred, cert, key, []*x509.Certificate{cert})
+	require.NoError(t, err)
 
 	// At exactly 20%, should trigger renewal (<=)
 	assert.True(t, expiresSoon(doc), "Document at exactly 20% threshold should be expiring")
@@ -583,7 +595,8 @@ func TestExpiresSoon_ClockSkewWithinTolerance(t *testing.T) {
 
 	td := domain.NewTrustDomainFromName("example.org")
 	cred := domain.NewIdentityCredentialFromComponents(td, "/test")
-	doc := domain.NewIdentityDocumentFromComponents(cred, cert, key, []*x509.Certificate{cert}, cert.NotAfter)
+	doc, err := domain.NewIdentityDocumentFromComponents(cred, cert, key, []*x509.Certificate{cert})
+	require.NoError(t, err)
 
 	// Within 5 minute skew tolerance, should not trigger refresh
 	assert.False(t, expiresSoon(doc), "Cert with NotBefore within 5min should be acceptable")
@@ -597,7 +610,8 @@ func TestExpiresSoon_ClockSkewBeyondTolerance(t *testing.T) {
 
 	td := domain.NewTrustDomainFromName("example.org")
 	cred := domain.NewIdentityCredentialFromComponents(td, "/test")
-	doc := domain.NewIdentityDocumentFromComponents(cred, cert, key, []*x509.Certificate{cert}, cert.NotAfter)
+	doc, err := domain.NewIdentityDocumentFromComponents(cred, cert, key, []*x509.Certificate{cert})
+	require.NoError(t, err)
 
 	// Beyond 5 minute skew tolerance, should trigger refresh (suspicious)
 	assert.True(t, expiresSoon(doc), "Cert with NotBefore >5min in future should trigger refresh")
@@ -610,7 +624,8 @@ func TestExpiresSoon_ZeroLifetime(t *testing.T) {
 
 	td := domain.NewTrustDomainFromName("example.org")
 	cred := domain.NewIdentityCredentialFromComponents(td, "/test")
-	doc := domain.NewIdentityDocumentFromComponents(cred, cert, key, []*x509.Certificate{cert}, cert.NotAfter)
+	doc, err := domain.NewIdentityDocumentFromComponents(cred, cert, key, []*x509.Certificate{cert})
+	require.NoError(t, err)
 
 	assert.True(t, expiresSoon(doc), "Cert with zero lifetime should trigger refresh")
 }
@@ -623,7 +638,8 @@ func TestExpiresSoon_NegativeLifetime(t *testing.T) {
 
 	td := domain.NewTrustDomainFromName("example.org")
 	cred := domain.NewIdentityCredentialFromComponents(td, "/test")
-	doc := domain.NewIdentityDocumentFromComponents(cred, cert, key, []*x509.Certificate{cert}, cert.NotAfter)
+	doc, err := domain.NewIdentityDocumentFromComponents(cred, cert, key, []*x509.Certificate{cert})
+	require.NoError(t, err)
 
 	assert.True(t, expiresSoon(doc), "Cert with negative lifetime should trigger refresh")
 }

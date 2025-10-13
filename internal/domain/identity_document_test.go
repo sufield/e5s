@@ -24,7 +24,6 @@ func TestNewIdentityDocumentFromComponents_Success(t *testing.T) {
 	// Arrange - Use fixed time for determinism
 	td := domain.NewTrustDomainFromName("example.org")
 	credential := domain.NewIdentityCredentialFromComponents(td, "/workload")
-	expiresAt := time.Unix(2000000000, 0) // May 18, 2033 - fixed future time
 
 	// Create X.509 components
 	cert := generateTestCertificate(t, "example.org", "/workload")
@@ -32,15 +31,15 @@ func TestNewIdentityDocumentFromComponents_Success(t *testing.T) {
 	chain := []*x509.Certificate{cert}
 
 	// Act
-	doc := domain.NewIdentityDocumentFromComponents(
+	doc, err := domain.NewIdentityDocumentFromComponents(
 		credential,
 		cert,
 		privateKey,
 		chain,
-		expiresAt,
 	)
 
 	// Assert - Verify all components are properly set
+	require.NoError(t, err)
 	require.NotNil(t, doc)
 
 	// Test identity credential
@@ -54,8 +53,9 @@ func TestNewIdentityDocumentFromComponents_Success(t *testing.T) {
 	assert.NotNil(t, doc.Chain(), "Chain should be non-nil for X.509 document")
 	assert.NotEmpty(t, doc.Chain(), "Chain should not be empty for X.509 document")
 
-	// Test expiration
-	assert.Equal(t, expiresAt, doc.ExpiresAt())
+	// Test expiration derived from certificate
+	assert.Equal(t, cert.NotAfter, doc.ExpiresAt(), "ExpiresAt should match cert.NotAfter")
+	assert.Equal(t, cert.NotBefore, doc.NotBefore(), "NotBefore should match cert.NotBefore")
 	assert.False(t, doc.IsExpired(), "Document should not be expired with future date")
 	assert.True(t, doc.IsValid(), "Document should be valid when not expired")
 
@@ -67,38 +67,78 @@ func TestNewIdentityDocumentFromComponents_Success(t *testing.T) {
 	}
 }
 
-// TestNewIdentityDocumentFromComponents_MinimalValid tests creation
-// with minimal valid configuration (no X.509 components)
-func TestNewIdentityDocumentFromComponents_MinimalValid(t *testing.T) {
+// TestNewIdentityDocumentFromComponents_ValidationErrors tests validation errors
+func TestNewIdentityDocumentFromComponents_ValidationErrors(t *testing.T) {
 	t.Parallel()
 
-	// Arrange
 	td := domain.NewTrustDomainFromName("example.org")
 	credential := domain.NewIdentityCredentialFromComponents(td, "/workload")
-	expiresAt := time.Unix(2000000000, 0) // May 18, 2033
+	cert := generateTestCertificate(t, "example.org", "/workload")
+	privateKey := generateTestPrivateKey(t)
+	chain := []*x509.Certificate{cert}
 
-	// Act - Create document without X.509 components
-	doc := domain.NewIdentityDocumentFromComponents(
-		credential,
-		nil, // no cert
-		nil, // no privateKey
-		nil, // no chain
-		expiresAt,
-	)
+	tests := []struct {
+		name       string
+		credential *domain.IdentityCredential
+		cert       *x509.Certificate
+		privateKey *ecdsa.PrivateKey
+		chain      []*x509.Certificate
+		wantErr    bool
+		errMsg     string
+	}{
+		{
+			name:       "nil identity credential",
+			credential: nil,
+			cert:       cert,
+			privateKey: privateKey,
+			chain:      chain,
+			wantErr:    true,
+			errMsg:     "identity credential cannot be nil",
+		},
+		{
+			name:       "nil certificate",
+			credential: credential,
+			cert:       nil,
+			privateKey: privateKey,
+			chain:      chain,
+			wantErr:    true,
+			errMsg:     "certificate cannot be nil",
+		},
+		{
+			name:       "nil private key",
+			credential: credential,
+			cert:       cert,
+			privateKey: nil,
+			chain:      chain,
+			wantErr:    true,
+			errMsg:     "private key cannot be nil",
+		},
+	}
 
-	// Assert - Verify identity credential is always non-nil
-	require.NotNil(t, doc)
-	assert.NotNil(t, doc.IdentityCredential(), "IdentityCredential should always be non-nil")
-	assert.Equal(t, credential, doc.IdentityCredential())
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	// X.509 components can be nil for non-X.509 documents
-	assert.Nil(t, doc.Certificate())
-	assert.Nil(t, doc.PrivateKey())
-	assert.Nil(t, doc.Chain())
+			// Act
+			doc, err := domain.NewIdentityDocumentFromComponents(
+				tt.credential,
+				tt.cert,
+				tt.privateKey,
+				tt.chain,
+			)
 
-	// Expiration still works
-	assert.Equal(t, expiresAt, doc.ExpiresAt())
-	assert.False(t, doc.IsExpired())
+			// Assert
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errMsg)
+				assert.Nil(t, doc)
+				assert.ErrorIs(t, err, domain.ErrIdentityDocumentInvalid)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, doc)
+			}
+		})
+	}
 }
 
 // TestIdentityDocument_ExpirationBehavior tests expiration logic
@@ -110,19 +150,22 @@ func TestIdentityDocument_ExpirationBehavior(t *testing.T) {
 
 	tests := []struct {
 		name            string
-		expiresAt       time.Time
+		notBefore       time.Time
+		notAfter        time.Time
 		expectedExpired bool
 		expectedValid   bool
 	}{
 		{
 			name:            "future expiration",
-			expiresAt:       time.Unix(2000000000, 0), // May 18, 2033
+			notBefore:       time.Unix(1000000000, 0), // January 9, 2001
+			notAfter:        time.Unix(2000000000, 0), // May 18, 2033
 			expectedExpired: false,
 			expectedValid:   true,
 		},
 		{
 			name:            "past expiration",
-			expiresAt:       time.Unix(1000000000, 0), // January 9, 2001
+			notBefore:       time.Unix(500000000, 0),  // October 26, 1985
+			notAfter:        time.Unix(1000000000, 0), // January 9, 2001
 			expectedExpired: true,
 			expectedValid:   false,
 		},
@@ -132,14 +175,20 @@ func TestIdentityDocument_ExpirationBehavior(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
+			// Create certificate with specific expiration
+			cert := generateTestCertificateWithTimes(t, "example.org", "/workload", tt.notBefore, tt.notAfter)
+			privateKey := generateTestPrivateKey(t)
+
 			// Act
-			doc := domain.NewIdentityDocumentFromComponents(
+			doc, err := domain.NewIdentityDocumentFromComponents(
 				credential,
-				nil, nil, nil,
-				tt.expiresAt,
+				cert,
+				privateKey,
+				nil,
 			)
 
 			// Assert
+			require.NoError(t, err)
 			assert.Equal(t, tt.expectedExpired, doc.IsExpired())
 			assert.Equal(t, tt.expectedValid, doc.IsValid())
 			assert.Equal(t, !doc.IsExpired(), doc.IsValid(), "IsValid() should equal !IsExpired()")
@@ -150,7 +199,7 @@ func TestIdentityDocument_ExpirationBehavior(t *testing.T) {
 // Helper functions for generating test X.509 components
 
 // generateTestPrivateKey creates a test ECDSA private key
-// Returns *ecdsa.PrivateKey which implements crypto.PrivateKey interface
+// Returns *ecdsa.PrivateKey which implements crypto.Signer interface
 func generateTestPrivateKey(t *testing.T) *ecdsa.PrivateKey {
 	t.Helper()
 	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -162,6 +211,18 @@ func generateTestPrivateKey(t *testing.T) *ecdsa.PrivateKey {
 // The certificate includes a SPIFFE ID in the URI SAN extension,
 // matching real SPIRE-issued X.509-SVIDs
 func generateTestCertificate(t *testing.T, trustDomain, path string) *x509.Certificate {
+	t.Helper()
+	return generateTestCertificateWithTimes(
+		t,
+		trustDomain,
+		path,
+		time.Unix(1000000000, 0), // January 9, 2001
+		time.Unix(2000000000, 0), // May 18, 2033
+	)
+}
+
+// generateTestCertificateWithTimes creates a test X.509 certificate with specific validity times
+func generateTestCertificateWithTimes(t *testing.T, trustDomain, path string, notBefore, notAfter time.Time) *x509.Certificate {
 	t.Helper()
 
 	// Create a self-signed certificate with SPIFFE ID
@@ -176,8 +237,8 @@ func generateTestCertificate(t *testing.T, trustDomain, path string) *x509.Certi
 		Subject: pkix.Name{
 			CommonName: "test-workload",
 		},
-		NotBefore:             time.Unix(1000000000, 0), // January 9, 2001
-		NotAfter:              time.Unix(2000000000, 0), // May 18, 2033
+		NotBefore:             notBefore,
+		NotAfter:              notAfter,
 		KeyUsage:              x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
 		BasicConstraintsValid: true,

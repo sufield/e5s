@@ -13,6 +13,12 @@ package app_test
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"math/big"
 	"testing"
 	"time"
 
@@ -379,15 +385,55 @@ func createValidIdentity(t *testing.T, spiffeID string, expiresAt time.Time) *po
 
 	identityCredential := domain.NewIdentityCredentialFromComponents(td, path)
 
+	// Create real certificate for testing (constructor now requires non-nil cert/key)
+	cert := createTestCertWithExpiry(t, expiresAt)
+	key := createTestPrivateKey(t)
+
+	doc, err := domain.NewIdentityDocumentFromComponents(
+		identityCredential,
+		cert,
+		key,
+		[]*x509.Certificate{cert},
+	)
+	require.NoError(t, err, "Failed to create identity document for test")
+
 	return &ports.Identity{
 		IdentityCredential: identityCredential,
 		Name:               "test-identity",
-		IdentityDocument: domain.NewIdentityDocumentFromComponents(
-			identityCredential,
-			nil, // cert
-			nil, // privateKey
-			nil, // chain
-			expiresAt,
-		),
+		IdentityDocument:   doc,
 	}
+}
+
+// createTestCertWithExpiry creates a test X.509 certificate with specific expiry
+func createTestCertWithExpiry(t *testing.T, expiresAt time.Time) *x509.Certificate {
+	t.Helper()
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err, "Failed to generate key for test certificate")
+
+	template := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "test"},
+		NotBefore:    time.Now().Add(-1 * time.Hour),
+		NotAfter:     expiresAt,
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	require.NoError(t, err, "Failed to create test certificate")
+
+	cert, err := x509.ParseCertificate(certDER)
+	require.NoError(t, err, "Failed to parse test certificate")
+
+	return cert
+}
+
+// createTestPrivateKey creates a test ECDSA private key
+func createTestPrivateKey(t *testing.T) *ecdsa.PrivateKey {
+	t.Helper()
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err, "Failed to generate test private key")
+
+	return key
 }

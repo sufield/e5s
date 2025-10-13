@@ -1,81 +1,352 @@
 package domain
 
 import (
+	"crypto"
 	"crypto/x509"
+	"fmt"
 	"time"
 )
 
-// IdentityDocument represents an X.509-based verifiable identity document (SVID) for a workload.
-// This is a minimal domain type that holds document data without crypto/parsing logic.
+// IdentityDocument represents an immutable X.509-based verifiable identity document (SVID).
+//
+// Components:
+//   - Identity credential: The SPIFFE ID for this workload/agent
+//   - Certificate: X.509 leaf certificate
+//   - Private key: crypto.Signer for mTLS and signing operations
+//   - Chain: Certificate chain (leaf-first)
+//
+// Design Philosophy:
+//   - Immutable: All fields validated once at construction, never modified
+//   - Defensive: Chain is copied on read/write to prevent aliasing bugs
+//   - Type-safe: Private key is crypto.Signer (required for TLS handshakes)
+//   - Clock skew aware: Provides IsCurrentlyValid(skew) for production time handling
+//
+// Certificate Validity:
+//   - ExpiresAt() derived from cert.NotAfter (single source of truth, no drift)
+//   - NotBefore() derived from cert.NotBefore
+//   - IsCurrentlyValid(skew) handles clock skew between systems
+//
 // Creation and validation delegated to IdentityDocumentProvider port (implemented in adapters).
-//
-// Design Note: We avoid duplicating go-spiffe SDK's svid/x509svid package logic
-// (ParseX509SVID, validation, chain-of-trust) by moving that to an adapter.
-// The domain only models the concept of an identity document with expiration.
-//
-// The certificate/key/chain are stored for use by adapters (e.g., TLS handshakes,
-// message signing). Domain doesn't validate these directly.
+// The domain only models the concept; adapters handle crypto/parsing using go-spiffe SDK.
 //
 // Note: This implementation is X.509-only. JWT SVIDs are not supported.
+//
+// Concurrency: Safe for concurrent use (immutable value object).
 type IdentityDocument struct {
 	identityCredential *IdentityCredential
 	cert               *x509.Certificate
-	privateKey         interface{} // crypto.Signer or crypto.PrivateKey
-	chain              []*x509.Certificate
-	expiresAt          time.Time
+	privateKey         crypto.Signer            // Typed for TLS/mTLS usage
+	chain              []*x509.Certificate      // Leaf-first (cert), then intermediates
 }
 
-// NewIdentityDocumentFromComponents creates an X.509 identity document from already-validated components.
-// This is used by the IdentityDocumentProvider adapter after certificate/key validation.
-// The cert, privateKey, and chain must be provided; expiresAt is extracted from cert.
+// NewIdentityDocumentFromComponents creates a validated, immutable identity document.
+//
+// This is typically called by IdentityDocumentProvider adapters after SDK validation.
+// The constructor performs final validation and ensures immutable, correct construction.
+//
+// Validation:
+//   - identityCredential must be non-nil
+//   - cert must be non-nil (leaf certificate)
+//   - privateKey must be non-nil crypto.Signer
+//   - chain is normalized to be leaf-first (cert, then intermediates)
+//   - Defensive copy of chain to prevent aliasing
+//
+// Chain Normalization:
+//   - If chain is empty or doesn't start with cert, rebuilt as [cert, ...intermediates]
+//   - If chain starts with cert, defensive copy is made
+//   - Ensures leaf-first invariant for SDK compatibility
+//
+// Parameters:
+//   - identityCredential: The SPIFFE ID for this identity
+//   - cert: X.509 leaf certificate
+//   - privateKey: crypto.Signer for mTLS and signing
+//   - chain: Certificate chain (may or may not include leaf)
+//
+// Returns:
+//   - IdentityDocument instance on success
+//   - ErrIdentityDocumentInvalid (wrapped with %w) if validation fails
+//
+// Examples:
+//   // Chain includes leaf (common from SDK)
+//   doc, err := NewIdentityDocumentFromComponents(id, leaf, key, []*x509.Certificate{leaf, ca})
+//
+//   // Chain doesn't include leaf (will be added)
+//   doc, err := NewIdentityDocumentFromComponents(id, leaf, key, []*x509.Certificate{ca})
+//
+//   // No intermediates (leaf-only chain)
+//   doc, err := NewIdentityDocumentFromComponents(id, leaf, key, nil)
+//
+// Concurrency: Safe for concurrent use (pure function, no shared state).
+//
+// Note: The expiresAt parameter has been removed (breaking change).
+// Use cert.NotAfter instead to avoid drift. Adapters should update their calls.
 func NewIdentityDocumentFromComponents(
 	identityCredential *IdentityCredential,
 	cert *x509.Certificate,
-	privateKey interface{},
+	privateKey crypto.Signer,
 	chain []*x509.Certificate,
-	expiresAt time.Time,
-) *IdentityDocument {
+) (*IdentityDocument, error) {
+	// Step 1: Validate required components
+	if identityCredential == nil {
+		return nil, fmt.Errorf("%w: identity credential cannot be nil", ErrIdentityDocumentInvalid)
+	}
+	if cert == nil {
+		return nil, fmt.Errorf("%w: certificate cannot be nil", ErrIdentityDocumentInvalid)
+	}
+	// Check both interface and underlying value for nil (handles typed nil)
+	// Use reflection to safely detect typed nil without dereferencing
+	if privateKey == nil || !isValidSigner(privateKey) {
+		return nil, fmt.Errorf("%w: private key cannot be nil", ErrIdentityDocumentInvalid)
+	}
+
+	// Step 2: Normalize chain to be leaf-first
+	// Ensures invariant: chain[0] == cert (leaf)
+	// Performs defensive copy to prevent aliasing bugs
+	var normalizedChain []*x509.Certificate
+
+	if len(chain) == 0 || chain[0] != cert {
+		// Chain missing leaf or incorrect order
+		// Rebuild as [leaf, ...intermediates]
+		normalizedChain = make([]*x509.Certificate, 1, 1+len(chain))
+		normalizedChain[0] = cert
+		normalizedChain = append(normalizedChain, chain...)
+	} else {
+		// Chain already leaf-first; defensive copy
+		normalizedChain = make([]*x509.Certificate, len(chain))
+		copy(normalizedChain, chain)
+	}
+
 	return &IdentityDocument{
 		identityCredential: identityCredential,
 		cert:               cert,
 		privateKey:         privateKey,
-		chain:              chain,
-		expiresAt:          expiresAt,
-	}
+		chain:              normalizedChain,
+	}, nil
 }
 
-// IdentityCredential returns the identity credential
+// IdentityCredential returns the SPIFFE ID for this identity.
+//
+// The identity credential is treated as immutable per the domain's immutability contract.
+//
+// Example:
+//   id.IdentityCredential().String() // "spiffe://example.org/workload"
 func (id *IdentityDocument) IdentityCredential() *IdentityCredential {
 	return id.identityCredential
 }
 
-// Certificate returns the X.509 certificate
+// Certificate returns the leaf X.509 certificate.
+//
+// The leaf certificate contains the SPIFFE ID in its URI SAN extension
+// and is the certificate presented during TLS handshakes.
+//
+// Example:
+//   cert := id.Certificate()
+//   fmt.Println(cert.Subject.CommonName)
 func (id *IdentityDocument) Certificate() *x509.Certificate {
 	return id.cert
 }
 
-// PrivateKey returns the private key
-func (id *IdentityDocument) PrivateKey() interface{} {
+// PrivateKey returns the private key as a crypto.Signer.
+//
+// This type is required for TLS handshakes and signing operations.
+// Common implementations: *rsa.PrivateKey, *ecdsa.PrivateKey, ed25519.PrivateKey.
+//
+// Example:
+//   signer := id.PrivateKey()
+//   signature, err := signer.Sign(rand.Reader, digest, crypto.SHA256)
+func (id *IdentityDocument) PrivateKey() crypto.Signer {
 	return id.privateKey
 }
 
-// Chain returns the certificate chain
+// Chain returns a defensive copy of the certificate chain (leaf-first).
+//
+// The chain includes the leaf certificate at position 0, followed by intermediates.
+// A defensive copy is returned to prevent callers from modifying the internal slice.
+//
+// Immutability contract:
+//   - Returned slice is a copy (callers can modify without affecting document)
+//   - Certificate pointers remain shared (x509.Certificate is immutable)
+//
+// Example:
+//   chain := id.Chain()
+//   leaf := chain[0]          // Always the leaf certificate
+//   intermediates := chain[1:] // CA certificates
 func (id *IdentityDocument) Chain() []*x509.Certificate {
-	return id.chain
+	out := make([]*x509.Certificate, len(id.chain))
+	copy(out, id.chain)
+	return out
 }
 
-// ExpiresAt returns the expiration time
+// LeafAndChain returns the leaf certificate and a defensive copy of the intermediates.
+//
+// This is a convenience method that separates the leaf from the chain for
+// operations that need them separately (e.g., TLS Config where leaf and
+// intermediates are set via different fields).
+//
+// Returns:
+//   - leaf: The X.509 leaf certificate (same as Certificate())
+//   - intermediates: Defensive copy of intermediate CA certificates (may be empty)
+//
+// Example:
+//   leaf, intermediates := id.LeafAndChain()
+//   tlsConfig.Certificates = []tls.Certificate{{
+//       Certificate: append([][]byte{leaf.Raw}, intermediateDERs...),
+//       PrivateKey:  id.PrivateKey(),
+//   }}
+func (id *IdentityDocument) LeafAndChain() (*x509.Certificate, []*x509.Certificate) {
+	if len(id.chain) <= 1 {
+		return id.cert, nil
+	}
+	rest := make([]*x509.Certificate, len(id.chain)-1)
+	copy(rest, id.chain[1:])
+	return id.cert, rest
+}
+
+// ExpiresAt returns the expiration time from the leaf certificate's NotAfter field.
+//
+// This is the single source of truth for expiration. No separate expiresAt field
+// is stored to avoid drift between certificate and cached timestamp.
+//
+// Example:
+//   expires := id.ExpiresAt()
+//   fmt.Printf("Expires: %s\n", expires.Format(time.RFC3339))
 func (id *IdentityDocument) ExpiresAt() time.Time {
-	return id.expiresAt
+	return id.cert.NotAfter
 }
 
-// IsExpired checks if the identity document has expired based on ExpiresAt
+// NotBefore returns the validity start time from the leaf certificate.
+//
+// The certificate is not valid before this time. Use IsValidAt() or
+// IsCurrentlyValid() for proper time-based validity checks.
+//
+// Example:
+//   notBefore := id.NotBefore()
+//   if time.Now().Before(notBefore) {
+//       // Certificate not yet valid
+//   }
+func (id *IdentityDocument) NotBefore() time.Time {
+	return id.cert.NotBefore
+}
+
+// Remaining returns the time duration until expiration from now.
+//
+// Returns negative duration if already expired.
+//
+// Example:
+//   remaining := id.Remaining()
+//   if remaining < 5*time.Minute {
+//       // Rotate soon
+//   }
+func (id *IdentityDocument) Remaining() time.Duration {
+	return time.Until(id.ExpiresAt())
+}
+
+// IsExpired reports whether the document is past its NotAfter time.
+//
+// This is a simple time comparison without clock skew handling.
+// For production use with clock skew tolerance, use IsCurrentlyValid(skew).
+//
+// Example:
+//   if id.IsExpired() {
+//       // Need to rotate certificate
+//   }
 func (id *IdentityDocument) IsExpired() bool {
-	return time.Now().After(id.expiresAt)
+	return time.Now().After(id.ExpiresAt())
 }
 
-// IsValid checks if the identity document is currently valid (simple time check)
-// For full validation (chain-of-trust, signature verification), use IdentityDocumentValidator port
+// IsValid checks if the identity document is currently valid (not expired).
+//
+// This is a convenience method equivalent to !IsExpired().
+// For production use with clock skew tolerance, use IsCurrentlyValid(skew).
+//
+// Example:
+//   if id.IsValid() {
+//       // Certificate is valid
+//   }
 func (id *IdentityDocument) IsValid() bool {
 	return !id.IsExpired()
+}
+
+// IsValidAt checks if the document is valid at a specific time.
+//
+// Returns true if t is within the certificate's NotBefore/NotAfter window.
+// This does NOT account for clock skew; use IsCurrentlyValid(skew) for that.
+//
+// Validity window: NotBefore <= t < NotAfter
+//
+// Example:
+//   // Check if valid 1 hour from now
+//   future := time.Now().Add(1 * time.Hour)
+//   if id.IsValidAt(future) {
+//       // Still valid in 1 hour
+//   }
+func (id *IdentityDocument) IsValidAt(t time.Time) bool {
+	return !t.Before(id.NotBefore()) && t.Before(id.ExpiresAt())
+}
+
+// IsCurrentlyValid checks validity with clock skew allowance.
+//
+// This is the production-recommended validity check as it handles clock drift
+// between systems (common in distributed environments).
+//
+// Clock Skew Handling:
+//   - NotBefore: Allow documents valid up to skew duration in the future
+//   - NotAfter: Allow documents expired up to skew duration ago
+//
+// Example with 5-minute skew:
+//   NotBefore: 10:00, NotAfter: 11:00, skew: 5min
+//   - 09:55: Valid (within skew of NotBefore)
+//   - 10:30: Valid (within validity window)
+//   - 11:04: Valid (within skew of NotAfter)
+//   - 11:06: Invalid (beyond skew tolerance)
+//
+// Recommended skew values:
+//   - Development: 1 * time.Minute
+//   - Production: 5 * time.Minute
+//   - High-latency networks: 10 * time.Minute
+//
+// Example:
+//   // Production with 5-minute clock skew tolerance
+//   if id.IsCurrentlyValid(5 * time.Minute) {
+//       // Certificate is valid accounting for clock drift
+//   }
+func (id *IdentityDocument) IsCurrentlyValid(skew time.Duration) bool {
+	now := time.Now()
+	return !now.Before(id.NotBefore().Add(-skew)) && now.Before(id.ExpiresAt().Add(skew))
+}
+
+// IsZero reports whether this document is uninitialized or invalid.
+//
+// Returns true if:
+//   - Document is nil
+//   - Identity credential is nil
+//   - Certificate is nil
+//
+// Use this to detect zero-value instances or programming errors.
+//
+// Example:
+//   var doc *IdentityDocument
+//   if doc.IsZero() {
+//       // Need to fetch identity document
+//   }
+func (id *IdentityDocument) IsZero() bool {
+	return id == nil || id.identityCredential == nil || id.cert == nil
+}
+
+// isValidSigner checks if a crypto.Signer is non-nil and usable.
+//
+// This handles Go's typed nil issue where an interface containing a nil
+// pointer (e.g., (*ecdsa.PrivateKey)(nil)) is non-nil as an interface.
+//
+// We use a panic-recovery approach to safely test if Public() can be called.
+// This is defensive against malformed Signer implementations.
+func isValidSigner(signer crypto.Signer) bool {
+	// Defer a recovery function to catch any panic from calling Public()
+	defer func() {
+		recover() // Silently catch any panic (indicates invalid signer)
+	}()
+
+	// Attempt to call Public() - will panic if signer is typed nil
+	pub := signer.Public()
+	return pub != nil
 }

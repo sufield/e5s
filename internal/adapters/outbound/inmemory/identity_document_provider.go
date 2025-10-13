@@ -89,9 +89,8 @@ func (p *InMemoryIdentityDocumentProvider) CreateX509IdentityDocument(
 		identityCredential,
 		cert,
 		privateKey,
-		[]*x509.Certificate{caCertX509},
-		notAfter,
-	), nil
+		[]*x509.Certificate{cert, caCertX509},
+	)
 }
 
 // ValidateIdentityDocument performs minimal validation (fake, dev-only)
