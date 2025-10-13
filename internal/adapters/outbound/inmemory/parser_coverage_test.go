@@ -223,11 +223,18 @@ func TestIdentityCredentialParser_ParseFromString_InvalidURI(t *testing.T) {
 		wantErrMsg string
 	}{
 		{"empty string", "", true, "identity credential cannot be empty"},
+		{"whitespace only", "  ", true, "identity credential cannot be empty"},
 		{"missing scheme", "example.org/workload", true, ""},
 		{"wrong scheme", "http://example.org/workload", true, "must use 'spiffe' scheme"},
 		{"missing host/trust domain", "spiffe:///workload", true, "must contain a trust domain"},
+		{"with userinfo", "spiffe://user:pass@example.org/workload", true, "must not include userinfo"},
+		{"with port", "spiffe://example.org:8080/workload", true, "must not include userinfo, port, query, or fragment"},
+		{"with query", "spiffe://example.org/workload?key=value", true, "must not include userinfo, port, query, or fragment"},
+		{"with fragment", "spiffe://example.org/workload#section", true, "must not include userinfo, port, query, or fragment"},
 		{"valid spiffe URI", "spiffe://example.org/workload", false, ""},
 		{"missing path", "spiffe://example.org", false, ""},
+		{"with leading/trailing spaces", "  spiffe://example.org/workload  ", false, ""},
+		{"uppercase trust domain", "spiffe://EXAMPLE.ORG/workload", false, ""},
 	}
 
 	for _, tt := range tests {
@@ -248,6 +255,54 @@ func TestIdentityCredentialParser_ParseFromString_InvalidURI(t *testing.T) {
 				require.NoError(t, err)
 				assert.NotNil(t, credential)
 			}
+		})
+	}
+}
+
+func TestIdentityCredentialParser_ParseFromString_Normalization(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	parser := inmemory.NewInMemoryIdentityCredentialParser()
+
+	tests := []struct {
+		name        string
+		input       string
+		expectedURI string
+	}{
+		{
+			name:        "lowercase trust domain",
+			input:       "spiffe://EXAMPLE.ORG/workload",
+			expectedURI: "spiffe://example.org/workload",
+		},
+		{
+			name:        "mixed case trust domain",
+			input:       "spiffe://Example.Org/workload",
+			expectedURI: "spiffe://example.org/workload",
+		},
+		{
+			name:        "trim spaces",
+			input:       "  spiffe://example.org/workload  ",
+			expectedURI: "spiffe://example.org/workload",
+		},
+		{
+			name:        "empty path becomes root",
+			input:       "spiffe://example.org",
+			expectedURI: "spiffe://example.org/",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			// Act
+			credential, err := parser.ParseFromString(ctx, tt.input)
+
+			// Assert
+			require.NoError(t, err)
+			assert.NotNil(t, credential)
+			assert.Equal(t, tt.expectedURI, credential.String())
 		})
 	}
 }

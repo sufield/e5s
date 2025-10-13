@@ -12,9 +12,8 @@ import (
 	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
-// InMemoryIdentityCredentialParser implements the IdentityCredentialParser port for in-memory walking skeleton
-// This provides simple string-based parsing without SDK dependencies.
-// For a real implementation, this would use go-spiffe SDK's spiffeid.FromString/FromPath.
+// InMemoryIdentityCredentialParser implements the IdentityCredentialParser port for in-memory walking skeleton.
+// Dev-only parser—production uses go-spiffe SDK (spiffeid.FromString/FromPath).
 type InMemoryIdentityCredentialParser struct{}
 
 // NewInMemoryIdentityCredentialParser creates a new in-memory identity credential parser
@@ -26,36 +25,36 @@ func NewInMemoryIdentityCredentialParser() ports.IdentityCredentialParser {
 // Format: spiffe://<trust-domain>/<path>
 // Example: spiffe://example.org/host
 func (p *InMemoryIdentityCredentialParser) ParseFromString(ctx context.Context, id string) (*domain.IdentityCredential, error) {
+	id = strings.TrimSpace(id)
 	if id == "" {
 		return nil, fmt.Errorf("inmemory: %w: identity credential cannot be empty", domain.ErrInvalidIdentityCredential)
 	}
 
-	// Parse as URI
 	u, err := url.Parse(id)
 	if err != nil {
 		return nil, fmt.Errorf("inmemory: %w: invalid URI format: %v", domain.ErrInvalidIdentityCredential, err)
 	}
-
-	// Validate scheme
 	if u.Scheme != "spiffe" {
 		return nil, fmt.Errorf("inmemory: %w: must use 'spiffe' scheme, got: %s", domain.ErrInvalidIdentityCredential, u.Scheme)
 	}
-
-	// Extract trust domain
+	if u.User != nil || u.Port() != "" || u.RawQuery != "" || u.Fragment != "" {
+		return nil, fmt.Errorf("inmemory: %w: URI must not include userinfo, port, query, or fragment", domain.ErrInvalidIdentityCredential)
+	}
 	if u.Host == "" {
 		return nil, fmt.Errorf("inmemory: %w: must contain a trust domain", domain.ErrInvalidIdentityCredential)
 	}
 
-	// Create trust domain from validated host (already checked for non-empty)
-	trustDomain := domain.NewTrustDomainFromName(u.Host)
+	// Normalize trust domain to lowercase (SPIFFE trust domains are DNS-like)
+	tdName := strings.ToLower(u.Host)
+	trustDomain := domain.NewTrustDomainFromName(tdName)
 
-	// Extract path (default to "/" if empty)
 	path := u.Path
 	if path == "" {
 		path = "/"
+	} else if !strings.HasPrefix(path, "/") {
+		path = "/" + path
 	}
 
-	// Create domain IdentityCredential from validated components
 	return domain.NewIdentityCredentialFromComponents(trustDomain, path), nil
 }
 
@@ -65,15 +64,12 @@ func (p *InMemoryIdentityCredentialParser) ParseFromPath(ctx context.Context, tr
 		return nil, fmt.Errorf("inmemory: %w: trust domain cannot be nil", domain.ErrInvalidIdentityCredential)
 	}
 
-	// Ensure path starts with "/"
 	if path == "" {
 		path = "/"
-	}
-	if !strings.HasPrefix(path, "/") {
+	} else if !strings.HasPrefix(path, "/") {
 		path = "/" + path
 	}
 
-	// Create domain IdentityCredential from components
 	return domain.NewIdentityCredentialFromComponents(trustDomain, path), nil
 }
 
