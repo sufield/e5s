@@ -6,6 +6,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"errors"
 	"math/big"
 	"net/url"
 	"testing"
@@ -198,46 +199,89 @@ func TestSDKDocumentProvider_ValidateIdentityDocument_NilExpectedID(t *testing.T
 }
 
 func TestSDKDocumentProvider_ValidateIdentityDocument_Expired(t *testing.T) {
-	provider := &SDKDocumentProvider{bundleSource: nil}
+	// Use a provider with a custom clock for testing expiration
+	provider := &SDKDocumentProvider{
+		bundleSource: nil,
+		clock:        time.Now,
+		clockSkew:    5 * time.Minute,
+	}
 
 	ctx := context.Background()
 	trustDomain := domain.NewTrustDomainFromName("example.org")
 	identityCredential := domain.NewIdentityCredentialFromComponents(trustDomain, "/test")
 
+	// Create test CA and expired SVID
+	caCert, caKey := createTestCA(t)
+	svidKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("failed to generate SVID key: %v", err)
+	}
+
+	spiffeURI, _ := url.Parse("spiffe://example.org/test")
+	expiredNotAfter := time.Now().Add(-10 * time.Minute) // Expired 10 minutes ago (beyond clock skew)
+	svidTemplate := &x509.Certificate{
+		SerialNumber: big.NewInt(2),
+		Subject:      pkix.Name{CommonName: "spiffe://example.org/test"},
+		URIs:         []*url.URL{spiffeURI},
+		NotBefore:    time.Now().Add(-24 * time.Hour),
+		NotAfter:     expiredNotAfter,
+		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+	}
+
+	svidCertDER, err := x509.CreateCertificate(rand.Reader, svidTemplate, caCert, &svidKey.PublicKey, caKey)
+	if err != nil {
+		t.Fatalf("failed to create expired SVID: %v", err)
+	}
+
+	svidCert, err := x509.ParseCertificate(svidCertDER)
+	if err != nil {
+		t.Fatalf("failed to parse expired SVID: %v", err)
+	}
+
 	// Create expired document
 	doc := domain.NewIdentityDocumentFromComponents(
 		identityCredential,
-		nil,
-		nil,
-		nil,
-		time.Now().Add(-1*time.Hour), // Expired
+		svidCert,
+		svidKey,
+		[]*x509.Certificate{svidCert},
+		svidCert.NotAfter,
 	)
 
-	err := provider.ValidateIdentityDocument(ctx, doc, identityCredential)
+	err = provider.ValidateIdentityDocument(ctx, doc, identityCredential)
 	if err == nil {
 		t.Fatal("expected error for expired document")
 	}
 
-	if err != domain.ErrIdentityDocumentExpired {
+	if !errors.Is(err, domain.ErrIdentityDocumentExpired) {
 		t.Errorf("expected ErrIdentityDocumentExpired, got: %v", err)
 	}
 }
 
 func TestSDKDocumentProvider_ValidateIdentityDocument_IdentityMismatch(t *testing.T) {
-	provider := &SDKDocumentProvider{bundleSource: nil}
+	provider := &SDKDocumentProvider{
+		bundleSource: nil,
+		clock:        time.Now,
+		clockSkew:    5 * time.Minute,
+	}
 
 	ctx := context.Background()
 	trustDomain := domain.NewTrustDomainFromName("example.org")
 	actualID := domain.NewIdentityCredentialFromComponents(trustDomain, "/actual")
 	expectedID := domain.NewIdentityCredentialFromComponents(trustDomain, "/expected")
 
-	// Create document with different ID than expected
+	// Create test CA and SVID with actualID
+	caCert, caKey := createTestCA(t)
+	spiffeIDStr := "spiffe://example.org/actual"
+	svidCert, svidKey := createTestSVID(t, caCert, caKey, spiffeIDStr)
+
+	// Create document with actualID (different from expectedID)
 	doc := domain.NewIdentityDocumentFromComponents(
 		actualID, // Different from expected
-		nil,
-		nil,
-		nil,
-		time.Now().Add(1*time.Hour),
+		svidCert,
+		svidKey,
+		[]*x509.Certificate{svidCert},
+		svidCert.NotAfter,
 	)
 
 	err := provider.ValidateIdentityDocument(ctx, doc, expectedID)
