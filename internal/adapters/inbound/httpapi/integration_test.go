@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pocket/hexagon/spire/internal/adapters/outbound/httpclient"
+	"github.com/pocket/hexagon/spire/examples/httpclient"
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	"github.com/spiffe/go-spiffe/v2/spiffetls/tlsconfig"
 	"github.com/stretchr/testify/require"
@@ -60,11 +60,17 @@ func TestMTLSClientServer(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Create client
-	client, err := httpclient.NewSPIFFEHTTPClient(ctx, httpclient.ClientConfig{
-		SocketPath:       socketPath,
-		ServerAuthorizer: tlsconfig.AuthorizeAny(),
-		Timeout:          5 * time.Second,
-		Transport:        httpclient.TransportConfig{MaxIdleConns: 10},
+	client, err := httpclient.New(ctx, httpclient.Config{
+		WorkloadAPI: httpclient.WorkloadAPIConfig{
+			SocketPath: socketPath,
+		},
+		SPIFFE: httpclient.SPIFFEConfig{
+			ExpectedServerID: "", // Accept any server
+		},
+		HTTP: httpclient.HTTPClientConfig{
+			Timeout:      5 * time.Second,
+			MaxIdleConns: 10,
+		},
 	})
 	require.NoError(t, err, "Failed to create client")
 	defer client.Close()
@@ -116,9 +122,16 @@ func TestMTLSClientServer_AuthorizationFailure(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Create client (will fail auth since ID mismatch)
-	client, err := httpclient.NewSPIFFEHTTPClient(ctx, httpclient.ClientConfig{
-		SocketPath:       socketPath,
-		ServerAuthorizer: tlsconfig.AuthorizeAny(),
+	client, err := httpclient.New(ctx, httpclient.Config{
+		WorkloadAPI: httpclient.WorkloadAPIConfig{
+			SocketPath: socketPath,
+		},
+		SPIFFE: httpclient.SPIFFEConfig{
+			ExpectedServerID: "", // Accept any server
+		},
+		HTTP: httpclient.HTTPClientConfig{
+			Timeout: 5 * time.Second,
+		},
 	})
 	require.NoError(t, err, "Failed to create client")
 	defer client.Close()
@@ -166,9 +179,16 @@ func TestMTLSServer_HealthCheck(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Test health endpoint
-	client, err := httpclient.NewSPIFFEHTTPClient(ctx, httpclient.ClientConfig{
-		SocketPath:       socketPath,
-		ServerAuthorizer: tlsconfig.AuthorizeAny(),
+	client, err := httpclient.New(ctx, httpclient.Config{
+		WorkloadAPI: httpclient.WorkloadAPIConfig{
+			SocketPath: socketPath,
+		},
+		SPIFFE: httpclient.SPIFFEConfig{
+			ExpectedServerID: "", // Accept any server
+		},
+		HTTP: httpclient.HTTPClientConfig{
+			Timeout: 5 * time.Second,
+		},
 	})
 	require.NoError(t, err, "Failed to create client")
 	defer client.Close()

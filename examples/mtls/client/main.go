@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/pocket/hexagon/spire/internal/httpclient"
+	"github.com/pocket/hexagon/spire/examples/httpclient"
 )
 
 func main() {
