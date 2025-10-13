@@ -1,4 +1,5 @@
 //go:build dev
+// +build dev
 
 package attestor
 
@@ -10,8 +11,8 @@ import (
 	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
-// UnixWorkloadAttestor is an in-memory implementation of Unix workload attestation
-// It attests workloads based on Unix process attributes (UID, GID, PID)
+// UnixWorkloadAttestor provides fake Unix attestation for walking skeleton / dev mode only.
+// It returns pre-configured selectors based on UID without any real OS-level verification.
 type UnixWorkloadAttestor struct {
 	// Map of UID to selector
 	uidSelectors map[int]string
@@ -29,8 +30,7 @@ func (a *UnixWorkloadAttestor) RegisterUID(uid int, selector string) {
 	a.uidSelectors[uid] = selector
 }
 
-// Attest verifies a workload and returns its selectors
-// In this in-memory implementation, we attest based on UID
+// Attest returns fake selectors for dev mode only - no real verification.
 func (a *UnixWorkloadAttestor) Attest(ctx context.Context, workload ports.ProcessIdentity) ([]string, error) {
 	// Validate process identity
 	if workload.UID < 0 {
@@ -47,10 +47,6 @@ func (a *UnixWorkloadAttestor) Attest(ctx context.Context, workload ports.Proces
 		selector,
 		fmt.Sprintf("unix:uid:%d", workload.UID),
 		fmt.Sprintf("unix:gid:%d", workload.GID),
-	}
-
-	if len(selectors) == 0 {
-		return nil, fmt.Errorf("%w: no selectors generated for workload", domain.ErrNoAttestationData)
 	}
 
 	return selectors, nil

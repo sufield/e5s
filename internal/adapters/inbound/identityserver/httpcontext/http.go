@@ -1,13 +1,13 @@
-// Package httpapi provides SPIFFE-aware HTTP utilities and middlewares for
-// context-based identity handling. It offers safe extraction of SPIFFE IDs from
-// authenticated mTLS requests and composable middlewares for authorization.
+// Package httpcontext provides internal HTTP context utilities for SPIFFE identity handling.
+// This package is an internal implementation detail used by identityserver.
+// External users should use identityserver.New() and identityserver.GetIdentity() instead.
 //
-// All functions assume mTLS middleware has populated the request context with
-// the authenticated client's SPIFFE ID.
-package httpapi
+// All functions assume the request context has been populated with the authenticated
+// client's identity by the server's TLS authentication layer.
+package httpcontext
 
 import (
-	"context"
+	stdcontext "context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -216,7 +216,7 @@ func GetIDString(r *http.Request) string {
 //	testID := spiffeid.RequireFromString("spiffe://example.org/test")
 //	req = httpapi.WithSPIFFEID(req, testID)
 func WithSPIFFEID(r *http.Request, id spiffeid.ID) *http.Request {
-	ctx := context.WithValue(r.Context(), spiffeIDKey, id)
+	ctx := stdcontext.WithValue(r.Context(), spiffeIDKey, id)
 	return r.WithContext(ctx)
 }
 

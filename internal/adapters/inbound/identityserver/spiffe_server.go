@@ -16,11 +16,11 @@ import (
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
 )
 
-// spiffeIDKey is the context key for storing SPIFFE ID.
-// Using an unexported struct type prevents collisions with other packages.
-type contextKey struct{}
+// contextKey is the type for context keys to prevent collisions.
+type contextKey string
 
-var spiffeIDKey = contextKey{}
+// spiffeIDKey is the context key for storing the authenticated client identity.
+const spiffeIDKey contextKey = "spiffe-id"
 
 // spiffeServer implements ports.MTLSServer using go-spiffe SDK
 type spiffeServer struct {
@@ -34,9 +34,9 @@ type spiffeServer struct {
 	mu        sync.Mutex
 }
 
-// NewSPIFFEServer returns a Server that authenticates clients via SPIFFE ID
-// and serves HTTPS using the Workload API-provided SVID.
-func NewSPIFFEServer(ctx context.Context, cfg ports.MTLSConfig) (ports.MTLSServer, error) {
+// New creates a new mTLS HTTP server that authenticates clients.
+// Returns a server that serves HTTPS using identity-based authentication.
+func New(ctx context.Context, cfg ports.MTLSConfig) (ports.MTLSServer, error) {
 	// Validate required configuration
 	if cfg.WorkloadAPI.SocketPath == "" {
 		return nil, fmt.Errorf("workload api socket path is required")
@@ -238,17 +238,19 @@ func (s *spiffeServer) wrapHandler(handler http.Handler) http.Handler {
 	})
 }
 
-// GetSPIFFEID extracts the SPIFFE ID from the request context
-func GetSPIFFEID(r *http.Request) (spiffeid.ID, bool) {
+// GetIdentity extracts the authenticated client identity from the request.
+// Returns the identity and true if present, zero value and false otherwise.
+func GetIdentity(r *http.Request) (spiffeid.ID, bool) {
 	id, ok := r.Context().Value(spiffeIDKey).(spiffeid.ID)
 	return id, ok
 }
 
-// MustGetSPIFFEID extracts the SPIFFE ID or panics if not present
-func MustGetSPIFFEID(r *http.Request) spiffeid.ID {
-	id, ok := GetSPIFFEID(r)
+// MustGetIdentity extracts the identity or panics if not present.
+// Use only in handlers where authentication is guaranteed.
+func MustGetIdentity(r *http.Request) spiffeid.ID {
+	id, ok := GetIdentity(r)
 	if !ok {
-		panic("SPIFFE ID not found in request context")
+		panic("identity not found in request context")
 	}
 	return id
 }

@@ -203,3 +203,6 @@ func (c *SPIREClient) GetX509BundleForTrustDomain(td spiffeid.TrustDomain) (*x50
 
 	return bundle, nil
 }
+
+// Compile-time assertion: SPIREClient implements x509bundle.Source
+var _ x509bundle.Source = (*SPIREClient)(nil)

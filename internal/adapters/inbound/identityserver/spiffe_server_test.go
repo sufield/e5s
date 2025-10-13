@@ -18,7 +18,7 @@ func contains(s, substr string) bool {
 	return strings.Contains(s, substr)
 }
 
-func TestNewSPIFFEServer_MissingSocketPath(t *testing.T) {
+func TestNew_MissingSocketPath(t *testing.T) {
 	ctx := context.Background()
 	cfg := ports.MTLSConfig{
 		SPIFFE: ports.SPIFFEConfig{
@@ -26,13 +26,13 @@ func TestNewSPIFFEServer_MissingSocketPath(t *testing.T) {
 		},
 	}
 
-	server, err := NewSPIFFEServer(ctx, cfg)
+	server, err := New(ctx, cfg)
 	require.Error(t, err)
 	assert.Nil(t, server)
 	assert.Contains(t, err.Error(), "socket path is required")
 }
 
-func TestNewSPIFFEServer_MissingAllowedClientID(t *testing.T) {
+func TestNew_MissingAllowedClientID(t *testing.T) {
 	ctx := context.Background()
 	cfg := ports.MTLSConfig{
 		WorkloadAPI: ports.WorkloadAPIConfig{
@@ -40,13 +40,13 @@ func TestNewSPIFFEServer_MissingAllowedClientID(t *testing.T) {
 		},
 	}
 
-	server, err := NewSPIFFEServer(ctx, cfg)
+	server, err := New(ctx, cfg)
 	require.Error(t, err)
 	assert.Nil(t, server)
 	assert.Contains(t, err.Error(), "authorization policy required")
 }
 
-func TestNewSPIFFEServer_InvalidClientID(t *testing.T) {
+func TestNew_InvalidClientID(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -59,7 +59,7 @@ func TestNewSPIFFEServer_InvalidClientID(t *testing.T) {
 		},
 	}
 
-	server, err := NewSPIFFEServer(ctx, cfg)
+	server, err := New(ctx, cfg)
 	if server != nil {
 		defer server.Close()
 	}
@@ -74,7 +74,7 @@ func TestNewSPIFFEServer_InvalidClientID(t *testing.T) {
 	)
 }
 
-func TestNewSPIFFEServer_ValidConfig(t *testing.T) {
+func TestNew_ValidConfig(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -90,7 +90,7 @@ func TestNewSPIFFEServer_ValidConfig(t *testing.T) {
 		},
 	}
 
-	server, err := NewSPIFFEServer(ctx, cfg)
+	server, err := New(ctx, cfg)
 
 	// If SPIRE is not running, this will fail - that's expected
 	if err != nil {
@@ -102,7 +102,7 @@ func TestNewSPIFFEServer_ValidConfig(t *testing.T) {
 	defer server.Close()
 }
 
-func TestNewSPIFFEServer_AppliesDefaults(t *testing.T) {
+func TestNew_AppliesDefaults(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -116,7 +116,7 @@ func TestNewSPIFFEServer_AppliesDefaults(t *testing.T) {
 		// No HTTP config - should apply defaults
 	}
 
-	server, err := NewSPIFFEServer(ctx, cfg)
+	server, err := New(ctx, cfg)
 
 	if err != nil {
 		t.Skipf("Skipping test - SPIRE agent not available: %v", err)
@@ -151,7 +151,7 @@ func TestSpiffeServer_Handle(t *testing.T) {
 		},
 	}
 
-	server, err := NewSPIFFEServer(ctx, cfg)
+	server, err := New(ctx, cfg)
 	if err != nil {
 		t.Skipf("Skipping test - SPIRE agent not available: %v", err)
 		return
@@ -186,7 +186,7 @@ func TestSpiffeServer_Close_Idempotent(t *testing.T) {
 		},
 	}
 
-	server, err := NewSPIFFEServer(ctx, cfg)
+	server, err := New(ctx, cfg)
 	if err != nil {
 		t.Skipf("Skipping test - SPIRE agent not available: %v", err)
 		return
@@ -200,43 +200,43 @@ func TestSpiffeServer_Close_Idempotent(t *testing.T) {
 	assert.NoError(t, err2)
 }
 
-func TestGetSPIFFEID_Present(t *testing.T) {
+func TestGetIdentity_Present(t *testing.T) {
 	req := httptest.NewRequest("GET", "/test", nil)
 	testID := spiffeid.RequireFromString("spiffe://example.org/test")
 	ctx := context.WithValue(req.Context(), spiffeIDKey, testID)
 	req = req.WithContext(ctx)
 
-	id, ok := GetSPIFFEID(req)
+	id, ok := GetIdentity(req)
 
 	assert.True(t, ok)
 	assert.Equal(t, testID, id)
 }
 
-func TestGetSPIFFEID_NotPresent(t *testing.T) {
+func TestGetIdentity_NotPresent(t *testing.T) {
 	req := httptest.NewRequest("GET", "/test", nil)
 
-	id, ok := GetSPIFFEID(req)
+	id, ok := GetIdentity(req)
 
 	assert.False(t, ok)
 	assert.Equal(t, spiffeid.ID{}, id)
 }
 
-func TestMustGetSPIFFEID_Present(t *testing.T) {
+func TestMustGetIdentity_Present(t *testing.T) {
 	req := httptest.NewRequest("GET", "/test", nil)
 	testID := spiffeid.RequireFromString("spiffe://example.org/test")
 	ctx := context.WithValue(req.Context(), spiffeIDKey, testID)
 	req = req.WithContext(ctx)
 
-	id := MustGetSPIFFEID(req)
+	id := MustGetIdentity(req)
 
 	assert.Equal(t, testID, id)
 }
 
-func TestMustGetSPIFFEID_Panics(t *testing.T) {
+func TestMustGetIdentity_Panics(t *testing.T) {
 	req := httptest.NewRequest("GET", "/test", nil)
 
 	assert.Panics(t, func() {
-		MustGetSPIFFEID(req)
+		MustGetIdentity(req)
 	})
 }
 
@@ -256,7 +256,7 @@ func TestWrapHandler_NoTLS(t *testing.T) {
 		},
 	}
 
-	server, err := NewSPIFFEServer(ctx, cfg)
+	server, err := New(ctx, cfg)
 	if err != nil {
 		t.Skipf("Skipping test - SPIRE agent not available: %v", err)
 		return

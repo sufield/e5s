@@ -59,6 +59,9 @@ func NewSPIREAdapterFactory(ctx context.Context, cfg *spire.Config) (*SPIREAdapt
 	if cfg == nil {
 		return nil, fmt.Errorf("config cannot be nil")
 	}
+	if cfg.SocketPath == "" {
+		return nil, fmt.Errorf("socket path is required")
+	}
 
 	// Create SPIRE Workload API client
 	client, err := spire.NewSPIREClient(ctx, *cfg)
@@ -66,8 +69,10 @@ func NewSPIREAdapterFactory(ctx context.Context, cfg *spire.Config) (*SPIREAdapt
 		return nil, fmt.Errorf("failed to create SPIRE client: %w", err)
 	}
 
+	// Store a copy so external mutation of cfg doesn't surprise the factory later
+	copied := *cfg
 	return &SPIREAdapterFactory{
-		config: cfg,
+		config: &copied,
 		client: client,
 	}, nil
 }
@@ -86,36 +91,26 @@ func (f *SPIREAdapterFactory) CreateIdentityCredentialParser() ports.IdentityCre
 
 // CreateIdentityDocumentProvider creates an identity document provider.
 //
-// Design Note: In production SPIRE deployments, this provider is used only for
-// validation (time checks, identity matching). Document **creation** happens on
-// SPIRE Server, not in the agent/workload.
+// Design Note: In production SPIRE deployments, workloads are **client-only**.
+// All certificate issuance and attestation happen in external SPIRE infrastructure:
+//   - SPIRE Server issues SVIDs after validating registration entries
+//   - SPIRE Agent attests workloads and delivers SVIDs via Workload API
+//   - Workloads fetch their own SVIDs and verify peer certificates
 //
-// This implementation uses the go-spiffe SDK's x509svid.Verify for production-grade validation:
-//   - Full chain-of-trust verification against trust bundles
+// This provider handles **validation only** (not creation):
+//   - Full chain-of-trust verification against trust bundles (x509svid.Verify)
 //   - Signature validation
 //   - Certificate expiration checks
 //   - SPIFFE ID extraction and validation from URI SAN
 //
-// The bundle source is obtained from the SPIRE Workload API client, which maintains
-// up-to-date trust bundles including federated trust domains.
-//
-// IMPORTANT: Requires f.client to implement x509bundle.Source via GetX509BundleForTrustDomain.
+// The bundle source (f.client) maintains up-to-date trust bundles including
+// federated trust domains. SPIREClient implements x509bundle.Source, verified
+// at compile-time in the spire package.
 //
 // Returns an SDK-based provider with full security validation for production use.
 func (f *SPIREAdapterFactory) CreateIdentityDocumentProvider() ports.IdentityDocumentProvider {
-	// Runtime safety check: ensure the client implements the bundle source interface
-	// This protects against future changes to SPIREClient that might break the contract
-	if f.client != nil {
-		if _, ok := any(f.client).(interface {
-			GetX509BundleForTrustDomain(spiffeid.TrustDomain) (interface{}, error)
-		}); !ok {
-			// This should never happen in production; fail fast with clear message
-			panic("SPIREClient no longer implements x509bundle.Source; update factory wiring")
-		}
-	}
-
-	// Use SDK-based validator with bundle source from Workload API
-	// SPIREClient implements x509bundle.Source interface via GetX509BundleForTrustDomain
+	// SPIREClient implements x509bundle.Source (compile-time assertion in spire package)
+	// No runtime check needed - any breakage is caught at build time
 	return spire.NewSDKDocumentProvider(f.client)
 }
 
@@ -156,11 +151,20 @@ func (f *SPIREAdapterFactory) CreateProductionAgent(
 		return nil, fmt.Errorf("identity credential parser cannot be nil")
 	}
 
+	// Parse and validate SPIFFE ID early (fail fast)
+	id, err := spiffeid.FromString(spiffeID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid SPIFFE ID: %w", err)
+	}
+
 	// Delegate to SPIRE Agent which handles all identity operations
-	return spire.NewAgent(ctx, f.client, spiffeID, parser)
+	return spire.NewAgent(ctx, f.client, id.String(), parser)
 }
 
 // Close closes the SPIRE client connection and releases resources.
+//
+// This method is idempotent - calling it multiple times is safe.
+// After the first call, subsequent calls are no-ops.
 //
 // This should be called when the factory is no longer needed, typically
 // in a defer statement after factory creation:
@@ -174,10 +178,15 @@ func (f *SPIREAdapterFactory) CreateProductionAgent(
 // Returns an error if closing the client fails. The error can be safely
 // ignored in most cases as it only affects cleanup logging.
 func (f *SPIREAdapterFactory) Close() error {
-	if f.client != nil {
-		if err := f.client.Close(); err != nil {
-			return fmt.Errorf("failed to close SPIRE client: %w", err)
-		}
+	if f.client == nil {
+		return nil // Already closed or never initialized
+	}
+
+	err := f.client.Close()
+	f.client = nil // Mark as closed to make this method idempotent
+
+	if err != nil {
+		return fmt.Errorf("failed to close SPIRE client: %w", err)
 	}
 	return nil
 }

@@ -50,7 +50,7 @@ func main() {
 	// - Connect to SPIRE agent
 	// - Fetch server's X.509 SVID
 	// - Configure mTLS with client authentication
-	server, err := identityserver.NewSPIFFEServer(ctx, cfg)
+	server, err := identityserver.New(ctx, cfg)
 	if err != nil {
 		log.Fatalf("Failed to create identity server: %v", err)
 	}

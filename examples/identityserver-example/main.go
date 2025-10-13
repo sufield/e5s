@@ -43,7 +43,7 @@ func main() {
 	log.Printf("  Address: %s", cfg.HTTP.Address)
 	log.Printf("  Allowed client: %s", cfg.SPIFFE.AllowedPeerID)
 
-	server, err := identityserver.NewSPIFFEServer(ctx, cfg)
+	server, err := identityserver.New(ctx, cfg)
 	if err != nil {
 		log.Fatalf("Failed to create server: %v", err)
 	}
@@ -75,7 +75,7 @@ func main() {
 
 // handleRoot is the root handler
 func handleRoot(w http.ResponseWriter, r *http.Request) {
-	clientID, ok := identityserver.GetSPIFFEID(r)
+	clientID, ok := identityserver.GetIdentity(r)
 	if !ok {
 		http.Error(w, "No identity", http.StatusInternalServerError)
 		return
@@ -88,7 +88,7 @@ func handleRoot(w http.ResponseWriter, r *http.Request) {
 
 // handleHello is a simple greeting handler
 func handleHello(w http.ResponseWriter, r *http.Request) {
-	clientID, ok := identityserver.GetSPIFFEID(r)
+	clientID, ok := identityserver.GetIdentity(r)
 	if !ok {
 		http.Error(w, "No identity", http.StatusInternalServerError)
 		return
@@ -102,7 +102,7 @@ func handleHello(w http.ResponseWriter, r *http.Request) {
 
 // handleIdentity returns detailed identity information
 func handleIdentity(w http.ResponseWriter, r *http.Request) {
-	clientID, ok := identityserver.GetSPIFFEID(r)
+	clientID, ok := identityserver.GetIdentity(r)
 	if !ok {
 		http.Error(w, "No identity", http.StatusInternalServerError)
 		return

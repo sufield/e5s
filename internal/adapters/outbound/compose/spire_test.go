@@ -33,6 +33,22 @@ func TestNewSPIREAdapterFactory_NilConfig(t *testing.T) {
 	}
 }
 
+// TestNewSPIREAdapterFactory_EmptySocketPath verifies validation of required config fields.
+func TestNewSPIREAdapterFactory_EmptySocketPath(t *testing.T) {
+	ctx := context.Background()
+	cfg := &spire.Config{
+		SocketPath: "", // Empty socket path should fail
+	}
+	_, err := NewSPIREAdapterFactory(ctx, cfg)
+	if err == nil {
+		t.Fatal("expected error for empty socket path, got nil")
+	}
+	expectedMsg := "socket path is required"
+	if err.Error() != expectedMsg {
+		t.Errorf("expected error message %q, got %q", expectedMsg, err.Error())
+	}
+}
+
 // TestSPIREAdapterFactory_CreateProductionAgent_EmptySpiffeID verifies validation.
 func TestSPIREAdapterFactory_CreateProductionAgent_EmptySpiffeID(t *testing.T) {
 	// Create a mock factory (without actual SPIRE client)
@@ -54,6 +70,27 @@ func TestSPIREAdapterFactory_CreateProductionAgent_EmptySpiffeID(t *testing.T) {
 	}
 }
 
+// TestSPIREAdapterFactory_CreateProductionAgent_InvalidSpiffeID verifies early SPIFFE ID parsing.
+func TestSPIREAdapterFactory_CreateProductionAgent_InvalidSpiffeID(t *testing.T) {
+	factory := &SPIREAdapterFactory{
+		config: &spire.Config{},
+		client: nil,
+	}
+
+	ctx := context.Background()
+	parser := factory.CreateIdentityCredentialParser()
+
+	// Invalid SPIFFE ID (not a valid format)
+	_, err := factory.CreateProductionAgent(ctx, "not-a-valid-spiffe-id", parser)
+	if err == nil {
+		t.Fatal("expected error for invalid SPIFFE ID, got nil")
+	}
+	// Should contain "invalid SPIFFE ID" in the error message
+	if err.Error() == "" {
+		t.Error("expected non-empty error message")
+	}
+}
+
 // NOTE: CreateServer test removed - production SPIRE adapter no longer provides server.
 // Production workloads are clients only. For server functionality, use InMemoryAdapterFactory.
 
@@ -67,6 +104,26 @@ func TestSPIREAdapterFactory_Close_NilClient(t *testing.T) {
 	err := factory.Close()
 	if err != nil {
 		t.Errorf("expected no error for nil client close, got: %v", err)
+	}
+}
+
+// TestSPIREAdapterFactory_Close_Idempotent verifies close is idempotent.
+func TestSPIREAdapterFactory_Close_Idempotent(t *testing.T) {
+	factory := &SPIREAdapterFactory{
+		config: &spire.Config{},
+		client: nil,
+	}
+
+	// First close
+	err1 := factory.Close()
+	if err1 != nil {
+		t.Errorf("expected no error on first close, got: %v", err1)
+	}
+
+	// Second close (should be no-op)
+	err2 := factory.Close()
+	if err2 != nil {
+		t.Errorf("expected no error on second close (idempotent), got: %v", err2)
 	}
 }
 
