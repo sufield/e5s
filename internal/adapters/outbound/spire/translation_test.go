@@ -311,7 +311,7 @@ func TestTranslateX509SVIDToIdentityDocument_MissingPrivateKey(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, doc)
 	assert.ErrorIs(t, err, domain.ErrIdentityDocumentInvalid)
-	assert.Contains(t, err.Error(), "missing private key")
+	assert.Contains(t, err.Error(), "missing/invalid private key")
 }
 
 // TestTranslateX509SVIDToIdentityDocument_SliceIsolation verifies defensive copy
