@@ -93,12 +93,14 @@ func (a *InMemoryAgent) initializeAgentIdentity(ctx context.Context) error {
 	return nil
 }
 
-// GetIdentity returns the agent's own identity document
-func (a *InMemoryAgent) GetIdentity(ctx context.Context) (*domain.IdentityDocument, error) {
+// GetIdentity returns the agent's own identity (credential + document + name)
+func (a *InMemoryAgent) GetIdentity(ctx context.Context) (*ports.Identity, error) {
 	if a.agentIdentity == nil {
 		return nil, fmt.Errorf("inmemory: %w: agent identity not initialized", domain.ErrAgentUnavailable)
 	}
-	return a.agentIdentity.IdentityDocument, nil
+	// Return shallow copy to discourage mutation
+	identity := *a.agentIdentity
+	return &identity, nil
 }
 
 // FetchIdentityDocument attests a workload and fetches its identity document from the server

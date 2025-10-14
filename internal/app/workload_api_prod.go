@@ -1,12 +1,13 @@
-//go:build dev
+//go:build !dev
 
 package app
 
 import (
 	"context"
 	"fmt"
+	"strings"
 
-	"github.com/pocket/hexagon/spire/internal/app/identityconv"
+	"github.com/pocket/hexagon/spire/internal/domain"
 	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
@@ -37,13 +38,27 @@ func (s *IdentityClientService) IssueIdentity(ctx context.Context, workload port
 	// Convert domain.IdentityDocument to ports.Identity (DTO for inbound ports)
 	// Extract name from identity credential path for human-readable identification
 	credential := doc.IdentityCredential()
-	name := identityconv.DeriveIdentityName(credential)
+	name := deriveIdentityName(credential)
 
 	return &ports.Identity{
 		IdentityCredential: credential,
 		IdentityDocument:   doc,
 		Name:               name,
 	}, nil
+}
+
+// deriveIdentityName derives a human-readable name from an identity credential.
+// Inline implementation for production (no dependency on identityconv package).
+func deriveIdentityName(cred *domain.IdentityCredential) string {
+	if cred == nil {
+		return "unknown"
+	}
+	path := strings.Trim(cred.Path(), "/")
+	if path == "" {
+		return cred.TrustDomain().String()
+	}
+	parts := strings.Split(path, "/")
+	return parts[len(parts)-1]
 }
 
 var _ ports.IdentityIssuer = (*IdentityClientService)(nil)
