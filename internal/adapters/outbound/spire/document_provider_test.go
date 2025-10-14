@@ -99,24 +99,9 @@ func createTestSVID(t *testing.T, caCert *x509.Certificate, caKey *rsa.PrivateKe
 	return svidCert, svidKey
 }
 
-func TestSDKDocumentProvider_CreateX509IdentityDocument_ReturnsError(t *testing.T) {
-	// In production, certificate creation is delegated to SPIRE Server
-	provider := &SDKDocumentProvider{bundleSource: nil}
-
-	ctx := context.Background()
-	trustDomain := domain.NewTrustDomainFromName("example.org")
-	identityCredential := domain.NewIdentityCredentialFromComponents(trustDomain, "/test")
-
-	_, err := provider.CreateX509IdentityDocument(ctx, identityCredential, nil, nil)
-	if err == nil {
-		t.Fatal("expected error for certificate creation, got nil")
-	}
-
-	// Should return domain sentinel error
-	if !errors.Is(err, domain.ErrNotSupported) {
-		t.Errorf("expected ErrNotSupported, got: %v", err)
-	}
-}
+// Note: TestSDKDocumentProvider_CreateX509IdentityDocument was removed.
+// In production, SDKDocumentProvider only validates (implements IdentityDocumentValidator).
+// Certificate creation is dev-only functionality (IdentityDocumentCreator/Provider).
 
 func TestSDKDocumentProvider_ValidateIdentityDocument_Success(t *testing.T) {
 	// Setup: Create test CA and SVID

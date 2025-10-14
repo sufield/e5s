@@ -93,17 +93,17 @@ func (a *InMemoryAgent) initializeAgentIdentity(ctx context.Context) error {
 	return nil
 }
 
-// GetIdentity returns the agent's own identity
-func (a *InMemoryAgent) GetIdentity(ctx context.Context) (*ports.Identity, error) {
+// GetIdentity returns the agent's own identity document
+func (a *InMemoryAgent) GetIdentity(ctx context.Context) (*domain.IdentityDocument, error) {
 	if a.agentIdentity == nil {
 		return nil, fmt.Errorf("inmemory: %w: agent identity not initialized", domain.ErrAgentUnavailable)
 	}
-	return a.agentIdentity, nil
+	return a.agentIdentity.IdentityDocument, nil
 }
 
 // FetchIdentityDocument attests a workload and fetches its identity document from the server
 // Runtime flow: Attest → Match (FindBySelectors) → Issue → Return
-func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload ports.ProcessIdentity) (*ports.Identity, error) {
+func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload ports.ProcessIdentity) (*domain.IdentityDocument, error) {
 	// Step 1: Attest the workload to get selectors
 	selectorStrings, err := a.attestor.Attest(ctx, workload)
 	if err != nil {
@@ -139,12 +139,15 @@ func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload port
 		return nil, fmt.Errorf("inmemory: failed to issue identity document: %w", err)
 	}
 
-	// Step 5: Return identity with document
-	return &ports.Identity{
-		IdentityCredential: mapper.IdentityCredential(),
-		Name:               extractNameFromIdentityCredential(mapper.IdentityCredential()),
-		IdentityDocument:   doc,
-	}, nil
+	// Step 5: Return identity document
+	return doc, nil
+}
+
+// Close releases resources held by the agent
+// For in-memory implementation, this is a no-op but required by ports.Agent interface
+func (a *InMemoryAgent) Close() error {
+	// In-memory agent has no resources to release (no sockets, watchers, etc.)
+	return nil
 }
 
 // extractNameFromIdentityCredential extracts a human-readable name from identity credential

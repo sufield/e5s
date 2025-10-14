@@ -2,7 +2,6 @@ package ports
 
 import (
 	"context"
-	"crypto/x509"
 
 	"github.com/pocket/hexagon/spire/internal/domain"
 )
@@ -12,46 +11,46 @@ type ConfigLoader interface {
 	Load(ctx context.Context) (*Config, error)
 }
 
-// NOTE: IdentityMapperRegistry and WorkloadAttestor interfaces have been moved to outbound_dev.go
-// These interfaces are only available in development builds (//go:build dev tag).
-// Production builds use external SPIRE infrastructure and don't need these interfaces.
-
-// IdentityServer represents the identity server functionality
+// NOTE: Dev-only interfaces have been moved to outbound_dev.go
+// These interfaces are only available in development builds (//go:build dev tag):
+// - IdentityMapperRegistry: Registry for selector-based identity mapping
+// - WorkloadAttestor: Platform-specific workload attestation
+// - IdentityServer: In-memory identity server for dev/testing
+// - IdentityDocumentCreator: Identity document creation (dev only)
+// - IdentityDocumentProvider: Composite creator+validator (dev only)
 //
-// Error Contract:
-// - IssueIdentity returns domain.ErrIdentityDocumentInvalid if identity credential invalid
-// - IssueIdentity returns domain.ErrServerUnavailable if server unavailable
-// - IssueIdentity returns domain.ErrCANotInitialized if CA not initialized
-// - GetTrustDomain never returns error (returns nil if not initialized)
-// - GetCA returns nil if CA not initialized (check before use)
-type IdentityServer interface {
-	// IssueIdentity issues an identity document for an identity credential
-	// Generates X.509 certificate signed by CA with identity credential in URI SAN
-	IssueIdentity(ctx context.Context, identityCredential *domain.IdentityCredential) (*domain.IdentityDocument, error)
+// Production builds use external SPIRE infrastructure and only need validation interfaces.
 
-	// GetTrustDomain returns the trust domain this server manages
-	GetTrustDomain() *domain.TrustDomain
-
-	// GetCA returns the CA certificate (root of trust)
-	// Returns nil if CA not initialized - caller must check
-	GetCA() *x509.Certificate
-}
-
-// Agent represents the identity agent functionality
+// Agent represents the identity agent functionality for production deployments.
 //
-// Error Contract:
+// Design Note: In SPIRE deployments, the agent is a long-lived client that:
+// - Maintains connection to SPIRE Agent via Unix socket or Workload API
+// - Watches for identity updates and rotations
+// - Provides identity documents to workloads
+//
+// The agent must be closed to release resources (socket connections, watchers).
+//
+// Error Contract (domain sentinels only):
 // - GetIdentity returns domain.ErrAgentUnavailable if agent not initialized
 // - FetchIdentityDocument returns domain.ErrWorkloadAttestationFailed if attestation fails
 // - FetchIdentityDocument returns domain.ErrNoMatchingMapper if no registration matches
 // - FetchIdentityDocument returns domain.ErrServerUnavailable if cannot reach server
+// - Close returns error if cleanup fails, but is idempotent
 type Agent interface {
-	// GetIdentity returns the agent's own identity
+	// GetIdentity returns the agent's own identity document
 	// Agent must bootstrap its identity before serving workloads
-	GetIdentity(ctx context.Context) (*Identity, error)
+	// Returns domain.IdentityDocument (not ports.Identity) for type consistency
+	GetIdentity(ctx context.Context) (*domain.IdentityDocument, error)
 
 	// FetchIdentityDocument fetches an identity document for a workload
 	// Flow: Attest → Match selectors in registry → Issue SVID → Return
-	FetchIdentityDocument(ctx context.Context, workload ProcessIdentity) (*Identity, error)
+	// Returns domain.IdentityDocument (not ports.Identity) for type consistency
+	FetchIdentityDocument(ctx context.Context, workload ProcessIdentity) (*domain.IdentityDocument, error)
+
+	// Close releases resources held by the agent (sockets, watchers, sources)
+	// This method is idempotent and safe to call multiple times
+	// Should be called via defer after agent creation
+	Close() error
 }
 
 // TrustDomainParser parses and validates trust domain strings
@@ -97,54 +96,44 @@ type IdentityCredentialParser interface {
 	ParseFromPath(ctx context.Context, trustDomain *domain.TrustDomain, path string) (*domain.IdentityCredential, error)
 }
 
-// TrustBundleProvider provides trust bundles for X.509 certificate chain validation
-// Trust bundles contain root CA certificates used to verify identity document chains
+// TrustBundleProvider provides trust bundles for X.509 certificate chain validation.
+// Trust bundles contain root CA certificates used to verify identity document chains.
 //
-// Design Note: In real SPIRE with go-spiffe SDK:
+// Design Note: Returns PEM-encoded bytes to avoid leaking crypto/x509 types into ports.
+// Adapters handle parsing PEM → x509.Certificate as needed.
+//
+// In real SPIRE with go-spiffe SDK:
 // - Bundle contains root CAs for trust domain(s)
 // - Used by x509svid.Verify(cert, chain, bundle) for chain-of-trust validation
 // - Bundles can be federated (multiple trust domains)
 //
-// Error Contract:
+// Error Contract (domain sentinels only):
 // - Returns domain.ErrTrustBundleNotFound if trust domain has no bundle
 // - Returns domain.ErrInvalidTrustDomain if trust domain is nil
 type TrustBundleProvider interface {
-	// GetBundle returns the trust bundle (root CA certificates) for a trust domain
-	// Returns map of trust domain string → PEM-encoded CA certificate(s)
-	// In production, would use go-spiffe's bundle.Source
+	// GetBundle returns the trust bundle as PEM-encoded bytes for a trust domain
+	// Returns concatenated PEM blocks (one or more root CA certificates)
+	// Format: "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n"
+	// Adapters parse PEM → x509.Certificate for validation operations
 	GetBundle(ctx context.Context, trustDomain *domain.TrustDomain) ([]byte, error)
 
-	// GetBundleForIdentity returns the trust bundle for an identity's trust domain
+	// GetBundleForIdentity returns the trust bundle as PEM bytes for an identity's trust domain
 	// Convenience method that extracts trust domain from identity credential
+	// Returns same PEM format as GetBundle
 	GetBundleForIdentity(ctx context.Context, identityCredential *domain.IdentityCredential) ([]byte, error)
-}
-
-// IdentityDocumentCreator creates identity documents (X.509 SVIDs).
-// This port abstracts SDK-specific identity document creation (e.g., go-spiffe's x509svid package).
-//
-// Design Note: The go-spiffe SDK provides mature document creation:
-// - x509svid.ParseX509SVID(certBytes, keyBytes) for DER parsing
-// - Proper crypto.Signer handling for private keys
-// By using this port:
-// - Real implementation can use SDK for proper document handling
-// - In-memory implementation can generate simple test documents
-//
-// Error Contract:
-// - CreateX509IdentityDocument returns domain.ErrIdentityDocumentInvalid for invalid inputs
-type IdentityDocumentCreator interface {
-	// CreateX509IdentityDocument creates an X.509 identity document with certificate and private key
-	// Generates certificate signed by CA, extracts expiration, returns domain.IdentityDocument
-	// In real implementation: uses SDK's x509svid.Parse or manual x509.CreateCertificate
-	CreateX509IdentityDocument(ctx context.Context, identityCredential *domain.IdentityCredential, caCert interface{}, caKey interface{}) (*domain.IdentityDocument, error)
 }
 
 // IdentityDocumentValidator validates identity documents.
 // This port abstracts SDK-specific identity document validation (e.g., go-spiffe's x509svid verification).
 //
-// Design Note: The go-spiffe SDK provides mature validation:
+// Design Note: Production workloads only validate received documents.
+// Creation is handled by SPIRE Server (external infrastructure).
+// For dev/testing, see IdentityDocumentCreator in outbound_dev.go.
+//
+// The go-spiffe SDK provides mature validation:
 // - x509svid.Verify(cert, chain, bundle) for chain-of-trust validation
 //
-// Error Contract:
+// Error Contract (domain sentinels only):
 // - ValidateIdentityDocument returns domain.ErrIdentityDocumentExpired for expired documents
 // - ValidateIdentityDocument returns domain.ErrIdentityDocumentMismatch for identity mismatch
 // - ValidateIdentityDocument returns domain.ErrCertificateChainInvalid for chain validation failure
@@ -153,16 +142,6 @@ type IdentityDocumentValidator interface {
 	// Checks identity credential match, expiration, and optionally bundle verification
 	// Returns domain sentinel errors (ErrIdentityDocumentExpired, ErrIdentityDocumentInvalid, ErrIdentityDocumentMismatch)
 	ValidateIdentityDocument(ctx context.Context, doc *domain.IdentityDocument, expectedID *domain.IdentityCredential) error
-}
-
-// IdentityDocumentProvider combines creation and validation of identity documents.
-// This composite interface is provided for adapters that implement both responsibilities.
-//
-// Naming: "IdentityDocumentProvider" is more inclusive than "CertificateProvider" (encompasses
-// both X.509 and JWT formats) while remaining self-explanatory and domain-focused.
-type IdentityDocumentProvider interface {
-	IdentityDocumentCreator
-	IdentityDocumentValidator
 }
 
 // BaseAdapterFactory provides minimal adapter creation methods shared by all implementations.

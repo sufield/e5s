@@ -46,7 +46,7 @@ type SDKDocumentProvider struct {
 // In production, this is typically obtained from SPIREClient's bundle watcher.
 //
 // Defaults: Clock skew tolerance of 5 minutes, time.Now for clock.
-func NewSDKDocumentProvider(bundleSource x509bundle.Source) ports.IdentityDocumentProvider {
+func NewSDKDocumentProvider(bundleSource x509bundle.Source) ports.IdentityDocumentValidator {
 	return &SDKDocumentProvider{
 		bundleSource: bundleSource,
 		clock:        time.Now,
@@ -54,24 +54,8 @@ func NewSDKDocumentProvider(bundleSource x509bundle.Source) ports.IdentityDocume
 	}
 }
 
-// CreateX509IdentityDocument is not supported in production.
-// Certificate creation is delegated to SPIRE Server.
-//
-// In production SPIRE deployments, certificates are issued by SPIRE Server
-// and fetched via Workload API. This method exists only for interface compliance.
-//
-// Returns domain.ErrNotSupported wrapped with a clear message that
-// this operation is not supported by the SDK provider.
-func (p *SDKDocumentProvider) CreateX509IdentityDocument(
-	ctx context.Context,
-	identityCredential *domain.IdentityCredential,
-	caCert interface{},
-	caKey interface{},
-) (*domain.IdentityDocument, error) {
-	return nil, fmt.Errorf("%w: certificate creation in production (delegated to SPIRE Server)", domain.ErrNotSupported)
-}
-
 // ValidateIdentityDocument performs full X.509 SVID validation using go-spiffe SDK.
+// Production deployments only validate certificates; creation is delegated to SPIRE Server.
 //
 // Validation steps:
 //  1. Nil checks (document, expected ID)
@@ -207,4 +191,4 @@ func (p *SDKDocumentProvider) ValidateIdentityDocument(
 }
 
 // Compile-time interface verification
-var _ ports.IdentityDocumentProvider = (*SDKDocumentProvider)(nil)
+var _ ports.IdentityDocumentValidator = (*SDKDocumentProvider)(nil)

@@ -129,8 +129,8 @@ func TestAgent_GetIdentity(t *testing.T) {
 	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, identity)
-	assert.NotNil(t, identity.IdentityCredential)
-	assert.Equal(t, "spiffe://example.org/agent", identity.IdentityCredential.String())
+	assert.NotNil(t, identity.IdentityCredential())
+	assert.Equal(t, "spiffe://example.org/agent", identity.IdentityCredential().String())
 }
 func TestAgent_NewInMemoryAgent_ErrorPaths(t *testing.T) {
 	t.Parallel()
@@ -268,8 +268,10 @@ func TestAgent_FetchIdentityDocument_FullErrorFlow(t *testing.T) {
 	// Assert - Should succeed
 	require.NoError(t, err)
 	assert.NotNil(t, identity)
-	assert.Equal(t, "workload", identity.Name)
-	assert.NotNil(t, identity.IdentityDocument)
+	// identity is now *domain.IdentityDocument, not *ports.Identity
+	// So we check IdentityCredential() method instead of Name and IdentityDocument fields
+	assert.NotNil(t, identity.IdentityCredential())
+	assert.Equal(t, "spiffe://example.org/workload", identity.IdentityCredential().String())
 }
 
 // TestAgent_ExtractName_RootPath tests extractNameFromIdentityCredential with root path
@@ -318,8 +320,10 @@ func TestAgent_ExtractName_RootPath(t *testing.T) {
 	// Act - Fetch with root path identity
 	identity, err := agent.FetchIdentityDocument(ctx, ports.ProcessIdentity{UID: 2000, GID: 2000})
 
-	// Assert - Name should be trust domain when path is "/"
+	// Assert - Should succeed and return identity document with root path
 	require.NoError(t, err)
 	assert.NotNil(t, identity)
-	assert.Equal(t, "example.org", identity.Name)
+	// identity is now *domain.IdentityDocument, not *ports.Identity
+	assert.NotNil(t, identity.IdentityCredential())
+	assert.Equal(t, "spiffe://example.org/", identity.IdentityCredential().String())
 }

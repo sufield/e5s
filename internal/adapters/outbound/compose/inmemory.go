@@ -83,12 +83,18 @@ func (f *InMemoryAdapterFactory) CreateTrustBundleProvider(server ports.Identity
 		return inmemory.NewInMemoryTrustBundleProvider(nil)
 	}
 
-	// Prefer a full bundle if the server exposes it (dev/prod parity helper).
+	// Try to get bundle from InMemoryServer's internal methods (type assertion)
+	// These are internal implementation details, not part of ports.IdentityServer interface
 	type caBundler interface {
 		GetCABundle() []*x509.Certificate
 	}
+	type caGetter interface {
+		GetCA() *x509.Certificate
+	}
 
 	var bundle []*x509.Certificate
+
+	// Prefer full bundle if available
 	if s, ok := server.(caBundler); ok {
 		b := s.GetCABundle()
 		if len(b) > 0 {
@@ -99,13 +105,16 @@ func (f *InMemoryAdapterFactory) CreateTrustBundleProvider(server ports.Identity
 		}
 	}
 
-	// Fallback to single CA
-	if ca := server.GetCA(); ca != nil {
-		// Defensive copy (single element slice)
-		bundle = make([]*x509.Certificate, 1)
-		bundle[0] = ca // Pointer copy is fine for immutable certs, but slice is copied
-		return inmemory.NewInMemoryTrustBundleProvider(bundle)
+	// Fallback to single CA (internal method, not in ports.IdentityServer interface)
+	if s, ok := server.(caGetter); ok {
+		if ca := s.GetCA(); ca != nil {
+			// Defensive copy (single element slice)
+			bundle = make([]*x509.Certificate, 1)
+			bundle[0] = ca // Pointer copy is fine for immutable certs, but slice is copied
+			return inmemory.NewInMemoryTrustBundleProvider(bundle)
+		}
 	}
+
 	return inmemory.NewInMemoryTrustBundleProvider(nil)
 }
 

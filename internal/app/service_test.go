@@ -35,20 +35,24 @@ type MockAgent struct {
 	mock.Mock
 }
 
-func (m *MockAgent) GetIdentity(ctx context.Context) (*ports.Identity, error) {
+func (m *MockAgent) GetIdentity(ctx context.Context) (*domain.IdentityDocument, error) {
 	args := m.Called(ctx)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*ports.Identity), args.Error(1)
+	return args.Get(0).(*domain.IdentityDocument), args.Error(1)
 }
 
-func (m *MockAgent) FetchIdentityDocument(ctx context.Context, workload ports.ProcessIdentity) (*ports.Identity, error) {
+func (m *MockAgent) FetchIdentityDocument(ctx context.Context, workload ports.ProcessIdentity) (*domain.IdentityDocument, error) {
 	args := m.Called(ctx, workload)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*ports.Identity), args.Error(1)
+	return args.Get(0).(*domain.IdentityDocument), args.Error(1)
+}
+
+func (m *MockAgent) Close() error {
+	return nil
 }
 
 // MockRegistry is a mock implementation of ports.IdentityMapperRegistry for testing

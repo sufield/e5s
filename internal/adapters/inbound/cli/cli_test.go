@@ -99,10 +99,10 @@ func TestCLI_Run_WorkloadIdentityIssuance(t *testing.T) {
 		GID:  1001,
 		Path: "/usr/bin/server",
 	}
-	serverIdentity, err := application.Agent.FetchIdentityDocument(ctx, serverWorkload)
+	serverDoc, err := application.Agent.FetchIdentityDocument(ctx, serverWorkload)
 	require.NoError(t, err)
-	assert.NotNil(t, serverIdentity)
-	assert.Contains(t, serverIdentity.IdentityCredential.String(), "example.org")
+	assert.NotNil(t, serverDoc)
+	assert.Contains(t, serverDoc.IdentityCredential().String(), "example.org")
 
 	clientWorkload := ports.ProcessIdentity{
 		PID:  12346,
@@ -110,10 +110,10 @@ func TestCLI_Run_WorkloadIdentityIssuance(t *testing.T) {
 		GID:  1002,
 		Path: "/usr/bin/client",
 	}
-	clientIdentity, err := application.Agent.FetchIdentityDocument(ctx, clientWorkload)
+	clientDoc, err := application.Agent.FetchIdentityDocument(ctx, clientWorkload)
 	require.NoError(t, err)
-	assert.NotNil(t, clientIdentity)
-	assert.Contains(t, clientIdentity.IdentityCredential.String(), "example.org")
+	assert.NotNil(t, clientDoc)
+	assert.Contains(t, clientDoc.IdentityCredential().String(), "example.org")
 }
 
 // TestCLI_Run_MessageExchange tests the authenticated message exchange
@@ -128,15 +128,25 @@ func TestCLI_Run_MessageExchange(t *testing.T) {
 
 	// Fetch identities
 	serverWorkload := ports.ProcessIdentity{UID: 1001, GID: 1001, PID: 12345, Path: "/usr/bin/server"}
-	serverIdentity, err := application.Agent.FetchIdentityDocument(ctx, serverWorkload)
+	serverDoc, err := application.Agent.FetchIdentityDocument(ctx, serverWorkload)
 	require.NoError(t, err)
+	serverIdentity := ports.Identity{
+		IdentityCredential: serverDoc.IdentityCredential(),
+		IdentityDocument:   serverDoc,
+		Name:               "server",
+	}
 
 	clientWorkload := ports.ProcessIdentity{UID: 1002, GID: 1002, PID: 12346, Path: "/usr/bin/client"}
-	clientIdentity, err := application.Agent.FetchIdentityDocument(ctx, clientWorkload)
+	clientDoc, err := application.Agent.FetchIdentityDocument(ctx, clientWorkload)
 	require.NoError(t, err)
+	clientIdentity := ports.Identity{
+		IdentityCredential: clientDoc.IdentityCredential(),
+		IdentityDocument:   clientDoc,
+		Name:               "client",
+	}
 
 	// Test message exchange
-	msg, err := application.Service.ExchangeMessage(ctx, *clientIdentity, *serverIdentity, "Test message")
+	msg, err := application.Service.ExchangeMessage(ctx, clientIdentity, serverIdentity, "Test message")
 	require.NoError(t, err)
 	assert.Equal(t, "Test message", msg.Content)
 	assert.Equal(t, clientIdentity.Name, msg.From.Name)
@@ -272,12 +282,22 @@ func TestCLI_Run_ExpiredIdentityHandling(t *testing.T) {
 
 	// Fetch valid identities
 	serverWorkload := ports.ProcessIdentity{UID: 1001, GID: 1001, PID: 12345, Path: "/usr/bin/server"}
-	serverIdentity, err := application.Agent.FetchIdentityDocument(ctx, serverWorkload)
+	serverDoc, err := application.Agent.FetchIdentityDocument(ctx, serverWorkload)
 	require.NoError(t, err)
+	serverIdentity := ports.Identity{
+		IdentityCredential: serverDoc.IdentityCredential(),
+		IdentityDocument:   serverDoc,
+		Name:               "server",
+	}
 
 	clientWorkload := ports.ProcessIdentity{UID: 1002, GID: 1002, PID: 12346, Path: "/usr/bin/client"}
-	clientIdentity, err := application.Agent.FetchIdentityDocument(ctx, clientWorkload)
+	clientDoc, err := application.Agent.FetchIdentityDocument(ctx, clientWorkload)
 	require.NoError(t, err)
+	clientIdentity := ports.Identity{
+		IdentityCredential: clientDoc.IdentityCredential(),
+		IdentityDocument:   clientDoc,
+		Name:               "client",
+	}
 
 	// Create expired identity by constructing a certificate with expired NotAfter
 	td := domain.NewTrustDomainFromName("example.org")
@@ -317,10 +337,10 @@ func TestCLI_Run_ExpiredIdentityHandling(t *testing.T) {
 	}
 
 	// Attempt message exchange with expired identity should fail
-	_, err = application.Service.ExchangeMessage(ctx, *expiredIdentity, *serverIdentity, "Test")
+	_, err = application.Service.ExchangeMessage(ctx, *expiredIdentity, serverIdentity, "Test")
 	assert.Error(t, err, "Should fail with expired identity")
 
-	_, err = application.Service.ExchangeMessage(ctx, *clientIdentity, *expiredIdentity, "Test")
+	_, err = application.Service.ExchangeMessage(ctx, clientIdentity, *expiredIdentity, "Test")
 	assert.Error(t, err, "Should fail with expired receiver identity")
 }
 

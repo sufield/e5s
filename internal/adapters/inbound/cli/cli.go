@@ -48,9 +48,14 @@ func (c *CLI) Run(ctx context.Context) error {
 		GID:  1001,
 		Path: "/usr/bin/server",
 	}
-	serverIdentity, err := c.application.Agent.FetchIdentityDocument(ctx, serverWorkload)
+	serverDoc, err := c.application.Agent.FetchIdentityDocument(ctx, serverWorkload)
 	if err != nil {
 		return fmt.Errorf("failed to fetch server identity document: %w", err)
+	}
+	serverIdentity := ports.Identity{
+		IdentityCredential: serverDoc.IdentityCredential(),
+		IdentityDocument:   serverDoc,
+		Name:               extractNameFromPath(serverDoc.IdentityCredential().Path()),
 	}
 	fmt.Printf("  ✓ Server workload identity document issued: %s\n", serverIdentity.IdentityCredential.String())
 
@@ -61,9 +66,14 @@ func (c *CLI) Run(ctx context.Context) error {
 		GID:  1002,
 		Path: "/usr/bin/client",
 	}
-	clientIdentity, err := c.application.Agent.FetchIdentityDocument(ctx, clientWorkload)
+	clientDoc, err := c.application.Agent.FetchIdentityDocument(ctx, clientWorkload)
 	if err != nil {
 		return fmt.Errorf("failed to fetch client identity document: %w", err)
+	}
+	clientIdentity := ports.Identity{
+		IdentityCredential: clientDoc.IdentityCredential(),
+		IdentityDocument:   clientDoc,
+		Name:               extractNameFromPath(clientDoc.IdentityCredential().Path()),
 	}
 	fmt.Printf("  ✓ Client workload identity document issued: %s\n", clientIdentity.IdentityCredential.String())
 	fmt.Println()
@@ -72,14 +82,14 @@ func (c *CLI) Run(ctx context.Context) error {
 	fmt.Println("Performing authenticated message exchange...")
 
 	// Client sends message to server
-	msg, err := c.application.Service.ExchangeMessage(ctx, *clientIdentity, *serverIdentity, "Hello server")
+	msg, err := c.application.Service.ExchangeMessage(ctx, clientIdentity, serverIdentity, "Hello server")
 	if err != nil {
 		return fmt.Errorf("failed to exchange message: %w", err)
 	}
 	fmt.Printf("  [%s → %s]: %s\n", msg.From.Name, msg.To.Name, msg.Content)
 
 	// Server sends response to client
-	response, err := c.application.Service.ExchangeMessage(ctx, *serverIdentity, *clientIdentity, "Hello client")
+	response, err := c.application.Service.ExchangeMessage(ctx, serverIdentity, clientIdentity, "Hello client")
 	if err != nil {
 		return fmt.Errorf("failed to exchange response: %w", err)
 	}
@@ -97,6 +107,26 @@ func (c *CLI) Run(ctx context.Context) error {
 	fmt.Printf("  - Current process UID: %d\n", currentUID)
 
 	return nil
+}
+
+// extractNameFromPath extracts a human-readable name from a SPIFFE ID path.
+// Uses the last path segment for readability (e.g., "/workload" → "workload").
+func extractNameFromPath(path string) string {
+	if path == "" || path == "/" {
+		return "unknown"
+	}
+
+	// Find last segment after final slash
+	for i := len(path) - 1; i >= 0; i-- {
+		if path[i] == '/' {
+			if i+1 < len(path) {
+				return path[i+1:]
+			}
+			return "unknown"
+		}
+	}
+
+	return path
 }
 
 var _ ports.CLI = (*CLI)(nil)

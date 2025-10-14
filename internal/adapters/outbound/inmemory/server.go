@@ -7,6 +7,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/pem"
 	"fmt"
 	"math/big"
 	"time"
@@ -85,8 +86,22 @@ func (s *InMemoryServer) GetTrustDomain() *domain.TrustDomain {
 }
 
 // GetCA returns the CA certificate (for agent initialization)
+// This is an internal helper, not part of ports.IdentityServer interface
 func (s *InMemoryServer) GetCA() *x509.Certificate {
 	return s.caCert
+}
+
+// GetCACertPEM returns the CA certificate as PEM bytes (required by ports.IdentityServer)
+func (s *InMemoryServer) GetCACertPEM() []byte {
+	if s.caCert == nil {
+		return nil
+	}
+	// Convert x509.Certificate to PEM bytes
+	certPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: s.caCert.Raw,
+	})
+	return certPEM
 }
 
 // GetCABundle returns the CA bundle (single-root in dev)

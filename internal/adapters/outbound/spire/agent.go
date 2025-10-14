@@ -83,15 +83,13 @@ func NewAgent(
 	}, nil
 }
 
-// GetIdentity returns the agent's own identity.
+// GetIdentity returns the agent's own identity document.
 //
 // Concurrency: Safe for concurrent use. Prevents refresh stampede by re-checking
-// after acquiring write lock. Returns a defensive copy to prevent external mutations.
+// after acquiring write lock.
 //
-// IMPORTANT - Immutability Note: The returned identity contains a shallow copy of
-// the ports.Identity struct. The nested domain.IdentityDocument is NOT deep-copied.
-// Callers MUST treat the returned identity and its document as immutable. Mutating
-// the returned identity may cause data races or undefined behavior.
+// IMPORTANT - Immutability Note: The returned document is immutable and safe for
+// concurrent read access. Do not attempt to mutate returned domain.IdentityDocument.
 //
 // Lifecycle: First call performs initial SVID fetch. Subsequent calls return
 // cached identity, refreshing only when the document expires soon (within 20%
@@ -105,7 +103,7 @@ func NewAgent(
 //   - Initial fetch fails (first call only)
 //   - Refresh fails for expiring document
 //   - Fetched document doesn't match expected SPIFFE ID
-func (a *Agent) GetIdentity(ctx context.Context) (*ports.Identity, error) {
+func (a *Agent) GetIdentity(ctx context.Context) (*domain.IdentityDocument, error) {
 	// Fast path: check if refresh needed (read lock)
 	a.mu.RLock()
 	current := a.agentIdentity
@@ -154,9 +152,8 @@ func (a *Agent) GetIdentity(ctx context.Context) (*ports.Identity, error) {
 		a.mu.Unlock()
 	}
 
-	// Return defensive shallow copy (document is immutable - see note above)
-	out := *current
-	return &out, nil
+	// Return the identity document (immutable, safe for concurrent reads)
+	return current.IdentityDocument, nil
 }
 
 // expiresSoon returns true if the document is expired or will expire within
@@ -226,9 +223,9 @@ func expiresSoon(doc *domain.IdentityDocument) bool {
 //   - workload: IGNORED in production (Workload API only attests caller)
 //
 // Returns:
-//   - Identity with SPIRE-issued SVID for THIS process
+//   - Identity document with SPIRE-issued SVID for THIS process
 //   - Error if Workload API unavailable or no registration entry matches
-func (a *Agent) FetchIdentityDocument(ctx context.Context, _ ports.ProcessIdentity) (*ports.Identity, error) {
+func (a *Agent) FetchIdentityDocument(ctx context.Context, _ ports.ProcessIdentity) (*domain.IdentityDocument, error) {
 	// Fetch X.509 SVID from SPIRE Workload API
 	// The Workload API will:
 	//   1. Authenticate the calling process (Unix domain socket peer credentials)
@@ -240,17 +237,8 @@ func (a *Agent) FetchIdentityDocument(ctx context.Context, _ ports.ProcessIdenti
 		return nil, fmt.Errorf("fetch workload SVID from SPIRE: %w", err)
 	}
 
-	// Extract the identity credential from the document
-	credential := doc.IdentityCredential()
-
-	// Create identity with the SPIRE-issued document
-	identity := &ports.Identity{
-		IdentityCredential: credential,
-		IdentityDocument:   doc,
-		Name:               extractNameFromCredential(credential),
-	}
-
-	return identity, nil
+	// Return the identity document directly
+	return doc, nil
 }
 
 // extractNameFromCredential extracts a human-readable name from identity credential.
