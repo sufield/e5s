@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/pocket/hexagon/spire/internal/domain"
 	"github.com/spiffe/go-spiffe/v2/bundle/x509bundle"
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
+	"github.com/spiffe/go-spiffe/v2/svid/x509svid"
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
 )
 
@@ -69,16 +71,29 @@ type Config struct {
 //   - Timeout is <= 0 (must be positive)
 //   - Workload API connection fails
 func NewSPIREClient(ctx context.Context, cfg Config) (*SPIREClient, error) {
+	// Check if context is already canceled before proceeding
+	select {
+	case <-ctx.Done():
+		return nil, fmt.Errorf("init canceled: %w", ctx.Err())
+	default:
+	}
+
 	// Apply defaults
 	if cfg.SocketPath == "" {
 		cfg.SocketPath = "unix:///tmp/spire-agent/public/api.sock"
+	}
+
+	// Validate socket path scheme
+	if !strings.HasPrefix(cfg.SocketPath, "unix://") {
+		return nil, fmt.Errorf("invalid socket path %q: must start with unix://", cfg.SocketPath)
 	}
 
 	// Validate trust domain (not just empty check - validate DNS format)
 	if cfg.TrustDomain == "" {
 		return nil, fmt.Errorf("%w: trust domain cannot be empty", domain.ErrInvalidTrustDomain)
 	}
-	td, err := spiffeid.TrustDomainFromString(cfg.TrustDomain)
+	// Normalize to lowercase (trust domains are DNS names, case-insensitive per SPIFFE spec)
+	td, err := spiffeid.TrustDomainFromString(strings.ToLower(cfg.TrustDomain))
 	if err != nil {
 		return nil, fmt.Errorf("%w: invalid trust domain %q: %w", domain.ErrInvalidTrustDomain, cfg.TrustDomain, err)
 	}
@@ -133,17 +148,35 @@ func (c *SPIREClient) Close() error {
 		// Close source first (it wraps the client)
 		if c.source != nil {
 			err1 = c.source.Close()
+			c.source = nil // Help GC, prevent reuse
 		}
 
 		// Then close underlying client
 		if c.client != nil {
 			err2 = c.client.Close()
+			c.client = nil // Help GC, prevent reuse
 		}
 
 		// Join both errors (Go 1.20+)
 		c.closeErr = errors.Join(err1, err2)
 	})
 	return c.closeErr
+}
+
+// withTimeout wraps the provided context with the client's configured timeout,
+// but only if the context doesn't already have a deadline and the timeout is valid.
+//
+// This ensures consistent timeout handling across all RPC operations while respecting
+// any deadlines already set by the caller.
+//
+// Returns:
+//   - Context with timeout applied (if needed)
+//   - Cancel function (no-op if no timeout was applied)
+func (c *SPIREClient) withTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
+	if _, hasDeadline := ctx.Deadline(); hasDeadline || c.timeout <= 0 {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, c.timeout)
 }
 
 // GetTrustDomain returns the configured trust domain as a string.
@@ -164,30 +197,23 @@ func (c *SPIREClient) GetSocketPath() string {
 	return c.socketPath
 }
 
-// GetWorkloadAPIClient exposes the underlying workloadapi.Client for advanced scenarios.
+// Sources returns the cached X509Source as both SVID and bundle source interfaces.
 //
-// WARNING: This method provides low-level access and is considered unstable API surface.
-// Prefer using SPIREClient's higher-level methods when possible. Direct client access
-// bypasses caching and may have performance implications.
+// The X509Source provides cached, auto-rotating SVIDs and bundles. This method
+// returns interface types rather than concrete types to enable testing and
+// prevent coupling to go-spiffe implementation details.
 //
-// Use cases:
-//   - Creating custom x509bundle.Source implementations
-//   - Direct Workload API operations not exposed by SPIREClient
+// Returns:
+//   - x509svid.Source: Interface for fetching X.509 SVIDs
+//   - x509bundle.Source: Interface for fetching X.509 trust bundles
 //
-// Compatibility: No guarantees about API stability across versions.
-func (c *SPIREClient) GetWorkloadAPIClient() *workloadapi.Client {
-	return c.client
-}
-
-// Source returns the cached X509Source for read-only access.
-//
-// The X509Source provides cached, auto-rotating SVIDs and bundles. This is useful
-// for advanced integrations that expect an x509svid.Source or x509bundle.Source
-// interface without exposing the raw Workload API client.
-//
-// Returns nil if the source was not successfully created during NewSPIREClient.
-func (c *SPIREClient) Source() *workloadapi.X509Source {
-	return c.source
+// Both interfaces are implemented by the same underlying X509Source. Returns (nil, nil)
+// if the source was not successfully created during NewSPIREClient.
+func (c *SPIREClient) Sources() (x509svid.Source, x509bundle.Source) {
+	if c.source == nil {
+		return nil, nil
+	}
+	return c.source, c.source
 }
 
 // GetX509BundleForTrustDomain fetches the X.509 bundle for a trust domain.
@@ -221,7 +247,7 @@ func (c *SPIREClient) GetX509BundleForTrustDomain(td spiffeid.TrustDomain) (*x50
 	}
 
 	// Fallback: Direct Workload API fetch (RPC per call)
-	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+	ctx, cancel := c.withTimeout(context.Background())
 	defer cancel()
 
 	bundleSet, err := c.client.FetchX509Bundles(ctx)
