@@ -21,14 +21,14 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestRequireAuthentication(t *testing.T) {
+func TestAuthenticated(t *testing.T) {
 	handlerCalled := false
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlerCalled = true
 		w.WriteHeader(http.StatusOK)
 	})
 
-	middleware := RequireAuthentication(handler)
+	middleware := Authenticated(handler)
 
 	t.Run("authenticated request", func(t *testing.T) {
 		handlerCalled = false
@@ -55,14 +55,16 @@ func TestRequireAuthentication(t *testing.T) {
 	})
 }
 
-func TestRequireTrustDomain(t *testing.T) {
+func TestRequireTrustDomainID(t *testing.T) {
+	exampleTD := spiffeid.RequireTrustDomainFromString("example.org")
+
 	handlerCalled := false
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlerCalled = true
 		w.WriteHeader(http.StatusOK)
 	})
 
-	middleware := RequireTrustDomain("example.org", handler)
+	middleware := RequireTrustDomainID(exampleTD, handler)
 
 	t.Run("matching trust domain", func(t *testing.T) {
 		handlerCalled = false

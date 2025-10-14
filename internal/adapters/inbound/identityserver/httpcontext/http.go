@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync/atomic"
 
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 )
@@ -26,33 +27,53 @@ var (
 	ErrNoSPIFFEID = errors.New("no SPIFFE ID in request context")
 )
 
-// contextKey is the type for context keys to avoid collisions.
-type contextKey string
+// spiffeIDKeyType is a zero-sized private type for context keys.
+// This prevents collisions with other packages using context.
+type spiffeIDKeyType struct{}
 
-const spiffeIDKey contextKey = "spiffe-id"
+var spiffeIDKey spiffeIDKeyType
 
-// logger is the package-level logger that can be swapped for different implementations.
-// Default uses standard library log with stdout.
-var logger = log.New(os.Stdout, "", log.LstdFlags)
+// plog holds the package-level logger atomically (thread-safe swapping).
+var plog atomic.Value // *log.Logger
+
+// redactID controls whether SPIFFE IDs are redacted in logs (default: false).
+var redactID atomic.Bool
+
+func init() {
+	plog.Store(log.New(os.Stdout, "", log.LstdFlags))
+	redactID.Store(false)
+}
 
 // SetLogger sets a custom logger for identity operations.
-// Pass nil to restore the default logger.
+// Pass nil to restore the default logger. Thread-safe.
 //
 // Example:
 //
 //	customLogger := log.New(logFile, "identity: ", log.LstdFlags)
 //	httpcontext.SetLogger(customLogger)
 func SetLogger(l *log.Logger) {
-	if l != nil {
-		logger = l
-	} else {
-		logger = log.New(os.Stdout, "", log.LstdFlags)
+	if l == nil {
+		l = log.New(os.Stdout, "", log.LstdFlags)
 	}
+	plog.Store(l)
+}
+
+// SetRedactIdentity controls whether SPIFFE IDs are redacted in logs.
+// Enable for production environments where IDs may be sensitive. Thread-safe.
+//
+// Example:
+//
+//	httpcontext.SetRedactIdentity(true) // Logs show "[redacted]" instead of actual IDs
+func SetRedactIdentity(on bool) {
+	redactID.Store(on)
 }
 
 // GetSPIFFEID extracts the authenticated client SPIFFE ID from request context.
 // Returns the ID and true if present, zero value and false otherwise.
 // Returns false if request or context is nil.
+//
+// This is the fast-path variant for hot paths. For production handlers,
+// use GetSPIFFEIDOrError for clearer error handling.
 //
 // Example:
 //
@@ -65,14 +86,10 @@ func SetLogger(l *log.Logger) {
 //	    // Use clientID for application logic
 //	}
 func GetSPIFFEID(r *http.Request) (spiffeid.ID, bool) {
-	if r == nil {
+	if r == nil || r.Context() == nil {
 		return spiffeid.ID{}, false
 	}
-	ctx := r.Context()
-	if ctx == nil {
-		return spiffeid.ID{}, false
-	}
-	id, ok := ctx.Value(spiffeIDKey).(spiffeid.ID)
+	id, ok := r.Context().Value(spiffeIDKey).(spiffeid.ID)
 	if !ok || id.IsZero() {
 		return spiffeid.ID{}, false
 	}
@@ -93,32 +110,11 @@ func GetSPIFFEID(r *http.Request) (spiffeid.ID, bool) {
 //	    // Use clientID
 //	}
 func GetSPIFFEIDOrError(r *http.Request) (spiffeid.ID, error) {
-	if r == nil || r.Context() == nil {
-		return spiffeid.ID{}, ErrNoSPIFFEID
-	}
-	id, ok := r.Context().Value(spiffeIDKey).(spiffeid.ID)
-	if !ok || id.IsZero() {
+	id, ok := GetSPIFFEID(r)
+	if !ok {
 		return spiffeid.ID{}, ErrNoSPIFFEID
 	}
 	return id, nil
-}
-
-// MustGetSPIFFEID extracts the SPIFFE ID or panics with ErrNoSPIFFEID.
-// DISCOURAGED in production handlers. Use GetSPIFFEIDOrError instead.
-// Safe only when mTLS middleware guarantees ID presence (e.g., tests).
-//
-// Example (test only):
-//
-//	func TestHandler(t *testing.T) {
-//	    clientID := httpcontext.MustGetSPIFFEID(req) // Safe: test setup guarantees ID
-//	    // Use clientID
-//	}
-func MustGetSPIFFEID(r *http.Request) spiffeid.ID {
-	id, ok := GetSPIFFEID(r)
-	if !ok {
-		panic(ErrNoSPIFFEID)
-	}
-	return id
 }
 
 // GetTrustDomain extracts the trust domain from the client's SPIFFE ID.
@@ -155,74 +151,6 @@ func GetPath(r *http.Request) (string, bool) {
 	return id.Path(), true
 }
 
-// MatchesTrustDomain checks if the client's trust domain matches the expected value (string).
-// For type-safe comparisons, use MatchesTrustDomainID.
-//
-// Example:
-//
-//	if httpcontext.MatchesTrustDomain(r, "example.org") {
-//	    // Client from example.org trust domain
-//	}
-func MatchesTrustDomain(r *http.Request, trustDomain string) bool {
-	td, ok := GetTrustDomain(r)
-	if !ok {
-		return false
-	}
-	return td.String() == trustDomain
-}
-
-// MatchesTrustDomainID checks if the client's trust domain matches the expected TrustDomain type.
-// This is type-safe and avoids string parsing/allocation overhead.
-//
-// Example:
-//
-//	expectedTD := spiffeid.RequireTrustDomainFromString("example.org")
-//	if httpcontext.MatchesTrustDomainID(r, expectedTD) {
-//	    // Client from expected trust domain
-//	}
-func MatchesTrustDomainID(r *http.Request, td spiffeid.TrustDomain) bool {
-	id, ok := GetSPIFFEID(r)
-	if !ok {
-		return false
-	}
-	return id.TrustDomain() == td
-}
-
-// HasPathPrefix checks if the client's SPIFFE ID path starts with the given prefix.
-// Automatically normalizes prefix to include leading "/" if missing.
-//
-// Example:
-//
-//	if httpcontext.HasPathPrefix(r, "/service/") {
-//	    // Client is a service workload
-//	}
-func HasPathPrefix(r *http.Request, prefix string) bool {
-	path, ok := GetPath(r)
-	if !ok {
-		return false
-	}
-	// Normalize prefix to include leading slash
-	if !strings.HasPrefix(prefix, "/") {
-		prefix = "/" + prefix
-	}
-	return strings.HasPrefix(path, prefix)
-}
-
-// HasPathSuffix checks if the client's SPIFFE ID path ends with the given suffix.
-//
-// Example:
-//
-//	if httpcontext.HasPathSuffix(r, "/admin") {
-//	    // Client has admin role (application-defined convention)
-//	}
-func HasPathSuffix(r *http.Request, suffix string) bool {
-	path, ok := GetPath(r)
-	if !ok {
-		return false
-	}
-	return strings.HasSuffix(path, suffix)
-}
-
 // GetPathSegments returns the path components of the SPIFFE ID as a slice.
 // Empty segments are filtered out. Returns empty slice for root path.
 //
@@ -247,23 +175,6 @@ func GetPathSegments(r *http.Request) ([]string, bool) {
 	}
 
 	return result, true
-}
-
-// MatchesID checks if the client's SPIFFE ID exactly matches the expected ID.
-// Parses the expected ID for type safety. Returns false if parsing fails.
-//
-// Example:
-//
-//	if httpcontext.MatchesID(r, "spiffe://example.org/service/frontend") {
-//	    // Specific service identity
-//	}
-func MatchesID(r *http.Request, expectedID string) bool {
-	want, err := spiffeid.FromString(expectedID)
-	if err != nil {
-		return false
-	}
-	got, ok := GetSPIFFEID(r)
-	return ok && got == want
 }
 
 // GetIDString returns the full SPIFFE ID as a string.
@@ -296,33 +207,137 @@ func WithSPIFFEID(r *http.Request, id spiffeid.ID) *http.Request {
 	return r.WithContext(ctx)
 }
 
-// RequireAuthentication is a middleware that ensures the request has a valid SPIFFE ID.
-// Returns 401 Unauthorized with standard status text if no identity is present.
+// MatchesTrustDomainID checks if the client's trust domain matches the expected TrustDomain type.
+// This is type-safe and avoids string parsing/allocation overhead.
 //
 // Example:
 //
-//	mux.Handle("/api/", httpcontext.RequireAuthentication(apiHandler))
-func RequireAuthentication(next http.Handler) http.Handler {
+//	expectedTD := spiffeid.RequireTrustDomainFromString("example.org")
+//	if httpcontext.MatchesTrustDomainID(r, expectedTD) {
+//	    // Client from expected trust domain
+//	}
+func MatchesTrustDomainID(r *http.Request, td spiffeid.TrustDomain) bool {
+	id, ok := GetSPIFFEID(r)
+	if !ok {
+		return false
+	}
+	return id.TrustDomain() == td
+}
+
+// MatchesIDParsed checks if the client's SPIFFE ID exactly matches the expected ID.
+// Use this when you have a pre-parsed spiffeid.ID to avoid per-request parsing overhead.
+//
+// Example:
+//
+//	expectedID := spiffeid.RequireFromString("spiffe://example.org/service/frontend")
+//	if httpcontext.MatchesIDParsed(r, expectedID) {
+//	    // Specific service identity
+//	}
+func MatchesIDParsed(r *http.Request, want spiffeid.ID) bool {
+	got, ok := GetSPIFFEID(r)
+	return ok && got == want
+}
+
+// HasPathPrefix checks if the client's SPIFFE ID path starts with the given prefix.
+// Automatically normalizes prefix to include leading "/" if missing.
+//
+// Example:
+//
+//	if httpcontext.HasPathPrefix(r, "/service/") {
+//	    // Client is a service workload
+//	}
+func HasPathPrefix(r *http.Request, prefix string) bool {
+	path, ok := GetPath(r)
+	if !ok {
+		return false
+	}
+	// Normalize prefix to include leading slash
+	if prefix != "" && !strings.HasPrefix(prefix, "/") {
+		prefix = "/" + prefix
+	}
+	return strings.HasPrefix(path, prefix)
+}
+
+// HasPathSuffix checks if the client's SPIFFE ID path ends with the given suffix.
+// Automatically normalizes suffix to include leading "/" if missing (for consistency).
+//
+// Example:
+//
+//	if httpcontext.HasPathSuffix(r, "/admin") {
+//	    // Client has admin role (application-defined convention)
+//	}
+func HasPathSuffix(r *http.Request, suffix string) bool {
+	path, ok := GetPath(r)
+	if !ok {
+		return false
+	}
+	// Normalize suffix to include leading slash for consistency with prefix
+	if suffix != "" && !strings.HasPrefix(suffix, "/") {
+		suffix = "/" + suffix
+	}
+	return strings.HasSuffix(path, suffix)
+}
+
+// Authenticated is a middleware that ensures the request has a valid SPIFFE ID.
+// Returns 401 Unauthorized with standard status text if no identity is present.
+// This is the canonical authentication middleware - use it as the base for all auth checks.
+//
+// Example:
+//
+//	mux.Handle("/api/", httpcontext.Authenticated(apiHandler))
+func Authenticated(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := GetSPIFFEID(r)
-		if !ok || id.IsZero() {
+		if _, err := GetSPIFFEIDOrError(r); err != nil {
 			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 			return
 		}
-		// ID verified; pass request through
 		next.ServeHTTP(w, r)
 	})
 }
 
-// RequireTrustDomain is a middleware that ensures the client is from a specific trust domain.
+// RequireTrustDomainID is a middleware that ensures the client is from a specific trust domain.
 // Returns 403 Forbidden with standard status text if the trust domain doesn't match.
+// Use type-safe spiffeid.TrustDomain to avoid parsing overhead and string typos.
 //
 // Example:
 //
-//	handler := httpcontext.RequireTrustDomain("example.org", apiHandler)
-func RequireTrustDomain(trustDomain string, next http.Handler) http.Handler {
+//	expectedTD := spiffeid.RequireTrustDomainFromString("example.org")
+//	handler := httpcontext.RequireTrustDomainID(expectedTD, apiHandler)
+func RequireTrustDomainID(td spiffeid.TrustDomain, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !MatchesTrustDomain(r, trustDomain) {
+		if !MatchesTrustDomainID(r, td) {
+			http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// RequireAnyTrustDomain is a middleware that ensures the client is from one of the allowed trust domains.
+// Returns 401 if no identity present, 403 if identity from disallowed trust domain.
+// Pre-computes a lookup set for O(1) trust domain checks.
+//
+// Example:
+//
+//	allowed := []spiffeid.TrustDomain{
+//	    spiffeid.RequireTrustDomainFromString("example.org"),
+//	    spiffeid.RequireTrustDomainFromString("partner.com"),
+//	}
+//	handler := httpcontext.RequireAnyTrustDomain(allowed, apiHandler)
+func RequireAnyTrustDomain(allowed []spiffeid.TrustDomain, next http.Handler) http.Handler {
+	// Pre-compute lookup set at middleware creation time
+	set := make(map[string]struct{}, len(allowed))
+	for _, td := range allowed {
+		set[td.String()] = struct{}{}
+	}
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		td, ok := GetTrustDomain(r)
+		if !ok {
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			return
+		}
+		if _, ok := set[td.String()]; !ok {
 			http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 			return
 		}
@@ -348,18 +363,23 @@ func RequirePathPrefix(prefix string, next http.Handler) http.Handler {
 }
 
 // LogIdentity is a middleware that logs the client's SPIFFE ID using the configured logger.
-// Useful for debugging and auditing. Logs method, path, and identity.
+// Respects the redaction setting (SetRedactIdentity). Useful for debugging and auditing.
+// Logs method, path, and identity in structured key-value format.
 //
 // Example:
 //
 //	mux.Handle("/api/", httpcontext.LogIdentity(apiHandler))
 func LogIdentity(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		idStr := "<unauthenticated>"
 		if id, ok := GetSPIFFEID(r); ok {
-			logger.Printf("identity method=%s path=%s spiffe_id=%q", r.Method, r.URL.Path, id.String())
-		} else {
-			logger.Printf("identity method=%s path=%s spiffe_id=<unauthenticated>", r.Method, r.URL.Path)
+			if redactID.Load() {
+				idStr = "[redacted]"
+			} else {
+				idStr = id.String()
+			}
 		}
+		plog.Load().(*log.Logger).Printf("identity method=%s path=%s spiffe_id=%q", r.Method, r.URL.Path, idStr)
 		next.ServeHTTP(w, r)
 	})
 }

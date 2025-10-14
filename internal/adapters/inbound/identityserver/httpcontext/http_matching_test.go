@@ -19,23 +19,23 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestMatchesTrustDomain(t *testing.T) {
+func TestMatchesTrustDomainID(t *testing.T) {
 	tests := []struct {
 		name        string
 		id          string
-		trustDomain string
+		trustDomain spiffeid.TrustDomain
 		want        bool
 	}{
 		{
 			name:        "matches",
 			id:          "spiffe://example.org/service",
-			trustDomain: "example.org",
+			trustDomain: spiffeid.RequireTrustDomainFromString("example.org"),
 			want:        true,
 		},
 		{
 			name:        "does not match",
 			id:          "spiffe://example.org/service",
-			trustDomain: "other.org",
+			trustDomain: spiffeid.RequireTrustDomainFromString("other.org"),
 			want:        false,
 		},
 	}
@@ -46,14 +46,15 @@ func TestMatchesTrustDomain(t *testing.T) {
 			testID := spiffeid.RequireFromString(tt.id)
 			req = WithSPIFFEID(req, testID)
 
-			result := MatchesTrustDomain(req, tt.trustDomain)
+			result := MatchesTrustDomainID(req, tt.trustDomain)
 			assert.Equal(t, tt.want, result)
 		})
 	}
 
 	t.Run("no ID in context", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/test", nil)
-		result := MatchesTrustDomain(req, "example.org")
+		exampleTD := spiffeid.RequireTrustDomainFromString("example.org")
+		result := MatchesTrustDomainID(req, exampleTD)
 		assert.False(t, result)
 	})
 }
@@ -136,23 +137,23 @@ func TestHasPathSuffix(t *testing.T) {
 	}
 }
 
-func TestMatchesID(t *testing.T) {
+func TestMatchesIDParsed(t *testing.T) {
 	tests := []struct {
 		name       string
 		id         string
-		expectedID string
+		expectedID spiffeid.ID
 		want       bool
 	}{
 		{
 			name:       "exact match",
 			id:         "spiffe://example.org/service/frontend",
-			expectedID: "spiffe://example.org/service/frontend",
+			expectedID: spiffeid.RequireFromString("spiffe://example.org/service/frontend"),
 			want:       true,
 		},
 		{
 			name:       "does not match",
 			id:         "spiffe://example.org/service/frontend",
-			expectedID: "spiffe://example.org/service/backend",
+			expectedID: spiffeid.RequireFromString("spiffe://example.org/service/backend"),
 			want:       false,
 		},
 	}
@@ -163,7 +164,7 @@ func TestMatchesID(t *testing.T) {
 			testID := spiffeid.RequireFromString(tt.id)
 			req = WithSPIFFEID(req, testID)
 
-			result := MatchesID(req, tt.expectedID)
+			result := MatchesIDParsed(req, tt.expectedID)
 			assert.Equal(t, tt.want, result)
 		})
 	}

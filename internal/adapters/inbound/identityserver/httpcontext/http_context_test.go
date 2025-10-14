@@ -61,22 +61,23 @@ func TestGetSPIFFEID(t *testing.T) {
 	}
 }
 
-func TestMustGetSPIFFEID(t *testing.T) {
-	t.Run("ID present", func(t *testing.T) {
+func TestGetSPIFFEIDOrError(t *testing.T) {
+	t.Run("ID present returns ID", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/test", nil)
 		testID := spiffeid.RequireFromString("spiffe://example.org/test")
 		req = WithSPIFFEID(req, testID)
 
-		id := MustGetSPIFFEID(req)
+		id, err := GetSPIFFEIDOrError(req)
+		require.NoError(t, err)
 		assert.Equal(t, testID, id)
 	})
 
-	t.Run("ID not present - panics", func(t *testing.T) {
+	t.Run("ID not present returns error", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/test", nil)
 
-		assert.Panics(t, func() {
-			MustGetSPIFFEID(req)
-		})
+		id, err := GetSPIFFEIDOrError(req)
+		assert.ErrorIs(t, err, ErrNoSPIFFEID)
+		assert.True(t, id.IsZero())
 	})
 }
 

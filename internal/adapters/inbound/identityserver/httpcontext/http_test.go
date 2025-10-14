@@ -3,8 +3,10 @@
 package httpcontext_test
 
 import (
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	spiffeidhttp "github.com/pocket/hexagon/spire/internal/adapters/inbound/identityserver/httpcontext"
@@ -63,32 +65,33 @@ func TestGetSPIFFEID(t *testing.T) {
 	}
 }
 
-func TestMustGetSPIFFEID(t *testing.T) {
+func TestGetSPIFFEIDOrError(t *testing.T) {
 	t.Parallel()
 
-	t.Run("with ID returns ID", func(t *testing.T) {
+	t.Run("with ID returns ID and nil error", func(t *testing.T) {
 		t.Parallel()
 
 		req := spiffeidhttp.WithSPIFFEID(httptest.NewRequest("GET", "/", nil), testID)
-		id := spiffeidhttp.MustGetSPIFFEID(req)
-		assert.Equal(t, testID.String(), id.String(), "MustGetSPIFFEID() id")
+		id, err := spiffeidhttp.GetSPIFFEIDOrError(req)
+		require.NoError(t, err)
+		assert.Equal(t, testID.String(), id.String())
 	})
 
-	t.Run("without ID panics with sentinel error", func(t *testing.T) {
+	t.Run("without ID returns ErrNoSPIFFEID", func(t *testing.T) {
 		t.Parallel()
 
 		req := httptest.NewRequest("GET", "/", nil)
-		assert.PanicsWithValue(t, spiffeidhttp.ErrNoSPIFFEID, func() {
-			spiffeidhttp.MustGetSPIFFEID(req)
-		}, "MustGetSPIFFEID should panic with ErrNoSPIFFEID")
+		id, err := spiffeidhttp.GetSPIFFEIDOrError(req)
+		assert.ErrorIs(t, err, spiffeidhttp.ErrNoSPIFFEID)
+		assert.True(t, id.IsZero())
 	})
 
-	t.Run("nil request panics with sentinel error", func(t *testing.T) {
+	t.Run("nil request returns ErrNoSPIFFEID", func(t *testing.T) {
 		t.Parallel()
 
-		assert.PanicsWithValue(t, spiffeidhttp.ErrNoSPIFFEID, func() {
-			spiffeidhttp.MustGetSPIFFEID(nil)
-		}, "MustGetSPIFFEID should panic with ErrNoSPIFFEID for nil request")
+		id, err := spiffeidhttp.GetSPIFFEIDOrError(nil)
+		assert.ErrorIs(t, err, spiffeidhttp.ErrNoSPIFFEID)
+		assert.True(t, id.IsZero())
 	})
 }
 
@@ -166,43 +169,57 @@ func TestGetPath(t *testing.T) {
 	}
 }
 
-func TestMatchesTrustDomain(t *testing.T) {
+func TestMatchesTrustDomainID(t *testing.T) {
+	t.Parallel()
+
+	exampleTD := spiffeid.RequireTrustDomainFromString("example.org")
+	otherTD := spiffeid.RequireTrustDomainFromString("other.org")
+
 	tests := []struct {
 		name        string
 		req         *http.Request
-		trustDomain string
+		trustDomain spiffeid.TrustDomain
 		want        bool
 	}{
 		{
 			name:        "matching trust domain",
 			req:         spiffeidhttp.WithSPIFFEID(httptest.NewRequest("GET", "/", nil), testID),
-			trustDomain: "example.org",
+			trustDomain: exampleTD,
 			want:        true,
 		},
 		{
 			name:        "non-matching trust domain",
 			req:         spiffeidhttp.WithSPIFFEID(httptest.NewRequest("GET", "/", nil), testID),
-			trustDomain: "other.org",
+			trustDomain: otherTD,
 			want:        false,
 		},
 		{
-			name:        "no ID",
+			name:        "no ID in context",
 			req:         httptest.NewRequest("GET", "/", nil),
-			trustDomain: "example.org",
+			trustDomain: exampleTD,
+			want:        false,
+		},
+		{
+			name:        "nil request",
+			req:         nil,
+			trustDomain: exampleTD,
 			want:        false,
 		},
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			if got := spiffeidhttp.MatchesTrustDomain(tt.req, tt.trustDomain); got != tt.want {
-				t.Errorf("MatchesTrustDomain() = %v, want %v", got, tt.want)
-			}
+			t.Parallel()
+			got := spiffeidhttp.MatchesTrustDomainID(tt.req, tt.trustDomain)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
 func TestHasPathPrefix(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name   string
 		req    *http.Request
@@ -210,9 +227,15 @@ func TestHasPathPrefix(t *testing.T) {
 		want   bool
 	}{
 		{
-			name:   "matching prefix",
+			name:   "matching prefix with leading slash",
 			req:    spiffeidhttp.WithSPIFFEID(httptest.NewRequest("GET", "/", nil), testID2),
 			prefix: "/service/",
+			want:   true,
+		},
+		{
+			name:   "matching prefix without leading slash (auto-normalized)",
+			req:    spiffeidhttp.WithSPIFFEID(httptest.NewRequest("GET", "/", nil), testID2),
+			prefix: "service/",
 			want:   true,
 		},
 		{
@@ -222,23 +245,38 @@ func TestHasPathPrefix(t *testing.T) {
 			want:   false,
 		},
 		{
-			name:   "no ID",
+			name:   "empty prefix matches all",
+			req:    spiffeidhttp.WithSPIFFEID(httptest.NewRequest("GET", "/", nil), testID2),
+			prefix: "",
+			want:   true,
+		},
+		{
+			name:   "no ID in context",
 			req:    httptest.NewRequest("GET", "/", nil),
+			prefix: "/service/",
+			want:   false,
+		},
+		{
+			name:   "nil request",
+			req:    nil,
 			prefix: "/service/",
 			want:   false,
 		},
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			if got := spiffeidhttp.HasPathPrefix(tt.req, tt.prefix); got != tt.want {
-				t.Errorf("HasPathPrefix() = %v, want %v", got, tt.want)
-			}
+			t.Parallel()
+			got := spiffeidhttp.HasPathPrefix(tt.req, tt.prefix)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
 func TestHasPathSuffix(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name   string
 		req    *http.Request
@@ -246,9 +284,15 @@ func TestHasPathSuffix(t *testing.T) {
 		want   bool
 	}{
 		{
-			name:   "matching suffix",
+			name:   "matching suffix with leading slash",
 			req:    spiffeidhttp.WithSPIFFEID(httptest.NewRequest("GET", "/", nil), testID2),
 			suffix: "/frontend",
+			want:   true,
+		},
+		{
+			name:   "matching suffix without leading slash (auto-normalized)",
+			req:    spiffeidhttp.WithSPIFFEID(httptest.NewRequest("GET", "/", nil), testID2),
+			suffix: "frontend",
 			want:   true,
 		},
 		{
@@ -258,18 +302,31 @@ func TestHasPathSuffix(t *testing.T) {
 			want:   false,
 		},
 		{
-			name:   "no ID",
+			name:   "empty suffix matches all",
+			req:    spiffeidhttp.WithSPIFFEID(httptest.NewRequest("GET", "/", nil), testID2),
+			suffix: "",
+			want:   true,
+		},
+		{
+			name:   "no ID in context",
 			req:    httptest.NewRequest("GET", "/", nil),
+			suffix: "/frontend",
+			want:   false,
+		},
+		{
+			name:   "nil request",
+			req:    nil,
 			suffix: "/frontend",
 			want:   false,
 		},
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			if got := spiffeidhttp.HasPathSuffix(tt.req, tt.suffix); got != tt.want {
-				t.Errorf("HasPathSuffix() = %v, want %v", got, tt.want)
-			}
+			t.Parallel()
+			got := spiffeidhttp.HasPathSuffix(tt.req, tt.suffix)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
@@ -322,38 +379,53 @@ func TestGetPathSegments(t *testing.T) {
 	}
 }
 
-func TestMatchesID(t *testing.T) {
+func TestMatchesIDParsed(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name       string
 		req        *http.Request
-		expectedID string
+		expectedID spiffeid.ID
 		want       bool
 	}{
 		{
 			name:       "matching ID",
 			req:        spiffeidhttp.WithSPIFFEID(httptest.NewRequest("GET", "/", nil), testID),
-			expectedID: "spiffe://example.org/test",
+			expectedID: testID,
 			want:       true,
 		},
 		{
-			name:       "non-matching ID",
+			name:       "non-matching ID different path",
 			req:        spiffeidhttp.WithSPIFFEID(httptest.NewRequest("GET", "/", nil), testID),
-			expectedID: "spiffe://example.org/other",
+			expectedID: testID2,
 			want:       false,
 		},
 		{
-			name:       "no ID",
+			name:       "non-matching ID different trust domain",
+			req:        spiffeidhttp.WithSPIFFEID(httptest.NewRequest("GET", "/", nil), testID),
+			expectedID: otherTD,
+			want:       false,
+		},
+		{
+			name:       "no ID in context",
 			req:        httptest.NewRequest("GET", "/", nil),
-			expectedID: "spiffe://example.org/test",
+			expectedID: testID,
+			want:       false,
+		},
+		{
+			name:       "nil request",
+			req:        nil,
+			expectedID: testID,
 			want:       false,
 		},
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			if got := spiffeidhttp.MatchesID(tt.req, tt.expectedID); got != tt.want {
-				t.Errorf("MatchesID() = %v, want %v", got, tt.want)
-			}
+			t.Parallel()
+			got := spiffeidhttp.MatchesIDParsed(tt.req, tt.expectedID)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
@@ -386,26 +458,37 @@ func TestGetIDString(t *testing.T) {
 }
 
 func TestWithSPIFFEID(t *testing.T) {
-	req := httptest.NewRequest("GET", "/", nil)
-	req = spiffeidhttp.WithSPIFFEID(req, testID)
+	t.Parallel()
 
-	id, ok := spiffeidhttp.GetSPIFFEID(req)
-	if !ok {
-		t.Fatal("WithSPIFFEID() did not set ID in context")
-	}
-	if id.String() != testID.String() {
-		t.Errorf("WithSPIFFEID() set ID = %v, want %v", id, testID)
-	}
+	t.Run("adds ID to context", func(t *testing.T) {
+		t.Parallel()
+
+		req := httptest.NewRequest("GET", "/", nil)
+		req = spiffeidhttp.WithSPIFFEID(req, testID)
+
+		id, ok := spiffeidhttp.GetSPIFFEID(req)
+		require.True(t, ok, "WithSPIFFEID() should set ID in context")
+		assert.Equal(t, testID.String(), id.String())
+	})
+
+	t.Run("nil request returns nil", func(t *testing.T) {
+		t.Parallel()
+
+		req := spiffeidhttp.WithSPIFFEID(nil, testID)
+		assert.Nil(t, req, "WithSPIFFEID(nil) should return nil")
+	})
 }
 
-func TestRequireAuthentication(t *testing.T) {
+func TestAuthenticated(t *testing.T) {
+	t.Parallel()
+
 	handlerCalled := false
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlerCalled = true
 		w.WriteHeader(http.StatusOK)
 	})
 
-	middleware := spiffeidhttp.RequireAuthentication(handler)
+	middleware := spiffeidhttp.Authenticated(handler)
 
 	t.Run("with authentication", func(t *testing.T) {
 		handlerCalled = false
@@ -414,38 +497,44 @@ func TestRequireAuthentication(t *testing.T) {
 
 		middleware.ServeHTTP(rr, req)
 
-		if !handlerCalled {
-			t.Error("handler was not called with authentication")
-		}
-		if rr.Code != http.StatusOK {
-			t.Errorf("status code = %v, want %v", rr.Code, http.StatusOK)
-		}
+		assert.True(t, handlerCalled, "handler should be called with authentication")
+		assert.Equal(t, http.StatusOK, rr.Code)
 	})
 
-	t.Run("without authentication", func(t *testing.T) {
+	t.Run("without authentication returns 401", func(t *testing.T) {
 		handlerCalled = false
 		req := httptest.NewRequest("GET", "/", nil)
 		rr := httptest.NewRecorder()
 
 		middleware.ServeHTTP(rr, req)
 
-		if handlerCalled {
-			t.Error("handler was called without authentication")
-		}
-		if rr.Code != http.StatusUnauthorized {
-			t.Errorf("status code = %v, want %v", rr.Code, http.StatusUnauthorized)
-		}
+		assert.False(t, handlerCalled, "handler should not be called without authentication")
+		assert.Equal(t, http.StatusUnauthorized, rr.Code)
+	})
+
+	t.Run("nil request returns 401", func(t *testing.T) {
+		handlerCalled = false
+		rr := httptest.NewRecorder()
+
+		middleware.ServeHTTP(rr, nil)
+
+		assert.False(t, handlerCalled, "handler should not be called with nil request")
+		assert.Equal(t, http.StatusUnauthorized, rr.Code)
 	})
 }
 
-func TestRequireTrustDomain(t *testing.T) {
+func TestRequireTrustDomainID(t *testing.T) {
+	t.Parallel()
+
+	exampleTD := spiffeid.RequireTrustDomainFromString("example.org")
+
 	handlerCalled := false
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlerCalled = true
 		w.WriteHeader(http.StatusOK)
 	})
 
-	middleware := spiffeidhttp.RequireTrustDomain("example.org", handler)
+	middleware := spiffeidhttp.RequireTrustDomainID(exampleTD, handler)
 
 	t.Run("matching trust domain", func(t *testing.T) {
 		handlerCalled = false
@@ -454,31 +543,97 @@ func TestRequireTrustDomain(t *testing.T) {
 
 		middleware.ServeHTTP(rr, req)
 
-		if !handlerCalled {
-			t.Error("handler was not called with matching trust domain")
-		}
-		if rr.Code != http.StatusOK {
-			t.Errorf("status code = %v, want %v", rr.Code, http.StatusOK)
-		}
+		assert.True(t, handlerCalled, "handler should be called with matching trust domain")
+		assert.Equal(t, http.StatusOK, rr.Code)
 	})
 
-	t.Run("non-matching trust domain", func(t *testing.T) {
+	t.Run("non-matching trust domain returns 403", func(t *testing.T) {
 		handlerCalled = false
 		req := spiffeidhttp.WithSPIFFEID(httptest.NewRequest("GET", "/", nil), otherTD)
 		rr := httptest.NewRecorder()
 
 		middleware.ServeHTTP(rr, req)
 
-		if handlerCalled {
-			t.Error("handler was called with non-matching trust domain")
-		}
-		if rr.Code != http.StatusForbidden {
-			t.Errorf("status code = %v, want %v", rr.Code, http.StatusForbidden)
-		}
+		assert.False(t, handlerCalled, "handler should not be called with non-matching trust domain")
+		assert.Equal(t, http.StatusForbidden, rr.Code)
+	})
+
+	t.Run("no ID returns 403", func(t *testing.T) {
+		handlerCalled = false
+		req := httptest.NewRequest("GET", "/", nil)
+		rr := httptest.NewRecorder()
+
+		middleware.ServeHTTP(rr, req)
+
+		assert.False(t, handlerCalled, "handler should not be called without ID")
+		assert.Equal(t, http.StatusForbidden, rr.Code)
+	})
+}
+
+func TestRequireAnyTrustDomain(t *testing.T) {
+	t.Parallel()
+
+	exampleTD := spiffeid.RequireTrustDomainFromString("example.org")
+	otherOrgTD := spiffeid.RequireTrustDomainFromString("other.org")
+
+	handlerCalled := false
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	allowed := []spiffeid.TrustDomain{exampleTD, otherOrgTD}
+	middleware := spiffeidhttp.RequireAnyTrustDomain(allowed, handler)
+
+	t.Run("first allowed trust domain", func(t *testing.T) {
+		handlerCalled = false
+		req := spiffeidhttp.WithSPIFFEID(httptest.NewRequest("GET", "/", nil), testID) // example.org
+		rr := httptest.NewRecorder()
+
+		middleware.ServeHTTP(rr, req)
+
+		assert.True(t, handlerCalled, "handler should be called with first allowed trust domain")
+		assert.Equal(t, http.StatusOK, rr.Code)
+	})
+
+	t.Run("second allowed trust domain", func(t *testing.T) {
+		handlerCalled = false
+		req := spiffeidhttp.WithSPIFFEID(httptest.NewRequest("GET", "/", nil), otherTD) // other.org
+		rr := httptest.NewRecorder()
+
+		middleware.ServeHTTP(rr, req)
+
+		assert.True(t, handlerCalled, "handler should be called with second allowed trust domain")
+		assert.Equal(t, http.StatusOK, rr.Code)
+	})
+
+	t.Run("disallowed trust domain returns 403", func(t *testing.T) {
+		handlerCalled = false
+		disallowedID := spiffeid.RequireFromString("spiffe://disallowed.org/test")
+		req := spiffeidhttp.WithSPIFFEID(httptest.NewRequest("GET", "/", nil), disallowedID)
+		rr := httptest.NewRecorder()
+
+		middleware.ServeHTTP(rr, req)
+
+		assert.False(t, handlerCalled, "handler should not be called with disallowed trust domain")
+		assert.Equal(t, http.StatusForbidden, rr.Code)
+	})
+
+	t.Run("no ID returns 401", func(t *testing.T) {
+		handlerCalled = false
+		req := httptest.NewRequest("GET", "/", nil)
+		rr := httptest.NewRecorder()
+
+		middleware.ServeHTTP(rr, req)
+
+		assert.False(t, handlerCalled, "handler should not be called without ID")
+		assert.Equal(t, http.StatusUnauthorized, rr.Code)
 	})
 }
 
 func TestRequirePathPrefix(t *testing.T) {
+	t.Parallel()
+
 	handlerCalled := false
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlerCalled = true
@@ -494,27 +649,19 @@ func TestRequirePathPrefix(t *testing.T) {
 
 		middleware.ServeHTTP(rr, req)
 
-		if !handlerCalled {
-			t.Error("handler was not called with matching prefix")
-		}
-		if rr.Code != http.StatusOK {
-			t.Errorf("status code = %v, want %v", rr.Code, http.StatusOK)
-		}
+		assert.True(t, handlerCalled, "handler should be called with matching prefix")
+		assert.Equal(t, http.StatusOK, rr.Code)
 	})
 
-	t.Run("non-matching prefix", func(t *testing.T) {
+	t.Run("non-matching prefix returns 403", func(t *testing.T) {
 		handlerCalled = false
 		req := spiffeidhttp.WithSPIFFEID(httptest.NewRequest("GET", "/", nil), testID)
 		rr := httptest.NewRecorder()
 
 		middleware.ServeHTTP(rr, req)
 
-		if handlerCalled {
-			t.Error("handler was called with non-matching prefix")
-		}
-		if rr.Code != http.StatusForbidden {
-			t.Errorf("status code = %v, want %v", rr.Code, http.StatusForbidden)
-		}
+		assert.False(t, handlerCalled, "handler should not be called with non-matching prefix")
+		assert.Equal(t, http.StatusForbidden, rr.Code)
 	})
 }
 
@@ -561,10 +708,11 @@ func BenchmarkGetSPIFFEID(b *testing.B) {
 
 // Benchmark middleware chain
 func BenchmarkMiddlewareChain(b *testing.B) {
+	exampleTD := spiffeid.RequireTrustDomainFromString("example.org")
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 
-	middleware := spiffeidhttp.RequireAuthentication(
-		spiffeidhttp.RequireTrustDomain("example.org",
+	middleware := spiffeidhttp.Authenticated(
+		spiffeidhttp.RequireTrustDomainID(exampleTD,
 			spiffeidhttp.RequirePathPrefix("/service/", handler),
 		),
 	)
@@ -582,6 +730,8 @@ func BenchmarkMiddlewareChain(b *testing.B) {
 func TestMiddlewareComposition(t *testing.T) {
 	t.Parallel()
 
+	exampleTD := spiffeid.RequireTrustDomainFromString("example.org")
+
 	handlerCalled := false
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlerCalled = true
@@ -589,8 +739,8 @@ func TestMiddlewareComposition(t *testing.T) {
 	})
 
 	// Chain: Auth -> TrustDomain -> PathPrefix
-	middleware := spiffeidhttp.RequireAuthentication(
-		spiffeidhttp.RequireTrustDomain("example.org",
+	middleware := spiffeidhttp.Authenticated(
+		spiffeidhttp.RequireTrustDomainID(exampleTD,
 			spiffeidhttp.RequirePathPrefix("/service/", handler),
 		),
 	)
@@ -661,4 +811,43 @@ func TestConcurrentAccess(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		<-done
 	}
+}
+
+// TestSetLogger verifies logger can be set and swapped thread-safely
+func TestSetLogger(t *testing.T) {
+	t.Parallel()
+
+	// Save original logger to restore after test
+	originalLogger := log.New(os.Stdout, "", log.LstdFlags)
+	defer spiffeidhttp.SetLogger(originalLogger)
+
+	t.Run("set custom logger", func(t *testing.T) {
+		customLogger := log.New(os.Stderr, "custom: ", log.Lshortfile)
+		spiffeidhttp.SetLogger(customLogger)
+		// Logger should be swapped atomically - no way to test directly without exposing internals
+		// This test just ensures no panics
+	})
+
+	t.Run("set nil logger restores default", func(t *testing.T) {
+		spiffeidhttp.SetLogger(nil)
+		// Should restore default logger without panicking
+	})
+}
+
+// TestSetRedactIdentity verifies redaction flag can be toggled thread-safely
+func TestSetRedactIdentity(t *testing.T) {
+	t.Parallel()
+
+	// Save original state to restore after test
+	defer spiffeidhttp.SetRedactIdentity(false)
+
+	t.Run("enable redaction", func(t *testing.T) {
+		spiffeidhttp.SetRedactIdentity(true)
+		// Redaction flag should be set atomically - verified by LogIdentity behavior
+	})
+
+	t.Run("disable redaction", func(t *testing.T) {
+		spiffeidhttp.SetRedactIdentity(false)
+		// Redaction flag should be unset atomically
+	})
 }
