@@ -30,7 +30,7 @@ type SPIREClient struct {
 	client      *workloadapi.Client
 	source      *workloadapi.X509Source // Cached, auto-rotating source (preferred)
 	socketPath  string
-	td          spiffeid.TrustDomain // Normalized trust domain (value type for safety)
+	trustDomain spiffeid.TrustDomain // Normalized trust domain (value type for safety)
 	timeout     time.Duration
 
 	// Close coordination
@@ -109,11 +109,11 @@ func NewSPIREClient(ctx context.Context, cfg Config) (*SPIREClient, error) {
 	}
 
 	return &SPIREClient{
-		client:     client,
-		source:     source,
-		socketPath: cfg.SocketPath,
-		td:         td, // Store as value type for safety
-		timeout:    cfg.Timeout,
+		client:      client,
+		source:      source,
+		socketPath:  cfg.SocketPath,
+		trustDomain: td, // Store as value type for safety
+		timeout:     cfg.Timeout,
 	}, nil
 }
 
@@ -149,14 +149,14 @@ func (c *SPIREClient) Close() error {
 // GetTrustDomain returns the configured trust domain as a string.
 // Returns the normalized (lowercase) form of the trust domain.
 func (c *SPIREClient) GetTrustDomain() string {
-	return c.td.String()
+	return c.trustDomain.String()
 }
 
 // TrustDomain returns the configured trust domain as a spiffeid.TrustDomain value type.
 // Prefer this over GetTrustDomain() when working with go-spiffe APIs to avoid repeated
 // string parsing and enable safer type-checked comparisons.
 func (c *SPIREClient) TrustDomain() spiffeid.TrustDomain {
-	return c.td
+	return c.trustDomain
 }
 
 // GetSocketPath returns the configured socket path

@@ -64,10 +64,10 @@ func TestSPIREClient_GetMethods(t *testing.T) {
 	require.NoError(t, err)
 
 	client := &SPIREClient{
-		socketPath: "unix:///tmp/test.sock",
-		td:         td,
-		timeout:    30 * time.Second,
-		client:     nil, // Will be nil for this test
+		socketPath:  "unix:///tmp/test.sock",
+		trustDomain: td,
+		timeout:     30 * time.Second,
+		client:      nil, // Will be nil for this test
 	}
 
 	assert.Equal(t, "example.org", client.GetTrustDomain())
@@ -222,11 +222,11 @@ func TestSPIREClient_Close(t *testing.T) {
 	require.NoError(t, err)
 
 	client := &SPIREClient{
-		socketPath: "unix:///tmp/test.sock",
-		td:         td,
-		timeout:    30 * time.Second,
-		client:     nil,
-		source:     nil,
+		socketPath:  "unix:///tmp/test.sock",
+		trustDomain: td,
+		timeout:     30 * time.Second,
+		client:      nil,
+		source:      nil,
 	}
 
 	// Close should not panic even with nil client and source
@@ -241,11 +241,11 @@ func TestSPIREClient_CloseIdempotent(t *testing.T) {
 	require.NoError(t, err)
 
 	client := &SPIREClient{
-		socketPath: "unix:///tmp/test.sock",
-		td:         td,
-		timeout:    30 * time.Second,
-		client:     nil,
-		source:     nil,
+		socketPath:  "unix:///tmp/test.sock",
+		trustDomain: td,
+		timeout:     30 * time.Second,
+		client:      nil,
+		source:      nil,
 	}
 
 	// Close multiple times should be safe

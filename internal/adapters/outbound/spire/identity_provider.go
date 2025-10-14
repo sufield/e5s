@@ -75,7 +75,7 @@ func (c *SPIREClient) FetchX509SVID(ctx context.Context) (*domain.IdentityDocume
 	}
 
 	// Select SVID using deterministic policy
-	svid := selectSVID(x509Ctx, c.td)
+	svid := selectSVID(x509Ctx, c.trustDomain)
 
 	// Convert SVID to domain IdentityDocument
 	// TranslateX509SVIDToIdentityDocument handles all validation:
