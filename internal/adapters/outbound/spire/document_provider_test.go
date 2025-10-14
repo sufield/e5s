@@ -119,7 +119,7 @@ func TestSDKDocumentProvider_ValidateIdentityDocument_Success(t *testing.T) {
 	}
 
 	// Create provider
-	provider := NewSDKDocumentProvider(bundleSource)
+	provider := NewSDKIdentityDocumentValidator(bundleSource)
 
 	// Create domain identity document
 	trustDomain := domain.NewTrustDomainFromName("example.org")
@@ -298,7 +298,7 @@ func TestSDKDocumentProvider_ValidateIdentityDocument_BundleNotFound(t *testing.
 		bundles: map[spiffeid.TrustDomain]*x509bundle.Bundle{},
 	}
 
-	provider := NewSDKDocumentProvider(bundleSource)
+	provider := NewSDKIdentityDocumentValidator(bundleSource)
 
 	// Create test CA and SVID
 	caCert, caKey := createTestCA(t)
@@ -375,7 +375,7 @@ func TestSDKDocumentProvider_ValidateIdentityDocument_WrongTrustDomain(t *testin
 		},
 	}
 
-	provider := NewSDKDocumentProvider(bundleSource)
+	provider := NewSDKIdentityDocumentValidator(bundleSource)
 
 	// Create document for different trust domain
 	trustDomain := domain.NewTrustDomainFromName("other.org")
@@ -422,7 +422,7 @@ func TestSDKDocumentProvider_ValidateIdentityDocument_WrongSPIFFEID(t *testing.T
 		},
 	}
 
-	provider := NewSDKDocumentProvider(bundleSource)
+	provider := NewSDKIdentityDocumentValidator(bundleSource)
 
 	// Create document with spiffeID1
 	trustDomain := domain.NewTrustDomainFromName("example.org")
@@ -453,5 +453,5 @@ func TestSDKDocumentProvider_ValidateIdentityDocument_WrongSPIFFEID(t *testing.T
 
 func TestSDKDocumentProvider_InterfaceCompliance(t *testing.T) {
 	// Compile-time check
-	var _ = NewSDKDocumentProvider(nil)
+	var _ = NewSDKIdentityDocumentValidator(nil)
 }

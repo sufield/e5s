@@ -3,10 +3,11 @@ package compose
 import (
 	"context"
 	"fmt"
+	"sync"
+	"time"
 
 	"github.com/pocket/hexagon/spire/internal/adapters/outbound/spire"
 	"github.com/pocket/hexagon/spire/internal/ports"
-	"github.com/spiffe/go-spiffe/v2/spiffeid"
 )
 
 // SPIREAdapterFactory provides production SPIRE implementations of adapters.
@@ -24,6 +25,9 @@ import (
 type SPIREAdapterFactory struct {
 	config *spire.Config
 	client *spire.SPIREClient
+
+	mu     sync.RWMutex // Protects client access (Close vs Create* methods)
+	closed bool         // Tracks if factory has been closed
 }
 
 // NewSPIREAdapterFactory creates the factory for production SPIRE adapters.
@@ -63,14 +67,19 @@ func NewSPIREAdapterFactory(ctx context.Context, cfg *spire.Config) (*SPIREAdapt
 		return nil, fmt.Errorf("socket path is required")
 	}
 
+	// Store defensive copy with defaults applied
+	// This ensures external mutation of cfg doesn't surprise the factory later
+	copied := *cfg
+	if copied.Timeout <= 0 {
+		copied.Timeout = 30 * time.Second
+	}
+
 	// Create SPIRE Workload API client
-	client, err := spire.NewSPIREClient(ctx, *cfg)
+	client, err := spire.NewSPIREClient(ctx, copied)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SPIRE client: %w", err)
 	}
 
-	// Store a copy so external mutation of cfg doesn't surprise the factory later
-	copied := *cfg
 	return &SPIREAdapterFactory{
 		config: &copied,
 		client: client,
@@ -109,9 +118,12 @@ func (f *SPIREAdapterFactory) CreateIdentityCredentialParser() ports.IdentityCre
 //
 // Returns an SDK-based validator with full security validation for production use.
 func (f *SPIREAdapterFactory) CreateIdentityDocumentValidator() ports.IdentityDocumentValidator {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+
 	// SPIREClient implements x509bundle.Source (compile-time assertion in spire package)
 	// No runtime check needed - any breakage is caught at build time
-	return spire.NewSDKDocumentProvider(f.client)
+	return spire.NewSDKIdentityDocumentValidator(f.client)
 }
 
 // NOTE: CreateServer has been removed from production SPIRE adapter.
@@ -139,7 +151,6 @@ func (f *SPIREAdapterFactory) CreateAgent(
 	spiffeID string,
 	parser ports.IdentityCredentialParser,
 ) (ports.Agent, error) {
-	// Validate all required parameters
 	if spiffeID == "" {
 		return nil, fmt.Errorf("SPIFFE ID cannot be empty")
 	}
@@ -147,14 +158,16 @@ func (f *SPIREAdapterFactory) CreateAgent(
 		return nil, fmt.Errorf("identity credential parser cannot be nil")
 	}
 
-	// Parse and validate SPIFFE ID early (fail fast)
-	id, err := spiffeid.FromString(spiffeID)
-	if err != nil {
+	// Validate via the port (hexagonal boundary - no direct SDK usage)
+	if _, err := parser.ParseFromString(ctx, spiffeID); err != nil {
 		return nil, fmt.Errorf("invalid SPIFFE ID: %w", err)
 	}
 
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+
 	// Delegate to SPIRE Agent which handles all identity operations
-	return spire.NewAgent(ctx, f.client, id.String(), parser)
+	return spire.NewAgent(ctx, f.client, spiffeID, parser)
 }
 
 // Close closes the SPIRE client connection and releases resources.
@@ -174,12 +187,16 @@ func (f *SPIREAdapterFactory) CreateAgent(
 // Returns an error if closing the client fails. The error can be safely
 // ignored in most cases as it only affects cleanup logging.
 func (f *SPIREAdapterFactory) Close() error {
-	if f.client == nil {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.closed || f.client == nil {
 		return nil // Already closed or never initialized
 	}
 
 	err := f.client.Close()
 	f.client = nil // Mark as closed to make this method idempotent
+	f.closed = true
 
 	if err != nil {
 		return fmt.Errorf("failed to close SPIRE client: %w", err)

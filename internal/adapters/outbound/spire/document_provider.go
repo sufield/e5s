@@ -36,7 +36,7 @@ type SDKDocumentProvider struct {
 	clockSkew    time.Duration    // Clock skew tolerance; defaults to 5 minutes
 }
 
-// NewSDKDocumentProvider creates a new SDK-based document provider.
+// NewSDKIdentityDocumentValidator creates a new SDK-based document validator.
 //
 // Parameters:
 //   - bundleSource: Source for X.509 trust bundles (typically from SPIRE Workload API)
@@ -46,7 +46,7 @@ type SDKDocumentProvider struct {
 // In production, this is typically obtained from SPIREClient's bundle watcher.
 //
 // Defaults: Clock skew tolerance of 5 minutes, time.Now for clock.
-func NewSDKDocumentProvider(bundleSource x509bundle.Source) ports.IdentityDocumentValidator {
+func NewSDKIdentityDocumentValidator(bundleSource x509bundle.Source) ports.IdentityDocumentValidator {
 	return &SDKDocumentProvider{
 		bundleSource: bundleSource,
 		clock:        time.Now,
