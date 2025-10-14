@@ -31,27 +31,60 @@ import (
 // Clock Skew: Allows 5 minutes of tolerance for certificate validity checks to handle
 // production clock drift between systems.
 type SDKDocumentProvider struct {
+	// bundleSource must be "hot": typically a workloadapi.X509Source that is started and kept current.
+	// Verify reads synchronously from the source and does not accept a context.
 	bundleSource x509bundle.Source
 	clock        func() time.Time // For testability; defaults to time.Now
 	clockSkew    time.Duration    // Clock skew tolerance; defaults to 5 minutes
 }
 
+// ValidatorOption configures an SDKDocumentProvider.
+type ValidatorOption func(*SDKDocumentProvider)
+
+// WithClockSkew sets the clock skew tolerance for certificate validity checks.
+// Default: 5 minutes.
+func WithClockSkew(d time.Duration) ValidatorOption {
+	return func(p *SDKDocumentProvider) {
+		p.clockSkew = d
+	}
+}
+
+// WithClock sets a custom clock function for time-based validations.
+// Primarily useful for testing. Default: time.Now.
+func WithClock(f func() time.Time) ValidatorOption {
+	return func(p *SDKDocumentProvider) {
+		p.clock = f
+	}
+}
+
 // NewSDKIdentityDocumentValidator creates a new SDK-based document validator.
 //
 // Parameters:
-//   - bundleSource: Source for X.509 trust bundles (typically from SPIRE Workload API)
-//     Must be safe for concurrent use (SPIRE's X509Source is).
+//   - bundleSource: Source for X.509 trust bundles (typically from SPIRE Workload API).
+//     Must be "hot" (started and ready). The source must be safe for concurrent use
+//     (SPIRE's X509Source is). Verify reads synchronously and does not accept a context.
+//   - opts: Optional configuration (clock skew tolerance, custom clock for testing)
 //
 // The bundle source is used to fetch root CA certificates for chain verification.
-// In production, this is typically obtained from SPIREClient's bundle watcher.
+// In production, this is typically obtained from SPIREClient's Sources() method.
 //
 // Defaults: Clock skew tolerance of 5 minutes, time.Now for clock.
-func NewSDKIdentityDocumentValidator(bundleSource x509bundle.Source) ports.IdentityDocumentValidator {
-	return &SDKDocumentProvider{
+//
+// Example with custom options:
+//   validator := NewSDKIdentityDocumentValidator(bundleSource,
+//       WithClockSkew(10 * time.Minute),
+//       WithClock(mockClock),
+//   )
+func NewSDKIdentityDocumentValidator(bundleSource x509bundle.Source, opts ...ValidatorOption) ports.IdentityDocumentValidator {
+	v := &SDKDocumentProvider{
 		bundleSource: bundleSource,
 		clock:        time.Now,
 		clockSkew:    5 * time.Minute,
 	}
+	for _, opt := range opts {
+		opt(v)
+	}
+	return v
 }
 
 // ValidateIdentityDocument performs full X.509 SVID validation using go-spiffe SDK.
@@ -60,10 +93,10 @@ func NewSDKIdentityDocumentValidator(bundleSource x509bundle.Source) ports.Ident
 // Validation steps:
 //  1. Nil checks (document, expected ID)
 //  2. Leaf certificate extraction and validation
-//  3. Clock skew tolerant time checks (NotBefore/NotAfter)
-//  4. Identity credential matching
-//  5. Full chain assembly (leaf + intermediates)
-//  6. Nil chain validation after filtering
+//  3. Private key presence check (prevents "works in validate, fails at TLS" scenarios)
+//  4. Clock skew tolerant time checks (NotBefore/NotAfter)
+//  5. Identity credential matching (with nil guard)
+//  6. Full chain assembly (leaf + intermediates)
 //  7. Bundle source validation (fail fast if misconfigured)
 //  8. SDK chain-of-trust verification using x509svid.Verify:
 //     - Validates certificate chain against trust bundle
@@ -108,7 +141,14 @@ func (p *SDKDocumentProvider) ValidateIdentityDocument(
 		return fmt.Errorf("%w: missing leaf certificate", domain.ErrIdentityDocumentInvalid)
 	}
 
-	// Step 3: Time validation with clock skew tolerance
+	// Step 3: Private key presence check (recommended for mTLS usage)
+	// Even though verification doesn't need the private key, our domain document
+	// is meant for mTLS. Failing early prevents "works in validate, fails at TLS" surprises.
+	if doc.PrivateKey() == nil {
+		return fmt.Errorf("%w: missing private key", domain.ErrIdentityDocumentInvalid)
+	}
+
+	// Step 4: Time validation with clock skew tolerance
 	// These checks provide clearer errors than SDK's generic validation failures
 	now := p.clock()
 	skew := p.clockSkew
@@ -131,7 +171,11 @@ func (p *SDKDocumentProvider) ValidateIdentityDocument(
 			skew)
 	}
 
-	// Step 4: Identity credential match (fast fail before expensive crypto)
+	// Step 5: Identity credential match (fast fail before expensive crypto)
+	// Guard: Ensure document has identity credential before calling Equals()
+	if doc.IdentityCredential() == nil {
+		return fmt.Errorf("%w: document has no identity credential", domain.ErrIdentityDocumentInvalid)
+	}
 	if !doc.IdentityCredential().Equals(expectedID) {
 		return fmt.Errorf("%w: expected %s, got %s",
 			domain.ErrIdentityDocumentMismatch,
@@ -139,7 +183,7 @@ func (p *SDKDocumentProvider) ValidateIdentityDocument(
 			doc.IdentityCredential())
 	}
 
-	// Step 5: Assemble full chain (leaf + intermediates)
+	// Step 6: Assemble full chain (leaf + intermediates)
 	// IMPORTANT: SDK expects [leaf, intermediate1, intermediate2, ...]
 	// Our IdentityDocument stores leaf separately from Chain() (intermediates)
 	intermediates := doc.Chain()
@@ -151,11 +195,6 @@ func (p *SDKDocumentProvider) ValidateIdentityDocument(
 		if cert != nil {
 			fullChain = append(fullChain, cert)
 		}
-	}
-
-	// Step 6: Validate we have at least the leaf
-	if len(fullChain) == 0 {
-		return fmt.Errorf("%w: empty certificate chain after filtering", domain.ErrIdentityDocumentInvalid)
 	}
 
 	// Step 7: Validate bundle source before SDK call (fail fast if misconfigured)
