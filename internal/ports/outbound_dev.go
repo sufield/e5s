@@ -4,91 +4,79 @@ package ports
 
 import (
 	"context"
+
 	"github.com/pocket/hexagon/spire/internal/domain"
 )
 
 // IdentityMapperRegistry provides read-only access to the identity mapper registry seeded at startup.
-// This interface is only available in development builds for in-memory implementations.
-//
-// In production deployments, SPIRE Server manages registration entries. Workloads only fetch
-// their identity via Workload API - no local registry or selector matching is needed.
+// Dev-only: in production, SPIRE Server manages registration entries.
 //
 // Error Contract:
-// - FindBySelectors returns domain.ErrNoMatchingMapper if no mapper matches
-// - FindBySelectors returns domain.ErrInvalidSelectors if selectors are nil/empty
-// - ListAll returns domain.ErrRegistryEmpty if no mappers seeded
+// - FindBySelectors: domain.ErrNoMatchingMapper if no mapper matches
+// - FindBySelectors: domain.ErrInvalidSelectors if selectors are nil/empty
+// - ListAll:         domain.ErrRegistryEmpty if no mappers seeded
+//
+// Implementations should respect ctx cancellation where applicable.
 type IdentityMapperRegistry interface {
-	// FindBySelectors finds an identity mapper matching the given selectors (AND logic)
-	// This is the core runtime operation: selectors → identity credential mapping
-	// All mapper selectors must be present in discovered selectors for a match
+	// FindBySelectors finds an identity mapper matching the given selectors.
+	// AND semantics: all mapper selectors must be present in the discovered selectors.
+	// Returns the first matching mapper (deterministic order depends on registry seeding).
 	FindBySelectors(ctx context.Context, selectors *domain.SelectorSet) (*domain.IdentityMapper, error)
 
-	// ListAll returns all seeded identity mappers (for debugging/admin)
+	// ListAll returns all seeded identity mappers (for debugging/admin).
 	ListAll(ctx context.Context) ([]*domain.IdentityMapper, error)
 }
 
 // WorkloadAttestor verifies workload identity based on platform-specific attributes.
-// This interface is only available in development builds for in-memory attestation.
-//
-// In production deployments, SPIRE Agent performs attestation. Workloads connect
-// to the agent's Unix socket, and the agent extracts credentials and attests automatically.
+// Dev-only: in production, SPIRE Agent performs attestation automatically.
 //
 // Error Contract:
-// - Returns domain.ErrWorkloadAttestationFailed if attestation fails
-// - Returns domain.ErrInvalidProcessIdentity if workload info is invalid
-// - Returns domain.ErrNoAttestationData if no selectors can be generated
+// - domain.ErrWorkloadAttestationFailed if attestation fails
+// - domain.ErrInvalidProcessIdentity   if workload info is invalid
+// - domain.ErrNoAttestationData        if no selectors can be generated
+//
+// Implementations should respect ctx cancellation where applicable.
 type WorkloadAttestor interface {
-	// Attest verifies a workload and returns its selectors
-	// Selectors format: "type:value" (e.g., "unix:uid:1000", "k8s:namespace:prod")
+	// Attest verifies a workload and returns its selectors.
+	// Selectors must be formatted as "type:key:value" (e.g., "unix:uid:1000", "k8s:namespace:prod").
 	Attest(ctx context.Context, workload ProcessIdentity) ([]string, error)
 }
 
 // IdentityServer represents identity server functionality for in-memory/dev mode only.
-// This interface is only available in development builds.
-//
-// In production deployments, SPIRE Server runs as external infrastructure (separate process).
-// Workloads are clients that communicate via Workload API. This interface exists only
-// for dev/testing where the "server" runs locally within the process.
+// Dev-only: in production, SPIRE Server runs as external infrastructure.
 //
 // Error Contract:
-// - IssueIdentity returns domain.ErrIdentityDocumentInvalid if identity credential invalid
-// - IssueIdentity returns domain.ErrServerUnavailable if server unavailable
-// - IssueIdentity returns domain.ErrCANotInitialized if CA not initialized
-// - GetTrustDomain never returns error (returns nil if not initialized)
-// - GetCACertPEM returns empty slice if CA not initialized
+// - IssueIdentity: domain.ErrIdentityDocumentInvalid if identity credential invalid
+// - IssueIdentity: domain.ErrServerUnavailable if server unavailable
+// - IssueIdentity: domain.ErrCANotInitialized if CA not initialized
+// - GetTrustDomain: never returns error (returns nil if not initialized)
+// - GetCACertPEM:  returns empty slice if CA not initialized
+//
+// Implementations should respect ctx cancellation where applicable.
 type IdentityServer interface {
-	// IssueIdentity issues an identity document for an identity credential
-	// Generates X.509 certificate signed by CA with identity credential in URI SAN
+	// IssueIdentity issues an identity document for an identity credential.
+	// Generates X.509 certificate signed by CA with identity credential in URI SAN.
 	IssueIdentity(ctx context.Context, identityCredential *domain.IdentityCredential) (*domain.IdentityDocument, error)
 
-	// GetTrustDomain returns the trust domain this server manages
+	// GetTrustDomain returns the trust domain this server manages.
 	GetTrustDomain() *domain.TrustDomain
 
-	// GetCACertPEM returns the CA certificate as PEM bytes (root of trust)
-	// Returns empty slice if CA not initialized - caller must check
+	// GetCACertPEM returns the CA certificate as PEM bytes (root of trust).
+	// Returns empty slice if CA not initialized - caller must check.
 	GetCACertPEM() []byte
 }
 
 // IdentityDocumentCreator creates identity documents (X.509 SVIDs).
-// This interface is only available in development builds.
-//
-// In production deployments, SPIRE Server handles creation. Workloads only
-// validate received documents. This interface exists only for dev/testing.
-//
-// Design Note: The go-spiffe SDK provides mature document creation:
-// - x509svid.ParseX509SVID(certBytes, keyBytes) for DER parsing
-// - Proper crypto.Signer handling for private keys
-// By using this port:
-// - Real implementation can use SDK for proper document handling
-// - In-memory implementation can generate simple test documents
+// Dev-only: in production, SPIRE Server handles creation.
 //
 // Error Contract:
-// - CreateX509IdentityDocument returns domain.ErrIdentityDocumentInvalid for invalid inputs
-// - CreateX509IdentityDocument returns domain.ErrCANotInitialized if CA not available
+// - CreateX509IdentityDocument: domain.ErrIdentityDocumentInvalid for invalid inputs
+// - CreateX509IdentityDocument: domain.ErrCANotInitialized if CA not available
+//
+// Implementations should respect ctx cancellation where applicable.
 type IdentityDocumentCreator interface {
-	// CreateX509IdentityDocument creates an X.509 identity document with certificate and private key
-	// Generates certificate signed by CA, extracts expiration, returns domain.IdentityDocument
-	// In real implementation: uses SDK's x509svid.Parse or manual x509.CreateCertificate
+	// CreateX509IdentityDocument creates an X.509 identity document with certificate and private key.
+	// Generates certificate signed by CA, extracts expiration, returns domain.IdentityDocument.
 	//
 	// Note: caCert and caKey are interface{} to avoid leaking crypto/x509 types into ports.
 	// Implementations cast to appropriate types (*x509.Certificate, crypto.Signer).
@@ -96,9 +84,7 @@ type IdentityDocumentCreator interface {
 }
 
 // IdentityDocumentProvider combines creation and validation of identity documents.
-// This composite interface is only available in development builds.
-//
-// In production, use IdentityDocumentValidator (from outbound.go) which is prod-safe.
+// Dev-only: in production, use IdentityDocumentValidator (from outbound.go) which is prod-safe.
 type IdentityDocumentProvider interface {
 	IdentityDocumentCreator
 	IdentityDocumentValidator
