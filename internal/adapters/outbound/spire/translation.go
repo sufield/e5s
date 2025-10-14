@@ -1,12 +1,9 @@
 package spire
 
 import (
-	"bytes"
 	"crypto"
 	"crypto/x509"
-	"encoding/asn1"
 	"fmt"
-	"strings"
 
 	"github.com/pocket/hexagon/spire/internal/domain"
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
@@ -16,23 +13,25 @@ import (
 // TranslateX509SVIDToIdentityDocument converts a go-spiffe X509SVID to a domain IdentityDocument.
 //
 // Security hardening (production-grade):
+//   - Validates SVID ID is non-zero (defensive)
 //   - Validates leaf certificate and all chain entries are non-nil
 //   - Requires private key to be a crypto.Signer (usable for mTLS)
-//   - Verifies private key matches leaf certificate's public key (prevents subtle mTLS failures)
+//   - Verifies private key matches leaf certificate's public key using x509.Equal
 //   - Performs defensive copy of certificate chain (pointer slice only; certs are immutable)
-//
-// Immutability note: The returned IdentityDocument contains pointers to x509.Certificate
-// instances which are treated as immutable. Only the slice is copied, not the certificate
-// DER bytes. This is sufficient for preventing accidental slice aliasing bugs.
 //
 // Error contract:
 //   - Returns domain.ErrIdentityDocumentInvalid (wrapped with %w) for all validation failures
-//   - Chains SDK errors for detailed context
+//   - Returns domain.ErrInvalidIdentityCredential (wrapped) for SPIFFE ID translation errors
 //
 // Concurrency: Safe for concurrent use (stateless, pure function).
 func TranslateX509SVIDToIdentityDocument(svid *x509svid.SVID) (*domain.IdentityDocument, error) {
 	if svid == nil {
 		return nil, fmt.Errorf("%w: nil SVID", domain.ErrIdentityDocumentInvalid)
+	}
+
+	// Defensive: validate SVID ID is non-zero (SDK shouldn't hand us one, but be safe)
+	if svid.ID.IsZero() {
+		return nil, fmt.Errorf("%w: zero SPIFFE ID", domain.ErrIdentityDocumentInvalid)
 	}
 
 	// Validate certificates exist and leaf is non-nil
@@ -55,15 +54,16 @@ func TranslateX509SVIDToIdentityDocument(svid *x509svid.SVID) (*domain.IdentityD
 	}
 
 	// Verify private key matches leaf certificate's public key
-	// This prevents subtle mTLS failures where cert and key don't correspond
-	if !publicKeyMatches(leaf.PublicKey, signer.Public()) {
+	// Use DER encoding for type-agnostic comparison (handles RSA/ECDSA/Ed25519)
+	if !publicKeysEqual(leaf.PublicKey, signer.Public()) {
 		return nil, fmt.Errorf("%w: private key does not match leaf certificate", domain.ErrIdentityDocumentInvalid)
 	}
 
 	// Convert SPIFFE ID to domain IdentityCredential
 	identityCredential, err := TranslateSPIFFEIDToIdentityCredential(svid.ID)
 	if err != nil {
-		return nil, fmt.Errorf("translate SPIFFE ID: %w", err)
+		// Preserve sentinel error while adding context
+		return nil, fmt.Errorf("%w: %v", domain.ErrInvalidIdentityCredential, err)
 	}
 
 	// Defensive copy of certificate chain to prevent aliasing bugs
@@ -72,7 +72,6 @@ func TranslateX509SVIDToIdentityDocument(svid *x509svid.SVID) (*domain.IdentityD
 	copy(chain, svid.Certificates)
 
 	// Create identity document from SVID components
-	// Note: expiresAt parameter removed - derived from leaf.NotAfter automatically
 	return domain.NewIdentityDocumentFromComponents(
 		identityCredential,
 		leaf,   // Leaf certificate
@@ -81,38 +80,12 @@ func TranslateX509SVIDToIdentityDocument(svid *x509svid.SVID) (*domain.IdentityD
 	)
 }
 
-// publicKeyMatches compares two public keys for equality by DER-encoding their SubjectPublicKeyInfo.
-//
-// This approach works across all key types (RSA, ECDSA, Ed25519) without type assertions.
-// It compares the canonical DER encoding which includes both the algorithm and key material.
-//
-// Fallback: If DER encoding fails (malformed keys), attempts best-effort ASN.1 equality.
-// This is defensive and should never happen with properly formed crypto.PublicKey instances.
-//
-// Returns true if keys are identical, false otherwise.
-func publicKeyMatches(a, b any) bool {
-	derA, errA := x509.MarshalPKIXPublicKey(a)
-	derB, errB := x509.MarshalPKIXPublicKey(b)
-	if errA != nil || errB != nil {
-		// Fallback: best-effort ASN.1 equality (very defensive)
-		// Should never happen with valid crypto.PublicKey instances
-		rawA, _ := asn1.Marshal(a)
-		rawB, _ := asn1.Marshal(b)
-		return bytes.Equal(rawA, rawB)
-	}
-	return bytes.Equal(derA, derB)
-}
-
 // TranslateSPIFFEIDToIdentityCredential converts a go-spiffe ID to a domain IdentityCredential.
 //
 // Path semantics:
 //   - SPIFFE root IDs (e.g., "spiffe://example.org") have no path (id.Path() == "")
 //   - Domain model uses "/" to denote root identity
 //   - All other paths are preserved exactly as normalized by SDK
-//
-// Trust domain handling:
-//   - Uses SDK-normalized trust domain string directly
-//   - Preserves exact casing and format from SPIFFE ID
 //
 // Error contract:
 //   - Returns domain.ErrInvalidIdentityCredential (wrapped with %w) for zero ID
@@ -142,10 +115,6 @@ func TranslateSPIFFEIDToIdentityCredential(id spiffeid.ID) (*domain.IdentityCred
 // This centralizes trust domain translation to avoid string round-trips scattered
 // throughout the codebase and ensures consistent error shaping.
 //
-// Validation:
-//   - Nil check with clear error message
-//   - Delegates DNS validation to SDK (spiffeid.TrustDomainFromString)
-//
 // Error contract:
 //   - Returns domain.ErrInvalidTrustDomain (wrapped with %w) for nil or malformed input
 //   - Chains SDK errors for detailed context
@@ -173,19 +142,7 @@ func TranslateTrustDomainToSPIFFEID(trustDomain *domain.TrustDomain) (spiffeid.T
 //
 // Path handling:
 //   - Domain path "/" → SPIFFE root ID (zero segments) → "spiffe://example.org"
-//   - Non-root paths → split into clean segments (filters empty parts from "//")
-//   - SDK validates each segment per SPIFFE spec
-//
-// Segment extraction:
-//   - Trims leading/trailing slashes
-//   - Splits on "/" and filters empty strings
-//   - Handles "//" gracefully (e.g., "a//b" → ["a", "b"])
-//
-// Examples:
-//   - {TrustDomain: "example.org", Path: "/"}              → "spiffe://example.org"
-//   - {TrustDomain: "example.org", Path: "/workload"}      → "spiffe://example.org/workload"
-//   - {TrustDomain: "example.org", Path: "workload"}       → "spiffe://example.org/workload"
-//   - {TrustDomain: "example.org", Path: "/ns//prod/api"} → "spiffe://example.org/ns/prod/api"
+//   - Non-root paths → split into clean segments using shared helper
 //
 // Error contract:
 //   - Returns domain.ErrInvalidIdentityCredential (wrapped with %w) for nil or malformed input
@@ -208,16 +165,29 @@ func TranslateIdentityCredentialToSPIFFEID(identityCredential *domain.IdentityCr
 		return spiffeid.FromSegments(sdkTD) // root ID (zero segments)
 	}
 
-	// Split path into clean segments (filters empty parts from double slashes)
-	trimmed := strings.Trim(identityCredential.Path(), "/")
-	parts := strings.Split(trimmed, "/")
-	segments := make([]string, 0, len(parts))
-	for _, part := range parts {
-		if part != "" {
-			segments = append(segments, part)
-		}
-	}
+	// Split path into clean segments using shared helper (deduplication)
+	segments := segmentsFromPath(identityCredential.Path())
 
 	// Build SPIFFE ID from segments (type-safe, SDK-normalized)
 	return spiffeid.FromSegments(sdkTD, segments...)
+}
+
+// publicKeysEqual compares two public keys for equality using DER encoding.
+// This is type-agnostic and handles RSA, ECDSA, and Ed25519 keys correctly.
+// Returns true if keys are equal, false otherwise (including on encoding errors).
+func publicKeysEqual(a, b any) bool {
+	derA, errA := x509.MarshalPKIXPublicKey(a)
+	derB, errB := x509.MarshalPKIXPublicKey(b)
+	if errA != nil || errB != nil {
+		return false
+	}
+	if len(derA) != len(derB) {
+		return false
+	}
+	for i := range derA {
+		if derA[i] != derB[i] {
+			return false
+		}
+	}
+	return true
 }
