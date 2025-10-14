@@ -160,10 +160,11 @@ func TestSpiffeServer_Handle(t *testing.T) {
 
 	// Register a test handler
 	handlerCalled := false
-	server.Handle("/test", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	err = server.Handle("/test", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlerCalled = true
 		w.WriteHeader(http.StatusOK)
 	}))
+	require.NoError(t, err)
 
 	// Verify handler was registered
 	// (can't easily test without TLS, but we can verify no panic)
@@ -203,7 +204,7 @@ func TestSpiffeServer_Close_Idempotent(t *testing.T) {
 func TestGetIdentity_Present(t *testing.T) {
 	req := httptest.NewRequest("GET", "/test", nil)
 	testID := spiffeid.RequireFromString("spiffe://example.org/test")
-	ctx := context.WithValue(req.Context(), spiffeIDKey, testID)
+	ctx := ContextWithIdentity(req.Context(), testID)
 	req = req.WithContext(ctx)
 
 	id, ok := GetIdentity(req)
@@ -224,7 +225,7 @@ func TestGetIdentity_NotPresent(t *testing.T) {
 func TestRequireIdentity_Present(t *testing.T) {
 	req := httptest.NewRequest("GET", "/test", nil)
 	testID := spiffeid.RequireFromString("spiffe://example.org/test")
-	ctx := context.WithValue(req.Context(), spiffeIDKey, testID)
+	ctx := ContextWithIdentity(req.Context(), testID)
 	req = req.WithContext(ctx)
 
 	id, err := RequireIdentity(req)

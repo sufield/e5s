@@ -55,19 +55,32 @@ func main() {
 	}()
 
 	// Register handlers
-	server.Handle("/", http.HandlerFunc(handleRoot))
-	server.Handle("/api/hello", http.HandlerFunc(handleHello))
-	server.Handle("/api/identity", http.HandlerFunc(handleIdentity))
-	server.Handle("/health", http.HandlerFunc(handleHealth))
+	if err := server.Handle("/", http.HandlerFunc(handleRoot)); err != nil {
+		log.Fatalf("Failed to register root handler: %v", err)
+	}
+	if err := server.Handle("/api/hello", http.HandlerFunc(handleHello)); err != nil {
+		log.Fatalf("Failed to register hello handler: %v", err)
+	}
+	if err := server.Handle("/api/identity", http.HandlerFunc(handleIdentity)); err != nil {
+		log.Fatalf("Failed to register identity handler: %v", err)
+	}
+	if err := server.Handle("/health", http.HandlerFunc(handleHealth)); err != nil {
+		log.Fatalf("Failed to register health handler: %v", err)
+	}
 
-	log.Println("✓ Server created successfully")
+	log.Println("✓ Server created and handlers registered successfully")
 	log.Printf("Listening on %s with mTLS authentication", cfg.HTTP.Address)
 	log.Println("Press Ctrl+C to stop")
 	log.Println()
 
-	// Start server (blocks until context is cancelled)
-	if err := server.Start(ctx); err != nil && err != context.Canceled {
-		log.Fatalf("Server error: %v", err)
+	// Start server
+	if err := server.Start(ctx); err != nil {
+		log.Fatalf("Failed to start server: %v", err)
+	}
+
+	// Wait for server to exit
+	if err := server.Wait(); err != nil && err != http.ErrServerClosed {
+		log.Printf("Server error: %v", err)
 	}
 
 	log.Println("Server stopped gracefully")

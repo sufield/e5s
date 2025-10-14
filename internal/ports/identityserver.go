@@ -7,6 +7,13 @@ import (
 	"time"
 )
 
+// ServerLogger is an optional interface for logging server events.
+// Implementations can use any logging library (stdlib log, zap, slog, etc.).
+// If nil, the server operates silently (caller controls logging).
+type ServerLogger interface {
+	Printf(format string, v ...any)
+}
+
 // MTLSConfig holds only configuration (no behavior).
 type MTLSConfig struct {
 	WorkloadAPI WorkloadAPIConfig
@@ -41,6 +48,7 @@ type HTTPConfig struct {
 	ShutdownTimeout   time.Duration // e.g., 10 * time.Second (graceful shutdown deadline)
 	MaxHeaderBytes    int           // e.g., 1 << 20 (1 MB) - max header size
 	Timeout           time.Duration // Client-specific timeout, e.g., 30 * time.Second
+	Logger            ServerLogger  // Optional logger for server events (nil = silent)
 }
 
 // MTLSServer is the stable interface for an mTLS HTTP server.
@@ -48,13 +56,18 @@ type HTTPConfig struct {
 type MTLSServer interface {
 	// Handle registers an HTTP handler (same semantics as http.ServeMux).
 	// Handlers receive requests with authenticated SPIFFE ID in context.
-	Handle(pattern string, handler http.Handler)
+	// Returns error if called after Start().
+	Handle(pattern string, handler http.Handler) error
 	// HandleFunc registers a function handler (convenience method).
 	// Handlers receive requests with authenticated SPIFFE ID in context.
-	HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request))
+	// Returns error if called after Start().
+	HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) error
 	// Start begins serving HTTPS with identity-based mTLS.
-	// Returns immediately after starting the server. Use Shutdown() to stop.
+	// Returns immediately after starting the server. Use Wait() to block until server exits.
 	Start(ctx context.Context) error
+	// Wait blocks until the server stops and returns the terminal error.
+	// Returns http.ErrServerClosed on graceful shutdown.
+	Wait() error
 	// Shutdown gracefully stops the server, waiting for active connections.
 	Shutdown(ctx context.Context) error
 	// Close releases resources (X509Source, connections, etc.).
