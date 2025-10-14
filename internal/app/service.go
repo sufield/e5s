@@ -7,24 +7,15 @@ import (
 	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
-// IdentityService implements identity-based message exchange
-// Pure core logic: No HTTP, no TLS, no network here
-// Dependencies are injected via ports (hexagonal architecture)
-type IdentityService struct {
-	agent    ports.Agent
-	registry ports.IdentityMapperRegistry
-}
+// NOTE: IdentityService struct definition has been split into:
+// - service_prod.go (//go:build !dev) - Production version with only agent field
+// - service_dev.go (//go:build dev) - Development version with agent and registry fields
+//
+// This file contains common methods that work across both versions.
 
-// NewIdentityService creates a new identity-based service
-func NewIdentityService(agent ports.Agent, registry ports.IdentityMapperRegistry) *IdentityService {
-	return &IdentityService{
-		agent:    agent,
-		registry: registry,
-	}
-}
-
-// ExchangeMessage performs authenticated message exchange
-// This demonstrates the core business logic using identities
+// ExchangeMessage performs authenticated message exchange.
+// This demonstrates the core business logic using identities.
+// This method only uses the agent field, so it works in both prod and dev.
 func (s *IdentityService) ExchangeMessage(ctx context.Context, from ports.Identity, to ports.Identity, content string) (*ports.Message, error) {
 	// Core business logic: validate identities
 	if from.IdentityCredential == nil {
@@ -51,5 +42,3 @@ func (s *IdentityService) ExchangeMessage(ctx context.Context, from ports.Identi
 
 	return msg, nil
 }
-
-var _ ports.Service = (*IdentityService)(nil)

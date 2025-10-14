@@ -1,11 +1,11 @@
+//go:build dev
+
 package domain
 
-// NOTE: This file (identity_mapper.go) is primarily used by the in-memory implementation.
+// NOTE: This file is only included in development builds (via //go:build dev tag).
 // In production deployments using real SPIRE, identity mapping is managed by SPIRE Server's
-// registration entries. However, this file must remain included in production builds because:
-// 1. Factory interfaces (AdapterFactory.SeedRegistry) use *domain.IdentityMapper
-// 2. The type is part of the domain model even if not actively used in production flows
-// Production code should use SPIRE Server CLI for registration: spire-server entry create
+// registration entries via CLI: spire-server entry create
+// Production builds exclude this file entirely, as workloads only fetch identities via Workload API.
 
 // IdentityMapper represents an immutable mapping between workload selectors and an identity.
 //

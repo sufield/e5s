@@ -1,22 +1,12 @@
 package app
 
-import (
-	"github.com/pocket/hexagon/spire/internal/ports"
-)
-
-// Application is the composition root that wires all dependencies
-// This is an infrastructure/bootstrap logic
-type Application struct {
-	Config                *ports.Config
-	Service               ports.Service
-	IdentityClientService *IdentityClientService
-	Agent                 ports.Agent
-	Registry              ports.IdentityMapperRegistry
-}
-
-// NOTE: Bootstrap function is implemented in build-specific files:
-// - bootstrap_dev.go (//go:build !production) - development mode with in-memory implementations
-// - bootstrap_prod.go (//go:build production) - production mode with SPIRE infrastructure
+// NOTE: Application struct definition has been split into:
+// - application_prod.go (//go:build !dev) - Production version without Registry field
+// - application_dev.go (//go:build dev) - Development version with Registry field
 //
-// This allows development-only interfaces (AdapterFactory, DevelopmentAdapterFactory, etc.)
-// to be completely excluded from production builds.
+// This file is intentionally empty except for this comment.
+// All Application-related code is in the build-specific files.
+//
+// Bootstrap function is implemented in build-specific files:
+// - bootstrap_dev.go (//go:build dev) - development mode with in-memory implementations
+// - bootstrap_prod.go (//go:build !dev) - production mode with SPIRE infrastructure

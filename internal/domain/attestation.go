@@ -1,16 +1,12 @@
+//go:build dev
+
 package domain
 
 import "fmt"
 
-// NOTE: This file (attestation.go) is primarily used by the in-memory implementation.
+// NOTE: This file is only included in development builds (via //go:build dev tag).
 // In production deployments using real SPIRE, attestation is handled by SPIRE Agent/Server.
-// However, this file must remain included in production builds because:
-// 1. AttestationService.MatchWorkloadToMapper() provides selector matching domain logic
-// 2. WorkloadAttestationResult uses SelectorSet (required type)
-// 3. These types complete the domain model vocabulary (see doc.go for full domain overview)
-// Production code delegates all attestation to external SPIRE infrastructure.
-//
-// NOTE: NodeAttestationResult has been moved to node_attestation.go with !production build tag.
+// Production builds exclude this file entirely, as workloads only fetch identities via Workload API.
 
 // WorkloadAttestationResult represents the result of workload attestation.
 //

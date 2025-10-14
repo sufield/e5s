@@ -1,10 +1,12 @@
+//go:build dev
+
 package domain
 
 // SelectorType represents the category of selector (node vs workload).
 // Used to distinguish between node-level and workload-level attestation in SPIRE.
 //
-// In production deployments, SPIRE Server manages selector-based matching.
-// These types are part of the domain model for in-memory implementations and testing.
+// NOTE: This file is only included in development builds (via //go:build dev tag).
+// Production builds exclude this file entirely.
 type SelectorType string
 
 const (

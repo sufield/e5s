@@ -1,3 +1,5 @@
+//go:build dev
+
 package domain_test
 
 // Selector Invariant Tests

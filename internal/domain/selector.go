@@ -1,15 +1,12 @@
+//go:build dev
+
 // Package domain models core SPIFFE concepts like selectors, identity credentials,
 // and identity documents, abstracting from infrastructure dependencies.
 package domain
 
-// NOTE: Selector types and matching logic are primarily used by in-memory implementations.
+// NOTE: This file is only included in development builds (via //go:build dev tag).
 // In production deployments using real SPIRE, selector matching is delegated to SPIRE Server.
-// However, these types must remain in production builds because:
-// 1. Domain types (Node, IdentityMapper) reference SelectorSet
-// 2. Factory interfaces (AdapterFactory.SeedRegistry) use domain.IdentityMapper
-// 3. In-memory attestors return selectors for development/testing
-// While production code paths don't actively use selector matching logic,
-// the types are part of the domain model and adapter interfaces.
+// Production builds exclude this file entirely, reducing binary size and attack surface.
 
 import (
 	"fmt"

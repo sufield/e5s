@@ -1,3 +1,5 @@
+//go:build dev
+
 package domain
 
 // SelectorSet represents a collection of unique selectors.
@@ -5,11 +7,9 @@ package domain
 //
 // Thread-safety: SelectorSet is NOT thread-safe. Callers must synchronize access.
 //
+// NOTE: This file is only included in development builds (via //go:build dev tag).
 // In production deployments, SPIRE Server manages selector matching.
-// This collection type is primarily used in:
-//   - In-memory implementations for development/testing
-//   - Domain models (IdentityMapper, Node) that reference selector sets
-//   - Adapter interfaces for seeding registries
+// Production builds exclude this file entirely.
 //
 // Example:
 //   set := NewSelectorSet()

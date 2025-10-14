@@ -37,10 +37,18 @@ check-prereqs:
 	done
 	@echo "✓ All prerequisites satisfied"
 
-## test: Run all tests
-test:
-	@echo "Running all tests..."
+## test: Run all tests (same as test-dev)
+test: test-dev
+
+## test-prod: Run tests without dev tags (production build)
+test-prod:
+	@echo "Running production tests (no dev tags)..."
 	@go test ./...
+
+## test-dev: Run tests with dev tags (development build)
+test-dev:
+	@echo "Running development tests (with -tags=dev)..."
+	@go test -tags=dev ./...
 
 ## test-verbose: Run all tests with verbose output
 test-verbose:
@@ -97,7 +105,7 @@ build: prod-build
 prod-build:
 	@echo "Building production binary..."
 	@mkdir -p bin
-	@go build -trimpath $(LDFLAGS) -o $(BINARY_PROD) ./cmd/agent
+	@go build -trimpath $(LDFLAGS) -o $(BINARY_PROD) ./cmd
 	@echo "Production binary: $(BINARY_PROD)"
 	@ls -lh $(BINARY_PROD)
 
@@ -105,39 +113,54 @@ prod-build:
 dev-build:
 	@echo "Building dev binary with -tags=dev..."
 	@mkdir -p bin
-	@go build -tags=$(BUILD_TAGS_DEV) -o $(BINARY_DEV) ./cmd/cp-minikube
+	@go build -tags=$(BUILD_TAGS_DEV) -o $(BINARY_DEV) ./cmd
 	@echo "Dev binary: $(BINARY_DEV)"
 	@ls -lh $(BINARY_DEV)
+
+## compare-sizes: Build both versions and compare binary sizes
+compare-sizes:
+	@echo "Building and comparing binary sizes..."
+	@mkdir -p bin
+	@echo "→ Building production binary..."
+	@go build -trimpath $(LDFLAGS) -o bin/agent-prod ./cmd
+	@echo "→ Building dev binary..."
+	@go build -tags=$(BUILD_TAGS_DEV) -o bin/agent-dev ./cmd
+	@echo ""
+	@echo "=== Binary Size Comparison ==="
+	@ls -lh bin/agent-prod bin/agent-dev
+	@echo ""
+	@PROD_SIZE=$$(stat -c%s bin/agent-prod 2>/dev/null || stat -f%z bin/agent-prod); \
+	DEV_SIZE=$$(stat -c%s bin/agent-dev 2>/dev/null || stat -f%z bin/agent-dev); \
+	DIFF=$$((DEV_SIZE - PROD_SIZE)); \
+	PERCENT=$$(echo "scale=2; ($$DIFF * 100) / $$DEV_SIZE" | bc -l); \
+	echo "Production binary: $$PROD_SIZE bytes"; \
+	echo "Development binary: $$DEV_SIZE bytes"; \
+	echo "Size difference: $$DIFF bytes ($$PERCENT% of dev binary)"; \
+	echo ""
 
 ## test-prod-build: Verify production build excludes dev code
 test-prod-build:
 	@echo "Testing production build..."
-	@echo "→ Checking for dev package imports in production cmd..."
-	@if go list -f '{{.Imports}}' ./cmd/agent 2>&1 | grep -q "controlplane\|cp-minikube"; then \
-		echo "✗ ERROR: Production cmd imports dev packages!"; \
+	@echo "→ Building production binary..."
+	@go build -o /tmp/test-prod ./cmd 2>&1
+	@echo "→ Building dev binary..."
+	@go build -tags=dev -o /tmp/test-dev ./cmd 2>&1
+	@echo "→ Verifying production tests exclude dev tests..."
+	@if go test -list . ./internal/domain 2>&1 | grep -q "TestSelector\|TestIdentityMapper"; then \
+		echo "✗ ERROR: Production build includes dev tests!"; \
 		exit 1; \
 	fi
-	@echo "→ Verifying dev cmd requires dev tags..."
-	@if go build -o /tmp/test-dev ./cmd/cp-minikube 2>&1; then \
-		echo "✗ ERROR: Dev cmd should not build without -tags=dev!"; \
-		rm -f /tmp/test-dev; \
+	@echo "→ Verifying dev tests run with dev tags..."
+	@if ! go test -tags=dev -list . ./internal/domain 2>&1 | grep -q "TestSelector\|TestIdentityMapper"; then \
+		echo "✗ ERROR: Dev tests not found with -tags=dev!"; \
 		exit 1; \
 	fi
-	@echo "→ Verifying dev cmd builds with dev tags..."
-	@if ! go build -tags=dev -o /tmp/test-dev ./cmd/cp-minikube 2>&1; then \
-		echo "✗ ERROR: Dev cmd failed to build with -tags=dev!"; \
+	@echo "→ Checking production binary for dev symbols..."
+	@if go tool nm /tmp/test-prod 2>/dev/null | grep -i "selector\|identitymapper"; then \
+		echo "✗ ERROR: Dev symbols found in production binary!"; \
 		exit 1; \
 	fi
-	@rm -f /tmp/test-dev
-	@echo "→ Checking production binary for dev strings..."
-	@if [ -f "$(BINARY_PROD)" ]; then \
-		if strings $(BINARY_PROD) 2>/dev/null | grep -q "cp-minikube\|BootstrapMinikubeInfra"; then \
-			echo "✗ ERROR: Dev code found in production binary!"; \
-			exit 1; \
-		fi; \
-	else \
-		echo "  (Binary not built, skipping string check)"; \
-	fi
+	@rm -f /tmp/test-prod /tmp/test-dev
 	@echo "✓ Production build check passed"
 
 ## verify: Run comprehensive verification (alias for verify-spire)
