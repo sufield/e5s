@@ -6,10 +6,9 @@ import (
 	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
-// IdentityService implements identity-based message exchange for production.
-// Production version only needs agent - no local registry or attestation.
-// Pure core logic: No HTTP, no TLS, no network here.
-// Dependencies are injected via ports (hexagonal architecture).
+// IdentityService provides identity operations for production.
+// Production version only needs agent - no local registry, attestation, or demo service.
+// In production, extend this with actual business logic (authorization, audit, etc.).
 type IdentityService struct {
 	agent ports.Agent
 }
@@ -20,5 +19,3 @@ func NewIdentityService(agent ports.Agent) *IdentityService {
 		agent: agent,
 	}
 }
-
-var _ ports.Service = (*IdentityService)(nil)

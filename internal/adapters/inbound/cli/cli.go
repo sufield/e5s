@@ -1,3 +1,5 @@
+//go:build dev
+
 package cli
 
 import (
@@ -6,6 +8,7 @@ import (
 	"os"
 
 	"github.com/pocket/hexagon/spire/internal/app"
+	"github.com/pocket/hexagon/spire/internal/app/identityconv"
 	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
@@ -55,7 +58,7 @@ func (c *CLI) Run(ctx context.Context) error {
 	serverIdentity := ports.Identity{
 		IdentityCredential: serverDoc.IdentityCredential(),
 		IdentityDocument:   serverDoc,
-		Name:               extractNameFromPath(serverDoc.IdentityCredential().Path()),
+		Name:               identityconv.DeriveIdentityName(serverDoc.IdentityCredential()),
 	}
 	fmt.Printf("  ✓ Server workload identity document issued: %s\n", serverIdentity.IdentityCredential.String())
 
@@ -73,7 +76,7 @@ func (c *CLI) Run(ctx context.Context) error {
 	clientIdentity := ports.Identity{
 		IdentityCredential: clientDoc.IdentityCredential(),
 		IdentityDocument:   clientDoc,
-		Name:               extractNameFromPath(clientDoc.IdentityCredential().Path()),
+		Name:               identityconv.DeriveIdentityName(clientDoc.IdentityCredential()),
 	}
 	fmt.Printf("  ✓ Client workload identity document issued: %s\n", clientIdentity.IdentityCredential.String())
 	fmt.Println()
@@ -107,26 +110,6 @@ func (c *CLI) Run(ctx context.Context) error {
 	fmt.Printf("  - Current process UID: %d\n", currentUID)
 
 	return nil
-}
-
-// extractNameFromPath extracts a human-readable name from a SPIFFE ID path.
-// Uses the last path segment for readability (e.g., "/workload" → "workload").
-func extractNameFromPath(path string) string {
-	if path == "" || path == "/" {
-		return "unknown"
-	}
-
-	// Find last segment after final slash
-	for i := len(path) - 1; i >= 0; i-- {
-		if path[i] == '/' {
-			if i+1 < len(path) {
-				return path[i+1:]
-			}
-			return "unknown"
-		}
-	}
-
-	return path
 }
 
 var _ ports.CLI = (*CLI)(nil)

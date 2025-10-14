@@ -1,3 +1,5 @@
+//go:build dev
+
 package app
 
 import (
@@ -11,7 +13,7 @@ import (
 // - service_prod.go (//go:build !dev) - Production version with only agent field
 // - service_dev.go (//go:build dev) - Development version with agent and registry fields
 //
-// This file contains common methods that work across both versions.
+// This file contains ExchangeMessage demo method (dev-only).
 
 // ExchangeMessage performs authenticated message exchange.
 // This demonstrates the core business logic using identities.

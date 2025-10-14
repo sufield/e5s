@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/pocket/hexagon/spire/internal/domain"
+	"github.com/pocket/hexagon/spire/internal/app/identityconv"
 	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
@@ -35,38 +35,13 @@ func (s *IdentityClientService) IssueIdentity(ctx context.Context, workload port
 	// Convert domain.IdentityDocument to ports.Identity (DTO for inbound ports)
 	// Extract name from identity credential path for human-readable identification
 	credential := doc.IdentityCredential()
-	name := extractNameFromCredential(credential)
+	name := identityconv.DeriveIdentityName(credential)
 
 	return &ports.Identity{
 		IdentityCredential: credential,
 		IdentityDocument:   doc,
 		Name:               name,
 	}, nil
-}
-
-// extractNameFromCredential extracts a human-readable name from identity credential.
-// Uses the last path segment for readability (e.g., "/workload" → "workload").
-func extractNameFromCredential(credential *domain.IdentityCredential) string {
-	if credential == nil {
-		return "unknown"
-	}
-
-	path := credential.Path()
-	if path == "" || path == "/" {
-		return credential.TrustDomain().String()
-	}
-
-	// Find last segment after final slash
-	for i := len(path) - 1; i >= 0; i-- {
-		if path[i] == '/' {
-			if i+1 < len(path) {
-				return path[i+1:]
-			}
-			return credential.TrustDomain().String()
-		}
-	}
-
-	return path
 }
 
 var _ ports.IdentityIssuer = (*IdentityClientService)(nil)

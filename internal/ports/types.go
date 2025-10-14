@@ -1,47 +1,34 @@
 package ports
 
-import (
-	"github.com/pocket/hexagon/spire/internal/domain"
-)
+import "github.com/pocket/hexagon/spire/internal/domain"
 
-// Identity represents a verified identity
+// Identity is a simple transport object crossing the hex boundary.
+// No behavior here. Use app-layer helpers for derivations/validation.
 type Identity struct {
-	IdentityCredential *domain.IdentityCredential // Identity format (URI-formatted identifier)
-	Name               string                     // Human-readable name
-	IdentityDocument   *domain.IdentityDocument   // X.509 or JWT identity document
+	IdentityCredential *domain.IdentityCredential `json:"identityCredential" yaml:"identityCredential"`
+	Name               string                     `json:"name,omitempty" yaml:"name,omitempty"` // optional convenience
+	IdentityDocument   *domain.IdentityDocument   `json:"identityDocument" yaml:"identityDocument"`
 }
 
-// ProcessIdentity represents process-level identity attributes for attestation (maps to domain.Workload).
+// ProcessIdentity describes process attributes used for attestation.
+// No methods: conversion/validation belong in app/domain.
 type ProcessIdentity struct {
-	PID  int    // Process ID
-	UID  int    // User ID
-	GID  int    // Group ID
-	Path string // Executable path
+	PID  int    `json:"pid" yaml:"pid"`
+	UID  int    `json:"uid" yaml:"uid"`
+	GID  int    `json:"gid" yaml:"gid"`
+	Path string `json:"path" yaml:"path"`
 }
 
-// ToWorkload converts to domain.Workload
-func (p ProcessIdentity) ToWorkload() *domain.Workload {
-	return domain.NewWorkload(p.PID, p.UID, p.GID, p.Path)
-}
-
-// Message represents an authenticated message exchange
-type Message struct {
-	From    Identity
-	To      Identity
-	Content string
-}
-
-// Config represents application configuration
+// Config is runtime configuration (prod uses subset; dev uses all fields).
 type Config struct {
-	TrustDomain   string
-	AgentSpiffeID string
-	Workloads     []WorkloadEntry
+	TrustDomain   string          `json:"trustDomain" yaml:"trustDomain"`     // e.g., "example.org"
+	AgentSpiffeID string          `json:"agentSpiffeId" yaml:"agentSpiffeId"` // string form of SPIFFE ID
+	Workloads     []WorkloadEntry `json:"workloads,omitempty" yaml:"workloads,omitempty"`
 }
 
-// WorkloadEntry represents a workload entry for registration (e.g., from config or mocks):
-// associates UID (for attestation), selector (for matching), and SpiffeID string (the issued identity credential).
+// WorkloadEntry is used to seed an in-memory registry (dev) or describe workload configs.
 type WorkloadEntry struct {
-	SpiffeID string
-	Selector string
-	UID      int
+	SpiffeID string `json:"spiffeId" yaml:"spiffeId"` // "spiffe://example.org/..."
+	Selector string `json:"selector" yaml:"selector"` // "type:key:value" (e.g., "unix:uid:1000")
+	UID      int    `json:"uid" yaml:"uid"`           // for simple dev attestors
 }

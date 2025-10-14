@@ -7,11 +7,10 @@ import (
 )
 
 // Application is the composition root that wires all dependencies for production.
-// Production version doesn't include Registry - workloads only fetch identities via Workload API.
+// Production version doesn't include Registry or demo Service - workloads only fetch identities via Workload API.
 type Application struct {
 	Config                *ports.Config
-	Service               ports.Service
 	IdentityClientService *IdentityClientService
 	Agent                 ports.Agent
-	// No Registry in production
+	// No Registry or Service in production (dev-only demos)
 }
