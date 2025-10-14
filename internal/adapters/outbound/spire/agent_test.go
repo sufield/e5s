@@ -116,7 +116,7 @@ func TestNewAgent_Success(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NotNil(t, agent)
-	assert.Equal(t, "spiffe://example.org/agent", agent.agentSpiffeID)
+	assert.NotNil(t, agent.agentIdentity)
 	assert.Equal(t, 0, fetcher.getCallCount(), "Constructor should not fetch (lazy initialization)")
 }
 
@@ -177,12 +177,14 @@ func TestGetIdentity_LazyFetch(t *testing.T) {
 	identity, err := agent.GetIdentity(ctx)
 	require.NoError(t, err)
 	require.NotNil(t, identity)
+	assert.NotNil(t, identity.IdentityDocument)
 	assert.Equal(t, 1, fetcher.getCallCount(), "First GetIdentity should fetch")
 
 	// Second call should use cached (not expired)
 	identity2, err := agent.GetIdentity(ctx)
 	require.NoError(t, err)
 	require.NotNil(t, identity2)
+	assert.NotNil(t, identity2.IdentityDocument)
 	assert.Equal(t, 1, fetcher.getCallCount(), "Second GetIdentity should use cache")
 }
 
@@ -227,8 +229,8 @@ func TestGetIdentity_RenewsExpiringSoon(t *testing.T) {
 	identity2, err := agent.GetIdentity(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, 2, fetcher.getCallCount(), "Should renew expiring document")
-	// identity1 and identity2 are both *domain.IdentityDocument now, compare their credentials
-	assert.NotEqual(t, identity1, identity2, "Should have different document instances after renewal")
+	// identity1 and identity2 are both *ports.Identity now, compare their documents
+	assert.NotEqual(t, identity1.IdentityDocument, identity2.IdentityDocument, "Should have different document instances after renewal")
 }
 
 func TestGetIdentity_FetchFailure(t *testing.T) {
@@ -273,13 +275,13 @@ func TestGetIdentity_DefensiveCopy(t *testing.T) {
 	identity2, err := agent.GetIdentity(ctx)
 	require.NoError(t, err)
 
-	// Since domain.IdentityDocument is immutable (see agent.go:92), returning the
-	// same pointer is safe and more efficient than defensive copies.
-	// The important guarantee is thread-safety, not pointer uniqueness.
-	assert.Same(t, identity1, identity2, "Immutable documents can safely share pointers (efficient caching)")
+	// GetIdentity returns a shallow copy of the cached identity to discourage mutation.
+	// The pointers will be different, but the underlying IdentityDocument is the same.
+	assert.NotSame(t, identity1, identity2, "Returns shallow copy to discourage mutation")
+	assert.Same(t, identity1.IdentityDocument, identity2.IdentityDocument, "But shares immutable document")
 
 	// Verify content is correct
-	assert.Equal(t, identity1.IdentityCredential().String(), identity2.IdentityCredential().String())
+	assert.Equal(t, identity1.IdentityCredential.String(), identity2.IdentityCredential.String())
 }
 
 func TestGetIdentity_Concurrency(t *testing.T) {
@@ -480,14 +482,14 @@ func TestExtractNameFromCredential(t *testing.T) {
 			expected: "workload",
 		},
 		{
-			name:     "empty path",
+			name:     "empty path (root ID)",
 			path:     "",
-			expected: "unknown",
+			expected: "example.org",
 		},
 		{
 			name:     "root path",
 			path:     "/",
-			expected: "unknown",
+			expected: "example.org",
 		},
 	}
 
@@ -530,11 +532,11 @@ func TestAgent_InterfaceCompliance(t *testing.T) {
 	var _ X509Fetcher = (*mockX509Fetcher)(nil)
 }
 
-func TestExpiresSoon_Nil(t *testing.T) {
-	assert.True(t, expiresSoon(nil), "nil document should be considered expiring")
+func TestNeedsRefresh_Nil(t *testing.T) {
+	assert.True(t, needsRefresh(nil, Options{}), "nil document should be considered expiring")
 }
 
-func TestExpiresSoon_Expired(t *testing.T) {
+func TestNeedsRefresh_Expired(t *testing.T) {
 	cert, key := createTestCert(t, "spiffe://example.org/test",
 		time.Now().Add(-2*time.Hour),
 		time.Now().Add(-1*time.Hour)) // Expired
@@ -544,10 +546,10 @@ func TestExpiresSoon_Expired(t *testing.T) {
 	doc, err := domain.NewIdentityDocumentFromComponents(cred, cert, key, []*x509.Certificate{cert})
 	require.NoError(t, err)
 
-	assert.True(t, expiresSoon(doc), "Expired document should be considered expiring")
+	assert.True(t, needsRefresh(doc, Options{}), "Expired document should be considered expiring")
 }
 
-func TestExpiresSoon_NearExpiry(t *testing.T) {
+func TestNeedsRefresh_NearExpiry(t *testing.T) {
 	// Cert valid for 24 hours, with 1 hour remaining (4.17% of lifetime)
 	// Threshold is 20%, so this should trigger renewal
 	cert, key := createTestCert(t, "spiffe://example.org/test",
@@ -559,10 +561,10 @@ func TestExpiresSoon_NearExpiry(t *testing.T) {
 	doc, err := domain.NewIdentityDocumentFromComponents(cred, cert, key, []*x509.Certificate{cert})
 	require.NoError(t, err)
 
-	assert.True(t, expiresSoon(doc), "Document with <20% lifetime remaining should be expiring")
+	assert.True(t, needsRefresh(doc, Options{}), "Document with <20% lifetime remaining should be expiring")
 }
 
-func TestExpiresSoon_Fresh(t *testing.T) {
+func TestNeedsRefresh_Fresh(t *testing.T) {
 	// Cert valid for 24 hours, with 20 hours remaining (83% of lifetime)
 	cert, key := createTestCert(t, "spiffe://example.org/test",
 		time.Now().Add(-4*time.Hour),
@@ -573,10 +575,10 @@ func TestExpiresSoon_Fresh(t *testing.T) {
 	doc, err := domain.NewIdentityDocumentFromComponents(cred, cert, key, []*x509.Certificate{cert})
 	require.NoError(t, err)
 
-	assert.False(t, expiresSoon(doc), "Fresh document with >20% lifetime should not be expiring")
+	assert.False(t, needsRefresh(doc, Options{}), "Fresh document with >20% lifetime should not be expiring")
 }
 
-func TestExpiresSoon_ExactThreshold(t *testing.T) {
+func TestNeedsRefresh_ExactThreshold(t *testing.T) {
 	// Cert valid for 24 hours, with exactly 20% remaining (4.8 hours)
 	cert, key := createTestCert(t, "spiffe://example.org/test",
 		time.Now().Add(-19*time.Hour-12*time.Minute),
@@ -588,10 +590,10 @@ func TestExpiresSoon_ExactThreshold(t *testing.T) {
 	require.NoError(t, err)
 
 	// At exactly 20%, should trigger renewal (<=)
-	assert.True(t, expiresSoon(doc), "Document at exactly 20% threshold should be expiring")
+	assert.True(t, needsRefresh(doc, Options{}), "Document at exactly 20% threshold should be expiring")
 }
 
-func TestExpiresSoon_ClockSkewWithinTolerance(t *testing.T) {
+func TestNeedsRefresh_ClockSkewWithinTolerance(t *testing.T) {
 	// Cert valid in near future (3 minutes from now) - within 5 minute tolerance
 	cert, key := createTestCert(t, "spiffe://example.org/test",
 		time.Now().Add(3*time.Minute),
@@ -603,10 +605,10 @@ func TestExpiresSoon_ClockSkewWithinTolerance(t *testing.T) {
 	require.NoError(t, err)
 
 	// Within 5 minute skew tolerance, should not trigger refresh
-	assert.False(t, expiresSoon(doc), "Cert with NotBefore within 5min should be acceptable")
+	assert.False(t, needsRefresh(doc, Options{}), "Cert with NotBefore within 5min should be acceptable")
 }
 
-func TestExpiresSoon_ClockSkewBeyondTolerance(t *testing.T) {
+func TestNeedsRefresh_ClockSkewBeyondTolerance(t *testing.T) {
 	// Cert valid far in future (10 minutes from now) - beyond 5 minute tolerance
 	cert, key := createTestCert(t, "spiffe://example.org/test",
 		time.Now().Add(10*time.Minute),
@@ -618,10 +620,10 @@ func TestExpiresSoon_ClockSkewBeyondTolerance(t *testing.T) {
 	require.NoError(t, err)
 
 	// Beyond 5 minute skew tolerance, should trigger refresh (suspicious)
-	assert.True(t, expiresSoon(doc), "Cert with NotBefore >5min in future should trigger refresh")
+	assert.True(t, needsRefresh(doc, Options{}), "Cert with NotBefore >5min in future should trigger refresh")
 }
 
-func TestExpiresSoon_ZeroLifetime(t *testing.T) {
+func TestNeedsRefresh_ZeroLifetime(t *testing.T) {
 	// Malformed cert: NotBefore == NotAfter (zero lifetime)
 	now := time.Now()
 	cert, key := createTestCert(t, "spiffe://example.org/test", now, now)
@@ -631,10 +633,10 @@ func TestExpiresSoon_ZeroLifetime(t *testing.T) {
 	doc, err := domain.NewIdentityDocumentFromComponents(cred, cert, key, []*x509.Certificate{cert})
 	require.NoError(t, err)
 
-	assert.True(t, expiresSoon(doc), "Cert with zero lifetime should trigger refresh")
+	assert.True(t, needsRefresh(doc, Options{}), "Cert with zero lifetime should trigger refresh")
 }
 
-func TestExpiresSoon_NegativeLifetime(t *testing.T) {
+func TestNeedsRefresh_NegativeLifetime(t *testing.T) {
 	// Malformed cert: NotAfter before NotBefore (negative lifetime)
 	cert, key := createTestCert(t, "spiffe://example.org/test",
 		time.Now().Add(1*time.Hour),
@@ -645,5 +647,5 @@ func TestExpiresSoon_NegativeLifetime(t *testing.T) {
 	doc, err := domain.NewIdentityDocumentFromComponents(cred, cert, key, []*x509.Certificate{cert})
 	require.NoError(t, err)
 
-	assert.True(t, expiresSoon(doc), "Cert with negative lifetime should trigger refresh")
+	assert.True(t, needsRefresh(doc, Options{}), "Cert with negative lifetime should trigger refresh")
 }

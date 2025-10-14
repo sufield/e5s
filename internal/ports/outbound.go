@@ -37,19 +37,24 @@ type ConfigLoader interface {
 // - FetchIdentityDocument returns domain.ErrServerUnavailable if cannot reach server
 // - Close returns error if cleanup fails, but is idempotent
 type Agent interface {
-	// GetIdentity returns the agent's own identity document
-	// Agent must bootstrap its identity before serving workloads
-	// Returns domain.IdentityDocument (not ports.Identity) for type consistency
-	GetIdentity(ctx context.Context) (*domain.IdentityDocument, error)
+	// GetIdentity returns the agent's own identity (credential + document + name).
+	// Lazily fetches SVID on first call, then caches and proactively refreshes
+	// when expiring soon (default: <= 20% lifetime remaining).
+	//
+	// Returns a shallow copy of the cached identity to discourage mutation.
+	// The IdentityDocument within is immutable and safe for concurrent reads.
+	GetIdentity(ctx context.Context) (*Identity, error)
 
-	// FetchIdentityDocument fetches an identity document for a workload
+	// FetchIdentityDocument fetches an identity document for a workload.
 	// Flow: Attest → Match selectors in registry → Issue SVID → Return
-	// Returns domain.IdentityDocument (not ports.Identity) for type consistency
+	//
+	// IMPORTANT: In production SPIRE mode, can only fetch SVID for the calling
+	// process (authenticated via Unix socket). The workload parameter is ignored.
 	FetchIdentityDocument(ctx context.Context, workload ProcessIdentity) (*domain.IdentityDocument, error)
 
-	// Close releases resources held by the agent (sockets, watchers, sources)
-	// This method is idempotent and safe to call multiple times
-	// Should be called via defer after agent creation
+	// Close releases resources held by the agent (sockets, watchers, sources).
+	// This method is idempotent and safe to call multiple times.
+	// Should be called via defer after agent creation.
 	Close() error
 }
 
