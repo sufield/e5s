@@ -2,46 +2,154 @@ package ports
 
 import (
 	"context"
-	"crypto/tls"
 )
 
-// IdentityClient is the main entrypoint for workloads to fetch their SVID
-// This interface matches go-spiffe SDK's workloadapi.Client for seamless transition
+// IdentityProvider is the inbound port for workloads to obtain their identity credentials.
+// This represents the core capability: a workload requests its identity from the system.
 //
-// Implementation note: The server-side adapter extracts calling process credentials
-// from the connection (Unix socket peer credentials) - not passed as parameter
+// In domain terms, this is about authentication and identity issuance, not about
+// specific protocols or transport mechanisms. Adapters translate between this
+// domain-centric interface and specific implementations (local agent, remote service, etc.).
 //
-// SDK compatibility: Signature matches github.com/spiffe/go-spiffe/v2/workloadapi.Client
-// When migrating to real SDK, inject *workloadapi.Client wrapped to implement this interface
-type IdentityClient interface {
-	// FetchX509SVID fetches an X.509 SVID for the calling workload
-	// Returns the workload's identity document (SVID) after attestation
-	// Matches: (*workloadapi.Client).FetchX509SVID(ctx) (*x509svid.SVID, error)
-	FetchX509SVID(ctx context.Context) (*Identity, error)
+// Security: The identity provider (via its adapter) MUST authenticate the calling
+// process through secure means (e.g., OS-level process credentials) before issuing
+// identity credentials. The caller never provides its own identity - it's always
+// extracted from a trusted source by the adapter.
+//
+// Error Contract: Implementations wrap errors with domain sentinels for error handling:
+//   - ErrIdentityServerUnavailable: Identity server unreachable
+//   - ErrWorkloadAttestationFailed: Workload authentication failed
+//   - ErrIdentityNotFound: No identity registered for workload
+//
+// Example:
+//
+//	provider := NewIdentityProvider(...) // adapter implementation
+//	identity, err := provider.FetchIdentity(ctx)
+//	if errors.Is(err, domain.ErrIdentityServerUnavailable) {
+//	    // handle server unavailable
+//	}
+type IdentityProvider interface {
+	// FetchIdentity retrieves the identity credential for the calling workload.
+	//
+	// The workload is authenticated based on its runtime properties (process ID,
+	// user ID, executable path, etc.), and if authorized, receives its identity
+	// credential (certificate-based proof of identity).
+	//
+	// Process:
+	// 1. Adapter extracts workload's runtime credentials from OS/transport
+	// 2. Workload is authenticated against known workload registrations
+	// 3. Identity credential is issued if workload is authorized
+	//
+	// Returns:
+	//   - *Identity: The workload's identity credential with valid proof
+	//   - error: Domain error if authentication or authorization fails
+	FetchIdentity(ctx context.Context) (*Identity, error)
 
-	// FetchX509SVIDWithConfig fetches an X.509 SVID with custom TLS configuration
-	// Enables mTLS authentication when connecting to the Workload API server
-	// The tlsConfig parameter allows specifying client certificates for mutual authentication
-	// If tlsConfig is nil, returns an error (tlsConfig is required for this method)
-	FetchX509SVIDWithConfig(ctx context.Context, tlsConfig *tls.Config) (*Identity, error)
+	// Close releases any resources held by the provider.
+	// This method is idempotent and safe to call multiple times.
+	//
+	// Usage:
+	//
+	//	provider, err := adapter.NewIdentityProvider(...)
+	//	if err != nil { return err }
+	//	defer provider.Close()
+	Close() error
 }
 
 // CLI is the inbound port for CLI orchestration.
-// Adapters implement this to drive use cases via command-line.
+// Adapters implement this to drive use cases via command-line interface.
+//
+// Example:
+//
+//	cli := NewCLIAdapter(app)
+//	if err := cli.Run(ctx); err != nil {
+//	    log.Fatal(err)
+//	}
 type CLI interface {
+	// Run executes the CLI command with the given context.
+	// Returns an error if command execution fails.
 	Run(ctx context.Context) error
 }
 
-// IdentityClientService is the server-side service for issuing SVIDs
-// This is called by the Workload API server adapter after extracting caller credentials
-type IdentityClientService interface {
-	// FetchX509SVIDForCaller issues an SVID for a caller after credential extraction
-	FetchX509SVIDForCaller(ctx context.Context, callerIdentity ProcessIdentity) (*Identity, error)
+// IdentityIssuer is the server-side service for issuing identity credentials to workloads.
+//
+// This represents the core use case of identity issuance: given an authenticated workload,
+// determine what identity it should receive and issue the appropriate credential.
+//
+// Security Critical: The workload's process credentials MUST be extracted from
+// a trusted source (e.g., OS kernel via system calls) by the adapter layer.
+// Never accept workload identity claims from the network or user input.
+//
+// Process Flow:
+// 1. Adapter extracts caller's process credentials from trusted source
+// 2. Adapter calls this service with the verified credentials
+// 3. Service authenticates workload against known registrations
+// 4. Service determines authorized identity for the workload
+// 5. Service issues identity credential if authorized
+//
+// Error Contract: Implementations wrap errors with domain sentinels:
+//   - ErrWorkloadAttestationFailed: Workload authentication failed
+//   - ErrIdentityNotFound: No identity registered for workload
+//   - ErrWorkloadInvalid: Invalid workload credentials
+type IdentityIssuer interface {
+	// IssueIdentity creates an identity credential for an authenticated workload.
+	//
+	// The workload parameter contains process credentials that were extracted
+	// from a trusted source by the adapter. This is never user-provided data.
+	//
+	// The service:
+	// 1. Validates the workload credentials
+	// 2. Authenticates the workload against known registrations
+	// 3. Determines the authorized identity for this workload
+	// 4. Issues the identity credential if authorized
+	//
+	// Parameters:
+	//   - ctx: Request context for timeout and cancellation
+	//   - workload: Process credentials from trusted source
+	//
+	// Returns:
+	//   - *Identity: The issued identity credential for the workload
+	//   - error: Domain error if authentication or authorization fails
+	IssueIdentity(ctx context.Context, workload ProcessIdentity) (*Identity, error)
 }
 
-// Service represents application use cases (business logic)
-// This is for demonstration purposes - showing identity-based operations
+// Service represents core application use cases (business logic).
+//
+// This interface demonstrates identity-based operations in a hexagonal architecture.
+// It shows how domain logic remains independent of infrastructure concerns
+// (HTTP, gRPC, CLI, databases, etc.).
+//
+// Usage:
+//
+//	service := app.NewIdentityService(agent, registry)
+//	msg, err := service.ExchangeMessage(ctx, alice, bob, "hello")
+//
+// Note: This demonstrates how authenticated identities flow through business logic.
+// In production, extend this with domain-specific use cases (policy enforcement,
+// audit logging, authorization checks, etc.).
 type Service interface {
-	// ExchangeMessage performs an authenticated message exchange
+	// ExchangeMessage performs an authenticated message exchange between two identities.
+	//
+	// This demonstrates a typical identity-based operation where the service:
+	// 1. Validates both identities have valid credentials
+	// 2. Checks identity credentials are not expired
+	// 3. Executes the business operation (message exchange)
+	//
+	// This is pure domain logic with no infrastructure dependencies.
+	// Implementation can enforce policies, audit exchanges, rate limit, etc.
+	//
+	// Parameters:
+	//   - ctx: Request context for timeout and cancellation
+	//   - from: Sender's authenticated identity
+	//   - to: Recipient's authenticated identity
+	//   - content: Message content
+	//
+	// Returns:
+	//   - *Message: The created message with metadata
+	//   - error: Domain error if validation or business rules fail
+	//
+	// Errors:
+	//   - ErrInvalidIdentityCredential: Identity lacks valid credential
+	//   - ErrIdentityDocumentExpired: Identity credential expired
 	ExchangeMessage(ctx context.Context, from Identity, to Identity, content string) (*Message, error)
 }

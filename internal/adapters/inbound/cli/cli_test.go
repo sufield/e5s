@@ -4,6 +4,9 @@ package cli_test
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
 	"io"
 	"os"
 	"testing"
@@ -276,16 +279,37 @@ func TestCLI_Run_ExpiredIdentityHandling(t *testing.T) {
 	clientIdentity, err := application.Agent.FetchIdentityDocument(ctx, clientWorkload)
 	require.NoError(t, err)
 
-	// Create expired identity
+	// Create expired identity by constructing a certificate with expired NotAfter
 	td := domain.NewTrustDomainFromName("example.org")
 	expiredNamespace := domain.NewIdentityCredentialFromComponents(td, "/expired")
-	expiredDoc := domain.NewIdentityDocumentFromComponents(
+
+	// Create an expired certificate with hardcoded timestamps
+	// Using dates far in the past (1998-2001) ensures the test remains reliable
+	// regardless of when it's run, avoiding flakiness from near-current expiry times.
+	// NotBefore: Sept 10, 1998 (Unix: 900000000)
+	// NotAfter:  Jan 9, 2001   (Unix: 1000000000) - clearly expired
+	expiredCert := &x509.Certificate{
+		NotBefore: time.Unix(900000000, 0),
+		NotAfter:  time.Unix(1000000000, 0),
+	}
+
+	// Create a dummy private key for testing
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	expiredDoc, err := domain.NewIdentityDocumentFromComponents(
 		expiredNamespace,
-		nil,                      // cert
-		nil,                      // privateKey
-		nil,                      // chain
-		time.Unix(1000000000, 0), // Expired (Jan 9, 2001)
+		expiredCert,
+		privateKey,
+		nil, // chain
 	)
+	require.NoError(t, err)
+
+	// Verify that ExpiresAt correctly derives from cert.NotAfter (domain contract)
+	assert.Equal(t, expiredCert.NotAfter, expiredDoc.ExpiresAt(),
+		"ExpiresAt should derive from certificate NotAfter (single source of truth)")
+	assert.True(t, expiredDoc.IsExpired(), "Document should be expired")
+
 	expiredIdentity := &ports.Identity{
 		Name:               "expired",
 		IdentityCredential: expiredNamespace,

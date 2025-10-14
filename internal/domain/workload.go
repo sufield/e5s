@@ -50,14 +50,17 @@ func NewWorkloadValidated(pid, uid, gid int, path string) (*Workload, error) {
 	}, nil
 }
 
-// NewWorkload creates a workload without validation (for backward compatibility).
+// NewWorkload creates a workload without upfront validation.
 // Path is normalized via filepath.Clean if non-empty.
 //
-// Prefer NewWorkloadValidated in new code. This constructor exists to maintain
-// API compatibility with existing code that may rely on lenient construction.
+// This lenient constructor is useful when constructing workloads from trusted
+// sources or when validation should be deferred. Call Validate() explicitly
+// if validation is needed later.
+//
+// For most use cases, prefer NewWorkloadValidated which validates at construction time.
 func NewWorkload(pid, uid, gid int, path string) *Workload {
 	if path == "" {
-		// Preserve prior behavior: allow empty; caller can Validate() later
+		// Allow empty path; caller can validate later if needed
 		return &Workload{pid: pid, uid: uid, gid: gid, path: ""}
 	}
 	return &Workload{
