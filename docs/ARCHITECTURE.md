@@ -443,7 +443,7 @@ func (r *InMemoryRegistry) FindBySelectors(
 
 **Important**: The CLI demo uses `InMemoryAgent` which is **NOT** used for HTTP mTLS examples. HTTP services use production `identityserver` adapter connecting to real SPIRE Workload API.
 
-#### CLI Demo Architecture
+#### CLI Demo
 
 ```
 ┌────────────────┐
@@ -485,7 +485,7 @@ func (r *InMemoryRegistry) FindBySelectors(
 
 #### Why Agent is in Outbound Adapters
 
-The agent is **correctly placed** as an outbound adapter because:
+The agent is placed as an outbound adapter because:
 
 1. **Direction of dependency**: CLI (inbound) → Application → Agent (outbound) → Infrastructure
 2. **Infrastructure-facing**: Agent talks to SPIRE Server (infrastructure), not to domain logic
@@ -505,7 +505,7 @@ InMemoryAgent (outbound adapter implementation)
 InMemoryServer (simulated SPIRE infrastructure)
 ```
 
-**Key Point**: Just because CLI calls it doesn't make it inbound. The agent is called BY the application to interact with infrastructure, making it outbound.
+Just because CLI calls it doesn't make it inbound. The agent is called BY the application to interact with infrastructure, making it outbound.
 
 #### CLI Demo vs HTTP mTLS
 
@@ -719,7 +719,7 @@ agent, err := spire.NewAgent(ctx, client, agentSpiffeID, parser)
 server, err := spire.NewServer(ctx, client, trustDomainStr, trustDomainParser)
 ```
 
-**Important**: In production, selector domain logic is **not required**. SPIRE Server handles all selector matching against its own registration entries. See `docs/PRODUCTION_VS_DEVELOPMENT.md` for architecture comparison.
+In production, selector domain logic is not required. SPIRE Server handles all selector matching against its own registration entries. See `docs/PRODUCTION_VS_DEVELOPMENT.md` for architecture comparison.
 
 ---
 
