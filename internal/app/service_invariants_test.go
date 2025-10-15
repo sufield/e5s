@@ -23,7 +23,7 @@ import (
 
 	"github.com/pocket/hexagon/spire/internal/app"
 	"github.com/pocket/hexagon/spire/internal/domain"
-	"github.com/pocket/hexagon/spire/internal/ports"
+	"github.com/pocket/hexagon/spire/internal/dto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -40,8 +40,8 @@ func TestExchangeMessage_Invariant_RequiresNonNilNamespaces(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		from      ports.Identity
-		to        ports.Identity
+		from      dto.Identity
+		to        dto.Identity
 		wantError bool
 		wantErr   error
 	}{
@@ -53,7 +53,7 @@ func TestExchangeMessage_Invariant_RequiresNonNilNamespaces(t *testing.T) {
 		},
 		{
 			name: "sender credential nil - violates invariant",
-			from: ports.Identity{
+			from: dto.Identity{
 				IdentityCredential: nil, // Nil credential
 				Name:               "client",
 			},
@@ -64,7 +64,7 @@ func TestExchangeMessage_Invariant_RequiresNonNilNamespaces(t *testing.T) {
 		{
 			name: "receiver credential nil - violates invariant",
 			from: *createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(1*time.Hour)),
-			to: ports.Identity{
+			to: dto.Identity{
 				IdentityCredential: nil, // Nil credential
 				Name:               "server",
 			},
@@ -105,8 +105,8 @@ func TestExchangeMessage_Invariant_RequiresValidDocuments(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		from      ports.Identity
-		to        ports.Identity
+		from      dto.Identity
+		to        dto.Identity
 		wantError bool
 		wantErr   error
 	}{
@@ -132,7 +132,7 @@ func TestExchangeMessage_Invariant_RequiresValidDocuments(t *testing.T) {
 		},
 		{
 			name: "sender document nil - violates invariant",
-			from: ports.Identity{
+			from: dto.Identity{
 				IdentityCredential: domain.NewIdentityCredentialFromComponents(
 					domain.NewTrustDomainFromName("example.org"), "/client"),
 				Name:             "client",
@@ -145,7 +145,7 @@ func TestExchangeMessage_Invariant_RequiresValidDocuments(t *testing.T) {
 		{
 			name: "receiver document nil - violates invariant",
 			from: *createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(1*time.Hour)),
-			to: ports.Identity{
+			to: dto.Identity{
 				IdentityCredential: domain.NewIdentityCredentialFromComponents(
 					domain.NewTrustDomainFromName("example.org"), "/server"),
 				Name:             "server",
@@ -188,18 +188,18 @@ func TestExchangeMessage_Invariant_NeverReturnsPartialResult(t *testing.T) {
 
 	tests := []struct {
 		name string
-		from ports.Identity
-		to   ports.Identity
+		from dto.Identity
+		to   dto.Identity
 	}{
 		{
 			name: "nil sender credential",
-			from: ports.Identity{IdentityCredential: nil, Name: "client"},
+			from: dto.Identity{IdentityCredential: nil, Name: "client"},
 			to:   *createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(1*time.Hour)),
 		},
 		{
 			name: "nil receiver credential",
 			from: *createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(1*time.Hour)),
-			to:   ports.Identity{IdentityCredential: nil, Name: "server"},
+			to:   dto.Identity{IdentityCredential: nil, Name: "server"},
 		},
 		{
 			name: "expired sender document",
@@ -241,8 +241,8 @@ func TestExchangeMessage_Invariant_PreservesInputIdentities(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		from    *ports.Identity
-		to      *ports.Identity
+		from    *dto.Identity
+		to      *dto.Identity
 		content string
 	}{
 		{

@@ -31,7 +31,7 @@ import (
 
 	"github.com/pocket/hexagon/spire/internal/app"
 	"github.com/pocket/hexagon/spire/internal/domain"
-	"github.com/pocket/hexagon/spire/internal/ports"
+	"github.com/pocket/hexagon/spire/internal/dto"
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -43,15 +43,15 @@ type MockAgent struct {
 	mock.Mock
 }
 
-func (m *MockAgent) GetIdentity(ctx context.Context) (*ports.Identity, error) {
+func (m *MockAgent) GetIdentity(ctx context.Context) (*domain.IdentityDocument, error) {
 	args := m.Called(ctx)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*ports.Identity), args.Error(1)
+	return args.Get(0).(*domain.IdentityDocument), args.Error(1)
 }
 
-func (m *MockAgent) FetchIdentityDocument(ctx context.Context, workload ports.ProcessIdentity) (*domain.IdentityDocument, error) {
+func (m *MockAgent) FetchIdentityDocument(ctx context.Context, workload *domain.Workload) (*domain.IdentityDocument, error) {
 	args := m.Called(ctx, workload)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -117,7 +117,7 @@ func TestIdentityService_ExchangeMessage_NilSenderNamespace(t *testing.T) {
 	mockRegistry := new(MockRegistry)
 	service := app.NewIdentityService(mockAgent, mockRegistry)
 
-	fromID := ports.Identity{
+	fromID := dto.Identity{
 		IdentityCredential: nil, // Invalid: nil credential
 		Name:               "client",
 	}
@@ -142,7 +142,7 @@ func TestIdentityService_ExchangeMessage_NilReceiverNamespace(t *testing.T) {
 	service := app.NewIdentityService(mockAgent, mockRegistry)
 
 	fromID := createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(1*time.Hour))
-	toID := ports.Identity{
+	toID := dto.Identity{
 		IdentityCredential: nil, // Invalid: nil credential
 		Name:               "server",
 	}
@@ -209,7 +209,7 @@ func TestIdentityService_ExchangeMessage_NilSenderDocument(t *testing.T) {
 	service := app.NewIdentityService(mockAgent, mockRegistry)
 
 	td := domain.NewTrustDomainFromName("example.org")
-	fromID := &ports.Identity{
+	fromID := &dto.Identity{
 		IdentityCredential: domain.NewIdentityCredentialFromComponents(td, "/client"),
 		Name:               "client",
 		IdentityDocument:   nil, // Invalid: nil document
@@ -236,7 +236,7 @@ func TestIdentityService_ExchangeMessage_NilReceiverDocument(t *testing.T) {
 
 	td := domain.NewTrustDomainFromName("example.org")
 	fromID := createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(1*time.Hour))
-	toID := &ports.Identity{
+	toID := &dto.Identity{
 		IdentityCredential: domain.NewIdentityCredentialFromComponents(td, "/server"),
 		Name:               "server",
 		IdentityDocument:   nil, // Invalid: nil document
@@ -303,8 +303,8 @@ func TestIdentityService_ExchangeMessage_LongContent(t *testing.T) {
 func TestIdentityService_ExchangeMessage_TableDriven(t *testing.T) {
 	tests := []struct {
 		name      string
-		fromID    *ports.Identity
-		toID      *ports.Identity
+		fromID    *dto.Identity
+		toID      *dto.Identity
 		content   string
 		wantError bool
 		wantErr   error
@@ -318,7 +318,7 @@ func TestIdentityService_ExchangeMessage_TableDriven(t *testing.T) {
 		},
 		{
 			name:      "nil sender credential",
-			fromID:    &ports.Identity{IdentityCredential: nil, Name: "client"},
+			fromID:    &dto.Identity{IdentityCredential: nil, Name: "client"},
 			toID:      createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(1*time.Hour)),
 			content:   "test",
 			wantError: true,
@@ -327,7 +327,7 @@ func TestIdentityService_ExchangeMessage_TableDriven(t *testing.T) {
 		{
 			name:      "nil receiver credential",
 			fromID:    createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(1*time.Hour)),
-			toID:      &ports.Identity{IdentityCredential: nil, Name: "server"},
+			toID:      &dto.Identity{IdentityCredential: nil, Name: "server"},
 			content:   "test",
 			wantError: true,
 			wantErr:   domain.ErrInvalidIdentityCredential,
@@ -387,7 +387,7 @@ func TestIdentityService_ExchangeMessage_TableDriven(t *testing.T) {
 
 // Helper function to create a valid identity for testing
 // Uses SDK to parse SPIFFE ID reliably instead of string slicing
-func createValidIdentity(t *testing.T, spiffeID string, expiresAt time.Time) *ports.Identity {
+func createValidIdentity(t *testing.T, spiffeID string, expiresAt time.Time) *dto.Identity {
 	t.Helper()
 
 	// Parse SPIFFE ID using SDK (no string slicing)
@@ -414,7 +414,7 @@ func createValidIdentity(t *testing.T, spiffeID string, expiresAt time.Time) *po
 	)
 	require.NoError(t, err, "Failed to create identity document for test")
 
-	return &ports.Identity{
+	return &dto.Identity{
 		IdentityCredential: identityCredential,
 		Name:               "test-identity",
 		IdentityDocument:   doc,

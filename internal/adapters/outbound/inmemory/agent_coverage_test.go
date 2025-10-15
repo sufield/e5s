@@ -17,7 +17,6 @@ import (
 	"github.com/pocket/hexagon/spire/internal/adapters/outbound/inmemory"
 	"github.com/pocket/hexagon/spire/internal/adapters/outbound/inmemory/attestor"
 	"github.com/pocket/hexagon/spire/internal/domain"
-	"github.com/pocket/hexagon/spire/internal/ports"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -52,7 +51,8 @@ func TestAgent_FetchIdentityDocument_NoSelectorsRegistered(t *testing.T) {
 	require.NoError(t, err)
 
 	// Act - Try to fetch with unregistered UID
-	_, err = agent.FetchIdentityDocument(ctx, ports.ProcessIdentity{UID: 99999, GID: 99999})
+	workload := domain.NewWorkload(1, 99999, 99999, "/unknown")
+	_, err = agent.FetchIdentityDocument(ctx, workload)
 
 	// Assert - Should fail because UID not registered in attestor
 	assert.Error(t, err)
@@ -90,7 +90,8 @@ func TestAgent_FetchIdentityDocument_NoMatchingMapper(t *testing.T) {
 	require.NoError(t, err)
 
 	// Act - Fetch with UID that has selectors but no matching mapper in registry
-	_, err = agent.FetchIdentityDocument(ctx, ports.ProcessIdentity{UID: 1000, GID: 1000})
+	workload := domain.NewWorkload(1, 1000, 1000, "/testapp")
+	_, err = agent.FetchIdentityDocument(ctx, workload)
 
 	// Assert - Should fail with "no mapper found" error
 	assert.Error(t, err)
@@ -130,7 +131,7 @@ func TestAgent_GetIdentity(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, identity)
 	assert.NotNil(t, identity.IdentityCredential)
-	assert.Equal(t, "spiffe://example.org/agent", identity.IdentityCredential.String())
+	assert.Equal(t, "spiffe://example.org/agent", identity.IdentityCredential().String())
 }
 func TestAgent_NewInMemoryAgent_ErrorPaths(t *testing.T) {
 	t.Parallel()
@@ -214,7 +215,8 @@ func TestAgent_FetchIdentityDocument_InvalidSelector(t *testing.T) {
 	require.NoError(t, err)
 
 	// Act - Try to fetch with UID that has invalid selector
-	_, err = agent.FetchIdentityDocument(ctx, ports.ProcessIdentity{UID: 2000, GID: 2000})
+	workload := domain.NewWorkload(1, 2000, 2000, "/testapp")
+	_, err = agent.FetchIdentityDocument(ctx, workload)
 
 	// Assert - Should fail with selector parse error
 	assert.Error(t, err)
@@ -263,7 +265,8 @@ func TestAgent_FetchIdentityDocument_FullErrorFlow(t *testing.T) {
 	require.NoError(t, err)
 
 	// Act - This should work end-to-end
-	identity, err := agent.FetchIdentityDocument(ctx, ports.ProcessIdentity{UID: 1000, GID: 1000})
+	workload := domain.NewWorkload(1, 1000, 1000, "/testapp")
+	identity, err := agent.FetchIdentityDocument(ctx, workload)
 
 	// Assert - Should succeed
 	require.NoError(t, err)
@@ -318,7 +321,8 @@ func TestAgent_ExtractName_RootPath(t *testing.T) {
 	require.NoError(t, err)
 
 	// Act - Fetch with root path identity
-	identity, err := agent.FetchIdentityDocument(ctx, ports.ProcessIdentity{UID: 2000, GID: 2000})
+	workload := domain.NewWorkload(1, 2000, 2000, "/testapp")
+	identity, err := agent.FetchIdentityDocument(ctx, workload)
 
 	// Assert - Should succeed and return identity document with root path
 	require.NoError(t, err)

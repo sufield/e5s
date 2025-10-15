@@ -20,12 +20,7 @@ func TestUnixWorkloadAttestor_Attest_Success(t *testing.T) {
 	attestorInst := attestor.NewUnixWorkloadAttestor()
 	attestorInst.RegisterUID(1000, "unix:user:testuser")
 
-	workload := ports.ProcessIdentity{
-		PID:  1234,
-		UID:  1000,
-		GID:  1000,
-		Path: "/bin/app",
-	}
+	workload := domain.NewWorkload(1234, 1000, 1000, "/bin/app")
 
 	selectors, err := attestorInst.Attest(ctx, workload)
 	require.NoError(t, err)
@@ -45,7 +40,7 @@ func TestUnixWorkloadAttestor_Attest_MultipleUIDs(t *testing.T) {
 	attestorInst.RegisterUID(1002, "unix:workload:client")
 
 	// Test server workload
-	serverWorkload := ports.ProcessIdentity{PID: 100, UID: 1001, GID: 1001, Path: "/usr/bin/server"}
+	serverWorkload := domain.NewWorkload(100, 1001, 1001, "/usr/bin/server")
 	serverSelectors, err := attestorInst.Attest(ctx, serverWorkload)
 	require.NoError(t, err)
 	assert.Contains(t, serverSelectors, "unix:workload:server")
@@ -53,7 +48,7 @@ func TestUnixWorkloadAttestor_Attest_MultipleUIDs(t *testing.T) {
 	assert.Contains(t, serverSelectors, "unix:gid:1001")
 
 	// Test client workload
-	clientWorkload := ports.ProcessIdentity{PID: 200, UID: 1002, GID: 1002, Path: "/usr/bin/client"}
+	clientWorkload := domain.NewWorkload(200, 1002, 1002, "/usr/bin/client")
 	clientSelectors, err := attestorInst.Attest(ctx, clientWorkload)
 	require.NoError(t, err)
 	assert.Contains(t, clientSelectors, "unix:workload:client")
@@ -70,12 +65,7 @@ func TestUnixWorkloadAttestor_Attest_UnregisteredUID(t *testing.T) {
 	attestorInst.RegisterUID(1000, "unix:user:testuser")
 
 	// Try to attest unregistered UID
-	workload := ports.ProcessIdentity{
-		PID:  1234,
-		UID:  9999,
-		GID:  9999,
-		Path: "/bin/unknown",
-	}
+	workload := domain.NewWorkload(1234, 9999, 9999, "/bin/unknown")
 
 	_, err := attestorInst.Attest(ctx, workload)
 	assert.Error(t, err)
@@ -92,12 +82,7 @@ func TestUnixWorkloadAttestor_Attest_InvalidUID(t *testing.T) {
 	attestorInst.RegisterUID(1000, "unix:user:testuser")
 
 	// Try to attest with negative UID
-	workload := ports.ProcessIdentity{
-		PID:  1234,
-		UID:  -1,
-		GID:  1000,
-		Path: "/bin/app",
-	}
+	workload := domain.NewWorkload(1234, -1, 1000, "/bin/app")
 
 	_, err := attestorInst.Attest(ctx, workload)
 	assert.Error(t, err)
@@ -116,7 +101,7 @@ func TestUnixWorkloadAttestor_RegisterUID(t *testing.T) {
 	attestorInst.RegisterUID(5000, "unix:service:myapp")
 
 	// Verify it can be attested
-	workload := ports.ProcessIdentity{UID: 5000, GID: 5000, PID: 123, Path: "/app"}
+	workload := domain.NewWorkload(123, 5000, 5000, "/app")
 	selectors, err := attestorInst.Attest(ctx, workload)
 	require.NoError(t, err)
 	assert.Contains(t, selectors, "unix:service:myapp")
@@ -136,7 +121,7 @@ func TestUnixWorkloadAttestor_RegisterUID_Overwrite(t *testing.T) {
 	attestorInst.RegisterUID(1000, "unix:user:updated")
 
 	// Verify updated selector is used
-	workload := ports.ProcessIdentity{UID: 1000, GID: 1000, PID: 123, Path: "/app"}
+	workload := domain.NewWorkload(123, 1000, 1000, "/app")
 	selectors, err := attestorInst.Attest(ctx, workload)
 	require.NoError(t, err)
 	assert.Contains(t, selectors, "unix:user:updated")
@@ -150,7 +135,7 @@ func TestUnixWorkloadAttestor_Attest_TableDriven(t *testing.T) {
 	tests := []struct {
 		name           string
 		registerUIDs   map[int]string
-		workload       ports.ProcessIdentity
+		workload       *domain.Workload
 		wantError      bool
 		wantErr        error
 		expectedCount  int
@@ -159,7 +144,7 @@ func TestUnixWorkloadAttestor_Attest_TableDriven(t *testing.T) {
 		{
 			name:           "valid attestation",
 			registerUIDs:   map[int]string{1000: "unix:user:app"},
-			workload:       ports.ProcessIdentity{UID: 1000, GID: 1000, PID: 100, Path: "/app"},
+			workload:       domain.NewWorkload(100, 1000, 1000, "/app"),
 			wantError:      false,
 			expectedCount:  3,
 			expectSelector: "unix:user:app",
@@ -167,7 +152,7 @@ func TestUnixWorkloadAttestor_Attest_TableDriven(t *testing.T) {
 		{
 			name:           "unregistered UID",
 			registerUIDs:   map[int]string{1000: "unix:user:app"},
-			workload:       ports.ProcessIdentity{UID: 2000, GID: 2000, PID: 200, Path: "/other"},
+			workload:       domain.NewWorkload(200, 2000, 2000, "/other"),
 			wantError:      true,
 			wantErr:        domain.ErrWorkloadAttestationFailed,
 			expectedCount:  0,
@@ -176,7 +161,7 @@ func TestUnixWorkloadAttestor_Attest_TableDriven(t *testing.T) {
 		{
 			name:           "negative UID",
 			registerUIDs:   map[int]string{},
-			workload:       ports.ProcessIdentity{UID: -5, GID: 100, PID: 100, Path: "/app"},
+			workload:       domain.NewWorkload(100, -5, 100, "/app"),
 			wantError:      true,
 			wantErr:        domain.ErrInvalidProcessIdentity,
 			expectedCount:  0,
@@ -185,7 +170,7 @@ func TestUnixWorkloadAttestor_Attest_TableDriven(t *testing.T) {
 		{
 			name:           "zero UID root",
 			registerUIDs:   map[int]string{0: "unix:user:root"},
-			workload:       ports.ProcessIdentity{UID: 0, GID: 0, PID: 1, Path: "/sbin/init"},
+			workload:       domain.NewWorkload(1, 0, 0, "/sbin/init"),
 			wantError:      false,
 			expectedCount:  3,
 			expectSelector: "unix:user:root",
@@ -193,7 +178,7 @@ func TestUnixWorkloadAttestor_Attest_TableDriven(t *testing.T) {
 		{
 			name:           "high UID value",
 			registerUIDs:   map[int]string{65534: "unix:user:nobody"},
-			workload:       ports.ProcessIdentity{UID: 65534, GID: 65534, PID: 9999, Path: "/usr/bin/nobody"},
+			workload:       domain.NewWorkload(9999, 65534, 65534, "/usr/bin/nobody"),
 			wantError:      false,
 			expectedCount:  3,
 			expectSelector: "unix:user:nobody",
@@ -201,7 +186,7 @@ func TestUnixWorkloadAttestor_Attest_TableDriven(t *testing.T) {
 		{
 			name:           "different GID than UID",
 			registerUIDs:   map[int]string{1000: "unix:user:app"},
-			workload:       ports.ProcessIdentity{UID: 1000, GID: 2000, PID: 100, Path: "/app"},
+			workload:       domain.NewWorkload(100, 1000, 2000, "/app"),
 			wantError:      false,
 			expectedCount:  3,
 			expectSelector: "unix:user:app",
@@ -235,8 +220,8 @@ func TestUnixWorkloadAttestor_Attest_TableDriven(t *testing.T) {
 					assert.Contains(t, selectors, tt.expectSelector)
 				}
 				// Verify standard selectors always present on success
-				assert.Contains(t, selectors, fmt.Sprintf("unix:uid:%d", tt.workload.UID))
-				assert.Contains(t, selectors, fmt.Sprintf("unix:gid:%d", tt.workload.GID))
+				assert.Contains(t, selectors, fmt.Sprintf("unix:uid:%d", tt.workload.UID()))
+				assert.Contains(t, selectors, fmt.Sprintf("unix:gid:%d", tt.workload.GID()))
 			}
 		})
 	}
@@ -262,12 +247,7 @@ func TestUnixWorkloadAttestor_Attest_GIDVariations(t *testing.T) {
 	gids := []int{0, 1000, 5000, 65534}
 
 	for _, gid := range gids {
-		workload := ports.ProcessIdentity{
-			UID:  1000,
-			GID:  gid,
-			PID:  1234,
-			Path: "/app",
-		}
+		workload := domain.NewWorkload(1234, 1000, gid, "/app")
 
 		selectors, err := attestorInst.Attest(ctx, workload)
 		require.NoError(t, err, "Should succeed with GID %d", gid)
@@ -294,7 +274,7 @@ func TestUnixWorkloadAttestor_ContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	workload := ports.ProcessIdentity{UID: 1000, GID: 1000, PID: 100, Path: "/app"}
+	workload := domain.NewWorkload(100, 1000, 1000, "/app")
 
 	// Current implementation doesn't check context, but this tests future-proofing
 	_, err := attestorInst.Attest(ctx, workload)
@@ -302,3 +282,4 @@ func TestUnixWorkloadAttestor_ContextCancellation(t *testing.T) {
 	// This test documents expected behavior
 	assert.NoError(t, err)
 }
+

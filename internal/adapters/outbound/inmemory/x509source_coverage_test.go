@@ -23,7 +23,7 @@ import (
 
 	"github.com/pocket/hexagon/spire/internal/adapters/outbound/inmemory"
 	"github.com/pocket/hexagon/spire/internal/domain"
-	"github.com/pocket/hexagon/spire/internal/ports"
+	"github.com/pocket/hexagon/spire/internal/dto"
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -43,7 +43,7 @@ func TestX509Source_Coverage_DefensiveCopyCABundle(t *testing.T) {
 
 	leafCert, leafKey := createTestLeafWithKey(t, "leaf", caCert1)
 	doc := createTestIdentityDocument(t, credential, leafCert, leafKey, nil)
-	identity := &ports.Identity{
+	identity := &dto.Identity{
 		IdentityCredential: credential,
 		IdentityDocument:   doc,
 		Name:               "workload",
@@ -83,7 +83,7 @@ func TestX509Source_Coverage_DefensiveCopyInGetBundle(t *testing.T) {
 
 	leafCert, leafKey := createTestLeafWithKey(t, "leaf", caCert)
 	doc := createTestIdentityDocument(t, credential, leafCert, leafKey, nil)
-	identity := &ports.Identity{
+	identity := &dto.Identity{
 		IdentityCredential: credential,
 		IdentityDocument:   doc,
 		Name:               "workload",
@@ -136,7 +136,7 @@ func TestX509Source_Coverage_ChainFiltering(t *testing.T) {
 	// Note: Domain normalizes chain to be leaf-first, so this becomes [leaf, intermediate, nil, nil]
 	chain := []*x509.Certificate{intermediateCert, nil, nil}
 	doc := createTestIdentityDocument(t, credential, leafCert, leafKey, chain)
-	identity := &ports.Identity{
+	identity := &dto.Identity{
 		IdentityCredential: credential,
 		IdentityDocument:   doc,
 		Name:               "workload",
@@ -187,7 +187,7 @@ func TestX509Source_Coverage_EmptyChain(t *testing.T) {
 			leafCert, leafKey := createTestLeafWithKey(t, "leaf", caCert)
 
 			doc := createTestIdentityDocument(t, credential, leafCert, leafKey, tt.chain)
-			identity := &ports.Identity{
+			identity := &dto.Identity{
 				IdentityCredential: credential,
 				IdentityDocument:   doc,
 				Name:               "workload",
@@ -225,7 +225,7 @@ func TestX509Source_Coverage_SPIFFEIDCaching(t *testing.T) {
 	caCert := createTestCA(t, "CA1")
 	leafCert, leafKey := createTestLeafWithKey(t, "leaf", caCert)
 	doc := createTestIdentityDocument(t, credential, leafCert, leafKey, nil)
-	identity := &ports.Identity{
+	identity := &dto.Identity{
 		IdentityCredential: credential,
 		IdentityDocument:   doc,
 		Name:               "workload",
@@ -280,7 +280,7 @@ func TestX509Source_Coverage_CaseInsensitiveTrustDomain(t *testing.T) {
 			caCert := createTestCA(t, "CA1")
 			leafCert, leafKey := createTestLeafWithKey(t, "leaf", caCert)
 			doc := createTestIdentityDocument(t, credential, leafCert, leafKey, nil)
-			identity := &ports.Identity{
+			identity := &dto.Identity{
 				IdentityCredential: credential,
 				IdentityDocument:   doc,
 				Name:               "workload",
@@ -319,7 +319,7 @@ func TestX509Source_Coverage_TrustDomainGetter(t *testing.T) {
 	caCert := createTestCA(t, "CA1")
 	leafCert, leafKey := createTestLeafWithKey(t, "leaf", caCert)
 	doc := createTestIdentityDocument(t, credential, leafCert, leafKey, nil)
-	identity := &ports.Identity{
+	identity := &dto.Identity{
 		IdentityCredential: credential,
 		IdentityDocument:   doc,
 		Name:               "workload",

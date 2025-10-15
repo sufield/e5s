@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/pocket/hexagon/spire/internal/adapters/outbound/inmemory"
-	"github.com/pocket/hexagon/spire/internal/ports"
+	"github.com/pocket/hexagon/spire/internal/dto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -34,7 +34,7 @@ func TestInMemoryConfig_Load_DefensiveCopy(t *testing.T) {
 	// Modify first config's workloads
 	originalLen := len(cfg1.Workloads)
 	cfg1.Workloads[0].UID = 9999
-	cfg1.Workloads = append(cfg1.Workloads, ports.WorkloadEntry{
+	cfg1.Workloads = append(cfg1.Workloads, dto.WorkloadEntry{
 		SpiffeID: "spiffe://example.org/modified",
 		Selector: "unix:uid:9999",
 		UID:      9999,
@@ -50,7 +50,7 @@ func TestInMemoryConfig_Validation_TrustDomainMismatch(t *testing.T) {
 	ctx := context.Background()
 
 	// Create config with mismatched trust domain
-	loader := inmemory.NewInMemoryConfig(func(cfg *ports.Config) {
+	loader := inmemory.NewInMemoryConfig(func(cfg *dto.Config) {
 		cfg.AgentSpiffeID = "spiffe://different.org/agent"
 	})
 
@@ -64,7 +64,7 @@ func TestInMemoryConfig_Validation_SelectorFormat(t *testing.T) {
 	ctx := context.Background()
 
 	// Create config with wrong selector format
-	loader := inmemory.NewInMemoryConfig(func(cfg *ports.Config) {
+	loader := inmemory.NewInMemoryConfig(func(cfg *dto.Config) {
 		cfg.Workloads[0].Selector = "unix:user:wrong-format"
 	})
 
@@ -78,10 +78,10 @@ func TestInMemoryConfig_WithOptions(t *testing.T) {
 	ctx := context.Background()
 
 	// Create config with custom trust domain
-	loader := inmemory.NewInMemoryConfig(func(cfg *ports.Config) {
+	loader := inmemory.NewInMemoryConfig(func(cfg *dto.Config) {
 		cfg.TrustDomain = "custom.org"
 		cfg.AgentSpiffeID = "spiffe://custom.org/agent"
-		cfg.Workloads = []ports.WorkloadEntry{
+		cfg.Workloads = []dto.WorkloadEntry{
 			{
 				SpiffeID: "spiffe://custom.org/workload",
 				Selector: "unix:uid:5000",
