@@ -64,25 +64,20 @@ func main() {
     defer server.Close()
 
     // Register handlers
-    server.HandleFunc("/api/hello", func(w http.ResponseWriter, r *http.Request) {
+    server.Handle("/api/hello", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
         clientID, ok := identityserver.GetIdentity(r)
         if !ok {
             http.Error(w, "Unauthorized", http.StatusUnauthorized)
             return
         }
         fmt.Fprintf(w, "Hello, %s!\n", clientID.String())
-    })
-
-    // Start server
-    if err := server.Start(ctx); err != nil {
-        log.Fatalf("Failed to start server: %v", err)
-    }
+    }))
 
     log.Println("Server listening on :8443")
 
-    // Wait for server to exit
-    if err := server.Wait(); err != nil && err != http.ErrServerClosed {
-        log.Printf("Server error: %v", err)
+    // Start server (blocks until shutdown)
+    if err := server.Start(ctx); err != nil {
+        log.Fatalf("Server error: %v", err)
     }
 }
 ```
@@ -115,8 +110,6 @@ func main() {
     // Authorize specific server
     serverID := spiffeid.RequireFromString("spiffe://example.org/server")
     cfg.SPIFFE.AllowedPeerID = serverID.String()
-    cfg.HTTP.Timeout = 30 * time.Second
-
     // Create the mTLS client
     client, err := httpclient.New(ctx, cfg)
     if err != nil {
@@ -125,7 +118,8 @@ func main() {
     defer client.Close()
 
     // Make request
-    resp, err := client.Get(ctx, "https://server:8443/api/hello")
+    req, _ := http.NewRequestWithContext(ctx, "GET", "https://server:8443/api/hello", nil)
+    resp, err := client.Do(ctx, req)
     if err != nil {
         log.Fatalf("Request failed: %v", err)
     }
@@ -157,17 +151,13 @@ type SPIFFEConfig struct {
     AllowedTrustDomain string // Any ID in trust domain (e.g., "example.org")
 }
 
-// HTTP server/client configuration
+// HTTP server configuration
 type HTTPConfig struct {
     Address           string        // Server address (e.g., ":8443")
     ReadHeaderTimeout time.Duration // Prevents Slowloris attacks
     ReadTimeout       time.Duration
     WriteTimeout      time.Duration
     IdleTimeout       time.Duration
-    ShutdownTimeout   time.Duration // Graceful shutdown deadline
-    MaxHeaderBytes    int           // Max header size (default: 1MB)
-    Timeout           time.Duration // Client request timeout
-    Logger            ServerLogger  // Optional logger (nil = silent)
 }
 ```
 
@@ -254,16 +244,8 @@ type MTLSServer interface {
     // Handlers receive requests with authenticated SPIFFE ID in context
     Handle(pattern string, handler http.Handler) error
 
-    // HandleFunc registers a function handler (convenience method)
-    HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) error
-
-    // Start begins serving HTTPS with identity-based mTLS
-    // Returns immediately after starting. Use Wait() to block until exit.
+    // Start begins serving HTTPS with identity-based mTLS (blocks until shutdown)
     Start(ctx context.Context) error
-
-    // Wait blocks until the server stops and returns the terminal error
-    // Returns http.ErrServerClosed on graceful shutdown
-    Wait() error
 
     // Shutdown gracefully stops the server, waiting for active connections
     Shutdown(ctx context.Context) error
@@ -283,12 +265,6 @@ type MTLSServer interface {
 type MTLSClient interface {
     // Do executes an HTTP request using identity-based mTLS
     Do(ctx context.Context, req *http.Request) (*http.Response, error)
-
-    // Get is a convenience for simple GET requests
-    Get(ctx context.Context, url string) (*http.Response, error)
-
-    // Post is a convenience for POST requests
-    Post(ctx context.Context, url, contentType string, body io.Reader) (*http.Response, error)
 
     // Close releases resources (X509Source, connections, etc.)
     Close() error
@@ -398,8 +374,8 @@ type MockMTLSServer struct {
     handlers map[string]http.Handler
 }
 
-func (m *MockMTLSServer) HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) error {
-    m.handlers[pattern] = http.HandlerFunc(handler)
+func (m *MockMTLSServer) Handle(pattern string, handler http.Handler) error {
+    m.handlers[pattern] = handler
     return nil
 }
 ```
@@ -413,30 +389,37 @@ func TestMTLSAuthentication(t *testing.T) {
     ctx := context.Background()
 
     // Create server
-    serverCfg := ports.DefaultMTLSConfig()
+    var serverCfg ports.MTLSConfig
+    serverCfg.WorkloadAPI.SocketPath = "unix:///tmp/spire-agent/public/api.sock"
     serverCfg.SPIFFE.AllowedTrustDomain = "example.org"
+    serverCfg.HTTP.Address = ":8443"
     server, err := identityserver.New(ctx, serverCfg)
     require.NoError(t, err)
     defer server.Close()
 
     // Register handler
-    server.HandleFunc("/test", func(w http.ResponseWriter, r *http.Request) {
+    server.Handle("/test", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
         id, ok := identityserver.GetIdentity(r)
         require.True(t, ok)
         fmt.Fprintf(w, "Hello, %s", id.String())
-    })
+    }))
 
-    require.NoError(t, server.Start(ctx))
+    // Start server in goroutine (blocks until shutdown)
+    go func() {
+        server.Start(ctx)
+    }()
 
     // Create client
-    clientCfg := ports.DefaultMTLSConfig()
+    var clientCfg ports.MTLSConfig
+    clientCfg.WorkloadAPI.SocketPath = "unix:///tmp/spire-agent/public/api.sock"
     clientCfg.SPIFFE.AllowedTrustDomain = "example.org"
     client, err := httpclient.New(ctx, clientCfg)
     require.NoError(t, err)
     defer client.Close()
 
     // Make request
-    resp, err := client.Get(ctx, "https://localhost:8443/test")
+    req, _ := http.NewRequestWithContext(ctx, "GET", "https://localhost:8443/test", nil)
+    resp, err := client.Do(ctx, req)
     require.NoError(t, err)
     defer resp.Body.Close()
 
@@ -534,9 +517,6 @@ server.Shutdown(shutdownCtx)  // Wait for connections to drain
 
 // Release resources
 server.Close()  // Close X509Source, sockets, etc.
-
-// Or use Stop() for convenience (Shutdown + Close)
-server.Stop(ctx)
 ```
 
 ### 4. Authentication Only (No Authorization)
@@ -544,7 +524,7 @@ server.Stop(ctx)
 The library only authenticates clients via SPIFFE IDs. Authorization decisions are left to the application:
 
 ```go
-server.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) {
+server.Handle("/admin", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
     clientID, ok := identityserver.GetIdentity(r)
     if !ok {
         http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -558,7 +538,7 @@ server.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) {
     }
 
     // Handle admin request
-})
+}))
 ```
 
 ## Quality and Best Practices
