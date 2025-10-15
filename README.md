@@ -1,24 +1,24 @@
 # SPIRE mTLS Library - Hexagonal Architecture
 
-A production-ready mTLS authentication library using SPIFFE/SPIRE for service-to-service communication, built with hexagonal architecture principles.
+An mTLS authentication library using SPIFFE/SPIRE for service-to-service communication, built with hexagonal architecture.
 
 ## Overview
 
-This project provides a **production mTLS library** using the real `go-spiffe` SDK v2.6.0 for identity-based authentication. It also includes an **in-memory SPIRE implementation** for development and learning purposes.
+This is an mTLS library using the real `go-spiffe` SDK v2.6.0 for identity-based authentication. It also includes an **in-memory SPIRE implementation** for development and testing purposes.
 
-### Production mTLS Library ✅
+### mTLS Library
 
-The core library provides:
+The library provides:
 - ✅ **Automatic Certificate Management**: Zero-downtime certificate rotation via SPIRE
 - ✅ **mTLS Authentication**: Both client and server authenticate each other
 - ✅ **Identity Extraction**: SPIFFE ID available to application handlers
 - ✅ **Standard HTTP**: Compatible with Go's standard `http` package
 - ✅ **Authentication Only**: No authorization logic - app decides access
 - ✅ **Production Ready**: Comprehensive tests (unit + integration)
-- ✅ **Clean API**: Structured configuration with sensible defaults
+- ✅ **Simple API**: Structured configuration with sensible defaults
 - ✅ **Thread-Safe**: Proper shutdown and resource management
 
-### Learning Implementation
+### Inmemory Implementation
 
 An in-memory SPIRE implementation demonstrates:
 - SPIRE Workload API concepts
@@ -167,7 +167,7 @@ type HTTPConfig struct {
 
 ```
 internal/
-├── domain/              # Pure domain entities (TrustDomain, IdentityCredential, etc.)
+├── domain/              # Domain entities (TrustDomain, IdentityCredential, etc.)
 ├── ports/               # Port interfaces (contracts between layers)
 │   ├── inbound.go       # IdentityProvider, CLI interfaces
 │   ├── outbound.go      # Agent, parsers, validators, factories
@@ -192,7 +192,7 @@ cmd/
 └── cp-minikube/         # Control plane for Minikube deployment
 
 examples/
-├── identityserver-example/ # Complete mTLS server example
+├── identityserver-example/ # mTLS server example
 ├── httpclient/             # mTLS client examples
 └── mtls/                   # Additional mTLS examples
 ```
@@ -230,7 +230,7 @@ examples/
 └─────────────────────────────────────────────────────────┘
 ```
 
-## Core Interfaces
+## Interfaces
 
 ### MTLSServer (Production Interface)
 
@@ -431,7 +431,7 @@ func TestMTLSAuthentication(t *testing.T) {
 
 ### Core Documentation
 
-- **[docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)** - Current state: Production vs Educational
+- [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) - Current state: Production vs Educational
 - [docs/MTLS.md](docs/MTLS.md) - Complete mTLS authentication guide
 - [docs/TEST_ARCHITECTURE.md](docs/TEST_ARCHITECTURE.md) - Testing strategy and best practices
 - [docs/CONTROL_PLANE.md](docs/CONTROL_PLANE.md) - SPIRE deployment and control plane
@@ -482,7 +482,7 @@ IDP_MODE=inmem go run ./cmd
 
 ### 1. Hexagonal Architecture
 
-Pure domain, port interfaces, swappable adapters:
+Consists of domain, port interfaces, swappable adapters:
 - Production implementation uses real `go-spiffe` SDK
 - In-memory implementation for development/testing
 - No domain coupling to infrastructure

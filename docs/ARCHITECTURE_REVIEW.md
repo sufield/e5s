@@ -1,4 +1,4 @@
-# Architecture Review: Port Placement and Adapter Complexity
+# Port Placement and Adapter Complexity
 
 This document analyzes two architectural concerns:
 
