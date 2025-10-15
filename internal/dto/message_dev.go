@@ -1,6 +1,6 @@
 //go:build dev
 
-package ports
+package dto
 
 // Message is demo-only: authenticated message exchange for CLI demos.
 type Message struct {

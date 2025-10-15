@@ -9,6 +9,7 @@ import (
 	"github.com/pocket/hexagon/spire/internal/adapters/outbound/inmemory"
 	"github.com/pocket/hexagon/spire/internal/adapters/outbound/inmemory/attestor"
 	"github.com/pocket/hexagon/spire/internal/domain"
+	"github.com/pocket/hexagon/spire/internal/dto"
 	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
@@ -24,7 +25,7 @@ func NewInMemoryAdapterFactory() *InMemoryAdapterFactory {
 	return &InMemoryAdapterFactory{}
 }
 
-func (f *InMemoryAdapterFactory) CreateRegistry(ctx context.Context, workloads []ports.WorkloadEntry, parser ports.IdentityCredentialParser) (*inmemory.InMemoryRegistry, error) {
+func (f *InMemoryAdapterFactory) CreateRegistry(ctx context.Context, workloads []dto.WorkloadEntry, parser ports.IdentityCredentialParser) (*inmemory.InMemoryRegistry, error) {
 	registry := inmemory.NewInMemoryRegistry()
 
 	// Seed registry with workload configurations
@@ -123,7 +124,7 @@ func (f *InMemoryAdapterFactory) CreateServer(ctx context.Context, trustDomain s
 	return inmemory.NewInMemoryServer(ctx, trustDomain, trustDomainParser, docProvider)
 }
 
-func (f *InMemoryAdapterFactory) CreateAttestor(workloads []ports.WorkloadEntry) *attestor.UnixWorkloadAttestor {
+func (f *InMemoryAdapterFactory) CreateAttestor(workloads []dto.WorkloadEntry) *attestor.UnixWorkloadAttestor {
 	a := attestor.NewUnixWorkloadAttestor()
 
 	// Register UIDs from workload configurations

@@ -5,6 +5,7 @@ package app
 import (
 	"fmt"
 
+	"github.com/pocket/hexagon/spire/internal/dto"
 	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
@@ -12,12 +13,12 @@ import (
 // In production there is no local registry or demo service;
 // workloads fetch identities via the SPIRE Workload API through the Agent.
 type Application struct {
-	cfg   *ports.Config
+	cfg   *dto.Config
 	agent ports.Agent
 }
 
 // New constructs a production Application and validates required deps.
-func New(cfg *ports.Config, agent ports.Agent) (*Application, error) {
+func New(cfg *dto.Config, agent ports.Agent) (*Application, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("config is nil")
 	}
@@ -39,5 +40,5 @@ func (a *Application) Close() error {
 }
 
 // Accessors (add only what you need)
-func (a *Application) Config() *ports.Config { return a.cfg }
-func (a *Application) Agent() ports.Agent    { return a.agent }
+func (a *Application) Config() *dto.Config { return a.cfg }
+func (a *Application) Agent() ports.Agent  { return a.agent }

@@ -13,7 +13,7 @@ import (
 	"github.com/spiffe/go-spiffe/v2/svid/x509svid"
 
 	"github.com/pocket/hexagon/spire/internal/domain"
-	"github.com/pocket/hexagon/spire/internal/ports"
+	"github.com/pocket/hexagon/spire/internal/dto"
 )
 
 // InMemoryX509Source is an in-memory implementation of x509svid.Source and x509bundle.Source
@@ -22,7 +22,7 @@ import (
 // Performance Note: Caches the parsed SPIFFE ID to avoid reparsing on every GetX509SVID() call.
 // Useful in tight test loops where the source is queried frequently.
 type InMemoryX509Source struct {
-	identity    *ports.Identity
+	identity    *dto.Identity
 	trustDomain *domain.TrustDomain
 	caBundle    []*x509.Certificate
 	idCache     *spiffeid.ID // Cached parsed SPIFFE ID (set on first GetX509SVID call)
@@ -33,7 +33,7 @@ type InMemoryX509Source struct {
 // Defensive copy: Makes a defensive copy of caBundle to prevent external mutations.
 // This is critical for test isolation - prevents one test from mutating another's bundle.
 func NewInMemoryX509Source(
-	identity *ports.Identity,
+	identity *dto.Identity,
 	trustDomain *domain.TrustDomain,
 	caBundle []*x509.Certificate,
 ) (*InMemoryX509Source, error) {

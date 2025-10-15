@@ -8,22 +8,23 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/pocket/hexagon/spire/internal/dto"
 	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
 // InMemoryConfig is an outbound adapter that provides hardcoded configuration
 // This adapter is responsible only for loading config - not wiring dependencies
 type InMemoryConfig struct {
-	config *ports.Config
+	config *dto.Config
 }
 
 // NewInMemoryConfig creates a new in-memory configuration adapter.
 // Optional functional options can override default values for tests.
-func NewInMemoryConfig(opts ...func(*ports.Config)) *InMemoryConfig {
-	cfg := &ports.Config{
+func NewInMemoryConfig(opts ...func(*dto.Config)) *InMemoryConfig {
+	cfg := &dto.Config{
 		TrustDomain:   "example.org",
 		AgentSpiffeID: "spiffe://example.org/host",
-		Workloads: []ports.WorkloadEntry{
+		Workloads: []dto.WorkloadEntry{
 			{
 				SpiffeID: "spiffe://example.org/server-workload",
 				Selector: "unix:uid:1001",
@@ -49,7 +50,7 @@ func NewInMemoryConfig(opts ...func(*ports.Config)) *InMemoryConfig {
 
 // Load returns a defensive copy of the in-memory configuration.
 // Returns a copy to prevent callers from mutating shared state across tests.
-func (c *InMemoryConfig) Load(ctx context.Context) (*ports.Config, error) {
+func (c *InMemoryConfig) Load(ctx context.Context) (*dto.Config, error) {
 	// Dev-only consistency checks: fail fast on misconfiguration
 	if err := validateConfig(c.config); err != nil {
 		return nil, fmt.Errorf("inmemory: invalid config: %w", err)
@@ -60,7 +61,7 @@ func (c *InMemoryConfig) Load(ctx context.Context) (*ports.Config, error) {
 
 	// Deep copy workloads slice to prevent mutation
 	if len(c.config.Workloads) > 0 {
-		wl := make([]ports.WorkloadEntry, len(c.config.Workloads))
+		wl := make([]dto.WorkloadEntry, len(c.config.Workloads))
 		copy(wl, c.config.Workloads)
 		cfg.Workloads = wl
 	}
@@ -69,7 +70,7 @@ func (c *InMemoryConfig) Load(ctx context.Context) (*ports.Config, error) {
 }
 
 // validateConfig performs dev-only consistency checks
-func validateConfig(cfg *ports.Config) error {
+func validateConfig(cfg *dto.Config) error {
 	if cfg == nil {
 		return fmt.Errorf("config cannot be nil")
 	}

@@ -177,14 +177,12 @@ func TestGetIdentity_LazyFetch(t *testing.T) {
 	identity, err := agent.GetIdentity(ctx)
 	require.NoError(t, err)
 	require.NotNil(t, identity)
-	assert.NotNil(t, identity.IdentityDocument)
 	assert.Equal(t, 1, fetcher.getCallCount(), "First GetIdentity should fetch")
 
 	// Second call should use cached (not expired)
 	identity2, err := agent.GetIdentity(ctx)
 	require.NoError(t, err)
 	require.NotNil(t, identity2)
-	assert.NotNil(t, identity2.IdentityDocument)
 	assert.Equal(t, 1, fetcher.getCallCount(), "Second GetIdentity should use cache")
 }
 
@@ -229,8 +227,8 @@ func TestGetIdentity_RenewsExpiringSoon(t *testing.T) {
 	identity2, err := agent.GetIdentity(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, 2, fetcher.getCallCount(), "Should renew expiring document")
-	// identity1 and identity2 are both *ports.Identity now, compare their documents
-	assert.NotEqual(t, identity1.IdentityDocument, identity2.IdentityDocument, "Should have different document instances after renewal")
+	// identity1 and identity2 are both *domain.IdentityDocument now, compare them directly
+	assert.NotEqual(t, identity1, identity2, "Should have different document instances after renewal")
 }
 
 func TestGetIdentity_FetchFailure(t *testing.T) {
@@ -275,13 +273,11 @@ func TestGetIdentity_DefensiveCopy(t *testing.T) {
 	identity2, err := agent.GetIdentity(ctx)
 	require.NoError(t, err)
 
-	// GetIdentity returns a shallow copy of the cached identity to discourage mutation.
-	// The pointers will be different, but the underlying IdentityDocument is the same.
-	assert.NotSame(t, identity1, identity2, "Returns shallow copy to discourage mutation")
-	assert.Same(t, identity1.IdentityDocument, identity2.IdentityDocument, "But shares immutable document")
+	// GetIdentity now returns the same *domain.IdentityDocument (immutable)
+	assert.Same(t, identity1, identity2, "Returns same immutable document")
 
 	// Verify content is correct
-	assert.Equal(t, identity1.IdentityCredential.String(), identity2.IdentityCredential.String())
+	assert.Equal(t, identity1.IdentityCredential().String(), identity2.IdentityCredential().String())
 }
 
 func TestGetIdentity_Concurrency(t *testing.T) {
@@ -421,7 +417,7 @@ func TestFetchIdentityDocument_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	// FetchIdentityDocument ignores workload parameter
-	workload := ports.ProcessIdentity{PID: 1234, UID: 1000}
+	workload := domain.NewWorkload(1234, 1000, 1000, "/usr/bin/workload")
 	identity, err := agent.FetchIdentityDocument(ctx, workload)
 
 	require.NoError(t, err)
@@ -442,7 +438,7 @@ func TestFetchIdentityDocument_FetchFailure(t *testing.T) {
 	agent, err := NewAgent(ctx, fetcher, "spiffe://example.org/agent", parser)
 	require.NoError(t, err)
 
-	workload := ports.ProcessIdentity{PID: 1234, UID: 1000}
+	workload := domain.NewWorkload(1234, 1000, 1000, "/usr/bin/workload")
 	identity, err := agent.FetchIdentityDocument(ctx, workload)
 
 	assert.Error(t, err)

@@ -8,6 +8,7 @@ import (
 
 	"github.com/pocket/hexagon/spire/internal/app/identityconv"
 	"github.com/pocket/hexagon/spire/internal/domain"
+	"github.com/pocket/hexagon/spire/internal/dto"
 	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
@@ -27,19 +28,22 @@ func NewIdentityClientService(agent ports.Agent) (*IdentityClientService, error)
 }
 
 // IssueIdentity creates an identity credential for an authenticated workload.
-// Flow (dev): validate process identity → delegate to agent → adapt to ports.Identity.
+// Flow (dev): validate workload → delegate to agent → adapt to dto.Identity.
 //
 // Error semantics:
-//   - domain.ErrInvalidProcessIdentity: workload validation failed
+//   - domain.ErrWorkloadInvalid: workload validation failed
 //   - domain.ErrIdentityDocumentInvalid: nil/empty document returned
 //   - wrapped agent errors: attestation/matching/issuance failures
 func (s *IdentityClientService) IssueIdentity(
 	ctx context.Context,
-	workload ports.ProcessIdentity,
-) (*ports.Identity, error) {
-	// 1) Validate inputs early with dev helper (returns domain.ErrInvalidProcessIdentity).
-	if err := identityconv.ValidateProcessIdentity(workload); err != nil {
-		return nil, fmt.Errorf("%w", err)
+	workload *domain.Workload,
+) (*dto.Identity, error) {
+	// 1) Validate workload.
+	if workload == nil {
+		return nil, fmt.Errorf("%w: nil workload", domain.ErrWorkloadInvalid)
+	}
+	if err := workload.Validate(); err != nil {
+		return nil, fmt.Errorf("validate workload: %w", err)
 	}
 
 	// 2) Delegate to agent for attestation → matching → issuance.
@@ -51,11 +55,11 @@ func (s *IdentityClientService) IssueIdentity(
 		return nil, fmt.Errorf("%w: empty identity document", domain.ErrIdentityDocumentInvalid)
 	}
 
-	// 3) Build ports DTO. Name is best-effort sugar for logs/UI.
+	// 3) Build DTO. Name is best-effort sugar for logs/UI.
 	cred := doc.IdentityCredential()
 	name := identityconv.DeriveIdentityName(cred)
 
-	return &ports.Identity{
+	return &dto.Identity{
 		IdentityCredential: cred,
 		IdentityDocument:   doc,
 		Name:               name,

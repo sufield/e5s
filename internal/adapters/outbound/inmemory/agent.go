@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/pocket/hexagon/spire/internal/domain"
+	"github.com/pocket/hexagon/spire/internal/dto"
 	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
@@ -25,7 +26,7 @@ type InMemoryAgent struct {
 	attestor            ports.WorkloadAttestor
 	parser              ports.IdentityCredentialParser
 	certificateProvider ports.IdentityDocumentProvider
-	agentIdentity       *ports.Identity
+	agentIdentity       *dto.Identity
 }
 
 // NewInMemoryAgent creates a new in-memory SPIRE agent
@@ -84,7 +85,7 @@ func (a *InMemoryAgent) initializeAgentIdentity(ctx context.Context) error {
 		return fmt.Errorf("inmemory: failed to create agent identity document: %w", err)
 	}
 
-	a.agentIdentity = &ports.Identity{
+	a.agentIdentity = &dto.Identity{
 		IdentityCredential: a.identityCredential,
 		Name:               "agent",
 		IdentityDocument:   agentDoc,
@@ -93,19 +94,17 @@ func (a *InMemoryAgent) initializeAgentIdentity(ctx context.Context) error {
 	return nil
 }
 
-// GetIdentity returns the agent's own identity (credential + document + name)
-func (a *InMemoryAgent) GetIdentity(ctx context.Context) (*ports.Identity, error) {
+// GetIdentity returns the agent's own identity document.
+func (a *InMemoryAgent) GetIdentity(ctx context.Context) (*domain.IdentityDocument, error) {
 	if a.agentIdentity == nil {
 		return nil, fmt.Errorf("inmemory: %w: agent identity not initialized", domain.ErrAgentUnavailable)
 	}
-	// Return shallow copy to discourage mutation
-	identity := *a.agentIdentity
-	return &identity, nil
+	return a.agentIdentity.IdentityDocument, nil
 }
 
 // FetchIdentityDocument attests a workload and fetches its identity document from the server
 // Runtime flow: Attest → Match (FindBySelectors) → Issue → Return
-func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload ports.ProcessIdentity) (*domain.IdentityDocument, error) {
+func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload *domain.Workload) (*domain.IdentityDocument, error) {
 	// Step 1: Attest the workload to get selectors
 	selectorStrings, err := a.attestor.Attest(ctx, workload)
 	if err != nil {

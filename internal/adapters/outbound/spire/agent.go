@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/pocket/hexagon/spire/internal/domain"
+	"github.com/pocket/hexagon/spire/internal/dto"
 	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
@@ -45,7 +46,7 @@ type Agent struct {
 	opts   Options
 
 	mu            sync.RWMutex
-	agentIdentity *ports.Identity // guarded by mu; never nil after ctor
+	agentIdentity *dto.Identity // guarded by mu; never nil after ctor
 }
 
 // NewAgent constructs an Agent and seeds the expected identity credential via the parser.
@@ -87,7 +88,7 @@ func NewAgentWithOptions(
 	return &Agent{
 		client: client,
 		opts:   opts,
-		agentIdentity: &ports.Identity{
+		agentIdentity: &dto.Identity{
 			IdentityCredential: cred,
 			IdentityDocument:   nil, // fetched lazily
 			Name:               extractNameFromCredential(cred),
@@ -95,9 +96,9 @@ func NewAgentWithOptions(
 	}, nil
 }
 
-// GetIdentity returns the agent's identity (credential + current SVID).
+// GetIdentity returns the agent's identity document (current SVID).
 // Lazily fetches and proactively refreshes when expiring soon.
-func (a *Agent) GetIdentity(ctx context.Context) (*ports.Identity, error) {
+func (a *Agent) GetIdentity(ctx context.Context) (*domain.IdentityDocument, error) {
 	a.mu.RLock()
 	current := a.agentIdentity
 	need := needsRefresh(current.IdentityDocument, a.opts)
@@ -122,7 +123,7 @@ func (a *Agent) GetIdentity(ctx context.Context) (*ports.Identity, error) {
 					current.IdentityCredential.String(),
 				)
 			}
-			a.agentIdentity = &ports.Identity{
+			a.agentIdentity = &dto.Identity{
 				IdentityCredential: current.IdentityCredential,
 				IdentityDocument:   doc,
 				Name:               current.Name,
@@ -132,13 +133,11 @@ func (a *Agent) GetIdentity(ctx context.Context) (*ports.Identity, error) {
 		a.mu.Unlock()
 	}
 
-	// Return a shallow copy to discourage mutation of the cached struct.
-	out := *current
-	return &out, nil
+	return current.IdentityDocument, nil
 }
 
 // FetchIdentityDocument fetches an SVID for THIS process via Workload API.
-func (a *Agent) FetchIdentityDocument(ctx context.Context, _ ports.ProcessIdentity) (*domain.IdentityDocument, error) {
+func (a *Agent) FetchIdentityDocument(ctx context.Context, _ *domain.Workload) (*domain.IdentityDocument, error) {
 	doc, err := a.client.FetchX509SVID(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("fetch workload SVID from SPIRE: %w", err)

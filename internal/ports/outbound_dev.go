@@ -6,7 +6,13 @@ import (
 	"context"
 
 	"github.com/pocket/hexagon/spire/internal/domain"
+	"github.com/pocket/hexagon/spire/internal/dto"
 )
+
+// ConfigLoader loads runtime configuration (dev-only).
+type ConfigLoader interface {
+	Load(ctx context.Context) (*dto.Config, error)
+}
 
 // IdentityMapperRegistry provides read-only access to the identity mapper registry seeded at startup.
 // Dev-only: in production, SPIRE Server manages registration entries.
@@ -39,7 +45,7 @@ type IdentityMapperRegistry interface {
 type WorkloadAttestor interface {
 	// Attest verifies a workload and returns its selectors.
 	// Selectors must be formatted as "type:key:value" (e.g., "unix:uid:1000", "k8s:namespace:prod").
-	Attest(ctx context.Context, workload ProcessIdentity) ([]string, error)
+	Attest(ctx context.Context, workload *domain.Workload) ([]string, error)
 }
 
 // IdentityServer represents identity server functionality for in-memory/dev mode only.
@@ -88,4 +94,10 @@ type IdentityDocumentCreator interface {
 type IdentityDocumentProvider interface {
 	IdentityDocumentCreator
 	IdentityDocumentValidator
+}
+
+// TrustBundleProvider provides trust bundles for validation (dev-only).
+type TrustBundleProvider interface {
+	GetBundle(ctx context.Context, trustDomain *domain.TrustDomain) ([]byte, error)
+	GetBundleForIdentity(ctx context.Context, identityCredential *domain.IdentityCredential) ([]byte, error)
 }

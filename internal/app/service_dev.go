@@ -6,6 +6,7 @@ import (
 	"context"
 
 	"github.com/pocket/hexagon/spire/internal/domain"
+	"github.com/pocket/hexagon/spire/internal/dto"
 	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
@@ -37,10 +38,10 @@ func NewIdentityService(agent ports.Agent, registry ports.IdentityMapperRegistry
 //   - ErrIdentityDocumentExpired: expired/invalid document
 func (s *IdentityService) ExchangeMessage(
 	_ context.Context,
-	from ports.Identity,
-	to ports.Identity,
+	from dto.Identity,
+	to dto.Identity,
 	content string,
-) (*ports.Message, error) {
+) (*dto.Message, error) {
 	// Validate identity credentials are present
 	if from.IdentityCredential == nil || to.IdentityCredential == nil {
 		return nil, domain.ErrInvalidIdentityCredential
@@ -62,7 +63,7 @@ func (s *IdentityService) ExchangeMessage(
 		return nil, domain.ErrIdentityDocumentExpired
 	}
 
-	return &ports.Message{
+	return &dto.Message{
 		From:    from,
 		To:      to,
 		Content: content,

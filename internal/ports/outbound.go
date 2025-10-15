@@ -6,13 +6,9 @@ import (
 	"github.com/pocket/hexagon/spire/internal/domain"
 )
 
-type ConfigLoader interface {
-	Load(ctx context.Context) (*Config, error)
-}
-
 type Agent interface {
-	GetIdentity(ctx context.Context) (*Identity, error)
-	FetchIdentityDocument(ctx context.Context, workload ProcessIdentity) (*domain.IdentityDocument, error)
+	GetIdentity(ctx context.Context) (*domain.IdentityDocument, error)
+	FetchIdentityDocument(ctx context.Context, workload *domain.Workload) (*domain.IdentityDocument, error)
 	Close() error
 }
 
