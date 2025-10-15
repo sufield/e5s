@@ -91,26 +91,21 @@ mapper, err := registry.FindBySelectors(ctx, selectors)
 
 | Method | Signature | Description | Returns | Error Cases |
 |--------|-----------|-------------|---------|-------------|
-| `Attest` | `(ctx, workload ProcessIdentity) → ([]string, error)` | Generates selectors from process attributes | Selector strings | `ErrWorkloadAttestationFailed` if attestation fails<br>`ErrInvalidProcessIdentity` if workload invalid<br>`ErrNoAttestationData` if no selectors |
+| `Attest` | `(ctx, workload *domain.Workload) → ([]string, error)` | Generates selectors from process attributes | Selector strings | `ErrWorkloadAttestationFailed` if attestation fails<br>`ErrWorkloadInvalid` if workload invalid<br>`ErrNoAttestationData` if no selectors |
 
 **Selector Format**: `"type:value"` (e.g., `"unix:uid:1000"`, `"k8s:namespace:prod"`)
 
 **Example Usage**:
 ```go
 // Unix attestation
-workload := ports.ProcessIdentity{
-    PID: 123,
-    UID: 1000,
-    GID: 1000,
-    Path: "/usr/bin/app",
-}
+workload := domain.NewWorkload(123, 1000, 1000, "/usr/bin/app")
 selectors, err := attestor.Attest(ctx, workload)
 // selectors = ["unix:uid:1000", "unix:gid:1000"]
 
 // Invalid workload
-workload := ports.ProcessIdentity{UID: -1}
-selectors, err := attestor.Attest(ctx, workload)
-// errors.Is(err, domain.ErrInvalidProcessIdentity) == true
+workload := domain.NewWorkload(-1, 1000, 1000, "")
+err := workload.Validate()
+// errors.Is(err, domain.ErrWorkloadInvalid) == true
 ```
 
 ---
@@ -151,21 +146,21 @@ if ca == nil {
 
 | Method | Signature | Description | Returns | Error Cases |
 |--------|-----------|-------------|---------|-------------|
-| `GetIdentity` | `(ctx) → (*Identity, error)` | Returns agent's own identity | Agent identity | `ErrAgentUnavailable` if not initialized |
-| `FetchIdentityDocument` | `(ctx, workload) → (*Identity, error)` | Attest → Match → Issue → Return | Workload identity | `ErrWorkloadAttestationFailed` if attestation fails<br>`ErrNoMatchingMapper` if no registration<br>`ErrServerUnavailable` if server unreachable |
+| `GetIdentity` | `(ctx) → (*domain.IdentityDocument, error)` | Returns agent's own identity document | Agent identity document | `ErrAgentUnavailable` if not initialized |
+| `FetchIdentityDocument` | `(ctx, workload *domain.Workload) → (*domain.IdentityDocument, error)` | Attest → Match → Issue → Return | Workload identity document | `ErrWorkloadAttestationFailed` if attestation fails<br>`ErrNoMatchingMapper` if no registration<br>`ErrServerUnavailable` if server unreachable |
 
-**Flow**: `Attest workload → Find mapper by selectors → Issue SVID from server → Return identity`
+**Flow**: `Attest workload → Find mapper by selectors → Issue SVID from server → Return identity document`
 
 **Example Usage**:
 ```go
 // Fetch workload SVID
-workload := ports.ProcessIdentity{UID: 1000, PID: 123}
-identity, err := agent.FetchIdentityDocument(ctx, workload)
-// err == nil, identity contains SVID
+workload := domain.NewWorkload(123, 1000, 1000, "/usr/bin/app")
+doc, err := agent.FetchIdentityDocument(ctx, workload)
+// err == nil, doc contains X.509 SVID
 
 // Unregistered workload
-workload := ports.ProcessIdentity{UID: 9999}
-identity, err := agent.FetchIdentityDocument(ctx, workload)
+workload := domain.NewWorkload(123, 9999, 9999, "/usr/bin/app")
+doc, err := agent.FetchIdentityDocument(ctx, workload)
 // errors.Is(err, domain.ErrNoMatchingMapper) == true
 ```
 
@@ -302,7 +297,7 @@ err = provider.ValidateIdentityDocument(ctx, expiredDoc, namespace)
 
 | Method | Signature | Description | Returns | Error Cases |
 |--------|-----------|-------------|---------|-------------|
-| `FetchX509SVID` | `(ctx) → (*Identity, error)` | Fetches SVID for calling workload | Identity with SVID | `ErrWorkloadAttestationFailed`<br>`ErrNoMatchingMapper`<br>`ErrServerUnavailable` |
+| `FetchIdentity` | `(ctx) → (*dto.Identity, error)` | Fetches identity for calling workload | Identity DTO with SVID | `ErrWorkloadAttestationFailed`<br>`ErrNoMatchingMapper`<br>`ErrServerUnavailable` |
 
 **Important**: No `callerIdentity` parameter - server extracts credentials from Unix socket connection
 
@@ -355,11 +350,11 @@ Use in-memory implementations to test full flows:
 func TestWorkloadAttestation(t *testing.T) {
     app, _ := app.Bootstrap(ctx, inmemory.NewInMemoryConfig(), compose.NewInMemoryDeps())
 
-    workload := ports.ProcessIdentity{UID: 1000}
-    identity, err := app.Agent.FetchIdentityDocument(ctx, workload)
+    workload := domain.NewWorkload(123, 1000, 1000, "/usr/bin/app")
+    doc, err := app.Agent.FetchIdentityDocument(ctx, workload)
 
     require.NoError(t, err)
-    assert.Equal(t, "spiffe://example.org/test-workload", identity.IdentityCredential.String())
+    assert.Equal(t, "spiffe://example.org/test-workload", doc.IdentityCredential().String())
 }
 ```
 

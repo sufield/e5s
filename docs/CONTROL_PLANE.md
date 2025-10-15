@@ -390,7 +390,7 @@ type IdentityServer interface {
 **Location**: `internal/adapters/outbound/inmemory/agent.go`
 
 ```go
-func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload ports.ProcessIdentity) (*ports.Identity, error) {
+func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload *domain.Workload) (*domain.IdentityDocument, error) {
     // Step 1: Attest the workload to get selectors
     selectorStrings, err := a.attestor.Attest(ctx, workload)
     if err != nil {
@@ -419,12 +419,8 @@ func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload port
         return nil, fmt.Errorf("failed to issue identity document: %w", err)
     }
 
-    // Step 5: Return identity with document
-    return &ports.Identity{
-        IdentityCredential:   mapper.IdentityCredential(),
-        Name:             extractNameFromIdentityCredential(mapper.IdentityCredential()),
-        IdentityDocument: doc,
-    }, nil
+    // Step 5: Return identity document
+    return doc, nil
 }
 ```
 

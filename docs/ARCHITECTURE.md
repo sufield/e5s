@@ -190,18 +190,26 @@ func (m *IdentityMapper) MatchesSelectors(discovered *SelectorSet) bool {
 
 ### 2. Port Layer (`internal/ports/`)
 
-**Purpose**: Define contracts between layers
+**Purpose**: Define contracts between layers (interfaces only)
 
 **Contents**:
-- **Inbound Ports**: `IdentityClient`, `Service`
-- **Outbound Ports**: `Server`, `Agent`, `IdentityMapperRegistry`, `WorkloadAttestor`, etc.
-- **Data Structures**: `Identity`, `ProcessIdentity`, `Config`
+- **Inbound Ports**: `IdentityProvider`, `CLI`, `Service` (dev-only)
+- **Outbound Ports**: `Agent`, `IdentityMapperRegistry`, `WorkloadAttestor`, `TrustDomainParser`, etc.
+- **Configuration**: `MTLSConfig`, `WorkloadAPIConfig`, `SPIFFEConfig`, `HTTPConfig` (mTLS server/client config)
+
+**Data Transfer Objects**: Moved to `internal/dto/`
+- `dto.Identity` - Identity transport DTO
+- `dto.Config` - Runtime configuration (dev/prod variants)
+- `dto.WorkloadEntry` - Workload registration (dev-only)
+- `dto.Message` - Demo message (dev-only)
 
 **Rules**:
 - ✅ Interfaces owned by application layer
 - ✅ SDK-agnostic (use domain types, not SDK types)
 - ✅ Complete error contracts (documented return errors)
+- ✅ DTOs separated into `internal/dto/` package
 - ❌ No implementation details
+- ❌ No business logic in DTOs
 
 **Example**:
 ```go
@@ -238,16 +246,20 @@ type IdentityClientService struct {
     agent ports.Agent
 }
 
-func (s *IdentityClientService) FetchX509SVIDForCaller(
+func (s *IdentityClientService) IssueIdentity(
     ctx context.Context,
-    callerIdentity ports.ProcessIdentity,
-) (*ports.Identity, error) {
+    workload *domain.Workload,
+) (*dto.Identity, error) {
     // Orchestration: delegate to agent port
-    identity, err := s.agent.FetchIdentityDocument(ctx, callerIdentity)
+    doc, err := s.agent.FetchIdentityDocument(ctx, workload)
     if err != nil {
         return nil, fmt.Errorf("failed to fetch identity document: %w", err)
     }
-    return identity, nil
+    // Build DTO from domain object
+    return &dto.Identity{
+        IdentityCredential: doc.IdentityCredential(),
+        IdentityDocument:   doc,
+    }, nil
 }
 ```
 
@@ -334,7 +346,7 @@ func (r *InMemoryRegistry) FindBySelectors(
 │  IdentityClientService     │  (Application Layer)
 │  internal/app/             │
 └──────┬─────────────────────┘
-       │ 3. FetchIdentityDocument(ProcessIdentity{UID:1000, PID:12345})
+       │ 3. FetchIdentityDocument(*domain.Workload{UID:1000, PID:12345})
        ▼
 ┌────────────────────────────┐
 │  InMemoryAgent             │  (In-Memory Adapter)
@@ -826,11 +838,12 @@ if errors.Is(err, domain.ErrNoMatchingMapper) {
 ```go
 // Server side (SO_PEERCRED)
 ucred, _ := syscall.GetsockoptUcred(fd, syscall.SOL_SOCKET, syscall.SO_PEERCRED)
-processIdentity := ports.ProcessIdentity{
-    PID: int(ucred.Pid),
-    UID: int(ucred.Uid),
-    GID: int(ucred.Gid),
-}
+workload := domain.NewWorkload(
+    int(ucred.Pid),
+    int(ucred.Uid),
+    int(ucred.Gid),
+    "", // path extracted separately if needed
+)
 ```
 
 **Selector Generation**:
@@ -937,11 +950,11 @@ func TestWorkloadAttestation(t *testing.T) {
     app, _ := app.Bootstrap(ctx, inmemory.NewInMemoryConfig(), compose.NewInMemoryDeps())
 
     // Test full flow
-    workload := ports.ProcessIdentity{UID: 1000, PID: 123}
-    identity, err := app.Agent.FetchIdentityDocument(ctx, workload)
+    workload := domain.NewWorkload(123, 1000, 1000, "/usr/bin/app")
+    doc, err := app.Agent.FetchIdentityDocument(ctx, workload)
 
     require.NoError(t, err)
-    assert.Equal(t, "spiffe://example.org/test-workload", identity.IdentityCredential.String())
+    assert.Equal(t, "spiffe://example.org/test-workload", doc.IdentityCredential().String())
 }
 ```
 

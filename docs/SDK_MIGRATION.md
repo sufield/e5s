@@ -25,14 +25,14 @@ The `IdentityClient` interface abstracts SPIRE Workload API operations, allowing
 type IdentityClient interface {
     // FetchX509SVID fetches an X.509 SVID for the calling workload
     // Signature matches: (*workloadapi.Client).FetchX509SVID(ctx) (*x509svid.SVID, error)
-    FetchX509SVID(ctx context.Context) (*Identity, error)
+    FetchIdentity(ctx context.Context) (*dto.Identity, error)
 }
 ```
 
 **Design Decisions**:
 - ✅ No `callerIdentity` parameter - extracted automatically from connection
 - ✅ Context-only signature matches SDK exactly
-- ✅ Returns `*Identity` (maps to `*x509svid.SVID` in SDK)
+- ✅ Returns `*dto.Identity` (transport DTO wrapping domain objects)
 
 ### Server-Side Service (Internal Implementation)
 
@@ -45,16 +45,17 @@ type IdentityClientService struct {
     agent ports.Agent
 }
 
-func (s *IdentityClientService) FetchX509SVIDForCaller(
+func (s *IdentityClientService) IssueIdentity(
     ctx context.Context,
-    callerIdentity ports.ProcessIdentity,
-) (*ports.Identity, error)
+    workload *domain.Workload,
+) (*dto.Identity, error)
 ```
 
 **Architecture**:
 1. Server adapter extracts Unix socket peer credentials (UID/PID/GID)
-2. Calls `FetchX509SVIDForCaller()` with extracted credentials
-3. Service delegates to agent for attestation → matching → issuance
+2. Creates `domain.Workload` object with extracted credentials
+3. Calls `IssueIdentity()` with workload information
+4. Service delegates to agent for attestation → matching → issuance
 
 ## Migration Path
 
@@ -116,8 +117,8 @@ func NewSDKIdentityClient(ctx context.Context, opts ...workloadapi.ClientOption)
     return &SDKIdentityClient{client: client}, nil
 }
 
-// FetchX509SVID implements ports.IdentityClient interface
-func (c *SDKIdentityClient) FetchX509SVID(ctx context.Context) (*ports.Identity, error) {
+// FetchIdentity implements ports.IdentityClient interface
+func (c *SDKIdentityClient) FetchIdentity(ctx context.Context) (*dto.Identity, error) {
     // Call real SDK method
     svid, err := c.client.FetchX509SVID(ctx)
     if err != nil {
@@ -134,13 +135,22 @@ func (c *SDKIdentityClient) Close() error {
 }
 
 // convertSDKSVIDToIdentity converts SDK types to domain types
-func convertSDKSVIDToIdentity(svid *x509svid.SVID) *ports.Identity {
-    // TODO: Map x509svid.SVID fields to ports.Identity
-    // - svid.ID.String() → IdentityCredential
-    // - svid.Certificates → IdentityDocument
-    // - svid.PrivateKey → IdentityDocument
-    return &ports.Identity{
-        // ... mapping logic
+func convertSDKSVIDToIdentity(svid *x509svid.SVID) *dto.Identity {
+    // Parse SPIFFE ID to domain IdentityCredential
+    identityCredential := domain.NewIdentityCredentialFromURI(svid.ID.String())
+
+    // Build domain IdentityDocument
+    doc := domain.NewIdentityDocumentFromComponents(
+        identityCredential,
+        svid.Certificates[0],      // leaf cert
+        svid.PrivateKey,            // private key
+        svid.Certificates[1:],      // CA chain
+        svid.Certificates[0].NotAfter, // expiration
+    )
+
+    return &dto.Identity{
+        IdentityCredential: identityCredential,
+        IdentityDocument:   doc,
     }
 }
 ```
@@ -182,12 +192,12 @@ func main() {
     }
 
     // Same code works for both implementations!
-    svid, err := client.FetchX509SVID(ctx)
+    identity, err := client.FetchIdentity(ctx)
     if err != nil {
-        log.Fatalf("Failed to fetch SVID: %v", err)
+        log.Fatalf("Failed to fetch identity: %v", err)
     }
 
-    fmt.Printf("SPIFFE ID: %s\n", svid.IdentityCredential.String())
+    fmt.Printf("SPIFFE ID: %s\n", identity.IdentityCredential.String())
 }
 ```
 
@@ -201,12 +211,13 @@ For server-side, you would:
 
 ## Type Mapping
 
-| Walking Skeleton Type | go-spiffe SDK Type | Notes |
+| Application Type | go-spiffe SDK Type | Notes |
 |-----------------------|-------------------|-------|
-| `ports.Identity` | `x509svid.SVID` | Contains cert chain + private key |
-| `ports.IdentityCredential` | `spiffeid.ID` | SPIFFE ID parsing/validation |
+| `dto.Identity` | `x509svid.SVID` | Transport DTO containing domain objects |
+| `domain.IdentityCredential` | `spiffeid.ID` | SPIFFE ID parsing/validation |
 | `domain.TrustDomain` | `spiffeid.TrustDomain` | Trust domain validation |
-| `ports.ProcessIdentity` | N/A (server-side only) | Used for attestation |
+| `domain.Workload` | N/A (server-side only) | Used for attestation |
+| `domain.IdentityDocument` | X.509 cert + key | Rich domain object wrapping crypto material |
 
 ## Environment Variables
 
@@ -223,19 +234,19 @@ For server-side, you would:
 ### Unit Tests
 
 ```go
-func TestFetchSVID(t *testing.T) {
+func TestFetchIdentity(t *testing.T) {
     // Mock IdentityClient for testing
     mockClient := &MockIdentityClient{
-        svid: &ports.Identity{
-            IdentityCredential: testNamespace,
+        identity: &dto.Identity{
+            IdentityCredential: testCredential,
             IdentityDocument: testDoc,
         },
     }
 
     // Test code works with interface
-    svid, err := mockClient.FetchX509SVID(context.Background())
+    identity, err := mockClient.FetchIdentity(context.Background())
     require.NoError(t, err)
-    assert.Equal(t, testNamespace, svid.IdentityCredential)
+    assert.Equal(t, testCredential, identity.IdentityCredential)
 }
 ```
 
@@ -252,9 +263,9 @@ func TestRealSDKIntegration(t *testing.T) {
     require.NoError(t, err)
     defer client.Close()
 
-    svid, err := client.FetchX509SVID(ctx)
+    identity, err := client.FetchIdentity(ctx)
     require.NoError(t, err)
-    assert.NotNil(t, svid)
+    assert.NotNil(t, identity)
 }
 ```
 

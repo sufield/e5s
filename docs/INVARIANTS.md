@@ -305,16 +305,16 @@ func (im *IdentityMapper) MatchesSelectors(selectors *SelectorSet) bool
 ```go
 // Invariant: ExchangeMessage requires non-nil identity credentials
 // Location: ExchangeMessage (line 28)
-func (s *IdentityService) ExchangeMessage(ctx context.Context, from ports.Identity, to ports.Identity, content string) (*ports.Message, error)
+func (s *IdentityService) ExchangeMessage(ctx context.Context, from dto.Identity, to dto.Identity, content string) (*dto.Message, error)
 ```
 - **Pre**: `from.IdentityCredential != nil` and `to.IdentityCredential != nil`
-- **Post**: If `err != nil`, then error message indicates which namespace is nil
+- **Post**: If `err != nil`, then error message indicates which identity credential is nil
 - **Rationale**: Cannot exchange messages without knowing sender/receiver identities
 
 ```go
 // Invariant: ExchangeMessage requires valid (non-expired) identity documents
 // Location: ExchangeMessage (line 28)
-func (s *IdentityService) ExchangeMessage(ctx context.Context, from ports.Identity, to ports.Identity, content string) (*ports.Message, error)
+func (s *IdentityService) ExchangeMessage(ctx context.Context, from dto.Identity, to dto.Identity, content string) (*dto.Message, error)
 ```
 - **Pre**: `from.IdentityDocument != nil && from.IdentityDocument.IsValid()`
 - **Pre**: `to.IdentityDocument != nil && to.IdentityDocument.IsValid()`
@@ -324,7 +324,7 @@ func (s *IdentityService) ExchangeMessage(ctx context.Context, from ports.Identi
 ```go
 // Invariant: ExchangeMessage never returns msg != nil when err != nil
 // Location: ExchangeMessage (line 28)
-func (s *IdentityService) ExchangeMessage(ctx context.Context, from ports.Identity, to ports.Identity, content string) (*ports.Message, error)
+func (s *IdentityService) ExchangeMessage(ctx context.Context, from dto.Identity, to dto.Identity, content string) (*dto.Message, error)
 ```
 - **Post**: If `err != nil`, then `msg == nil` always holds
 - **Post**: If `err == nil`, then `msg != nil` and `msg.From/To` match inputs
@@ -333,7 +333,7 @@ func (s *IdentityService) ExchangeMessage(ctx context.Context, from ports.Identi
 ```go
 // Invariant: Created message preserves input identities and content
 // Location: ExchangeMessage (line 46)
-func (s *IdentityService) ExchangeMessage(ctx context.Context, from ports.Identity, to ports.Identity, content string) (*ports.Message, error)
+func (s *IdentityService) ExchangeMessage(ctx context.Context, from dto.Identity, to dto.Identity, content string) (*dto.Message, error)
 ```
 - **Post**: If `err == nil`, then:
   - `msg.From.IdentityCredential == from.IdentityCredential`
@@ -487,43 +487,42 @@ func NewInMemoryAgent(...) (*InMemoryAgent, error)
 ```go
 // Invariant: GetIdentity() never returns nil identity for initialized agent
 // Location: GetIdentity (line 78)
-func (a *InMemoryAgent) GetIdentity(ctx context.Context) (*ports.Identity, error)
+func (a *InMemoryAgent) GetIdentity(ctx context.Context) (*domain.IdentityDocument, error)
 ```
-- **Post**: If agent is initialized, `identity != nil && err == nil`
-- **Post**: If agent not initialized, `identity == nil && err != nil`
+- **Post**: If agent is initialized, `doc != nil && err == nil`
+- **Post**: If agent not initialized, `doc == nil && err != nil`
 - **Rationale**: GetIdentity should always succeed for valid agent
 
 ```go
 // Invariant: FetchIdentityDocument() follows strict flow: Attest → Match → Issue
 // Location: FetchIdentityDocument (line 87)
-func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload ports.ProcessIdentity) (*ports.Identity, error)
+func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload *domain.Workload) (*domain.IdentityDocument, error)
 ```
 - **Post**: If `err == nil`, then:
   1. Workload was attested (selectors obtained)
   2. Selectors matched registry (mapper found)
   3. Document issued by server
-  4. Returned identity has non-nil namespace and valid document
+  4. Returned document has non-nil identity credential and is valid
 - **Rationale**: Identity issuance requires all steps to succeed
 
 ```go
 // Invariant: FetchIdentityDocument() validates attestation result
 // Location: FetchIdentityDocument (line 94)
-func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload ports.ProcessIdentity) (*ports.Identity, error)
+func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload *domain.Workload) (*domain.IdentityDocument, error)
 ```
 - **Post**: If attestation returns empty selectors, returns error (never proceeds to match)
 - **Rationale**: Cannot match workload without selectors
 
 ```go
-// Invariant: FetchIdentityDocument() returns identity with non-nil document
+// Invariant: FetchIdentityDocument() returns identity document with non-nil credential
 // Location: FetchIdentityDocument (line 121)
-func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload ports.ProcessIdentity) (*ports.Identity, error)
+func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload *domain.Workload) (*domain.IdentityDocument, error)
 ```
 - **Post**: If `err == nil`, then:
-  - `identity != nil`
-  - `identity.IdentityCredential != nil`
-  - `identity.IdentityDocument != nil`
-  - `identity.IdentityDocument.IsValid() == true` (freshly issued)
-- **Rationale**: Returned identity must be complete and valid
+  - `doc != nil`
+  - `doc.IdentityCredential() != nil`
+  - `doc.IsValid() == true` (freshly issued)
+- **Rationale**: Returned identity document must be complete and valid
 
 ---
 
@@ -634,22 +633,22 @@ func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload port
    ```go
    tests := []struct {
        name        string
-       fromID      *ports.Identity
+       identity    *dto.Identity
        expectError bool
    }{
-       {"nil namespace", &ports.Identity{IdentityCredential: nil}, true}, // Invariant violation
+       {"nil identity credential", &dto.Identity{IdentityCredential: nil}, true}, // Invariant violation
        {"valid identity", createValidIdentity(t), false},
    }
    ```
 
 3. **Assertion Helpers**: Create reusable validation functions
    ```go
-   func assertValidIdentity(t *testing.T, id *ports.Identity) {
+   func assertValidIdentity(t *testing.T, identity *dto.Identity) {
        t.Helper()
-       require.NotNil(t, id)
-       require.NotNil(t, id.IdentityCredential) // Invariant
-       require.NotNil(t, id.IdentityDocument)  // Invariant
-       assert.True(t, id.IdentityDocument.IsValid()) // Invariant
+       require.NotNil(t, identity)
+       require.NotNil(t, identity.IdentityCredential) // Invariant
+       require.NotNil(t, identity.IdentityDocument)  // Invariant
+       assert.True(t, identity.IdentityDocument.IsValid()) // Invariant
    }
    ```
 
