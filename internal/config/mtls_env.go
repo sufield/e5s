@@ -7,103 +7,114 @@ import (
 	"time"
 )
 
-// applyEnvOverrides overrides config values with environment variables if set.
+// applyEnvOverrides applies strict environment variable overrides.
+//
+// Breaking changes from previous version:
+//   - Removed: HTTP_PORT, HTTP_ENABLED, EXPECTED_SERVER_ID, ALLOWED_CLIENT_ID
+//   - ALLOWED_ID and ALLOWED_IDS are mutually exclusive (error if both set)
+//   - AUTH_PEER_VERIFICATION must be one of: any, trust-domain, specific-id, one-of
+//   - List inputs are normalized: trimmed, deduped, empties dropped
+//
 // Returns error for invalid environment variable values to fail fast.
 func applyEnvOverrides(cfg *MTLSConfig) error {
 	// SPIRE configuration
-	if socketPath := os.Getenv("SPIRE_AGENT_SOCKET"); socketPath != "" {
-		cfg.SPIRE.SocketPath = socketPath
+	if v := os.Getenv("SPIRE_AGENT_SOCKET"); v != "" {
+		cfg.SPIRE.SocketPath = v
 	}
-	if trustDomain := os.Getenv("SPIRE_TRUST_DOMAIN"); trustDomain != "" {
-		cfg.SPIRE.TrustDomain = trustDomain
+	if v := os.Getenv("SPIRE_TRUST_DOMAIN"); v != "" {
+		cfg.SPIRE.TrustDomain = strings.TrimSpace(v)
 	}
-	if timeout := os.Getenv("SPIRE_TIMEOUT"); timeout != "" {
-		t, err := time.ParseDuration(timeout)
-		if err != nil {
-			return fmt.Errorf("invalid SPIRE_TIMEOUT %q: %w", timeout, err)
-		}
-		cfg.SPIRE.Timeout = t
+	if err := parseDurationInto("SPIRE_TIMEOUT", &cfg.SPIRE.Timeout); err != nil {
+		return err
 	}
 
 	// HTTP configuration
-	if address := os.Getenv("HTTP_ADDRESS"); address != "" {
-		cfg.HTTP.Address = address
-	}
-	if enabled := os.Getenv("HTTP_ENABLED"); enabled != "" {
-		e, err := parseBool(enabled)
-		if err != nil {
-			return fmt.Errorf("invalid HTTP_ENABLED %q: %w", enabled, err)
-		}
-		cfg.HTTP.Enabled = e
-	}
-	if timeout := os.Getenv("HTTP_TIMEOUT"); timeout != "" {
-		t, err := time.ParseDuration(timeout)
-		if err != nil {
-			return fmt.Errorf("invalid HTTP_TIMEOUT %q: %w", timeout, err)
-		}
-		cfg.HTTP.Timeout = t
+	if v := os.Getenv("HTTP_ADDRESS"); v != "" {
+		cfg.HTTP.Address = v
 	}
 
-	// HTTP timeout overrides
-	if timeout := os.Getenv("HTTP_READ_HEADER_TIMEOUT"); timeout != "" {
-		t, err := time.ParseDuration(timeout)
-		if err != nil {
-			return fmt.Errorf("invalid HTTP_READ_HEADER_TIMEOUT %q: %w", timeout, err)
-		}
-		cfg.HTTP.ReadHeaderTimeout = t
+	// HTTP durations
+	if err := parseDurationInto("HTTP_TIMEOUT", &cfg.HTTP.Timeout); err != nil {
+		return err
 	}
-	if timeout := os.Getenv("HTTP_READ_TIMEOUT"); timeout != "" {
-		t, err := time.ParseDuration(timeout)
-		if err != nil {
-			return fmt.Errorf("invalid HTTP_READ_TIMEOUT %q: %w", timeout, err)
-		}
-		cfg.HTTP.ReadTimeout = t
+	if err := parseDurationInto("HTTP_READ_HEADER_TIMEOUT", &cfg.HTTP.ReadHeaderTimeout); err != nil {
+		return err
 	}
-	if timeout := os.Getenv("HTTP_WRITE_TIMEOUT"); timeout != "" {
-		t, err := time.ParseDuration(timeout)
-		if err != nil {
-			return fmt.Errorf("invalid HTTP_WRITE_TIMEOUT %q: %w", timeout, err)
-		}
-		cfg.HTTP.WriteTimeout = t
+	if err := parseDurationInto("HTTP_READ_TIMEOUT", &cfg.HTTP.ReadTimeout); err != nil {
+		return err
 	}
-	if timeout := os.Getenv("HTTP_IDLE_TIMEOUT"); timeout != "" {
-		t, err := time.ParseDuration(timeout)
-		if err != nil {
-			return fmt.Errorf("invalid HTTP_IDLE_TIMEOUT %q: %w", timeout, err)
-		}
-		cfg.HTTP.IdleTimeout = t
+	if err := parseDurationInto("HTTP_WRITE_TIMEOUT", &cfg.HTTP.WriteTimeout); err != nil {
+		return err
+	}
+	if err := parseDurationInto("HTTP_IDLE_TIMEOUT", &cfg.HTTP.IdleTimeout); err != nil {
+		return err
 	}
 
-	// Authentication configuration
-	if peerVerification := os.Getenv("AUTH_PEER_VERIFICATION"); peerVerification != "" {
-		cfg.HTTP.Auth.PeerVerification = peerVerification
+	// Auth mode (validate against allowed values)
+	if v := os.Getenv("AUTH_PEER_VERIFICATION"); v != "" {
+		mode := strings.ToLower(strings.TrimSpace(v))
+		switch mode {
+		case "any", "trust-domain", "specific-id", "one-of":
+			cfg.HTTP.Auth.PeerVerification = mode
+		default:
+			return fmt.Errorf("invalid AUTH_PEER_VERIFICATION %q (allowed: any|trust-domain|specific-id|one-of)", v)
+		}
 	}
-	if trustDomain := os.Getenv("AUTH_TRUST_DOMAIN"); trustDomain != "" {
-		cfg.HTTP.Auth.TrustDomain = trustDomain
+	if v := os.Getenv("AUTH_TRUST_DOMAIN"); v != "" {
+		cfg.HTTP.Auth.TrustDomain = strings.TrimSpace(v)
 	}
 
-	// Support comma-separated list for AllowedIDs
-	if allowedIDs := os.Getenv("ALLOWED_IDS"); allowedIDs != "" {
-		cfg.HTTP.Auth.AllowedIDs = strings.Split(allowedIDs, ",")
-		// Trim whitespace from each ID
-		for i := range cfg.HTTP.Auth.AllowedIDs {
-			cfg.HTTP.Auth.AllowedIDs[i] = strings.TrimSpace(cfg.HTTP.Auth.AllowedIDs[i])
+	// Allowed IDs (mutually exclusive: single ID or list, not both)
+	id := strings.TrimSpace(os.Getenv("ALLOWED_ID"))
+	ids := strings.TrimSpace(os.Getenv("ALLOWED_IDS"))
+
+	if id != "" && ids != "" {
+		return fmt.Errorf("ALLOWED_ID and ALLOWED_IDS are mutually exclusive; set only one")
+	}
+
+	if id != "" {
+		cfg.HTTP.Auth.AllowedIDs = []string{id}
+	}
+	if ids != "" {
+		list := splitCleanDedup(ids, ",")
+		if len(list) == 0 {
+			return fmt.Errorf("ALLOWED_IDS provided but resolved to empty after cleaning")
 		}
+		cfg.HTTP.Auth.AllowedIDs = list
 	}
 
 	return nil
 }
 
-// parseBool parses boolean environment variables
-// Accepts: "true", "1", "yes", "on" for true; "false", "0", "no", "off" for false
-func parseBool(value string) (bool, error) {
-	value = strings.ToLower(strings.TrimSpace(value))
-	switch value {
-	case "true", "1", "yes", "on":
-		return true, nil
-	case "false", "0", "no", "off":
-		return false, nil
-	default:
-		return false, fmt.Errorf("invalid boolean value %q", value)
+// parseDurationInto parses a duration from an env var and stores it in target.
+func parseDurationInto(env string, target *time.Duration) error {
+	if v := os.Getenv(env); v != "" {
+		d, err := time.ParseDuration(strings.TrimSpace(v))
+		if err != nil {
+			return fmt.Errorf("invalid %s %q: %w", env, v, err)
+		}
+		*target = d
 	}
+	return nil
+}
+
+// splitCleanDedup splits a string by separator, trims whitespace, removes empties, and deduplicates.
+func splitCleanDedup(s, sep string) []string {
+	raw := strings.Split(s, sep)
+	seen := make(map[string]struct{}, len(raw))
+	out := make([]string, 0, len(raw))
+
+	for _, r := range raw {
+		v := strings.TrimSpace(r)
+		if v == "" {
+			continue
+		}
+		if _, ok := seen[v]; ok {
+			continue
+		}
+		seen[v] = struct{}{}
+		out = append(out, v)
+	}
+
+	return out
 }
