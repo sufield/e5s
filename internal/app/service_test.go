@@ -1,3 +1,6 @@
+//go:build dev
+// +build dev
+
 package app_test
 
 // Identity Service Tests
@@ -6,10 +9,13 @@ package app_test
 // Tests cover message exchange between identities, credential validation,
 // document expiration checks, and error handling for invalid inputs.
 //
+// NOTE: These tests are dev-only since IdentityService and ports.Service
+// are only available in development builds.
+//
 // Run these tests with:
 //
-//	go test ./internal/app/... -v -run TestIdentityService
-//	go test ./internal/app/... -cover
+//	go test -tags dev ./internal/app/... -v -run TestIdentityService
+//	go test -tags dev ./internal/app/... -cover
 
 import (
 	"context"
@@ -19,12 +25,14 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"math/big"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/pocket/hexagon/spire/internal/app"
 	"github.com/pocket/hexagon/spire/internal/domain"
 	"github.com/pocket/hexagon/spire/internal/ports"
+	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -278,8 +286,8 @@ func TestIdentityService_ExchangeMessage_LongContent(t *testing.T) {
 	fromID := createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(1*time.Hour))
 	toID := createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(1*time.Hour))
 
-	// Create long content (10KB)
-	longContent := string(make([]byte, 10*1024))
+	// Create long content (10KB) - use readable content instead of NUL bytes
+	longContent := strings.Repeat("x", 10*1024)
 
 	// Act - Long content should be allowed (no size validation in current implementation)
 	msg, err := service.ExchangeMessage(ctx, *fromID, *toID, longContent)
@@ -378,20 +386,25 @@ func TestIdentityService_ExchangeMessage_TableDriven(t *testing.T) {
 }
 
 // Helper function to create a valid identity for testing
+// Uses SDK to parse SPIFFE ID reliably instead of string slicing
 func createValidIdentity(t *testing.T, spiffeID string, expiresAt time.Time) *ports.Identity {
 	t.Helper()
 
-	td := domain.NewTrustDomainFromName("example.org")
-	path := "/client"
-	if len(spiffeID) > len("spiffe://example.org") {
-		path = spiffeID[len("spiffe://example.org"):]
+	// Parse SPIFFE ID using SDK (no string slicing)
+	sid, err := spiffeid.FromString(spiffeID)
+	require.NoError(t, err, "Failed to parse SPIFFE ID")
+
+	// Extract trust domain and path from parsed ID
+	td := domain.NewTrustDomainFromName(sid.TrustDomain().String())
+	path := sid.Path()
+	if path == "" {
+		path = "/" // Root identity
 	}
 
 	identityCredential := domain.NewIdentityCredentialFromComponents(td, path)
 
-	// Create real certificate for testing (constructor now requires non-nil cert/key)
-	cert := createTestCertWithExpiry(t, expiresAt)
-	key := createTestPrivateKey(t)
+	// Create real certificate for testing with matching key
+	cert, key := createTestCertWithExpiry(t, expiresAt)
 
 	doc, err := domain.NewIdentityDocumentFromComponents(
 		identityCredential,
@@ -409,7 +422,8 @@ func createValidIdentity(t *testing.T, spiffeID string, expiresAt time.Time) *po
 }
 
 // createTestCertWithExpiry creates a test X.509 certificate with specific expiry
-func createTestCertWithExpiry(t *testing.T, expiresAt time.Time) *x509.Certificate {
+// Returns both the certificate and the private key used to sign it (ensures key↔cert match)
+func createTestCertWithExpiry(t *testing.T, expiresAt time.Time) (*x509.Certificate, *ecdsa.PrivateKey) {
 	t.Helper()
 
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -429,15 +443,5 @@ func createTestCertWithExpiry(t *testing.T, expiresAt time.Time) *x509.Certifica
 	cert, err := x509.ParseCertificate(certDER)
 	require.NoError(t, err, "Failed to parse test certificate")
 
-	return cert
-}
-
-// createTestPrivateKey creates a test ECDSA private key
-func createTestPrivateKey(t *testing.T) *ecdsa.PrivateKey {
-	t.Helper()
-
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	require.NoError(t, err, "Failed to generate test private key")
-
-	return key
+	return cert, key
 }
