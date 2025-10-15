@@ -7,40 +7,56 @@ import (
 	"fmt"
 
 	"github.com/pocket/hexagon/spire/internal/app/identityconv"
+	"github.com/pocket/hexagon/spire/internal/domain"
 	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
-// IdentityClientService implements the server-side identity issuance logic.
-// This is the internal service used by server adapters to issue identity credentials.
+// IdentityClientService implements the server-side identity issuance logic (dev only).
 // Server adapters extract workload credentials and call this service.
 type IdentityClientService struct {
 	agent ports.Agent
 }
 
 // NewIdentityClientService creates a new identity issuer service.
-func NewIdentityClientService(agent ports.Agent) *IdentityClientService {
-	return &IdentityClientService{
-		agent: agent,
+// Returns error if agent is nil (fail-fast validation).
+func NewIdentityClientService(agent ports.Agent) (*IdentityClientService, error) {
+	if agent == nil {
+		return nil, fmt.Errorf("agent cannot be nil")
 	}
+	return &IdentityClientService{agent: agent}, nil
 }
 
 // IssueIdentity creates an identity credential for an authenticated workload.
-// This is called by server adapters after extracting the workload's credentials
-// from a trusted source (e.g., Unix socket peer credentials).
-func (s *IdentityClientService) IssueIdentity(ctx context.Context, workload ports.ProcessIdentity) (*ports.Identity, error) {
-	// Delegate to agent for attestation → matching → issuance
-	doc, err := s.agent.FetchIdentityDocument(ctx, workload)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch identity document: %w", err)
+// Flow (dev): validate process identity → delegate to agent → adapt to ports.Identity.
+//
+// Error semantics:
+//   - domain.ErrInvalidProcessIdentity: workload validation failed
+//   - domain.ErrIdentityDocumentInvalid: nil/empty document returned
+//   - wrapped agent errors: attestation/matching/issuance failures
+func (s *IdentityClientService) IssueIdentity(
+	ctx context.Context,
+	workload ports.ProcessIdentity,
+) (*ports.Identity, error) {
+	// 1) Validate inputs early with dev helper (returns domain.ErrInvalidProcessIdentity).
+	if err := identityconv.ValidateProcessIdentity(workload); err != nil {
+		return nil, fmt.Errorf("%w", err)
 	}
 
-	// Convert domain.IdentityDocument to ports.Identity (DTO for inbound ports)
-	// Extract name from identity credential path for human-readable identification
-	credential := doc.IdentityCredential()
-	name := identityconv.DeriveIdentityName(credential)
+	// 2) Delegate to agent for attestation → matching → issuance.
+	doc, err := s.agent.FetchIdentityDocument(ctx, workload)
+	if err != nil {
+		return nil, fmt.Errorf("fetch identity document: %w", err)
+	}
+	if doc == nil || doc.IdentityCredential() == nil {
+		return nil, fmt.Errorf("%w: empty identity document", domain.ErrIdentityDocumentInvalid)
+	}
+
+	// 3) Build ports DTO. Name is best-effort sugar for logs/UI.
+	cred := doc.IdentityCredential()
+	name := identityconv.DeriveIdentityName(cred)
 
 	return &ports.Identity{
-		IdentityCredential: credential,
+		IdentityCredential: cred,
 		IdentityDocument:   doc,
 		Name:               name,
 	}, nil

@@ -71,7 +71,11 @@ func Bootstrap(ctx context.Context, configLoader ports.ConfigLoader, factory *co
 	}
 
 	// Step 7: Initialize services
-	identitySvc := NewIdentityClientService(agent)
+	identitySvc, err := NewIdentityClientService(agent)
+	if err != nil {
+		// Agent has Close() but we keep it simple: all or nothing
+		return nil, fmt.Errorf("create identity client service: %w", err)
+	}
 	service := NewIdentityService(agent, registry)
 
 	// Step 8: Wire application with constructor validation
