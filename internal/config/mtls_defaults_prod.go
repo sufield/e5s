@@ -8,8 +8,8 @@ import "time"
 //
 // Security properties:
 //   - Binds to loopback only ("127.0.0.1:8443") by default
-//   - No "any" auth default - must be explicitly configured
-//   - Requires explicit SPIRE socket and trust domain configuration
+//   - No SPIRE defaults - must be explicitly configured
+//   - No auth defaults - must be explicitly configured
 const (
 	DefaultHTTPAddress       = "127.0.0.1:8443" // force loopback unless explicitly changed
 	DefaultHTTPTimeout       = 30 * time.Second
@@ -20,40 +20,45 @@ const (
 	DefaultSPIRETimeout      = 30 * time.Second
 )
 
-// ApplyDefaults sets default values for unspecified configuration (production mode).
+// ApplyDefaults sets safe infrastructure defaults only (production mode).
 //
-// Note: In production, SPIRE socket path and trust domain are NOT defaulted.
-// These must be explicitly configured to prevent misconfiguration.
+// Breaking changes from previous version:
+//   - No fallback from HTTP.Port to Address (set Address explicitly)
+//   - Does NOT copy SPIRE.TrustDomain into HTTP.Auth.TrustDomain
+//   - Does NOT default PeerVerification to "any"
+//
+// In production:
+//   - SPIRE socket path and trust domain must be explicitly configured
+//   - Authentication fields must be explicitly configured
+//   - Validation will fail if required fields are missing
 func ApplyDefaults(cfg *MTLSConfig) {
 	// SPIRE: no socket path or trust domain defaults in prod (must be explicit)
-	if cfg.SPIRE.Timeout <= 0 {
+	if cfg.SPIRE.Timeout == 0 {
 		cfg.SPIRE.Timeout = DefaultSPIRETimeout
 	}
 
-	// HTTP defaults
+	// HTTP infrastructure defaults (timeouts, address)
 	if cfg.HTTP.Address == "" {
 		cfg.HTTP.Address = DefaultHTTPAddress
 	}
-	if cfg.HTTP.Timeout <= 0 {
+	if cfg.HTTP.Timeout == 0 {
 		cfg.HTTP.Timeout = DefaultHTTPTimeout
 	}
-	if cfg.HTTP.ReadHeaderTimeout <= 0 {
+	if cfg.HTTP.ReadHeaderTimeout == 0 {
 		cfg.HTTP.ReadHeaderTimeout = DefaultReadHeaderTimeout
 	}
-	if cfg.HTTP.ReadTimeout <= 0 {
+	if cfg.HTTP.ReadTimeout == 0 {
 		cfg.HTTP.ReadTimeout = DefaultReadTimeout
 	}
-	if cfg.HTTP.WriteTimeout <= 0 {
+	if cfg.HTTP.WriteTimeout == 0 {
 		cfg.HTTP.WriteTimeout = DefaultWriteTimeout
 	}
-	if cfg.HTTP.IdleTimeout <= 0 {
+	if cfg.HTTP.IdleTimeout == 0 {
 		cfg.HTTP.IdleTimeout = DefaultIdleTimeout
 	}
 
-	// Authentication: inherit trust domain from SPIRE if not specified
-	if cfg.HTTP.Auth.TrustDomain == "" {
-		cfg.HTTP.Auth.TrustDomain = cfg.SPIRE.TrustDomain
-	}
-
-	// Production: NO default peer verification - must be explicit
+	// Auth: no implicit defaults (force explicit config/validation elsewhere).
+	// cfg.HTTP.Auth.PeerVerification stays as provided.
+	// cfg.HTTP.Auth.TrustDomain stays as provided.
+	// cfg.HTTP.Auth.AllowedIDs stays as provided.
 }
