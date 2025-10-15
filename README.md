@@ -1,95 +1,175 @@
-# SPIRE Workload API - Hexagonal Architecture Implementation
+# SPIRE mTLS Library - Hexagonal Architecture
 
-A production-ready implementation of SPIRE's Workload API using hexagonal architecture. This demonstrates how workloads fetch their SVIDs (SPIFFE Verifiable Identity Documents) from a SPIRE agent through a Unix domain socket.
+A production-ready mTLS authentication library using SPIFFE/SPIRE for service-to-service communication, built with hexagonal architecture principles.
 
 ## Overview
 
-This project provides two implementations:
+This project provides a **production mTLS library** using the real `go-spiffe` SDK v2.6.0 for identity-based authentication. It also includes an **in-memory SPIRE implementation** for development and learning purposes.
 
-1. **Production mTLS Library** ✅ - Using real `go-spiffe` SDK v2.6.0
-   - HTTP server and client with automatic mTLS
-   - Production-ready with comprehensive tests
-   - Used in `internal/adapters/inbound/httpapi` and `internal/adapters/outbound/httpclient`
+### Production mTLS Library ✅
 
-2. **Learning SPIRE Implementation** - In-memory for learning
-   - Demonstrates SPIRE Workload API concepts
-   - Agent server, workload clients, attestation flow
-   - Used in `cmd/agent` and `cmd/workload` for demos
-
-**Hexagonal Architecture**: Clear separation between domain, ports, and adapters allows both implementations to coexist
-
-## Features
-
-### 1. SPIRE Workload API
-
-- **Agent Server**: Runs on each host, provides Workload API on Unix socket
-- **Workload Clients**: Applications fetch their SVIDs from the local agent
-- **Attestation Flow**: Agent attests workload identity → matches selectors → issues SVID
-- **Hexagonal Architecture**: Clean separation between domain, ports, and adapters
-
-### 2. mTLS Authentication Library ✨
-
-A production-ready mTLS authentication library using SPIFFE/SPIRE for service-to-service communication:
-
+The core library provides:
 - ✅ **Automatic Certificate Management**: Zero-downtime certificate rotation via SPIRE
 - ✅ **mTLS Authentication**: Both client and server authenticate each other
 - ✅ **Identity Extraction**: SPIFFE ID available to application handlers
 - ✅ **Standard HTTP**: Compatible with Go's standard `http` package
 - ✅ **Authentication Only**: No authorization logic - app decides access
 - ✅ **Production Ready**: Comprehensive tests (unit + integration)
-- ✅ **Config Structs**: Clean API with structured configuration
+- ✅ **Clean API**: Structured configuration with sensible defaults
 - ✅ **Thread-Safe**: Proper shutdown and resource management
-- ✅ **Graceful Shutdown**: Separate Shutdown() and Close() methods
 
-**Quick Start**:
+### Learning Implementation
+
+An in-memory SPIRE implementation demonstrates:
+- SPIRE Workload API concepts
+- Agent server and workload attestation flow
+- Used for development and testing
+
+**Hexagonal Architecture**: Clear separation between domain, ports, and adapters allows both implementations to coexist.
+
+## Quick Start
+
+### mTLS Server
 
 ```go
-// Server with config struct
-server, err := httpapi.NewHTTPServer(ctx, httpapi.ServerConfig{
-    Address:    ":8443",
-    SocketPath: socketPath,
-    Authorizer: tlsconfig.AuthorizeAny(),
-})
-if err != nil {
-    log.Fatal(err)
-}
-defer server.Stop(ctx)
+package main
 
-server.RegisterHandler("/api/hello", func(w http.ResponseWriter, r *http.Request) {
-    clientID, ok := httpapi.GetSPIFFEID(r)
-    if !ok {
-        http.Error(w, "Unauthorized", http.StatusUnauthorized)
-        return
+import (
+    "context"
+    "fmt"
+    "log"
+    "net/http"
+    "time"
+
+    "github.com/pocket/hexagon/spire/internal/adapters/inbound/identityserver"
+    "github.com/pocket/hexagon/spire/internal/ports"
+)
+
+func main() {
+    ctx := context.Background()
+
+    // Configure the mTLS server
+    var cfg ports.MTLSConfig
+    cfg.WorkloadAPI.SocketPath = "unix:///tmp/spire-agent/public/api.sock"
+    cfg.SPIFFE.AllowedPeerID = "spiffe://example.org/client"  // Or use AllowedTrustDomain
+    cfg.HTTP.Address = ":8443"
+    cfg.HTTP.ReadHeaderTimeout = 10 * time.Second
+    cfg.HTTP.WriteTimeout = 30 * time.Second
+
+    // Create the mTLS server
+    server, err := identityserver.New(ctx, cfg)
+    if err != nil {
+        log.Fatalf("Failed to create server: %v", err)
     }
-    fmt.Fprintf(w, "Hello, %s!\n", clientID)
-})
+    defer server.Close()
 
-if err := server.Start(ctx); err != nil {
-    log.Fatal(err)
-}
+    // Register handlers
+    server.HandleFunc("/api/hello", func(w http.ResponseWriter, r *http.Request) {
+        clientID, ok := identityserver.GetIdentity(r)
+        if !ok {
+            http.Error(w, "Unauthorized", http.StatusUnauthorized)
+            return
+        }
+        fmt.Fprintf(w, "Hello, %s!\n", clientID.String())
+    })
 
-// Client with config struct
-client, err := httpclient.NewSPIFFEHTTPClient(ctx, httpclient.ClientConfig{
-    SocketPath:       socketPath,
-    ServerAuthorizer: tlsconfig.AuthorizeID(serverID),
-    Timeout:          30 * time.Second,
-})
-if err != nil {
-    log.Fatal(err)
-}
-defer client.Close()
+    // Start server
+    if err := server.Start(ctx); err != nil {
+        log.Fatalf("Failed to start server: %v", err)
+    }
 
-resp, err := client.Get(ctx, "https://server:8443/api/hello")
-if err != nil {
-    log.Fatal(err)
+    log.Println("Server listening on :8443")
+
+    // Wait for server to exit
+    if err := server.Wait(); err != nil && err != http.ErrServerClosed {
+        log.Printf("Server error: %v", err)
+    }
 }
-defer resp.Body.Close()
 ```
 
-**Documentation**:
-- [docs/MTLS.md](docs/MTLS.md) - Complete mTLS guide
-- [docs/TEST_ARCHITECTURE.md](docs/TEST_ARCHITECTURE.md) - Testing strategy and best practices
-- [examples/mtls-adapters/](examples/mtls-adapters/) - Working examples
+### mTLS Client
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "io"
+    "log"
+    "time"
+
+    "github.com/pocket/hexagon/spire/internal/adapters/outbound/httpclient"
+    "github.com/pocket/hexagon/spire/internal/ports"
+    "github.com/spiffe/go-spiffe/v2/spiffeid"
+    "github.com/spiffe/go-spiffe/v2/spiffetls/tlsconfig"
+)
+
+func main() {
+    ctx := context.Background()
+
+    // Configure the mTLS client
+    var cfg ports.MTLSConfig
+    cfg.WorkloadAPI.SocketPath = "unix:///tmp/spire-agent/public/api.sock"
+
+    // Authorize specific server
+    serverID := spiffeid.RequireFromString("spiffe://example.org/server")
+    cfg.SPIFFE.AllowedPeerID = serverID.String()
+    cfg.HTTP.Timeout = 30 * time.Second
+
+    // Create the mTLS client
+    client, err := httpclient.New(ctx, cfg)
+    if err != nil {
+        log.Fatalf("Failed to create client: %v", err)
+    }
+    defer client.Close()
+
+    // Make request
+    resp, err := client.Get(ctx, "https://server:8443/api/hello")
+    if err != nil {
+        log.Fatalf("Request failed: %v", err)
+    }
+    defer resp.Body.Close()
+
+    body, _ := io.ReadAll(resp.Body)
+    fmt.Printf("Response: %s\n", body)
+}
+```
+
+### Configuration Options
+
+```go
+// MTLSConfig holds all configuration
+type MTLSConfig struct {
+    WorkloadAPI WorkloadAPIConfig
+    SPIFFE      SPIFFEConfig
+    HTTP        HTTPConfig
+}
+
+// WorkloadAPI configuration
+type WorkloadAPIConfig struct {
+    SocketPath string // e.g., "unix:///tmp/spire-agent/public/api.sock"
+}
+
+// SPIFFE authorization configuration
+type SPIFFEConfig struct {
+    AllowedPeerID      string // Exact SPIFFE ID match (e.g., "spiffe://example.org/client")
+    AllowedTrustDomain string // Any ID in trust domain (e.g., "example.org")
+}
+
+// HTTP server/client configuration
+type HTTPConfig struct {
+    Address           string        // Server address (e.g., ":8443")
+    ReadHeaderTimeout time.Duration // Prevents Slowloris attacks
+    ReadTimeout       time.Duration
+    WriteTimeout      time.Duration
+    IdleTimeout       time.Duration
+    ShutdownTimeout   time.Duration // Graceful shutdown deadline
+    MaxHeaderBytes    int           // Max header size (default: 1MB)
+    Timeout           time.Duration // Client request timeout
+    Logger            ServerLogger  // Optional logger (nil = silent)
+}
+```
 
 ## Architecture
 
@@ -99,29 +179,32 @@ defer resp.Body.Close()
 internal/
 ├── domain/              # Pure domain entities (TrustDomain, IdentityCredential, etc.)
 ├── ports/               # Port interfaces (contracts between layers)
+│   ├── inbound.go       # IdentityProvider, CLI interfaces
+│   ├── outbound.go      # Agent, parsers, validators, factories
+│   ├── identityserver.go # MTLSServer, MTLSClient, MTLSConfig
+│   └── types.go         # Shared types (Identity, ProcessIdentity, etc.)
 ├── app/                 # Application services (business logic)
 ├── config/              # Configuration (YAML + env fallback)
+├── controlplane/        # Control plane for SPIRE deployment
 └── adapters/            # Infrastructure implementations
     ├── inbound/
-    │   ├── workloadapi/ # Workload API server (Unix socket HTTP)
-    │   ├── httpapi/     # mTLS HTTP server (authentication)
-    │   └── cli/         # CLI demonstration
+    │   ├── identityserver/ # Production mTLS server (go-spiffe SDK)
+    │   └── cli/            # CLI demonstration
     └── outbound/
-        ├── inmemory/    # In-memory SPIRE implementation
-        ├── workloadapi/ # Workload API client
-        ├── httpclient/  # mTLS HTTP client
-        └── compose/     # Dependency injection factory
+        ├── spire/          # Production SPIRE adapters (go-spiffe SDK)
+        ├── httpclient/     # Production mTLS client (go-spiffe SDK)
+        ├── inmemory/       # In-memory SPIRE implementation (dev/learning)
+        └── compose/        # Dependency injection factory
 
 cmd/
-├── agent/               # SPIRE agent server (production entrypoint)
-├── workload/            # Workload SVID fetch (production entrypoint)
-└── main.go              # CLI demonstration tool
+├── main.go              # CLI demonstration tool (uses in-memory)
+├── main_prod.go         # Production entrypoint (uses real SPIRE)
+└── cp-minikube/         # Control plane for Minikube deployment
 
 examples/
-└── mtls-adapters/       # Complete mTLS server/client examples
-    ├── server/          # Example mTLS server
-    ├── client/          # Example mTLS client
-    └── k8s/             # Kubernetes deployment manifests
+├── identityserver-example/ # Complete mTLS server example
+├── httpclient/             # mTLS client examples
+└── mtls/                   # Additional mTLS examples
 ```
 
 ### Hexagonal Architecture
@@ -130,22 +213,17 @@ examples/
 ┌─────────────────────────────────────────────────────────┐
 │                    Inbound Adapters                      │
 │  ┌────────────────┐              ┌─────────────────┐    │
-│  │ Workload API   │              │ CLI Demo        │    │
-│  │ Server (HTTP)  │              │ Adapter         │    │
+│  │IdentityServer  │              │ CLI Demo        │    │
+│  │ (mTLS HTTP)    │              │ Adapter         │    │
 │  └────────┬───────┘              └────────┬────────┘    │
 │           │                               │             │
 │           └───────────────┬───────────────┘             │
 │                           │                             │
 │  ┌────────────────────────▼─────────────────────────┐   │
 │  │              Ports (Interfaces)                   │   │
-│  │  • IdentityClient  • IdentityMapperRegistry      │   │
-│  │  • Agent           • Server                       │   │
-│  └────────────────────────┬─────────────────────────┘   │
-│                           │                             │
-│  ┌────────────────────────▼─────────────────────────┐   │
-│  │         Application Services                      │   │
-│  │  • IdentityClientService (SVID issuance)         │   │
-│  │  • IdentityService (demonstration)               │   │
+│  │  • MTLSServer     • MTLSClient                   │   │
+│  │  • Agent          • IdentityProvider             │   │
+│  │  • Parsers        • Validators                   │   │
 │  └────────────────────────┬─────────────────────────┘   │
 │                           │                             │
 │  ┌────────────────────────▼─────────────────────────┐   │
@@ -156,226 +234,94 @@ examples/
 │                           │                             │
 │  ┌────────────────────────▼─────────────────────────┐   │
 │  │            Outbound Adapters                      │   │
-│  │  • InMemoryAgent  • InMemoryServer               │   │
-│  │  • InMemoryRegistry  • Attestors                 │   │
+│  │  • SPIREAgent     • HTTPClient                   │   │
+│  │  • InMemoryAgent  • InMemoryServer (dev)         │   │
 │  └───────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────┘
 ```
 
-## Production Flow
+## Core Interfaces
 
-### 1. Agent Server
+### MTLSServer (Production Interface)
 
-The agent runs as a daemon, providing the Workload API:
-
-```bash
-# Start SPIRE agent
-./bin/agent
-
-# Output:
-# Workload API listening on /tmp/spire-agent/public/api.sock
-# === SPIRE Agent with Workload API ===
-# Trust Domain: example.org
-# Agent Identity: spiffe://example.org/host
-# Registered workloads: 3
-#   - spiffe://example.org/server-workload (UID: 1001)
-#   - spiffe://example.org/client-workload (UID: 1002)
-#   - spiffe://example.org/test-workload (UID: 1000)
-```
-
-**What it does**:
-1. Creates Unix domain socket at `/tmp/spire-agent/public/api.sock`
-2. Listens for workload SVID requests
-3. Extracts calling process credentials (UID/PID/GID)
-4. Attests workload → matches selectors → issues SVID
-
-### 2. Workload Client
-
-Workloads fetch their SVIDs by connecting to the agent's socket:
-
-```bash
-# Workload fetches its SVID
-./bin/workload
-
-# Output:
-# === Workload Fetching SVID ===
-# Process UID: 1000
-# Process PID: 123456
-# Connecting to: /tmp/spire-agent/public/api.sock
-#
-# Fetching X.509 SVID from agent...
-# ✓ SVID fetched successfully!
-#
-# SPIFFE ID: spiffe://example.org/test-workload
-# Certificate: X.509 Certificate for spiffe://example.org/test-workload
-# Expires At: 2025-10-04 23:04:33
-#
-# ✓ Workload successfully authenticated!
-```
-
-**What it does**:
-1. Connects to agent's Unix socket
-2. Sends `GET /svid/x509` request with process credentials
-3. Receives SVID (certificate + private key)
-4. Uses SVID for mTLS or authentication
-
-### 3. Complete Flow
-
-```
-┌─────────────┐
-│  Workload   │
-│  (UID 1000) │
-└──────┬──────┘
-       │ 1. Connect to Unix socket
-       ▼
-┌──────────────────────────┐
-│  Workload API Server     │
-│  /tmp/.../api.sock       │
-└──────┬───────────────────┘
-       │ 2. Extract caller UID/PID via SO_PEERCRED
-       ▼
-┌──────────────────────────┐
-│  IdentityClientService   │
-│  (app layer)             │
-└──────┬───────────────────┘
-       │ 3. Delegate to agent
-       ▼
-┌──────────────────────────┐
-│  Agent.FetchIdentity     │
-│  Document                │
-└──────┬───────────────────┘
-       │ 4. Attest workload
-       ▼
-┌──────────────────────────┐
-│  WorkloadAttestor        │
-│  Returns: unix:uid:1000  │
-└──────┬───────────────────┘
-       │ 5. Match selectors
-       ▼
-┌──────────────────────────┐
-│  IdentityMapperRegistry  │
-│  (immutable, seeded)     │
-└──────┬───────────────────┘
-       │ 6. Issue SVID
-       ▼
-┌──────────────────────────┐
-│  Server.IssueIdentity    │
-│  (generates X.509 cert)  │
-└──────┬───────────────────┘
-       │ 7. Return to workload
-       ▼
-┌──────────────────────────┐
-│  SVID                    │
-│  spiffe://...workload    │
-└──────────────────────────┘
-```
-
-## Running the System
-
-### Prerequisites
-
-- Go 1.25.1 or higher
-
-### Build Binaries
-
-```bash
-# Build agent and workload
-go build -o bin/agent ./cmd/agent
-go build -o bin/workload ./cmd/workload
-
-# Or build all
-go build -o bin/agent ./cmd/agent && \
-go build -o bin/workload ./cmd/workload && \
-go build -o bin/demo ./cmd
-```
-
-### Start Agent Server
-
-```bash
-# Start agent in background
-IDP_MODE=inmem ./bin/agent &
-
-# Or with custom socket path
-SPIRE_AGENT_SOCKET=/custom/path/api.sock ./bin/agent
-```
-
-### Fetch SVID as Workload
-
-```bash
-# Fetch SVID (uses current process UID)
-./bin/workload
-
-# Or with custom socket path
-SPIRE_AGENT_SOCKET=/custom/path/api.sock ./bin/workload
-```
-
-### Run CLI Demo
-
-```bash
-# Run full demonstration (does not use Workload API)
-IDP_MODE=inmem go run ./cmd
-
-# Or use built binary
-./bin/demo
-```
-
-## Port Interfaces
-
-### IdentityClient (Client-Side Interface)
-
-**Location**: `internal/ports/inbound.go`
+**Location**: `internal/ports/identityserver.go`
 
 ```go
-// IdentityClient is the main entrypoint for workloads to fetch their SVID
-// Signature matches go-spiffe SDK's workloadapi.Client
-type IdentityClient interface {
-    // FetchX509SVID fetches an X.509 SVID for the calling workload
-    // Server extracts caller identity from Unix socket connection
-    FetchX509SVID(ctx context.Context) (*Identity, error)
+// MTLSServer is the stable interface for an mTLS HTTP server.
+// It provides identity-based authentication using SPIFFE/SPIRE.
+type MTLSServer interface {
+    // Handle registers an HTTP handler
+    // Handlers receive requests with authenticated SPIFFE ID in context
+    Handle(pattern string, handler http.Handler) error
+
+    // HandleFunc registers a function handler (convenience method)
+    HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) error
+
+    // Start begins serving HTTPS with identity-based mTLS
+    // Returns immediately after starting. Use Wait() to block until exit.
+    Start(ctx context.Context) error
+
+    // Wait blocks until the server stops and returns the terminal error
+    // Returns http.ErrServerClosed on graceful shutdown
+    Wait() error
+
+    // Shutdown gracefully stops the server, waiting for active connections
+    Shutdown(ctx context.Context) error
+
+    // Close releases resources (X509Source, connections, etc.)
+    Close() error
 }
 ```
 
-**Usage in workloads**:
-```go
-client := workloadapi.NewClient("/tmp/spire-agent/public/api.sock")
-svid, err := client.FetchX509SVID(ctx)
-// Use svid.IdentityCredential, svid.IdentityDocument
-```
+### MTLSClient (Production Interface)
 
-### Agent (Server-Side Interface)
-
-**Location**: `internal/ports/outbound.go`
+**Location**: `internal/ports/identityserver.go`
 
 ```go
-type Agent interface {
-    // GetIdentity returns the agent's own identity
-    GetIdentity(ctx context.Context) (*Identity, error)
+// MTLSClient is the stable interface for an mTLS HTTP client.
+// It provides identity-based authentication and server verification using SPIFFE/SPIRE.
+type MTLSClient interface {
+    // Do executes an HTTP request using identity-based mTLS
+    Do(ctx context.Context, req *http.Request) (*http.Response, error)
 
-    // FetchIdentityDocument fetches identity document for a workload
-    // Used internally by IdentityClientService after credential extraction
-    FetchIdentityDocument(ctx context.Context, workload ProcessIdentity) (*Identity, error)
+    // Get is a convenience for simple GET requests
+    Get(ctx context.Context, url string) (*http.Response, error)
+
+    // Post is a convenience for POST requests
+    Post(ctx context.Context, url, contentType string, body io.Reader) (*http.Response, error)
+
+    // Close releases resources (X509Source, connections, etc.)
+    Close() error
 }
 ```
 
-### IdentityMapperRegistry (Immutable Registry)
+### Identity Extraction
 
-**Location**: `internal/ports/outbound.go`
+**Location**: `internal/adapters/inbound/identityserver`
 
 ```go
-// IdentityMapperRegistry provides read-only access to identity mappings
-// Seeded at startup, sealed before runtime, no mutations allowed
-type IdentityMapperRegistry interface {
-    // FindBySelectors matches selectors to identity credential (AND logic)
-    FindBySelectors(ctx context.Context, selectors *domain.SelectorSet) (*domain.IdentityMapper, error)
+// GetIdentity extracts the authenticated client identity from the request
+// Returns the identity and true if present, zero value and false otherwise
+func GetIdentity(r *http.Request) (spiffeid.ID, bool)
 
-    // ListAll returns all seeded identity mappers
-    ListAll(ctx context.Context) ([]*domain.IdentityMapper, error)
-}
+// RequireIdentity extracts the authenticated client identity from the request
+// Returns ErrNoSPIFFEID if the identity is not present
+func RequireIdentity(r *http.Request) (spiffeid.ID, error)
+
+// IdentityFromContext extracts the SPIFFE ID from the context
+// Useful for non-HTTP code or testing
+func IdentityFromContext(ctx context.Context) (spiffeid.ID, bool)
+
+// ContextWithIdentity adds a SPIFFE ID to the context
+// Useful for testing or propagating identity
+func ContextWithIdentity(ctx context.Context, id spiffeid.ID) context.Context
 ```
 
 ## Domain Entities
 
 ### IdentityCredential (SPIFFE ID)
+
+**Location**: `internal/domain/identity_credential.go`
 
 ```go
 // IdentityCredential represents a SPIFFE ID: spiffe://<trust-domain>/<path>
@@ -387,17 +333,19 @@ type IdentityCredential struct {
 
 **Examples**:
 - `spiffe://example.org/host` (agent)
-- `spiffe://example.org/server-workload` (workload)
+- `spiffe://example.org/server` (server workload)
+- `spiffe://example.org/client` (client workload)
 
 ### IdentityDocument (SVID)
 
+**Location**: `internal/domain/identity_document.go`
+
 ```go
 // IdentityDocument represents an X.509 SVID
-// Note: This implementation is X.509-only. JWT SVIDs are not supported.
 type IdentityDocument struct {
     identityCredential *IdentityCredential
     certificate        *x509.Certificate
-    privateKey         *rsa.PrivateKey
+    privateKey         crypto.PrivateKey
     certificateChain   []*x509.Certificate
     expiresAt          time.Time
 }
@@ -406,6 +354,8 @@ type IdentityDocument struct {
 **Why X.509-only?** Focus on simplicity and the primary use case (mTLS). JWT can be added via adapters if needed without changing the domain model.
 
 ### Selector
+
+**Location**: `internal/domain/selector.go`
 
 ```go
 // Selector represents a workload attribute used for attestation
@@ -420,112 +370,6 @@ type Selector struct {
 - `unix:user:server-workload`
 - `k8s:namespace:production`
 
-### IdentityMapper
-
-```go
-// IdentityMapper maps selectors to identity credential
-// Used by registry to match attested workloads to identities
-type IdentityMapper struct {
-    identityCredential *IdentityCredential
-    selectors         *SelectorSet
-}
-```
-
-## Configuration
-
-### Seeding the Registry
-
-Registration is configuration, not runtime behavior. Workload mappings are seeded at agent startup:
-
-**Location**: `internal/adapters/outbound/inmemory/config.go`
-
-```go
-Workloads: []ports.WorkloadEntry{
-    {
-        SpiffeID: "spiffe://example.org/server-workload",
-        Selector: "unix:user:server-workload",
-        UID:      1001,
-    },
-    {
-        SpiffeID: "spiffe://example.org/client-workload",
-        Selector: "unix:user:client-workload",
-        UID:      1002,
-    },
-}
-```
-
-**Bootstrap flow**:
-1. Load configuration (workload entries)
-2. Parse each entry into `IdentityMapper` (domain entity)
-3. Seed registry with mappers
-4. Seal registry (prevent mutations)
-5. Start Workload API server
-
-After sealing, registry is immutable - read-only at runtime.
-
-## Design Decisions
-
-### 1. IdentityClient (Not WorkloadAPI)
-
-Following `go-spiffe` SDK naming: `workloadapi.Client` provides the client interface. Our `IdentityClient` port matches this exactly.
-
-### 2. No Parameters in FetchX509SVID()
-
-```go
-// ✅ Correct: Matches SDK
-FetchX509SVID(ctx context.Context) (*Identity, error)
-
-// ❌ Wrong: Caller shouldn't provide identity
-FetchX509SVID(ctx context.Context, callerIdentity ProcessIdentity) (*Identity, error)
-```
-
-Server extracts credentials from Unix socket connection, not from client-provided data.
-
-### 3. Immutable Registry
-
-Registration is seeded data, not runtime mutations:
-- ✅ Seed at startup (composition root)
-- ✅ Seal before serving requests
-- ✅ Read-only at runtime
-- ❌ No Register() API endpoint
-
-### 4. Hexagonal Architecture
-
-Pure domain, port interfaces, swappable adapters:
-- In-memory implementation for development/testing
-- ✅ **Real `go-spiffe` SDK (v2.6.0)** - Production-ready implementation
-- No domain coupling to infrastructure
-
-## SPIRE Integration ✅
-
-**The project is already using the real go-spiffe SDK v2.6.0!**
-
-The mTLS adapters (`httpapi` and `httpclient`) use the production `go-spiffe` SDK:
-
-```go
-// Real SDK integration (already implemented)
-import "github.com/spiffe/go-spiffe/v2/workloadapi"
-
-// In server.go and client.go
-x509Source, err := workloadapi.NewX509Source(
-    ctx,
-    workloadapi.WithClientOptions(
-        workloadapi.WithAddr(cfg.SocketPath),
-    ),
-)
-```
-
-**What's using SPIRE**:
-- ✅ `internal/adapters/inbound/httpapi` - mTLS server using go-spiffe SDK
-- ✅ `internal/adapters/outbound/httpclient` - mTLS client using go-spiffe SDK
-- ✅ Integration tests - Full mTLS with real SPIRE agent
-
-**What's using in-memory** (for development):
-- `internal/adapters/outbound/inmemory` - In-memory SPIRE implementation for testing
-- Used by `cmd/agent` and `cmd/workload` for demo purposes
-
-See `docs/SDK_MIGRATION.md` for details on the dual-mode architecture.
-
 ## Testing
 
 The project has comprehensive test coverage with both unit and integration tests. See [docs/TEST_ARCHITECTURE.md](docs/TEST_ARCHITECTURE.md) for complete testing guide.
@@ -536,10 +380,7 @@ The project has comprehensive test coverage with both unit and integration tests
 # Run unit tests (fast, no dependencies)
 go test ./internal/adapters/... -short
 
-# Run validation tests
-go test ./internal/adapters/inbound/httpapi -run 'TestNewHTTPServer_Missing' -v
-
-# Run integration tests (requires SPIRE)
+# Run integration tests (requires SPIRE in Minikube)
 make minikube-up
 go test -tags=integration ./internal/adapters/... -v
 
@@ -549,110 +390,182 @@ go test -cover ./internal/...
 
 ### Unit Tests
 
-Mock the `IdentityClient` interface:
+Mock the interfaces:
 
 ```go
-type MockIdentityClient struct {
-    svid *ports.Identity
+// Mock MTLSServer for testing
+type MockMTLSServer struct {
+    handlers map[string]http.Handler
 }
 
-func (m *MockIdentityClient) FetchX509SVID(ctx context.Context) (*ports.Identity, error) {
-    return m.svid, nil
-}
-
-func TestMyService(t *testing.T) {
-    client := &MockIdentityClient{svid: testSVID}
-    service := NewMyService(client)
-    // Test service logic
+func (m *MockMTLSServer) HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) error {
+    m.handlers[pattern] = http.HandlerFunc(handler)
+    return nil
 }
 ```
 
 ### Integration Tests
 
-Use in-memory implementation or real SPIRE:
+Use real SPIRE:
 
 ```go
-func TestWorkloadAttestation(t *testing.T) {
-    // Bootstrap in-memory agent
-    app, _ := app.Bootstrap(ctx, inmemory.NewInMemoryConfig(), compose.NewInMemoryDeps())
+func TestMTLSAuthentication(t *testing.T) {
+    ctx := context.Background()
 
-    // Test workload fetch
-    workload := ports.ProcessIdentity{UID: 1000, PID: 123}
-    identity, err := app.Agent.FetchIdentityDocument(ctx, workload)
-
+    // Create server
+    serverCfg := ports.DefaultMTLSConfig()
+    serverCfg.SPIFFE.AllowedTrustDomain = "example.org"
+    server, err := identityserver.New(ctx, serverCfg)
     require.NoError(t, err)
-    assert.Equal(t, "spiffe://example.org/test-workload", identity.IdentityCredential.String())
+    defer server.Close()
+
+    // Register handler
+    server.HandleFunc("/test", func(w http.ResponseWriter, r *http.Request) {
+        id, ok := identityserver.GetIdentity(r)
+        require.True(t, ok)
+        fmt.Fprintf(w, "Hello, %s", id.String())
+    })
+
+    require.NoError(t, server.Start(ctx))
+
+    // Create client
+    clientCfg := ports.DefaultMTLSConfig()
+    clientCfg.SPIFFE.AllowedTrustDomain = "example.org"
+    client, err := httpclient.New(ctx, clientCfg)
+    require.NoError(t, err)
+    defer client.Close()
+
+    // Make request
+    resp, err := client.Get(ctx, "https://localhost:8443/test")
+    require.NoError(t, err)
+    defer resp.Body.Close()
+
+    assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
 ```
-
-### Test Coverage
-
-- ✅ **Unit Tests**: Config validation, identity extraction, helper functions
-- ✅ **Integration Tests**: Full mTLS handshake, authorization, health checks
-- ✅ **Graceful Skipping**: Tests skip when SPIRE unavailable (not fail)
-- ✅ **Fast Feedback**: Unit tests run in ~3ms
 
 ## Documentation
 
 ### Core Documentation
 
-- **[docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)** - **Current state: Production vs Educational**
+- **[docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)** - Current state: Production vs Educational
 - [docs/MTLS.md](docs/MTLS.md) - Complete mTLS authentication guide
 - [docs/TEST_ARCHITECTURE.md](docs/TEST_ARCHITECTURE.md) - Testing strategy and best practices
-- [docs/SDK_MIGRATION.md](docs/SDK_MIGRATION.md) - Dual-mode architecture (SDK vs in-memory)
-- [docs/CONTROL_PLANE.md](docs/CONTROL_PLANE.md) - Seeding vs runtime architecture
+- [docs/CONTROL_PLANE.md](docs/CONTROL_PLANE.md) - SPIRE deployment and control plane
 - [docs/ARCHITECTURE_REVIEW.md](docs/ARCHITECTURE_REVIEW.md) - Port placement and design decisions
 
-### API Reference
+### Examples
 
-**Server API** (`internal/adapters/inbound/httpapi`):
-- `NewHTTPServer(ctx, ServerConfig)` - Create mTLS server
-- `ServerConfig` - Server configuration struct
-- `Start(ctx)` - Start listening
-- `Shutdown(ctx)` - Graceful shutdown
-- `Stop(ctx)` - Shutdown and cleanup
-- `RegisterHandler(pattern, handler)` - Register HTTP handler
-- `GetSPIFFEID(r)` - Extract client SPIFFE ID
+- [examples/identityserver-example/](examples/identityserver-example/) - Complete mTLS server
+- [examples/httpclient/](examples/httpclient/) - mTLS client examples
+- [examples/mtls/](examples/mtls/) - Additional mTLS examples
 
-**Client API** (`internal/adapters/outbound/httpclient`):
-- `NewSPIFFEHTTPClient(ctx, ClientConfig)` - Create mTLS client
-- `ClientConfig` - Client configuration struct
-- `TransportConfig` - HTTP transport settings
-- `Get/Post/Put/Delete/Patch(ctx, url, ...)` - HTTP methods
-- `Close()` - Release resources
+## Running the Examples
 
-### Configuration
+### Prerequisites
 
-Both server and client use config structs for clean, extensible APIs:
+- Go 1.25.1 or higher
+- SPIRE Agent running locally (for production examples)
+- Or Minikube with SPIRE (for integration tests)
+
+### Run mTLS Server Example
+
+```bash
+# Set SPIRE socket path
+export SPIRE_AGENT_SOCKET="unix:///tmp/spire-agent/public/api.sock"
+
+# Run the example server
+go run ./examples/identityserver-example
+
+# Output:
+# Creating mTLS server with configuration:
+#   Socket: unix:///tmp/spire-agent/public/api.sock
+#   Address: :8443
+#   Allowed client: spiffe://example.org/client
+# ✓ Server created and handlers registered successfully
+# Listening on :8443 with mTLS authentication
+```
+
+### Run CLI Demo (In-Memory)
+
+```bash
+# Run full demonstration using in-memory SPIRE
+IDP_MODE=inmem go run ./cmd
+
+# This uses the in-memory implementation for learning purposes
+```
+
+## Design Decisions
+
+### 1. Hexagonal Architecture
+
+Pure domain, port interfaces, swappable adapters:
+- Production implementation uses real `go-spiffe` SDK
+- In-memory implementation for development/testing
+- No domain coupling to infrastructure
+
+### 2. Config Structs over Multiple Parameters
 
 ```go
-// Server configuration
-type ServerConfig struct {
-    Address    string                  // Required: listen address
-    SocketPath string                  // Required: SPIRE agent socket
-    Authorizer tlsconfig.Authorizer    // Required: client authorization
+// ✅ Good: Grouped parameters with defaults
+server, err := identityserver.New(ctx, ports.MTLSConfig{
+    WorkloadAPI: ports.WorkloadAPIConfig{
+        SocketPath: socketPath,
+    },
+    SPIFFE: ports.SPIFFEConfig{
+        AllowedPeerID: "spiffe://example.org/client",
+    },
+    HTTP: ports.HTTPConfig{
+        Address: ":8443",
+    },
+})
 
-    // Optional timeouts (defaults provided)
-    ReadHeaderTimeout time.Duration
-    ReadTimeout       time.Duration
-    WriteTimeout      time.Duration
-    IdleTimeout       time.Duration
-}
+// ❌ Bad: Too many parameters
+server, err := NewServer(ctx, socketPath, allowedID, ":8443", 10*time.Second, ...)
+```
 
-// Client configuration
-type ClientConfig struct {
-    SocketPath       string                  // Required: SPIRE agent socket
-    ServerAuthorizer tlsconfig.Authorizer    // Required: server authorization
-    Timeout          time.Duration           // Optional: request timeout
-    Transport        TransportConfig         // Optional: connection pooling
-}
+### 3. Separate Shutdown and Close
+
+```go
+// Graceful shutdown
+shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+defer cancel()
+server.Shutdown(shutdownCtx)  // Wait for connections to drain
+
+// Release resources
+server.Close()  // Close X509Source, sockets, etc.
+
+// Or use Stop() for convenience (Shutdown + Close)
+server.Stop(ctx)
+```
+
+### 4. Authentication Only (No Authorization)
+
+The library only authenticates clients via SPIFFE IDs. Authorization decisions are left to the application:
+
+```go
+server.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) {
+    clientID, ok := identityserver.GetIdentity(r)
+    if !ok {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
+
+    // Application decides access control
+    if !isAdmin(clientID) {
+        http.Error(w, "Forbidden", http.StatusForbidden)
+        return
+    }
+
+    // Handle admin request
+})
 ```
 
 ## Quality and Best Practices
 
 This implementation follows Go best practices and production-ready patterns:
 
-1. **✅ Config Structs**: APIs use config structs (not 4+ parameters) for maintainability
+1. **✅ Config Structs**: APIs use config structs for maintainability
 2. **✅ Proper Validation**: Required fields validated with clear error messages
 3. **✅ Resource Management**: Proper cleanup with defer, separate Shutdown/Close
 4. **✅ Thread Safety**: Mutex protects shared state, sync.Once for initialization
@@ -661,45 +574,6 @@ This implementation follows Go best practices and production-ready patterns:
 7. **✅ Test Coverage**: Unit tests (validation) + Integration tests (mTLS)
 8. **✅ Documentation**: Inline docs, comprehensive guides, examples
 
-### Design Patterns
-
-**Config Struct Pattern**:
-```go
-// ✅ Good: Grouped parameters with defaults
-NewHTTPServer(ctx, ServerConfig{
-    Address:    ":8443",
-    SocketPath: socketPath,
-    Authorizer: tlsconfig.AuthorizeAny(),
-})
-
-// ❌ Bad: Too many parameters
-NewHTTPServer(ctx, ":8443", socketPath, authorizer, 10*time.Second, 30*time.Second, ...)
-```
-
-**Resource Cleanup**:
-```go
-server, err := NewHTTPServer(ctx, cfg)
-if err != nil {
-    return err
-}
-defer server.Stop(ctx)  // Always cleanup
-
-// Graceful shutdown with timeout
-shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-defer cancel()
-server.Shutdown(shutdownCtx)
-```
-
-**Identity Extraction**:
-```go
-clientID, ok := httpapi.GetSPIFFEID(r)
-if !ok {
-    http.Error(w, "Unauthorized", http.StatusUnauthorized)
-    return
-}
-// Use clientID for application authorization
-```
-
 ### Security Considerations
 
 1. **mTLS Required**: All connections must use mutual TLS
@@ -707,6 +581,22 @@ if !ok {
 3. **Certificate Rotation**: Automatic via SPIRE (zero downtime)
 4. **No Authorization**: Library only authenticates - app decides access
 5. **Timeout Configuration**: All operations have configurable timeouts
+6. **TLS 1.3**: Minimum TLS version enforced
+7. **Secure Defaults**: Go's secure cipher suites used
+
+## SPIRE Integration
+
+The project uses the real `go-spiffe` SDK v2.6.0 for production deployments:
+
+**Production adapters**:
+- ✅ `internal/adapters/inbound/identityserver` - mTLS server using go-spiffe SDK
+- ✅ `internal/adapters/outbound/httpclient` - mTLS client using go-spiffe SDK
+- ✅ `internal/adapters/outbound/spire` - SPIRE agent adapters
+- ✅ Integration tests - Full mTLS with real SPIRE agent
+
+**Development adapters**:
+- `internal/adapters/outbound/inmemory` - In-memory SPIRE implementation for learning
+- Used by `cmd/main.go` for CLI demonstrations
 
 ## References
 
@@ -714,124 +604,3 @@ if !ok {
 - [SPIRE Documentation](https://spiffe.io/docs/latest/spire/)
 - [go-spiffe SDK](https://github.com/spiffe/go-spiffe)
 - [Hexagonal Architecture](https://alistair.cockburn.us/hexagonal-architecture/)
-
-### Identifying and Expressing Invariants for Better Code Quality
-
-Invariants are properties in your code that must always hold true at specific points (e.g., after a method call or in a struct's state). Examples: In a bank account, "balance >= 0" is an invariant; in your auth system, "IdentityDocument.IsValid() == true" before exchange. Expressing them explicitly (via code, docs, or tests) catches bugs early, improves maintainability, and enforces design intent—directly boosting quality.
-
-#### Step 1: Identifying Invariants
-
-Scan your code for:
-- **State Assumptions**: What must be true post-operation? (e.g., in `ExchangeMessage`, post-validation: `msg.From.IdentityDocument != nil`).
-- **Pre/Post Conditions**: Entry (pre): "from/to namespaces non-nil"; Exit (post): "msg created only if valid".
-- **Business Rules**: Domain-specific (e.g., "SelectorSet size <= 10" to prevent DoS).
-- **Tools for Discovery**: 
-  - Code review/static analysis (e.g., `go vet`, SonarQube).
-  - Property-based testing (e.g., Go's `github.com/leanovate/gopter` for random inputs).
-  - Ask: "What breaks if this flips?" (e.g., nil doc → auth failure).
-
-Focus on high-impact areas like your auth flow: `IdentityService`, `InMemoryAgent.FetchIdentityDocument`.
-
-#### Step 2: Expressing Invariants
-
-Don't just identify—make them **executable**:
-- **Documentation**: Javadoc-style comments (e.g., `// Invariant: Balance >= 0 after Deposit/Withdraw`).
-- **Runtime Assertions**: Enforce dynamically (cheap in debug; strip in prod).
-  - Go: Use `if !invariant { panic("invariant violated") }` or `debug.Assert` from `runtime/debug`.
-- **Design by Contract**: Pre/post via funcs (e.g., `RequireNonNil(fromDoc)`).
-- **Static Tools**: Types (e.g., non-nil structs) or linters.
-
-| Method | Pros | Cons | When to Use |
-|--------|------|------|-------------|
-| **Docs/Comments** | Zero cost, readable. | Not enforced. | Quick prototypes. |
-| **Assertions** | Catches at runtime. | Panics in prod (if not stripped). | Debug builds, critical paths. |
-| **Tests** | Verifies across scenarios. | No runtime guard. | Always—your main tool. |
-
-#### Step 3: Write Tests for Invariants
-
-**write tests for invariants**. They're a natural fit for unit/integration tests, verifying the "always true" guarantee without runtime overhead. But combine them with runtime checks (e.g., assertions) for enforcement. Below, I'll break it down: identification, expression, testing strategy, and Go-specific tips.
-
-tests are the best way to *verify* invariants hold under varied inputs, ensuring quality without runtime cost. They're "executable specs" that fail on regressions. Focus on:
-- **Unit Tests**: Isolate core (mock ports); assert invariant post-call.
-- **Property Tests**: Random data to stress invariants (e.g., 1k runs with fuzzed UIDs).
-- **Integration**: With in-memory adapters to check end-flow invariants (e.g., full auth succeeds only if docs valid).
-
-Perfect—tests core + adapters without real SPIRE setup. Later, parametrize for real vs. mock.
-
-**Pros/Cons of Invariant Tests**
-| Pros | Cons |
-|------|------|
-| Fast/isolated; high coverage. | Can feel repetitive (e.g., many expiry cases). |
-| Enforces DbC mindset. | Over-testing trivia (e.g., skip trivial "non-nil"). |
-| Fuzz-friendly for robustness. | Mocks add setup boilerplate (mitigate with helpers). |
-
-#### Go-Specific Testing Example
-Extend your `app_test.go` with invariant-focused tests. Use `testify`
-
-```go
-// In app_test.go (add after existing ExchangeMessage tests)
-
-func TestIdentityService_Invariants_PostExchange(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name     string
-		setup    func(service *app.IdentityService, from, to *ports.Identity)
-		assertFn func(msg *ports.Message)
-	}{
-		{
-			name: "msg from/to namespaces match inputs",
-			setup: func(s *app.IdentityService, from, to *ports.Identity) {
-				// Act in setup
-				msg, _ := s.ExchangeMessage(context.Background(), *from, *to, "test")
-				// But assert in assertFn
-			},
-			assertFn: func(msg *ports.Message) {
-				assert.NotNil(t, msg.From.IdentityCredential)
-				assert.NotNil(t, msg.To.IdentityCredential)
-				assert.True(t, msg.From.IdentityDocument.IsValid())
-				assert.True(t, msg.To.IdentityDocument.IsValid())
-			},
-		},
-		{
-			name: "msg content preserved (immutability invariant)",
-			setup: func(s *app.IdentityService, from, to *ports.Identity) {
-				msg, _ := s.ExchangeMessage(context.Background(), *from, *to, "immutable content")
-			},
-			assertFn: func(msg *ports.Message) {
-				assert.Equal(t, "immutable content", msg.Content)  // No truncation/mutation
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			mockAgent := new(MockAgent)
-			mockRegistry := new(MockRegistry)
-			service := app.NewIdentityService(mockAgent, mockRegistry)
-			from := createValidIdentity(t, "spiffe://example.org/client", time.Now().Add(1*time.Hour))
-			to := createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(1*time.Hour))
-
-			tt.setup(service, from, to)  // Act
-
-			// Re-act to get msg for assert (or capture in setup)
-			msg, err := service.ExchangeMessage(context.Background(), *from, *to, "test")
-			require.NoError(t, err)
-			tt.assertFn(msg)
-		})
-	}
-}
-
-// Property test example (add "github.com/leanovate/gopter" for fuzz)
-func TestIdentityService_Property_ValidDocsAlwaysProduceValidMsg(t *testing.T) {
-	// Use gopter for 100 random valid identities
-	// Assert: ExchangeMessage always succeeds with valid msg invariant
-	// (Omitted for brevity; focus on unit first)
-}
-```
-
-- **Start Small**: Add 2-3 invariant tests to `app/service_test.go` (post-call checks). Run `go test -cover ./internal/app`—aim for 90%+.
-- **Evolve**: Once core is solid, add integration (wire in-memory factory, test full flow).
-- **Tools**: `go test -race` for concurrency invariants; `golangci-lint` for static invariant hints.
-
-This approach ensures invariants are not just identified but enforced, improving quality iteratively. 
