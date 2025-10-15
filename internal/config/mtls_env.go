@@ -3,13 +3,12 @@ package config
 import (
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 )
 
-// applyEnvOverrides overrides config values with environment variables if set
-// Returns error for invalid environment variable values to fail fast
+// applyEnvOverrides overrides config values with environment variables if set.
+// Returns error for invalid environment variable values to fail fast.
 func applyEnvOverrides(cfg *MTLSConfig) error {
 	// SPIRE configuration
 	if socketPath := os.Getenv("SPIRE_AGENT_SOCKET"); socketPath != "" {
@@ -18,17 +17,17 @@ func applyEnvOverrides(cfg *MTLSConfig) error {
 	if trustDomain := os.Getenv("SPIRE_TRUST_DOMAIN"); trustDomain != "" {
 		cfg.SPIRE.TrustDomain = trustDomain
 	}
+	if timeout := os.Getenv("SPIRE_TIMEOUT"); timeout != "" {
+		t, err := time.ParseDuration(timeout)
+		if err != nil {
+			return fmt.Errorf("invalid SPIRE_TIMEOUT %q: %w", timeout, err)
+		}
+		cfg.SPIRE.Timeout = t
+	}
 
 	// HTTP configuration
 	if address := os.Getenv("HTTP_ADDRESS"); address != "" {
 		cfg.HTTP.Address = address
-	}
-	if port := os.Getenv("HTTP_PORT"); port != "" {
-		p, err := strconv.Atoi(port)
-		if err != nil {
-			return fmt.Errorf("invalid HTTP_PORT %q: %w", port, err)
-		}
-		cfg.HTTP.Port = p
 	}
 	if enabled := os.Getenv("HTTP_ENABLED"); enabled != "" {
 		e, err := parseBool(enabled)
@@ -45,7 +44,7 @@ func applyEnvOverrides(cfg *MTLSConfig) error {
 		cfg.HTTP.Timeout = t
 	}
 
-	// Timeout overrides
+	// HTTP timeout overrides
 	if timeout := os.Getenv("HTTP_READ_HEADER_TIMEOUT"); timeout != "" {
 		t, err := time.ParseDuration(timeout)
 		if err != nil {
@@ -79,15 +78,10 @@ func applyEnvOverrides(cfg *MTLSConfig) error {
 	if peerVerification := os.Getenv("AUTH_PEER_VERIFICATION"); peerVerification != "" {
 		cfg.HTTP.Auth.PeerVerification = peerVerification
 	}
-	if allowedID := os.Getenv("ALLOWED_CLIENT_ID"); allowedID != "" {
-		cfg.HTTP.Auth.AllowedID = allowedID
-	}
-	if allowedServerID := os.Getenv("EXPECTED_SERVER_ID"); allowedServerID != "" {
-		cfg.HTTP.Auth.AllowedID = allowedServerID
-	}
 	if trustDomain := os.Getenv("AUTH_TRUST_DOMAIN"); trustDomain != "" {
 		cfg.HTTP.Auth.TrustDomain = trustDomain
 	}
+
 	// Support comma-separated list for AllowedIDs
 	if allowedIDs := os.Getenv("ALLOWED_IDS"); allowedIDs != "" {
 		cfg.HTTP.Auth.AllowedIDs = strings.Split(allowedIDs, ",")
