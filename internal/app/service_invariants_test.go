@@ -135,7 +135,7 @@ func TestExchangeMessage_Invariant_RequiresValidDocuments(t *testing.T) {
 			},
 			to:        *createValidIdentity(t, "spiffe://example.org/server", time.Now().Add(1*time.Hour)),
 			wantError: true,
-			wantErr:   domain.ErrIdentityDocumentExpired,
+			wantErr:   domain.ErrIdentityDocumentInvalid,
 		},
 		{
 			name: "receiver document nil - violates invariant",
@@ -147,7 +147,7 @@ func TestExchangeMessage_Invariant_RequiresValidDocuments(t *testing.T) {
 				IdentityDocument: nil, // Nil document
 			},
 			wantError: true,
-			wantErr:   domain.ErrIdentityDocumentExpired,
+			wantErr:   domain.ErrIdentityDocumentInvalid,
 		},
 	}
 

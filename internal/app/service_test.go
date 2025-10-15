@@ -214,7 +214,7 @@ func TestIdentityService_ExchangeMessage_NilSenderDocument(t *testing.T) {
 	// Assert
 	assert.Error(t, err)
 	assert.Nil(t, msg)
-	assert.ErrorIs(t, err, domain.ErrIdentityDocumentExpired)
+	assert.ErrorIs(t, err, domain.ErrIdentityDocumentInvalid)
 }
 
 func TestIdentityService_ExchangeMessage_NilReceiverDocument(t *testing.T) {
@@ -240,7 +240,7 @@ func TestIdentityService_ExchangeMessage_NilReceiverDocument(t *testing.T) {
 	// Assert
 	assert.Error(t, err)
 	assert.Nil(t, msg)
-	assert.ErrorIs(t, err, domain.ErrIdentityDocumentExpired)
+	assert.ErrorIs(t, err, domain.ErrIdentityDocumentInvalid)
 }
 
 func TestIdentityService_ExchangeMessage_EmptyContent(t *testing.T) {
