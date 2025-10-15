@@ -44,3 +44,49 @@ type Service interface {
 	//   - ErrIdentityDocumentExpired: Identity credential expired
 	ExchangeMessage(ctx context.Context, from Identity, to Identity, content string) (*Message, error)
 }
+
+// IdentityIssuer is the server-side service for issuing identity credentials to workloads (dev only).
+//
+// This represents the core use case of identity issuance: given an authenticated workload,
+// determine what identity it should receive and issue the appropriate credential.
+//
+// Dev-only: Production SPIRE workloads are clients that fetch their own identities from the
+// Workload API. They don't issue identities to other workloads. This interface exists only
+// for development/demo purposes.
+//
+// Security Critical: The workload's process credentials MUST be extracted from
+// a trusted source (e.g., OS kernel via system calls) by the adapter layer.
+// Never accept workload identity claims from the network or user input.
+//
+// Process Flow:
+// 1. Adapter extracts caller's process credentials from trusted source
+// 2. Adapter calls this service with the verified credentials
+// 3. Service authenticates workload against known registrations
+// 4. Service determines authorized identity for the workload
+// 5. Service issues identity credential if authorized
+//
+// Error Contract: Implementations wrap errors with domain sentinels:
+//   - ErrWorkloadAttestationFailed: Workload authentication failed
+//   - ErrIdentityNotFound: No identity registered for workload
+//   - ErrWorkloadInvalid: Invalid workload credentials
+type IdentityIssuer interface {
+	// IssueIdentity creates an identity credential for an authenticated workload.
+	//
+	// The workload parameter contains process credentials that were extracted
+	// from a trusted source by the adapter. This is never user-provided data.
+	//
+	// The service:
+	// 1. Validates the workload credentials
+	// 2. Authenticates the workload against known registrations
+	// 3. Determines the authorized identity for this workload
+	// 4. Issues the identity credential if authorized
+	//
+	// Parameters:
+	//   - ctx: Request context for timeout and cancellation
+	//   - workload: Process credentials from trusted source
+	//
+	// Returns:
+	//   - *Identity: The issued identity credential for the workload
+	//   - error: Domain error if authentication or authorization fails
+	IssueIdentity(ctx context.Context, workload ProcessIdentity) (*Identity, error)
+}

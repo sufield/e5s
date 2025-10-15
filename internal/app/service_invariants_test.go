@@ -1,3 +1,6 @@
+//go:build dev
+// +build dev
+
 package app_test
 
 // Identity Service Invariant Tests
@@ -6,10 +9,12 @@ package app_test
 // Invariants tested: non-nil credentials requirement, valid (non-expired) documents,
 // no partial results on error, input preservation, success guarantees, idempotency.
 //
+// NOTE: These tests are dev-only since IdentityService is only available in development builds.
+//
 // Run these tests with:
 //
-//	go test ./internal/app/... -v -run TestExchangeMessage_Invariant
-//	go test ./internal/app/... -cover
+//	go test -tags dev ./internal/app/... -v -run TestExchangeMessage_Invariant
+//	go test -tags dev ./internal/app/... -cover
 
 import (
 	"context"
