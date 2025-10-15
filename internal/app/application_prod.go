@@ -8,37 +8,29 @@ import (
 	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
-// Application is the production composition root.
-// Production version doesn't include Registry or demo Service - workloads only fetch identities via Workload API.
+// Application wires production dependencies.
+// In production there is no local registry or demo service;
+// workloads fetch identities via the SPIRE Workload API through the Agent.
 type Application struct {
 	cfg   *ports.Config
-	ics   ports.IdentityIssuer // server-side issuance facade
 	agent ports.Agent
 }
 
-// New wires the production application and validates required deps.
-func New(
-	cfg *ports.Config,
-	ics ports.IdentityIssuer,
-	agent ports.Agent,
-) (*Application, error) {
+// New constructs a production Application and validates required deps.
+func New(cfg *ports.Config, agent ports.Agent) (*Application, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("config is nil")
-	}
-	if ics == nil {
-		return nil, fmt.Errorf("identity issuer is nil")
 	}
 	if agent == nil {
 		return nil, fmt.Errorf("agent is nil")
 	}
 	return &Application{
 		cfg:   cfg,
-		ics:   ics,
 		agent: agent,
 	}, nil
 }
 
-// Close releases resources owned by the application.
+// Close releases resources owned by the application (idempotent).
 func (a *Application) Close() error {
 	if a == nil || a.agent == nil {
 		return nil
@@ -46,7 +38,6 @@ func (a *Application) Close() error {
 	return a.agent.Close()
 }
 
-// Accessors (kept simple; add only what you actually need).
-func (a *Application) Config() *ports.Config                { return a.cfg }
-func (a *Application) IdentityIssuer() ports.IdentityIssuer { return a.ics }
-func (a *Application) Agent() ports.Agent                   { return a.agent }
+// Accessors (add only what you need)
+func (a *Application) Config() *ports.Config { return a.cfg }
+func (a *Application) Agent() ports.Agent    { return a.agent }

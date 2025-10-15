@@ -33,9 +33,7 @@ func Bootstrap(ctx context.Context, configLoader ports.ConfigLoader, factory *co
 		return nil, fmt.Errorf("failed to create SPIRE agent: %w", err)
 	}
 
-	// Step 4: Initialize services
-	identityClientService := NewIdentityClientService(agent)
-
-	// Step 5: Wire application with constructor validation
-	return New(config, identityClientService, agent)
+	// Step 4: Wire application with constructor validation
+	// Production workloads only need Agent to fetch their own identity
+	return New(config, agent)
 }
