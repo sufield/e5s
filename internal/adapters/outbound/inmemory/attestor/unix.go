@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/pocket/hexagon/spire/internal/domain"
+	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
 // UnixWorkloadAttestor provides fake Unix attestation for walking skeleton / dev mode only.
@@ -53,3 +54,6 @@ func (a *UnixWorkloadAttestor) Attest(ctx context.Context, workload *domain.Work
 
 	return selectors, nil
 }
+
+// Verify that UnixWorkloadAttestor implements ports.WorkloadAttestor
+var _ ports.WorkloadAttestor = (*UnixWorkloadAttestor)(nil)

@@ -17,6 +17,7 @@ import (
 	"github.com/pocket/hexagon/spire/internal/adapters/outbound/inmemory"
 	"github.com/pocket/hexagon/spire/internal/app"
 	"github.com/pocket/hexagon/spire/internal/domain"
+	"github.com/pocket/hexagon/spire/internal/dto"
 	"github.com/pocket/hexagon/spire/internal/ports"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -34,7 +35,7 @@ func TestCLI_Run_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create CLI adapter
-	cliAdapter := cli.New(application)
+	cliAdapter := cli.NewCLI(application)
 
 	// Run CLI - just verify it completes without error
 	err = cliAdapter.Run(ctx)
@@ -51,7 +52,7 @@ func TestCLI_Run_OutputFormat(t *testing.T) {
 	application, err := app.Bootstrap(ctx, loader, factory)
 	require.NoError(t, err)
 
-	cliAdapter := cli.New(application)
+	cliAdapter := cli.NewCLI(application)
 
 	// Capture output
 	old := os.Stdout
@@ -93,23 +94,13 @@ func TestCLI_Run_WorkloadIdentityIssuance(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify agent can fetch identities for configured workloads
-	serverWorkload := ports.ProcessIdentity{
-		PID:  12345,
-		UID:  1001,
-		GID:  1001,
-		Path: "/usr/bin/server",
-	}
+	serverWorkload := domain.NewWorkload(12345, 1001, 1001, "/usr/bin/server")
 	serverDoc, err := application.Agent().FetchIdentityDocument(ctx, serverWorkload)
 	require.NoError(t, err)
 	assert.NotNil(t, serverDoc)
 	assert.Contains(t, serverDoc.IdentityCredential().String(), "example.org")
 
-	clientWorkload := ports.ProcessIdentity{
-		PID:  12346,
-		UID:  1002,
-		GID:  1002,
-		Path: "/usr/bin/client",
-	}
+	clientWorkload := domain.NewWorkload(12346, 1002, 1002, "/usr/bin/client")
 	clientDoc, err := application.Agent().FetchIdentityDocument(ctx, clientWorkload)
 	require.NoError(t, err)
 	assert.NotNil(t, clientDoc)
@@ -127,26 +118,26 @@ func TestCLI_Run_MessageExchange(t *testing.T) {
 	require.NoError(t, err)
 
 	// Fetch identities
-	serverWorkload := ports.ProcessIdentity{UID: 1001, GID: 1001, PID: 12345, Path: "/usr/bin/server"}
+	serverWorkload := domain.NewWorkload(12345, 1001, 1001, "/usr/bin/server")
 	serverDoc, err := application.Agent().FetchIdentityDocument(ctx, serverWorkload)
 	require.NoError(t, err)
-	serverIdentity := ports.Identity{
+	serverIdentity := &dto.Identity{
 		IdentityCredential: serverDoc.IdentityCredential(),
 		IdentityDocument:   serverDoc,
 		Name:               "server",
 	}
 
-	clientWorkload := ports.ProcessIdentity{UID: 1002, GID: 1002, PID: 12346, Path: "/usr/bin/client"}
+	clientWorkload := domain.NewWorkload(12346, 1002, 1002, "/usr/bin/client")
 	clientDoc, err := application.Agent().FetchIdentityDocument(ctx, clientWorkload)
 	require.NoError(t, err)
-	clientIdentity := ports.Identity{
+	clientIdentity := &dto.Identity{
 		IdentityCredential: clientDoc.IdentityCredential(),
 		IdentityDocument:   clientDoc,
 		Name:               "client",
 	}
 
 	// Test message exchange
-	msg, err := application.Service().ExchangeMessage(ctx, clientIdentity, serverIdentity, "Test message")
+	msg, err := application.Service().ExchangeMessage(ctx, *clientIdentity, *serverIdentity, "Test message")
 	require.NoError(t, err)
 	assert.Equal(t, "Test message", msg.Content)
 	assert.Equal(t, clientIdentity.Name, msg.From.Name)
@@ -164,7 +155,7 @@ func TestCLI_New(t *testing.T) {
 	application, err := app.Bootstrap(ctx, loader, factory)
 	require.NoError(t, err)
 
-	cliAdapter := cli.New(application)
+	cliAdapter := cli.NewCLI(application)
 	assert.NotNil(t, cliAdapter)
 }
 
@@ -199,7 +190,7 @@ func TestCLI_Run_TableDriven(t *testing.T) {
 			ctx := context.Background()
 
 			application := tt.setupApp(t)
-			cliAdapter := cli.New(application)
+			cliAdapter := cli.NewCLI(application)
 
 			// Capture output
 			old := os.Stdout
@@ -250,7 +241,7 @@ func TestCLI_Run_ConfigDisplay(t *testing.T) {
 	application, err := app.Bootstrap(ctx, loader, factory)
 	require.NoError(t, err)
 
-	cliAdapter := cli.New(application)
+	cliAdapter := cli.NewCLI(application)
 
 	// Capture output
 	old := os.Stdout
@@ -282,19 +273,19 @@ func TestCLI_Run_ExpiredIdentityHandling(t *testing.T) {
 	require.NoError(t, err)
 
 	// Fetch valid identities
-	serverWorkload := ports.ProcessIdentity{UID: 1001, GID: 1001, PID: 12345, Path: "/usr/bin/server"}
+	serverWorkload := domain.NewWorkload(12345, 1001, 1001, "/usr/bin/server")
 	serverDoc, err := application.Agent().FetchIdentityDocument(ctx, serverWorkload)
 	require.NoError(t, err)
-	serverIdentity := ports.Identity{
+	serverIdentity := dto.Identity{
 		IdentityCredential: serverDoc.IdentityCredential(),
 		IdentityDocument:   serverDoc,
 		Name:               "server",
 	}
 
-	clientWorkload := ports.ProcessIdentity{UID: 1002, GID: 1002, PID: 12346, Path: "/usr/bin/client"}
+	clientWorkload := domain.NewWorkload(12346, 1002, 1002, "/usr/bin/client")
 	clientDoc, err := application.Agent().FetchIdentityDocument(ctx, clientWorkload)
 	require.NoError(t, err)
-	clientIdentity := ports.Identity{
+	clientIdentity := dto.Identity{
 		IdentityCredential: clientDoc.IdentityCredential(),
 		IdentityDocument:   clientDoc,
 		Name:               "client",
@@ -331,17 +322,17 @@ func TestCLI_Run_ExpiredIdentityHandling(t *testing.T) {
 		"ExpiresAt should derive from certificate NotAfter (single source of truth)")
 	assert.True(t, expiredDoc.IsExpired(), "Document should be expired")
 
-	expiredIdentity := &ports.Identity{
+	expiredIdentity := dto.Identity{
 		Name:               "expired",
 		IdentityCredential: expiredNamespace,
 		IdentityDocument:   expiredDoc,
 	}
 
 	// Attempt message exchange with expired identity should fail
-	_, err = application.Service().ExchangeMessage(ctx, *expiredIdentity, serverIdentity, "Test")
+	_, err = application.Service().ExchangeMessage(ctx, expiredIdentity, serverIdentity, "Test")
 	assert.Error(t, err, "Should fail with expired identity")
 
-	_, err = application.Service().ExchangeMessage(ctx, clientIdentity, *expiredIdentity, "Test")
+	_, err = application.Service().ExchangeMessage(ctx, clientIdentity, expiredIdentity, "Test")
 	assert.Error(t, err, "Should fail with expired receiver identity")
 }
 
@@ -356,5 +347,5 @@ func TestCLI_ImplementsPort(t *testing.T) {
 	application, err := app.Bootstrap(ctx, loader, factory)
 	require.NoError(t, err)
 
-	var _ ports.CLI = cli.New(application)
+	var _ ports.CLI = cli.NewCLI(application)
 }

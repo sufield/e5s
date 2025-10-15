@@ -50,7 +50,7 @@ func main() {
 	fmt.Println()
 
 	// Step 4: Create CLI inbound adapter with bootstrapped application
-	cliAdapter := cli.New(application)
+	cliAdapter := cli.NewCLI(application)
 
 	// Step 5: Run the application via CLI adapter
 	if err := cliAdapter.Run(ctx); err != nil {

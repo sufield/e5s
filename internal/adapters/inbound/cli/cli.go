@@ -9,6 +9,8 @@ import (
 
 	"github.com/pocket/hexagon/spire/internal/app"
 	"github.com/pocket/hexagon/spire/internal/app/identityconv"
+	"github.com/pocket/hexagon/spire/internal/domain"
+	"github.com/pocket/hexagon/spire/internal/dto"
 	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
@@ -19,8 +21,8 @@ type CLI struct {
 	application *app.Application
 }
 
-// New creates a new CLI adapter with a bootstrapped application
-func New(application *app.Application) *CLI {
+// NewCLI creates a new CLI adapter with a bootstrapped application
+func NewCLI(application *app.Application) *CLI {
 	return &CLI{
 		application: application,
 	}
@@ -45,17 +47,12 @@ func (c *CLI) Run(ctx context.Context) error {
 	fmt.Println("Attesting and fetching identity documents for workloads...")
 
 	// Server workload
-	serverWorkload := ports.ProcessIdentity{
-		PID:  12345,
-		UID:  1001,
-		GID:  1001,
-		Path: "/usr/bin/server",
-	}
+	serverWorkload := domain.NewWorkload(12345, 1001, 1001, "/usr/bin/server")
 	serverDoc, err := c.application.Agent().FetchIdentityDocument(ctx, serverWorkload)
 	if err != nil {
 		return fmt.Errorf("failed to fetch server identity document: %w", err)
 	}
-	serverIdentity := ports.Identity{
+	serverIdentity := dto.Identity{
 		IdentityCredential: serverDoc.IdentityCredential(),
 		IdentityDocument:   serverDoc,
 		Name:               identityconv.DeriveIdentityName(serverDoc.IdentityCredential()),
@@ -63,17 +60,12 @@ func (c *CLI) Run(ctx context.Context) error {
 	fmt.Printf("  ✓ Server workload identity document issued: %s\n", serverIdentity.IdentityCredential.String())
 
 	// Client workload
-	clientWorkload := ports.ProcessIdentity{
-		PID:  12346,
-		UID:  1002,
-		GID:  1002,
-		Path: "/usr/bin/client",
-	}
+	clientWorkload := domain.NewWorkload(12346, 1002, 1002, "/usr/bin/client")
 	clientDoc, err := c.application.Agent().FetchIdentityDocument(ctx, clientWorkload)
 	if err != nil {
 		return fmt.Errorf("failed to fetch client identity document: %w", err)
 	}
-	clientIdentity := ports.Identity{
+	clientIdentity := dto.Identity{
 		IdentityCredential: clientDoc.IdentityCredential(),
 		IdentityDocument:   clientDoc,
 		Name:               identityconv.DeriveIdentityName(clientDoc.IdentityCredential()),
