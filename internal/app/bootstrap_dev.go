@@ -53,11 +53,6 @@ func Bootstrap(ctx context.Context, configLoader ports.ConfigLoader, factory *co
 	identityClientService := NewIdentityClientService(agent)
 	service := NewIdentityService(agent, registry)
 
-	return &Application{
-		Config:                config,
-		Service:               service,
-		IdentityClientService: identityClientService,
-		Agent:                 agent,
-		Registry:              registry,
-	}, nil
+	// Step 8: Wire application with constructor validation
+	return New(config, service, identityClientService, agent, registry)
 }

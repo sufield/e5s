@@ -38,11 +38,13 @@ func main() {
 		log.Fatalf("Failed to bootstrap application: %v", err)
 	}
 
+	defer application.Close()
+
 	fmt.Printf("✓ Application bootstrapped successfully\n")
-	fmt.Printf("  Trust Domain: %s\n", application.Config.TrustDomain)
-	fmt.Printf("  Agent Identity: %s\n", application.Config.AgentSpiffeID)
-	fmt.Printf("  Registered Workloads: %d\n", len(application.Config.Workloads))
-	for _, w := range application.Config.Workloads {
+	fmt.Printf("  Trust Domain: %s\n", application.Config().TrustDomain)
+	fmt.Printf("  Agent Identity: %s\n", application.Config().AgentSpiffeID)
+	fmt.Printf("  Registered Workloads: %d\n", len(application.Config().Workloads))
+	for _, w := range application.Config().Workloads {
 		fmt.Printf("    - %s (UID: %d)\n", w.SpiffeID, w.UID)
 	}
 	fmt.Println()

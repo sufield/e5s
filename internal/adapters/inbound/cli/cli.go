@@ -33,10 +33,10 @@ func (c *CLI) Run(ctx context.Context) error {
 
 	// Display configuration (read-only)
 	fmt.Println("Configuration:")
-	fmt.Printf("  Trust Domain: %s\n", c.application.Config.TrustDomain)
-	fmt.Printf("  Agent SPIFFE ID: %s\n", c.application.Config.AgentSpiffeID)
-	fmt.Printf("  Registered Workloads: %d\n", len(c.application.Config.Workloads))
-	for _, w := range c.application.Config.Workloads {
+	fmt.Printf("  Trust Domain: %s\n", c.application.Config().TrustDomain)
+	fmt.Printf("  Agent SPIFFE ID: %s\n", c.application.Config().AgentSpiffeID)
+	fmt.Printf("  Registered Workloads: %d\n", len(c.application.Config().Workloads))
+	for _, w := range c.application.Config().Workloads {
 		fmt.Printf("    - %s (UID: %d)\n", w.SpiffeID, w.UID)
 	}
 	fmt.Println()
@@ -51,7 +51,7 @@ func (c *CLI) Run(ctx context.Context) error {
 		GID:  1001,
 		Path: "/usr/bin/server",
 	}
-	serverDoc, err := c.application.Agent.FetchIdentityDocument(ctx, serverWorkload)
+	serverDoc, err := c.application.Agent().FetchIdentityDocument(ctx, serverWorkload)
 	if err != nil {
 		return fmt.Errorf("failed to fetch server identity document: %w", err)
 	}
@@ -69,7 +69,7 @@ func (c *CLI) Run(ctx context.Context) error {
 		GID:  1002,
 		Path: "/usr/bin/client",
 	}
-	clientDoc, err := c.application.Agent.FetchIdentityDocument(ctx, clientWorkload)
+	clientDoc, err := c.application.Agent().FetchIdentityDocument(ctx, clientWorkload)
 	if err != nil {
 		return fmt.Errorf("failed to fetch client identity document: %w", err)
 	}
@@ -85,14 +85,14 @@ func (c *CLI) Run(ctx context.Context) error {
 	fmt.Println("Performing authenticated message exchange...")
 
 	// Client sends message to server
-	msg, err := c.application.Service.ExchangeMessage(ctx, clientIdentity, serverIdentity, "Hello server")
+	msg, err := c.application.Service().ExchangeMessage(ctx, clientIdentity, serverIdentity, "Hello server")
 	if err != nil {
 		return fmt.Errorf("failed to exchange message: %w", err)
 	}
 	fmt.Printf("  [%s → %s]: %s\n", msg.From.Name, msg.To.Name, msg.Content)
 
 	// Server sends response to client
-	response, err := c.application.Service.ExchangeMessage(ctx, serverIdentity, clientIdentity, "Hello client")
+	response, err := c.application.Service().ExchangeMessage(ctx, serverIdentity, clientIdentity, "Hello client")
 	if err != nil {
 		return fmt.Errorf("failed to exchange response: %w", err)
 	}
