@@ -22,7 +22,6 @@ type MTLSConfig struct {
 
 // HTTPConfig holds HTTP server/client configuration.
 type HTTPConfig struct {
-	Enabled           bool          `yaml:"enabled"`
 	Address           string        `yaml:"address"` // "host:port" format required
 	Timeout           time.Duration `yaml:"timeout"` // end-to-end request timeout
 	ReadHeaderTimeout time.Duration `yaml:"read_header_timeout"`
@@ -61,11 +60,10 @@ func (c *MTLSConfig) Validate() error {
 
 // Validate checks if HTTP configuration is valid.
 func (h *HTTPConfig) Validate() error {
-	if !h.Enabled {
-		return nil // skip validation if disabled
-	}
-
 	// Validate address format (host:port required)
+	if strings.TrimSpace(h.Address) == "" {
+		return fmt.Errorf("address is required")
+	}
 	host, portStr, err := net.SplitHostPort(h.Address)
 	if err != nil {
 		return fmt.Errorf("address %q must be host:port format: %w", h.Address, err)
@@ -102,13 +100,18 @@ func (h *HTTPConfig) Validate() error {
 
 // Validate checks if authentication configuration is valid.
 func (a *AuthConfig) Validate() error {
+	// Peer verification mode is required
+	if strings.TrimSpace(a.PeerVerification) == "" {
+		return fmt.Errorf("peer_verification is required")
+	}
+
 	// Validate peer verification mode
 	mode := strings.ToLower(a.PeerVerification)
 	switch mode {
 	case "any", "trust-domain", "specific-id", "one-of":
 		// valid modes
 	default:
-		return fmt.Errorf("peer_verification must be one of: any, trust-domain, specific-id, one-of; got %q", a.PeerVerification)
+		return fmt.Errorf("invalid peer_verification %q (expected: any, trust-domain, specific-id, one-of)", a.PeerVerification)
 	}
 
 	// Validate mode-specific requirements
@@ -122,8 +125,8 @@ func (a *AuthConfig) Validate() error {
 			return fmt.Errorf("peer_verification=trust-domain requires trust_domain to be set")
 		}
 	case "one-of":
-		if len(a.AllowedIDs) == 0 {
-			return fmt.Errorf("peer_verification=one-of requires at least one allowed_ids entry")
+		if len(a.AllowedIDs) < 2 {
+			return fmt.Errorf("peer_verification=one-of requires at least 2 allowed_ids entries (use specific-id for single ID), got %d", len(a.AllowedIDs))
 		}
 	}
 

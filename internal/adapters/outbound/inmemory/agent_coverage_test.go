@@ -129,8 +129,8 @@ func TestAgent_GetIdentity(t *testing.T) {
 	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, identity)
-	assert.NotNil(t, identity.IdentityCredential())
-	assert.Equal(t, "spiffe://example.org/agent", identity.IdentityCredential().String())
+	assert.NotNil(t, identity.IdentityCredential)
+	assert.Equal(t, "spiffe://example.org/agent", identity.IdentityCredential.String())
 }
 func TestAgent_NewInMemoryAgent_ErrorPaths(t *testing.T) {
 	t.Parallel()
