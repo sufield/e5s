@@ -93,8 +93,8 @@ func (c *MTLSConfig) ToClientConfig() (ports.MTLSConfig, error) {
 			SocketPath: c.SPIRE.SocketPath,
 		},
 		SPIFFE: spiffe,
-		HTTP: ports.HTTPConfig{
-			Timeout: c.HTTP.Timeout,
+		HTTP:    ports.HTTPConfig{
+			// Client adapter will apply its own defaults
 		},
 	}, nil
 }

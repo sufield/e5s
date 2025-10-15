@@ -18,9 +18,13 @@ import (
 func main() {
 	ctx := context.Background()
 
-	// Create identity server configuration
-	// Using defaults: socket path, address, timeouts
-	cfg := ports.DefaultMTLSConfig()
+	// Create identity server configuration (adapters provide defaults)
+	var cfg ports.MTLSConfig
+	cfg.WorkloadAPI.SocketPath = "unix:///tmp/spire-agent/public/api.sock"
+	cfg.HTTP.Address = ":8443"
+	cfg.HTTP.ReadHeaderTimeout = 10 * time.Second
+	cfg.HTTP.WriteTimeout = 30 * time.Second
+	cfg.HTTP.IdleTimeout = 60 * time.Second
 
 	// Optionally override from environment
 	if socketPath := os.Getenv("SPIRE_AGENT_SOCKET"); socketPath != "" {
@@ -58,33 +62,46 @@ func main() {
 
 	// Register handlers
 	// The server performs authentication - handlers receive authenticated requests
-	server.Handle("/api/hello", http.HandlerFunc(helloHandler))
-	server.Handle("/api/echo", http.HandlerFunc(echoHandler))
-	server.Handle("/health", http.HandlerFunc(healthHandler))
-
-	// Start server
-	if err := server.Start(ctx); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
+	if err := server.Handle("/api/hello", http.HandlerFunc(helloHandler)); err != nil {
+		log.Fatalf("Failed to register handler: %v", err)
+	}
+	if err := server.Handle("/api/echo", http.HandlerFunc(echoHandler)); err != nil {
+		log.Fatalf("Failed to register handler: %v", err)
+	}
+	if err := server.Handle("/health", http.HandlerFunc(healthHandler)); err != nil {
+		log.Fatalf("Failed to register handler: %v", err)
 	}
 
-	log.Printf("✓ Server started successfully on %s", cfg.HTTP.Address)
-	log.Printf("Waiting for requests (Ctrl+C to stop)...")
+	log.Printf("✓ Handlers registered successfully")
+	log.Printf("Starting server on %s (blocks until shutdown)...", cfg.HTTP.Address)
+
+	// Start server in goroutine (blocks until shutdown)
+	serverErr := make(chan error, 1)
+	go func() {
+		if err := server.Start(ctx); err != nil {
+			serverErr <- err
+		}
+		close(serverErr)
+	}()
 
 	// Wait for shutdown signal
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-	<-sigChan
 
-	log.Println("Shutting down server...")
-
-	// Graceful shutdown
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	if err := server.Shutdown(shutdownCtx); err != nil {
-		log.Printf("Error during shutdown: %v", err)
-	} else {
-		log.Println("✓ Server shutdown complete")
+	select {
+	case <-sigChan:
+		log.Println("Shutdown signal received, stopping server...")
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			log.Printf("Error during shutdown: %v", err)
+		} else {
+			log.Println("✓ Server shutdown complete")
+		}
+	case err := <-serverErr:
+		if err != nil {
+			log.Printf("Server error: %v", err)
+		}
 	}
 }
 

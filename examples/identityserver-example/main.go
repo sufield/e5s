@@ -73,14 +73,28 @@ func main() {
 	log.Println("Press Ctrl+C to stop")
 	log.Println()
 
-	// Start server
-	if err := server.Start(ctx); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
-	}
+	// Start server in goroutine (blocks until shutdown)
+	serverErr := make(chan error, 1)
+	go func() {
+		if err := server.Start(ctx); err != nil {
+			serverErr <- err
+		}
+		close(serverErr)
+	}()
 
-	// Wait for server to exit
-	if err := server.Wait(); err != nil && err != http.ErrServerClosed {
-		log.Printf("Server error: %v", err)
+	// Wait for shutdown signal or server error
+	select {
+	case <-ctx.Done():
+		log.Println("Shutdown signal received, stopping server...")
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			log.Printf("Shutdown error: %v", err)
+		}
+	case err := <-serverErr:
+		if err != nil {
+			log.Printf("Server error: %v", err)
+		}
 	}
 
 	log.Println("Server stopped gracefully")
