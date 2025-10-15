@@ -28,7 +28,7 @@ This project contains **two separate implementations** that coexist through hexa
 - Kubernetes deployments with SPIRE
 - High-availability scenarios
 
-### 📚 Educational: SPIRE Workload API Demo
+### Educational: SPIRE Workload API Demo
 
 **Status**: Educational/Demo purposes
 **Implementation**: In-memory (not connected to real SPIRE)
@@ -40,10 +40,10 @@ This project contains **two separate implementations** that coexist through hexa
 - `internal/adapters/outbound/inmemory` - In-memory SPIRE
 
 **Purpose**:
-- 📖 Learn SPIRE concepts (attestation, selectors, SVIDs)
-- 🎓 Understand Workload API flow
-- 🔧 Development without SPIRE infrastructure
-- 📝 Demonstrate hexagonal architecture
+- Learn SPIRE concepts (attestation, selectors, SVIDs)
+- Understand Workload API flow
+- Development without SPIRE infrastructure
+- Demonstrate hexagonal architecture
 
 **Not for**:
 - Production deployments
@@ -92,7 +92,7 @@ This project contains **two separate implementations** that coexist through hexa
 
 ### ❌ Not Needed
 
-The following are **intentionally separate** and will remain as educational demos:
+The following are intentionally separate and will remain as educational demos:
 
 - `cmd/agent` - Educational demo (not migrating to real SDK)
 - `cmd/workload` - Educational demo (not migrating to real SDK)
@@ -189,4 +189,4 @@ go test ./internal/adapters/outbound/inmemory/... -v
 | **SPIRE Required** | Yes (real agent) | No (in-memory) |
 | **Status** | ✅ Complete | ✅ Complete |
 
-**Bottom Line**: If you need production mTLS authentication, use `httpapi` and `httpclient` - they're ready now with real SPIRE. If you want to learn SPIRE concepts, use the demo commands with in-memory implementation.
+If you need production mTLS authentication, use `httpapi` and `httpclient` - they're ready now with real SPIRE. If you want to learn SPIRE concepts, use the demo commands with in-memory implementation.

@@ -1,6 +1,6 @@
 # Node Entity Domain 
 
-The `Node` struct and its methods represent **pure domain logic** for an in-memory walking skeleton:
+The `Node` struct and its methods represent domain logic for an in-memory walking skeleton:
 
 ```go
 type Node struct {
