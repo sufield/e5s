@@ -2,7 +2,7 @@
 	clean help prereqs check-prereqs check-prereqs-k8s check-prereqs-lint check-prereqs-misc \
 	build prod-build dev-build test-prod-build compare-sizes test-inmem test-inmem-html \
 	helm-lint helm-template minikube-up minikube-down minikube-status \
-	minikube-delete ci-test ci-build verify verify-spire check-spire-ready test-integration test-prod-binary \
+	minikube-delete ci-test ci-build verify verify-spire check-spire-ready test-integration test-integration-fast test-prod-binary \
 	refactor-baseline refactor-compare refactor-check refactor-install-tools refactor-clean \
 	test-dev test-prod register-test-workload
 
@@ -424,3 +424,8 @@ refactor-clean:
 help:
 	@echo "Available targets:"
 	@sed -n 's/^##//p' ${MAKEFILE_LIST} | column -t -s ':' | sed -e 's/^/ /'
+
+## test-integration-fast: Run integration tests (optimized - uses pre-compiled binary)
+test-integration-fast: check-spire-ready register-test-workload
+	@echo "Running optimized integration tests..."
+	@bash scripts/run-integration-tests-optimized.sh
