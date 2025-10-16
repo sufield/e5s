@@ -20,17 +20,17 @@
 
 ## Overview
 
-This library provides mTLS (Mutual TLS) authentication using SPIFFE/SPIRE for service-to-service communication. It implements the adapter pattern and focuses solely on authentication (verifying identity), leaving authorization (access control) to the application layer.
+This library provides mTLS (Mutual TLS) authentication using SPIFFE/SPIRE for service-to-service communication. It follows hexagonal architecture principles and focuses solely on **authentication** (verifying identity), leaving **authorization** (access control) to the application layer.
 
 ### Features
 
 - ✅ **Automatic Certificate Management**: Zero-downtime certificate rotation via SPIRE
-- ✅ **mTLS Authentication**: Both client and server authenticate each other
-- ✅ **Identity Extraction**: SPIFFE ID available to application handlers
+- ✅ **mTLS Authentication**: Both client and server authenticate each other using X.509 SVIDs
+- ✅ **Identity Extraction**: SPIFFE ID available to application handlers through simple APIs
 - ✅ **Standard HTTP**: Compatible with Go's standard `http` package
-- ✅ **Authentication Only**: No authorization logic - app decides access
+- ✅ **Authentication Only**: No authorization logic - application decides access control
 - ✅ **Production Ready**: Battle-tested with comprehensive tests
-- ✅ **Configuration Flexible**: YAML files with environment variable overrides
+- ✅ **Clean Architecture**: Port interfaces with adapter implementations
 
 ### What This Library Does
 
@@ -48,7 +48,7 @@ This library provides mTLS (Mutual TLS) authentication using SPIFFE/SPIRE for se
 
 ### Prerequisites
 
-1. Go 1.25+
+1. Go 1.21+
 2. SPIRE server and agent running
 3. Workload registrations created
 
@@ -62,43 +62,43 @@ import (
     "fmt"
     "net/http"
 
-    "github.com/pocket/hexagon/spire/internal/adapters/inbound/httpapi"
-    "github.com/spiffe/go-spiffe/v2/spiffeid"
-    "github.com/spiffe/go-spiffe/v2/spiffetls/tlsconfig"
+    "github.com/pocket/hexagon/spire/internal/adapters/inbound/identityserver"
+    "github.com/pocket/hexagon/spire/internal/ports"
 )
 
 func main() {
     ctx := context.Background()
 
-    // Create server with trust domain authentication
-    authorizer := tlsconfig.AuthorizeMemberOf(
-        spiffeid.RequireTrustDomainFromString("example.org"),
-    )
-
-    server, err := httpapi.NewHTTPServer(
-        ctx,
-        ":8443",
-        "unix:///tmp/spire-agent/public/api.sock",
-        authorizer,
-    )
+    // Create server with mTLS authentication
+    server, err := identityserver.New(ctx, ports.MTLSConfig{
+        WorkloadAPI: ports.WorkloadAPIConfig{
+            SocketPath: "unix:///tmp/spire-agent/public/api.sock",
+        },
+        SPIFFE: ports.SPIFFEConfig{
+            AllowedTrustDomain: "example.org", // Allow any client from this domain
+        },
+        HTTP: ports.HTTPConfig{
+            Address: ":8443",
+        },
+    })
     if err != nil {
         panic(err)
     }
-    defer server.Stop(ctx)
+    defer server.Close()
 
     // Register handler
-    server.RegisterHandler("/api/hello", func(w http.ResponseWriter, r *http.Request) {
-        clientID, ok := httpapi.GetSPIFFEID(r)
+    server.Handle("/api/hello", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        clientID, ok := identityserver.GetIdentity(r)
         if !ok {
             http.Error(w, "No identity", http.StatusUnauthorized)
             return
         }
 
         fmt.Fprintf(w, "Hello, %s!\n", clientID.String())
-    })
+    }))
 
+    // Start server (blocks)
     server.Start(ctx)
-    select {} // Block forever
 }
 ```
 
@@ -112,21 +112,24 @@ import (
     "io"
     "os"
 
-    "github.com/pocket/hexagon/spire/internal/adapters/outbound/httpclient"
-    "github.com/spiffe/go-spiffe/v2/spiffeid"
-    "github.com/spiffe/go-spiffe/v2/spiffetls/tlsconfig"
+    "github.com/pocket/hexagon/spire/examples/httpclient"
 )
 
 func main() {
     ctx := context.Background()
 
-    // Create client with server identity verification
-    serverID := spiffeid.RequireFromString("spiffe://example.org/server")
-    client, err := httpclient.NewSPIFFEHTTPClient(
-        ctx,
-        "unix:///tmp/spire-agent/public/api.sock",
-        tlsconfig.AuthorizeID(serverID),
-    )
+    // Create client with mTLS authentication
+    client, err := httpclient.New(ctx, httpclient.Config{
+        WorkloadAPI: httpclient.WorkloadAPIConfig{
+            SocketPath: "unix:///tmp/spire-agent/public/api.sock",
+        },
+        SPIFFE: httpclient.SPIFFEConfig{
+            ExpectedServerID: "spiffe://example.org/server", // Or leave empty for any
+        },
+        HTTP: httpclient.HTTPClientConfig{
+            Timeout: 30 * time.Second,
+        },
+    })
     if err != nil {
         panic(err)
     }
@@ -171,12 +174,21 @@ go run ./examples/mtls-adapters/client
                    │
                    ▼
 ┌─────────────────────────────────────────────────────────┐
-│           mTLS Adapter Layer (This Library)             │
+│         Port Layer (Dependency Inversion)               │
 │                                                          │
-│  Inbound: httpapi                  Outbound: httpclient │
-│  - HTTPServer                      - SPIFFEHTTPClient   │
-│  - Identity middleware             - All HTTP methods   │
-│  - Identity utilities              - Server verification│
+│  - ports.MTLSServer interface                           │
+│  - ports.MTLSClient interface                           │
+│  - ports.MTLSConfig (pure data)                         │
+└──────────────────┬──────────────────────────────────────┘
+                   │
+                   ▼
+┌─────────────────────────────────────────────────────────┐
+│           Adapter Layer (Implementations)               │
+│                                                          │
+│  Inbound: identityserver    Outbound: httpclient        │
+│  - spiffeServer             - spiffeClient              │
+│  - Identity extraction      - All HTTP methods          │
+│  - Helper utilities         - Server verification       │
 └──────────────────┬──────────────────────────────────────┘
                    │
                    ▼
@@ -236,87 +248,90 @@ Client                    SPIRE Agent              Server
 
 ### Creating an mTLS Server
 
+The server uses the `ports.MTLSServer` interface, implemented by `identityserver.New()`:
+
 ```go
 import (
     "context"
-    "github.com/pocket/hexagon/spire/internal/adapters/inbound/httpapi"
-    "github.com/spiffe/go-spiffe/v2/spiffetls/tlsconfig"
+    "time"
+
+    "github.com/pocket/hexagon/spire/internal/adapters/inbound/identityserver"
+    "github.com/pocket/hexagon/spire/internal/ports"
 )
 
 func main() {
     ctx := context.Background()
 
-    server, err := httpapi.NewHTTPServer(
-        ctx,
-        ":8443",                                    // Listen address
-        "unix:///tmp/spire-agent/public/api.sock", // SPIRE socket
-        tlsconfig.AuthorizeAny(),                  // Client authorizer
-    )
+    server, err := identityserver.New(ctx, ports.MTLSConfig{
+        WorkloadAPI: ports.WorkloadAPIConfig{
+            SocketPath: "unix:///tmp/spire-agent/public/api.sock",
+        },
+        SPIFFE: ports.SPIFFEConfig{
+            // Choose ONE of these authorization policies:
+            AllowedPeerID:      "spiffe://example.org/client",  // Specific client
+            // OR
+            AllowedTrustDomain: "example.org",                  // Any from domain
+        },
+        HTTP: ports.HTTPConfig{
+            Address:           ":8443",
+            ReadHeaderTimeout: 10 * time.Second,
+            ReadTimeout:       30 * time.Second,
+            WriteTimeout:      30 * time.Second,
+            IdleTimeout:       60 * time.Second,
+        },
+    })
     if err != nil {
         panic(err)
     }
-    defer server.Stop(ctx)
+    defer server.Close()
 
     // Register handlers...
     server.Start(ctx)
 }
 ```
 
-### Authorizer Options
+### Authorization Policies
 
-The server uses go-spiffe's built-in authorizers to verify client identity during the TLS handshake:
+The server configuration requires **exactly one** of these policies:
 
-#### 1. AuthorizeAny() - Accept Any Client
-
-```go
-authorizer := tlsconfig.AuthorizeAny()
-```
-
-Use for: Development, internal networks where all authenticated clients are trusted.
-
-#### 2. AuthorizeID() - Specific Client ID
+#### 1. AllowedPeerID - Specific Client Identity
 
 ```go
-clientID := spiffeid.RequireFromString("spiffe://example.org/client")
-authorizer := tlsconfig.AuthorizeID(clientID)
+SPIFFE: ports.SPIFFEConfig{
+    AllowedPeerID: "spiffe://example.org/client",
+}
 ```
 
-Use for: Point-to-point connections, dedicated client-server pairs.
+**Use for**: Point-to-point connections, dedicated client-server pairs.
 
-#### 3. AuthorizeMemberOf() - Trust Domain
+#### 2. AllowedTrustDomain - Any Client from Domain
 
 ```go
-trustDomain := spiffeid.RequireTrustDomainFromString("example.org")
-authorizer := tlsconfig.AuthorizeMemberOf(trustDomain)
+SPIFFE: ports.SPIFFEConfig{
+    AllowedTrustDomain: "example.org",
+}
 ```
 
-Use for: Production environments, multi-service deployments.
-
-#### 4. AuthorizeOneOf() - Multiple Allowed IDs
-
-```go
-authorizer := tlsconfig.AuthorizeOneOf(
-    spiffeid.RequireFromString("spiffe://example.org/client1"),
-    spiffeid.RequireFromString("spiffe://example.org/client2"),
-    spiffeid.RequireFromString("spiffe://example.org/client3"),
-)
-```
-
-Use for: Load balancers, multiple client instances.
+**Use for**: Production environments with multiple services in the same trust domain.
 
 ### Registering Handlers
 
 ```go
-server.RegisterHandler("/api/resource", func(w http.ResponseWriter, r *http.Request) {
+// Register handler - returns error if called after Start()
+err := server.Handle("/api/resource", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
     // Handler automatically receives authenticated client identity in context
-    clientID, ok := httpapi.GetSPIFFEID(r)
+    clientID, ok := identityserver.GetIdentity(r)
     if !ok {
         http.Error(w, "No identity", http.StatusInternalServerError)
         return
     }
 
     // Your handler logic here
-})
+    fmt.Fprintf(w, "Authenticated as: %s\n", clientID.String())
+}))
+if err != nil {
+    log.Fatal(err)
+}
 ```
 
 ### Graceful Shutdown
@@ -328,24 +343,28 @@ import (
     "syscall"
 )
 
-// Setup signal handling
-sigChan := make(chan os.Signal, 1)
-signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-
-// Start server
+// Start server in goroutine
 go func() {
     if err := server.Start(ctx); err != nil {
         log.Fatal(err)
     }
 }()
 
-// Wait for signal
+// Setup signal handling
+sigChan := make(chan os.Signal, 1)
+signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 <-sigChan
 
 // Shutdown gracefully
 shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 defer cancel()
-server.Stop(shutdownCtx)
+
+if err := server.Shutdown(shutdownCtx); err != nil {
+    log.Printf("Shutdown error: %v", err)
+}
+
+// Close resources
+server.Close()
 ```
 
 ---
@@ -354,24 +373,37 @@ server.Stop(shutdownCtx)
 
 ### Creating an mTLS Client
 
+The client is provided as an example implementation in `examples/httpclient`:
+
 ```go
 import (
     "context"
-    "github.com/pocket/hexagon/spire/internal/adapters/outbound/httpclient"
-    "github.com/spiffe/go-spiffe/v2/spiffeid"
-    "github.com/spiffe/go-spiffe/v2/spiffetls/tlsconfig"
+    "time"
+
+    "github.com/pocket/hexagon/spire/examples/httpclient"
 )
 
 func main() {
     ctx := context.Background()
 
-    // Verify server identity
-    serverID := spiffeid.RequireFromString("spiffe://example.org/server")
-    client, err := httpclient.NewSPIFFEHTTPClient(
-        ctx,
-        "unix:///tmp/spire-agent/public/api.sock",
-        tlsconfig.AuthorizeID(serverID),
-    )
+    client, err := httpclient.New(ctx, httpclient.Config{
+        WorkloadAPI: httpclient.WorkloadAPIConfig{
+            SocketPath: "unix:///tmp/spire-agent/public/api.sock",
+        },
+        SPIFFE: httpclient.SPIFFEConfig{
+            // Optional: Verify specific server identity
+            ExpectedServerID: "spiffe://example.org/server",
+            // OR verify any server from specific trust domain
+            ExpectedTrustDomain: "example.org",
+            // OR leave both empty to accept any server from client's trust domain
+        },
+        HTTP: httpclient.HTTPClientConfig{
+            Timeout:             30 * time.Second,
+            MaxIdleConns:        100,
+            MaxIdleConnsPerHost: 10,
+            IdleConnTimeout:     90 * time.Second,
+        },
+    })
     if err != nil {
         panic(err)
     }
@@ -384,132 +416,140 @@ func main() {
 ### HTTP Methods
 
 ```go
-// GET
+// GET request
 resp, err := client.Get(ctx, "https://server:8443/api/resource")
 
-// POST
+// POST request
 body := strings.NewReader(`{"key":"value"}`)
 resp, err := client.Post(ctx, url, "application/json", body)
 
-// PUT
-body := strings.NewReader(`{"key":"updated"}`)
-resp, err := client.Put(ctx, url, "application/json", body)
-
-// DELETE
-resp, err := client.Delete(ctx, "https://server:8443/api/resource/123")
-
-// PATCH
-body := strings.NewReader(`{"key":"patched"}`)
-resp, err := client.Patch(ctx, url, "application/json", body)
-
-// Custom request
-req, _ := http.NewRequestWithContext(ctx, "OPTIONS", url, nil)
+// Custom request with Do()
+req, _ := http.NewRequestWithContext(ctx, "PUT", url, body)
+req.Header.Set("Content-Type", "application/json")
 resp, err := client.Do(req)
 ```
 
-### Client Configuration
-
-```go
-// Set timeout
-client.SetTimeout(60 * time.Second)
-
-// Access underlying http.Client for advanced configuration
-httpClient := client.GetHTTPClient()
-transport := httpClient.Transport.(*http.Transport)
-transport.MaxIdleConns = 200
-```
+**Note**: The client currently supports `Get`, `Post`, and `Do` methods. For other HTTP methods (PUT, DELETE, PATCH), use `Do()` with a custom request.
 
 ---
 
 ## Identity Extraction
 
-The library provides 15+ helper functions for working with SPIFFE identities in request handlers.
+The library provides simple identity extraction functions through the `identityserver` package:
 
-### Core Extraction
+### Basic Extraction (Recommended)
 
 ```go
-// Get SPIFFE ID with error handling
-clientID, ok := httpapi.GetSPIFFEID(r)
-if !ok {
-    http.Error(w, "No identity", http.StatusUnauthorized)
+import "github.com/pocket/hexagon/spire/internal/adapters/inbound/identityserver"
+
+func handler(w http.ResponseWriter, r *http.Request) {
+    // Get SPIFFE ID - returns (spiffeid.ID, bool)
+    clientID, ok := identityserver.GetIdentity(r)
+    if !ok {
+        http.Error(w, "No identity", http.StatusUnauthorized)
+        return
+    }
+
+    // Use the identity
+    log.Printf("Request from: %s", clientID.String())
+    log.Printf("Trust domain: %s", clientID.TrustDomain().String())
+    log.Printf("Path: %s", clientID.Path())
+}
+```
+
+### Error-Based Extraction
+
+```go
+// Get SPIFFE ID with error - returns (spiffeid.ID, error)
+clientID, err := identityserver.RequireIdentity(r)
+if err != nil {
+    http.Error(w, "Unauthorized", http.StatusUnauthorized)
     return
 }
-
-// Get SPIFFE ID or panic (for guaranteed contexts)
-clientID := httpapi.MustGetSPIFFEID(r)
-
-// Get ID as string
-idStr := httpapi.GetIDString(r)  // "spiffe://example.org/service"
 ```
 
-### Trust Domain Operations
+### Context-Based Extraction
 
 ```go
-// Extract trust domain
-td, ok := httpapi.GetTrustDomain(r)
-
-// Check trust domain match
-if httpapi.MatchesTrustDomain(r, "example.org") {
-    // Client from example.org
+// Extract from context (useful for non-HTTP code)
+clientID, ok := identityserver.IdentityFromContext(r.Context())
+if !ok {
+    // No identity in context
 }
 ```
 
-### Path Operations
+### Available Identity Methods
 
-SPIFFE IDs have a hierarchical path structure: `spiffe://trust-domain/path/to/workload`
+Once you have the `spiffeid.ID`, you can use these methods:
 
 ```go
-// Extract path
-path, ok := httpapi.GetPath(r)  // "/service/frontend"
+clientID, _ := identityserver.GetIdentity(r)
 
-// Check path prefix (useful for service type detection)
-if httpapi.HasPathPrefix(r, "/service/") {
+// Get components
+fullID := clientID.String()              // "spiffe://example.org/service/frontend"
+domain := clientID.TrustDomain().String() // "example.org"
+path := clientID.Path()                   // "/service/frontend"
+
+// Check properties
+isZero := clientID.IsZero()              // false for valid IDs
+
+// Compare trust domains
+sameDomain := clientID.TrustDomain() == otherID.TrustDomain()
+```
+
+### Advanced Path-Based Checks
+
+For more advanced path-based authorization, use the `httpcontext` package (internal implementation detail):
+
+```go
+import "github.com/pocket/hexagon/spire/internal/adapters/inbound/identityserver/httpcontext"
+
+// Check path prefix
+if httpcontext.HasPathPrefix(r, "/service/") {
     // Client is a service workload
 }
 
-// Check path suffix (useful for role-like patterns)
-if httpapi.HasPathSuffix(r, "/admin") {
+// Check path suffix
+if httpcontext.HasPathSuffix(r, "/admin") {
     // Client has admin role (application-defined)
 }
 
 // Get path segments
-segments, ok := httpapi.GetPathSegments(r)
+segments, ok := httpcontext.GetPathSegments(r)
 // For spiffe://example.org/ns/prod/service/api
 // segments = []string{"ns", "prod", "service", "api"}
-```
 
-### Identity Matching
-
-```go
-// Exact ID match
-if httpapi.MatchesID(r, "spiffe://example.org/service/frontend") {
-    // Specific service identity
+// Use segments for routing
+if len(segments) >= 2 {
+    namespace := segments[0]    // "ns"
+    environment := segments[1]  // "prod"
 }
 ```
 
-### Middleware
+### Middleware (Advanced)
+
+The `httpcontext` package provides middleware for common patterns:
 
 ```go
-import "github.com/pocket/hexagon/spire/internal/adapters/inbound/httpapi"
+import "github.com/pocket/hexagon/spire/internal/adapters/inbound/identityserver/httpcontext"
 
 // Require authentication
-mux.Handle("/api/", httpapi.RequireAuthentication(apiHandler))
+mux.Handle("/api/", httpcontext.Authenticated(apiHandler))
 
 // Require specific trust domain
-handler := httpapi.RequireTrustDomain("example.org", apiHandler)
+expectedTD := spiffeid.RequireTrustDomainFromString("example.org")
+handler := httpcontext.RequireTrustDomainID(expectedTD, apiHandler)
 
 // Require path prefix
-handler := httpapi.RequirePathPrefix("/service/", apiHandler)
+handler := httpcontext.RequirePathPrefix("/service/", apiHandler)
 
-// Log all identities (for debugging)
-mux.Handle("/api/", httpapi.LogIdentity(apiHandler))
+// Log all identities (debugging)
+mux.Handle("/api/", httpcontext.LogIdentity(apiHandler))
 
 // Chain middleware
-handler := httpapi.RequireAuthentication(
-    httpapi.RequireTrustDomain("example.org",
-        httpapi.RequirePathPrefix("/service/",
-            httpapi.LogIdentity(apiHandler),
-        ),
+handler := httpcontext.Authenticated(
+    httpcontext.RequireTrustDomainID(expectedTD,
+        httpcontext.LogIdentity(apiHandler),
     ),
 )
 ```
@@ -518,91 +558,97 @@ handler := httpapi.RequireAuthentication(
 
 ## Configuration
 
-### YAML Configuration File
-
-Create `config.yaml`:
-
-```yaml
-http:
-  enabled: true
-  address: ":8443"
-  timeout: 30s
-  authentication:
-    policy: trust-domain
-    trust_domain: example.org
-
-spire:
-  socket_path: unix:///tmp/spire-agent/public/api.sock
-  trust_domain: example.org
-```
-
-Load in code:
+### Server Configuration
 
 ```go
-import "github.com/pocket/hexagon/spire/internal/config"
+server, err := identityserver.New(ctx, ports.MTLSConfig{
+    WorkloadAPI: ports.WorkloadAPIConfig{
+        SocketPath: "unix:///tmp/spire-agent/public/api.sock",
+    },
+    SPIFFE: ports.SPIFFEConfig{
+        // REQUIRED: Choose ONE
+        AllowedPeerID:      "spiffe://example.org/client",  // Specific client
+        AllowedTrustDomain: "example.org",                  // Any from domain
+    },
+    HTTP: ports.HTTPConfig{
+        Address:           ":8443",           // Required
+        ReadHeaderTimeout: 10 * time.Second,  // Optional, has defaults
+        ReadTimeout:       30 * time.Second,  // Optional
+        WriteTimeout:      30 * time.Second,  // Optional
+        IdleTimeout:       60 * time.Second,  // Optional
+    },
+})
+```
 
-cfg, err := config.LoadFromFile("config.yaml")
-if err != nil {
-    panic(err)
-}
+### Client Configuration
 
-if err := cfg.Validate(); err != nil {
-    panic(err)
-}
-
-// Use config...
+```go
+client, err := httpclient.New(ctx, httpclient.Config{
+    WorkloadAPI: httpclient.WorkloadAPIConfig{
+        SocketPath: "unix:///tmp/spire-agent/public/api.sock",  // Required
+    },
+    SPIFFE: httpclient.SPIFFEConfig{
+        // OPTIONAL: All can be empty for "any server from client's trust domain"
+        ExpectedServerID:    "spiffe://example.org/server",  // Specific server
+        ExpectedTrustDomain: "example.org",                  // Any from domain
+    },
+    HTTP: httpclient.HTTPClientConfig{
+        Timeout:             30 * time.Second,  // Required
+        MaxIdleConns:        100,               // Optional
+        MaxIdleConnsPerHost: 10,                // Optional
+        IdleConnTimeout:     90 * time.Second,  // Optional
+    },
+})
 ```
 
 ### Environment Variables
 
-Environment variables override YAML values:
+The examples support these environment variables:
 
+**Server**:
+- `SPIRE_AGENT_SOCKET` - Socket path (default: `unix:///tmp/spire-agent/public/api.sock`)
+- `SERVER_ADDRESS` - Listen address (default: `:8443`)
+- `ALLOWED_CLIENT_ID` - Restrict to specific client (optional)
+
+**Client**:
+- `SPIRE_AGENT_SOCKET` - Socket path (default: `unix:///tmp/spire-agent/public/api.sock`)
+- `SERVER_URL` - Server URL (default: `https://localhost:8443`)
+- `EXPECTED_SERVER_ID` - Expected server identity (optional)
+
+Example:
 ```bash
-export SPIRE_AGENT_SOCKET="unix:///custom/socket"
-export SPIRE_TRUST_DOMAIN="production.example.org"
-export HTTP_ADDRESS=":9443"
-export AUTH_POLICY="specific-id"
-export ALLOWED_CLIENT_ID="spiffe://example.org/client"
+# Server
+SPIRE_AGENT_SOCKET="unix:///var/run/spire/agent.sock" \
+SERVER_ADDRESS=":9443" \
+ALLOWED_CLIENT_ID="spiffe://example.org/client" \
+./bin/mtls-server
+
+# Client
+SPIRE_AGENT_SOCKET="unix:///var/run/spire/agent.sock" \
+SERVER_URL="https://api-server:8443" \
+EXPECTED_SERVER_ID="spiffe://example.org/server" \
+./bin/mtls-client
 ```
-
-Load environment-only:
-
-```go
-cfg := config.LoadFromEnv()
-```
-
-### Configuration Options
-
-| YAML Key | Env Var | Description | Default |
-|----------|---------|-------------|---------|
-| `spire.socket_path` | `SPIRE_AGENT_SOCKET` | SPIRE agent socket | `unix:///tmp/spire-agent/public/api.sock` |
-| `spire.trust_domain` | `SPIRE_TRUST_DOMAIN` | Trust domain | `example.org` |
-| `http.address` | `HTTP_ADDRESS` | Listen address | `:8443` |
-| `http.enabled` | `HTTP_ENABLED` | Enable HTTP | `false` |
-| `http.timeout` | - | Request timeout | `30s` |
-| `http.authentication.policy` | `AUTH_POLICY` | Auth policy | `any` |
-| `http.authentication.allowed_id` | `ALLOWED_CLIENT_ID` or `EXPECTED_SERVER_ID` | Single allowed ID | - |
-| `http.authentication.trust_domain` | `AUTH_TRUST_DOMAIN` | Auth trust domain | Same as `spire.trust_domain` |
 
 ---
 
 ## Authentication vs Authorization
 
-This library handles authentication only. Your application must implement authorization.
+This library handles **authentication only**. Your application must implement **authorization**.
 
 ### Authentication (This Library) ✅
 
 ```go
 func handler(w http.ResponseWriter, r *http.Request) {
-    // AUTHENTICATION: Verify who the client is
-    clientID, ok := httpapi.GetSPIFFEID(r)
+    // AUTHENTICATION: Verify WHO the client is
+    clientID, ok := identityserver.GetIdentity(r)
     if !ok {
         http.Error(w, "Unauthorized", http.StatusUnauthorized)
         return
     }
 
     // At this point, we know WHO the client is (authenticated)
-    // ...
+    log.Printf("Authenticated: %s", clientID.String())
 }
 ```
 
@@ -610,21 +656,21 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 ```go
 func handler(w http.ResponseWriter, r *http.Request) {
-    // AUTHENTICATION: Verify who the client is
-    clientID, ok := httpapi.GetSPIFFEID(r)
+    // AUTHENTICATION: Verify WHO the client is
+    clientID, ok := identityserver.GetIdentity(r)
     if !ok {
         http.Error(w, "Unauthorized", http.StatusUnauthorized)
         return
     }
 
-    // AUTHORIZATION: Decide what the client can do
-    if !myAuthzService.IsAllowed(clientID, "read", "resource") {
+    // AUTHORIZATION: Decide WHAT the client can do
+    if !myAuthzService.IsAllowed(clientID.String(), "read", "resource") {
         http.Error(w, "Forbidden", http.StatusForbidden)
         return
     }
 
     // Handle authorized request
-    // ...
+    fmt.Fprintf(w, "Success!\n")
 }
 ```
 
@@ -633,18 +679,23 @@ func handler(w http.ResponseWriter, r *http.Request) {
 #### 1. Path-Based Roles
 
 ```go
+import "github.com/pocket/hexagon/spire/internal/adapters/inbound/identityserver/httpcontext"
+
 // Application defines roles via SPIFFE ID path
-if httpapi.HasPathSuffix(r, "/admin") {
+if httpcontext.HasPathSuffix(r, "/admin") {
     // Client has admin role
-} else if httpapi.HasPathSuffix(r, "/readonly") {
+} else if httpcontext.HasPathSuffix(r, "/readonly") {
     // Client has readonly role
+} else {
+    http.Error(w, "Forbidden", http.StatusForbidden)
+    return
 }
 ```
 
 #### 2. Service Type Detection
 
 ```go
-segments, _ := httpapi.GetPathSegments(r)
+segments, _ := httpcontext.GetPathSegments(r)
 if len(segments) > 0 {
     switch segments[0] {
     case "service":
@@ -653,6 +704,9 @@ if len(segments) > 0 {
         // User request
     case "system":
         // System request
+    default:
+        http.Error(w, "Forbidden", http.StatusForbidden)
+        return
     }
 }
 ```
@@ -660,7 +714,7 @@ if len(segments) > 0 {
 #### 3. External Authorization Service
 
 ```go
-clientID, _ := httpapi.GetSPIFFEID(r)
+clientID, _ := identityserver.GetIdentity(r)
 
 // Call external authz service (OPA, Casbin, etc.)
 decision, err := opaClient.Evaluate(clientID.String(), resource, action)
@@ -679,22 +733,9 @@ if err != nil || !decision.Allowed {
 The library uses `workloadapi.X509Source` which automatically rotates certificates:
 
 - **Default SVID TTL**: 1 hour
-- **Rotation**: Happens automatically ~30 minutes before expiry
+- **Rotation**: Happens automatically before expiry (typically ~30 minutes before)
 - **Zero Downtime**: New connections use new cert, existing connections continue
-
-### Monitoring Rotation
-
-```go
-// X509Source handles rotation internally
-// No application code required
-
-// Optional: Log rotation events (advanced)
-source.WatchX509Context(ctx, &x509ContextWatcher{
-    OnX509ContextUpdate: func(ctx *workloadapi.X509Context) {
-        log.Printf("Certificate rotated: %s", ctx.DefaultSVID().ID)
-    },
-})
-```
+- **No Application Code Required**: Completely transparent to your application
 
 ### Rotation Timeline
 
@@ -709,6 +750,8 @@ SVID 2:   │           │═══════════│═════�
           │      Rotation      Expiry        │
           │      Triggered                   │
 ```
+
+**Note**: The exact rotation timing is controlled by SPIRE and may vary based on configuration. The X509Source monitors expiry and fetches new certificates automatically.
 
 ---
 
@@ -740,19 +783,20 @@ go run ./examples/mtls-adapters/client
 
 ### Kubernetes
 
-See [examples/mtls-adapters/README.md](../examples/mtls-adapters/README.md) for complete Kubernetes deployment guide.
+See [examples/mtls-adapters/KUBERNETES.md](../examples/mtls-adapters/KUBERNETES.md) for complete Kubernetes deployment guide including:
+- Deployment manifests
+- Building images for Minikube and remote registries
+- Workload registration with SPIRE
+- Advanced configuration
 
+Quick start:
 ```bash
 # Build images
 docker build -t mtls-server:latest -f examples/mtls-adapters/server/Dockerfile .
 docker build -t mtls-client:latest -f examples/mtls-adapters/client/Dockerfile .
 
-# Register workloads
-./examples/mtls-adapters/k8s/spire-registrations.sh
-
 # Deploy
-kubectl apply -f examples/mtls-adapters/k8s/server-deployment.yaml
-kubectl apply -f examples/mtls-adapters/k8s/client-job.yaml
+kubectl apply -f examples/mtls-adapters/k8s/
 ```
 
 ### Docker
@@ -777,7 +821,7 @@ docker run -d \
 **Solutions**:
 - Verify SPIRE agent is running: `ps aux | grep spire-agent`
 - Check socket exists: `ls -la /tmp/spire-agent/public/api.sock`
-- Verify socket permissions
+- Verify socket permissions: `stat /tmp/spire-agent/public/api.sock`
 - Check `SPIRE_AGENT_SOCKET` environment variable
 
 ### 2. "TLS handshake failed"
@@ -786,8 +830,8 @@ docker run -d \
 
 **Possible Causes**:
 - Client and server in different trust domains
-- Server's `ALLOWED_CLIENT_ID` doesn't match client
-- Client's `EXPECTED_SERVER_ID` doesn't match server
+- Server's `AllowedPeerID` doesn't match client
+- Client's `ExpectedServerID` doesn't match server
 - Workload not registered in SPIRE
 
 **Solutions**:
@@ -821,51 +865,58 @@ spire-server entry create \
 - Check firewall rules
 - In Kubernetes, verify Service is created
 
+### 5. "cannot register handler after Start"
+
+**Problem**: Tried to call `Handle()` after `Start()`.
+
+**Solution**: Register all handlers **before** calling `Start()`:
+```go
+server.Handle("/api/hello", handler1)
+server.Handle("/api/goodbye", handler2)
+// Now start
+server.Start(ctx)
+```
+
 ---
 
 ## Best Practices
 
-### 1. Use Specific Authorizers in Production
+### 1. Use Specific Authorization Policies in Production
 
 ```go
-// ❌ Don't use in production
-authorizer := tlsconfig.AuthorizeAny()
+// ❌ Too permissive for production
+SPIFFE: ports.SPIFFEConfig{
+    AllowedTrustDomain: "dev.example.org",
+}
 
-// ✅ Use specific trust domain
-authorizer := tlsconfig.AuthorizeMemberOf(
-    spiffeid.RequireTrustDomainFromString("production.example.org"),
-)
+// ✅ Specific client in production
+SPIFFE: ports.SPIFFEConfig{
+    AllowedPeerID: "spiffe://prod.example.org/payment-service",
+}
 
-// ✅ Or specific IDs
-authorizer := tlsconfig.AuthorizeID(
-    spiffeid.RequireFromString("spiffe://production.example.org/client"),
-)
+// ✅ Or production trust domain
+SPIFFE: ports.SPIFFEConfig{
+    AllowedTrustDomain: "prod.example.org",
+}
 ```
 
 ### 2. Always Close Resources
 
 ```go
-server, err := httpapi.NewHTTPServer(ctx, httpapi.ServerConfig{
-    Address:    addr,
-    SocketPath: socket,
-    Authorizer: authorizer,
-})
+server, err := identityserver.New(ctx, config)
 if err != nil {
     return err
 }
-defer server.Stop(ctx)  // ✅ Always defer Stop
+defer server.Close()  // ✅ Always defer Close
 
-client, err := httpclient.NewSPIFFEHTTPClient(ctx, httpclient.ClientConfig{
-    SocketPath:       socket,
-    ServerAuthorizer: authorizer,
-})
+client, err := httpclient.New(ctx, config)
 if err != nil {
     return err
 }
 defer client.Close()  // ✅ Always defer Close
 ```
 
-### 3. Use Environment Variables for Secrets
+### 3. Use Environment Variables for Configuration
 
 ```go
 // ❌ Don't hardcode
@@ -881,49 +932,57 @@ if socketPath == "" {
 ### 4. Implement Graceful Shutdown
 
 ```go
-sigChan := make(chan os.Signal, 1)
-signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-
+// Start server in goroutine
 go func() {
     server.Start(ctx)
 }()
 
+// Wait for signal
+sigChan := make(chan os.Signal, 1)
+signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 <-sigChan
 
+// Graceful shutdown with timeout
 shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 defer cancel()
-server.Stop(shutdownCtx)  // ✅ Graceful shutdown
+server.Shutdown(shutdownCtx)  // ✅ Graceful shutdown
+server.Close()                // ✅ Then release resources
 ```
 
-### 5. Use Middleware for Common Patterns
+### 5. Handle Errors Properly
 
 ```go
-// ✅ Reusable authentication middleware
-requireAuth := httpapi.RequireAuthentication(
-    httpapi.RequireTrustDomain("example.org", nil),
-)
+// ✅ Check errors from Handle()
+if err := server.Handle("/api/hello", handler); err != nil {
+    log.Fatalf("Failed to register handler: %v", err)
+}
 
-mux.Handle("/api/", requireAuth)
+// ✅ Check identity extraction
+clientID, ok := identityserver.GetIdentity(r)
+if !ok {
+    http.Error(w, "Unauthorized", http.StatusUnauthorized)
+    return
+}
 ```
 
 ### 6. Log Identity for Audit
 
 ```go
-// ✅ Log all authenticated requests
-handler := httpapi.LogIdentity(apiHandler)
+import "github.com/pocket/hexagon/spire/internal/adapters/inbound/identityserver/httpcontext"
+
+// ✅ Log all authenticated requests for audit
+handler := httpcontext.LogIdentity(apiHandler)
 ```
 
-### 7. Validate Configuration
+### 7. Don't Leak Identity in Errors
 
 ```go
-cfg, err := config.LoadFromFile("config.yaml")
-if err != nil {
-    return err
-}
+// ❌ Don't leak identity information
+http.Error(w, fmt.Sprintf("User %s not authorized", clientID), 403)
 
-if err := cfg.Validate(); err != nil {  // ✅ Always validate
-    return err
-}
+// ✅ Use generic messages
+http.Error(w, "Forbidden", http.StatusForbidden)
+log.Printf("Authorization failed for %s", clientID) // Log separately
 ```
 
 ---
@@ -936,19 +995,19 @@ Complete working examples are available in [`examples/mtls-adapters/`](../exampl
 
 1. **Server Example** ([server/main.go](../examples/mtls-adapters/server/main.go))
    - 4 endpoints: /api/hello, /api/echo, /api/identity, /health
-   - Demonstrates all identity utilities
+   - Demonstrates identity extraction
    - Graceful shutdown
    - Environment-based configuration
 
 2. **Client Example** ([client/main.go](../examples/mtls-adapters/client/main.go))
    - Makes requests to all server endpoints
-   - Demonstrates all HTTP methods
-   - Proper error handling
+   - Demonstrates Get and Post methods
+   - Proper error handling and resource cleanup
 
 3. **Kubernetes Deployment** ([k8s/](../examples/mtls-adapters/k8s/))
    - Complete manifests for server and client
-   - Automated workload registration script
    - Health probes and resource limits
+   - SPIRE integration
 
 ### Running Examples
 
@@ -958,7 +1017,6 @@ go run ./examples/mtls-adapters/server
 go run ./examples/mtls-adapters/client
 
 # Kubernetes
-./examples/mtls-adapters/k8s/spire-registrations.sh
 kubectl apply -f examples/mtls-adapters/k8s/
 ```
 
@@ -966,24 +1024,25 @@ kubectl apply -f examples/mtls-adapters/k8s/
 
 ## References
 
-### Documentation
+### Project Documentation
 
-- [MTLS_IMPLEMENTATION.md](MTLS_IMPLEMENTATION.md) - Implementation plan
-- [ITERATIONS_COMPLETE_SUMMARY.md](ITERATIONS_COMPLETE_SUMMARY.md) - Complete implementation summary
 - [examples/mtls-adapters/README.md](../examples/mtls-adapters/README.md) - Example usage guide
+- [examples/mtls-adapters/KUBERNETES.md](../examples/mtls-adapters/KUBERNETES.md) - Kubernetes deployment
+- [examples/mtls-adapters/TROUBLESHOOTING.md](../examples/mtls-adapters/TROUBLESHOOTING.md) - Troubleshooting guide
+- [PROJECT_STATUS.md](PROJECT_STATUS.md) - Current project status and architecture
 
 ### External Resources
 
-- [SPIFFE Specification](https://github.com/spiffe/spiffe)
-- [SPIRE Documentation](https://spiffe.io/docs/)
-- [go-spiffe SDK](https://github.com/spiffe/go-spiffe)
-- [go-spiffe Examples](https://github.com/spiffe/go-spiffe/tree/main/v2/examples)
+- [SPIFFE Specification](https://github.com/spiffe/spiffe) - SPIFFE ID and SVID specs
+- [SPIRE Documentation](https://spiffe.io/docs/) - SPIRE server and agent setup
+- [go-spiffe SDK](https://github.com/spiffe/go-spiffe) - Go SDK documentation
+- [go-spiffe Examples](https://github.com/spiffe/go-spiffe/tree/main/v2/examples) - Official SDK examples
 
 ### API Reference
 
-- [httpapi Package](../internal/adapters/inbound/httpapi/) - Server implementation
-- [httpclient Package](../internal/adapters/outbound/httpclient/) - Client implementation
-- [config Package](../internal/config/) - Configuration support
+- `internal/ports/identityserver.go` - Port interfaces (MTLSServer, MTLSClient, MTLSConfig)
+- `internal/adapters/inbound/identityserver/` - Server implementation
+- `examples/httpclient/` - Client implementation (example code)
 
 ---
 
@@ -992,6 +1051,6 @@ kubectl apply -f examples/mtls-adapters/k8s/
 For issues and questions:
 
 - **Examples**: See [examples/mtls-adapters/README.md](../examples/mtls-adapters/README.md)
-- **Troubleshooting**: See [Troubleshooting](#troubleshooting) section above
+- **Kubernetes**: See [examples/mtls-adapters/KUBERNETES.md](../examples/mtls-adapters/KUBERNETES.md)
+- **Troubleshooting**: See [examples/mtls-adapters/TROUBLESHOOTING.md](../examples/mtls-adapters/TROUBLESHOOTING.md)
 - **SPIRE Issues**: [spiffe/spire GitHub](https://github.com/spiffe/spire/issues)
-
