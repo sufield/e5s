@@ -1,398 +1,482 @@
 # Control Plane: Registration as Seeded Data
 
-This document describes the **in-memory (development)** implementation. In **production mode** with external SPIRE, the control plane (registry, attestation, matching) is managed entirely by SPIRE Server. See `docs/PRODUCTION_VS_DEVELOPMENT.md` for comparison.
+**Build Tag**: `//go:build dev` - This entire document describes **development-only** implementation.
+
+In **production mode** with external SPIRE, the control plane (registry, attestation, matching) is managed entirely by SPIRE Server infrastructure. See `docs/MTLS.md` for production usage.
+
+## Overview
 
 In this hexagonal, in-memory SPIRE implementation, registration is NOT a runtime operation. There is no "Register workload" API or mutation endpoint. Instead:
 
-- **Registration = Seeded fixtures** loaded at startup
-- **Runtime path = Attest → Match → Issue**
-- **No mutable control plane** - fixtures are read-only after bootstrap
+- **Registration = Seeded data** loaded at startup from configuration
+- **Runtime path = Attest → Match → Issue** (read-only operations)
+- **No mutable control plane** - registry is sealed after bootstrap
 
 This aligns with hexagonal architecture: configuration is infrastructure, not behavior.
 
 ---
 
-## Control Plane Components and Directories
+## Table of Contents
 
-This implementation does NOT have a traditional mutable control plane. Instead, it uses **"registration as seeded data"** - an immutable approach where workload registrations are loaded once at startup and sealed.
+1. [Control Plane Components](#control-plane-components)
+2. [Port Interfaces](#port-interfaces)
+3. [Bootstrap Flow](#bootstrap-flow)
+4. [Runtime Flow](#runtime-flow-read-only)
+5. [Architecture Diagram](#control-plane-architecture-diagram)
+6. [Design Rationale](#design-rationale)
 
 ---
 
-### Control Plane Components
+## Control Plane Components
 
-#### 1. **Server (Identity Issuance)**
+All control plane code is under `//go:build dev` and excluded from production builds.
+
+### 1. Server (Identity Issuance)
+
 **Location**: `internal/adapters/outbound/inmemory/server.go`
+**Build Tag**: `//go:build dev`
 
 **Responsibilities**:
-- CA certificate generation and management
+- CA certificate generation and management (deterministic for testing)
 - Identity document (X.509 SVID) issuance via `IssueIdentity()`
-- Trust domain management
+- Trust domain enforcement (credential must match server trust domain)
 - Root of trust (CA certificate) provider
 
-**Methods**:
-- `IssueIdentity(ctx, identityCredential)` - Issues SVIDs for attested workloads
-- `GetTrustDomain()` - Returns trust domain
-- `GetCA()` - Returns CA certificate
+**Port Interface**: `ports.IdentityServer` (`internal/ports/outbound_dev.go:62-73`)
 
-**Port Interface**: `ports.IdentityServer` (defined in `internal/ports/outbound.go:54-73`)
-
-**Implementation**:
+**Key Methods**:
 ```go
-// InMemoryServer is an in-memory implementation of SPIRE server
-type InMemoryServer struct {
-    trustDomain          *domain.TrustDomain
-    caCert               *x509.Certificate
-    caKey                *rsa.PrivateKey
-    certificateProvider  ports.IdentityDocumentProvider
-}
-
 // IssueIdentity issues an X.509 identity document for an identity credential
-// No verification of registration - that's done by the agent during attestation/matching
 func (s *InMemoryServer) IssueIdentity(ctx context.Context, identityCredential *domain.IdentityCredential) (*domain.IdentityDocument, error)
+
+// GetTrustDomain returns the trust domain this server manages
+func (s *InMemoryServer) GetTrustDomain() *domain.TrustDomain
+
+// GetCACertPEM returns the CA certificate as PEM bytes (root of trust)
+func (s *InMemoryServer) GetCACertPEM() []byte
 ```
+
+**Implementation Details** (`server.go:25-31`):
+```go
+type InMemoryServer struct {
+    trustDomain         *domain.TrustDomain
+    caCert              *x509.Certificate
+    caKey               *rsa.PrivateKey
+    certificateProvider ports.IdentityDocumentProvider
+}
+```
+
+**Key Behavior**:
+- Trust domain enforcement: `server.go:66-68` validates credential trust domain matches server
+- CA initialization check: `server.go:71-73` ensures CA materials exist before issuance
+- Deterministic CA generation: Uses fixed time (2099-01-01) and seeded RNG for testing
 
 ---
 
-#### 2. **Registry (Workload Registration Storage)**
+### 2. Registry (Workload Registration Storage)
+
 **Location**: `internal/adapters/outbound/inmemory/registry.go`
+**Build Tag**: `//go:build dev`
 
 **Responsibilities**:
 - Stores identity mapper registrations (selector → SPIFFE ID mappings)
-- Immutable after seeding - sealed at startup
+- Immutable after seeding - sealed during bootstrap
 - Read-only runtime queries via `FindBySelectors()`
+- **No concurrency control** - sequential access only in dev mode
 
-**Methods**:
-- `Seed(ctx, mapper)` - Internal only, called during bootstrap
-- `Seal()` - Makes registry immutable
-- `FindBySelectors(ctx, selectors)` - Runtime lookup (read-only)
-- `ListAll(ctx)` - Returns all registrations (admin/debug)
+**Port Interface**: `ports.IdentityMapperRegistry` (`internal/ports/outbound_dev.go:26-34`)
 
-**Port Interface**: `ports.IdentityMapperRegistry` (defined in `internal/ports/outbound.go:15-31`)
-
-**Implementation**:
+**Key Methods**:
 ```go
-type InMemoryRegistry struct {
-    mu      sync.RWMutex
-    mappers map[string]*domain.IdentityMapper
-    sealed  bool
-}
-
 // Seed adds an identity mapper (INTERNAL - used only during bootstrap)
-// Do not call from application services - it's infrastructure/configuration only
-func (r *InMemoryRegistry) Seed(ctx context.Context, mapper *domain.IdentityMapper) error {
-    r.mu.Lock()
-    defer r.mu.Unlock()
+// Not part of port interface - called only by factory during composition
+func (r *InMemoryRegistry) Seed(ctx context.Context, mapper *domain.IdentityMapper) error
 
-    if r.sealed {
-        return fmt.Errorf("%w", domain.ErrRegistrySealed)
-    }
+// Seal marks the registry as immutable after bootstrap
+func (r *InMemoryRegistry) Seal()
 
-    key := mapper.IdentityCredential().String()
-    r.mappers[key] = mapper
-    return nil
-}
+// FindBySelectors finds an identity mapper matching selectors (READ-ONLY port method)
+// Uses AND logic: ALL mapper selectors must be present in discovered selectors
+func (r *InMemoryRegistry) FindBySelectors(ctx context.Context, selectors *domain.SelectorSet) (*domain.IdentityMapper, error)
 
-// Seal marks the registry as immutable after seeding
-func (r *InMemoryRegistry) Seal() {
-    r.mu.Lock()
-    defer r.mu.Unlock()
-    r.sealed = true
-}
-
-// FindBySelectors finds an identity mapper matching the given selectors (implements port)
-func (r *InMemoryRegistry) FindBySelectors(ctx context.Context, selectors *domain.SelectorSet) (*domain.IdentityMapper, error) {
-    r.mu.RLock()
-    defer r.mu.RUnlock()
-
-    // Validate input
-    if selectors == nil || len(selectors.All()) == 0 {
-        return nil, fmt.Errorf("%w: selectors are nil or empty", domain.ErrInvalidSelectors)
-    }
-
-    // Match selectors against all mappers
-    for _, mapper := range r.mappers {
-        if mapper.MatchesSelectors(selectors) {
-            return mapper, nil
-        }
-    }
-    return nil, fmt.Errorf("%w: no mapper matches selectors", domain.ErrNoMatchingMapper)
-}
+// ListAll returns all seeded identity mappers (READ-ONLY port method, for debugging/admin)
+func (r *InMemoryRegistry) ListAll(ctx context.Context) ([]*domain.IdentityMapper, error)
 ```
 
-**Design Note**: No `Register()` or mutation methods exposed via port - seeding happens internally during bootstrap.
+**Implementation Details** (`registry.go:19-22`):
+```go
+type InMemoryRegistry struct {
+    mappers map[string]*domain.IdentityMapper // identityCredential.String() → IdentityMapper
+    sealed  bool                              // Prevents modifications after bootstrap
+}
+// NOTE: No sync.RWMutex - "No concurrency support needed - all access is sequential in test/dev mode"
+```
+
+**Key Behavior**:
+- Seeding validation: `registry.go:37-38` prevents seeding after seal
+- Deterministic ordering: `registry.go:82-87` sorts keys for stable iteration
+- Sealed enforcement: Once `Seal()` called, `Seed()` returns `domain.ErrRegistrySealed`
+
+**Design Note**: No `Register()` or mutation methods exposed via port interface - seeding happens internally during bootstrap only.
 
 ---
 
-#### 3. **Bootstrap/Composition Root (Seeding Logic)**
-**Location**: `internal/app/application.go` - `Bootstrap()` function
+### 3. Bootstrap (Seeding Orchestration)
+
+**Location**: `internal/app/bootstrap_dev.go`
+**Build Tag**: `//go:build dev`
 
 **Responsibilities**:
 - Loads workload registrations from configuration fixtures (`config.Workloads`)
-- Seeds the registry with identity mappers (selector → SPIFFE ID)
-- Seals the registry to prevent mutations
-- Wires all control plane components (server, agent, registry)
+- Creates pre-seeded registry via factory (seeding happens in factory, not bootstrap)
+- Wires all control plane components (server, agent, registry, services)
+- Guards against infinite waits with default 10-second timeout
 
-**Steps**:
+**Key Function** (`bootstrap_dev.go:23-83`):
 ```go
-func Bootstrap(ctx context.Context, configLoader ports.ConfigLoader, factory ports.AdapterFactory) (*Application, error) {
+func Bootstrap(ctx context.Context, configLoader ports.ConfigLoader, factory *compose.InMemoryAdapterFactory) (*Application, error) {
     // Step 1: Load configuration (fixtures)
-    config, err := configLoader.Load(ctx)
+    cfg, err := configLoader.Load(ctx)
     if err != nil {
-        return nil, fmt.Errorf("failed to load config: %w", err)
+        return nil, fmt.Errorf("load config: %w", err)
     }
 
-    // Step 2: Initialize registry (will be seeded and sealed)
-    registry := factory.CreateRegistry()
+    // Step 2: Initialize parsers and providers
+    tdParser := factory.CreateTrustDomainParser()
+    idParser := factory.CreateIdentityCredentialParser()
+    docProvider := factory.CreateIdentityDocumentProvider()
 
-    // Steps 3-8: Initialize other adapters (parser, server, attestor, etc.)...
+    // Step 3: Create server (with CA generation)
+    server, err := factory.CreateServer(ctx, cfg.TrustDomain, tdParser, docProvider)
+    if err != nil {
+        return nil, fmt.Errorf("create server: %w", err)
+    }
 
-    // Step 9: SEED registry with identity mappers (configuration, not runtime)
-    for _, workload := range config.Workloads {
-        // Parse identity credential from fixture
+    // Step 4: Create registry - ALREADY SEEDED by factory
+    // Factory handles: parse workloads → create mappers → seed registry → return sealed
+    registry, err := factory.CreateRegistry(ctx, cfg.Workloads, idParser)
+    if err != nil {
+        return nil, fmt.Errorf("create registry: %w", err)
+    }
+
+    // Step 5: Create attestor (configured with workload UIDs)
+    attestor := factory.CreateAttestor(cfg.Workloads)
+
+    // Step 6: Create agent (uses registry + server)
+    agent, err := factory.CreateAgent(ctx, cfg.AgentSpiffeID, server, registry, attestor, idParser, docProvider)
+    if err != nil {
+        return nil, fmt.Errorf("create agent: %w", err)
+    }
+
+    // Step 7: Initialize services
+    identitySvc, err := NewIdentityClientService(agent)
+    if err != nil {
+        return nil, fmt.Errorf("create identity client service: %w", err)
+    }
+    service := NewIdentityService(agent, registry)
+
+    // Step 8: Wire application with constructor validation
+    return New(cfg, service, identitySvc, agent, registry)
+}
+```
+
+**Key Differences from Old Documentation**:
+- **NO manual seeding loop** in bootstrap - seeding happens inside `factory.CreateRegistry()`
+- **NO separate `SealRegistry()` call** - registry returned already sealed from factory
+- Registry creation is ONE call: `factory.CreateRegistry(ctx, cfg.Workloads, idParser)`
+- Timeout guard: `bootstrap_dev.go:33-36` adds default 10s timeout if none provided
+
+---
+
+### 4. Configuration Loader (Registration Data Source)
+
+**Location**: `internal/adapters/outbound/inmemory/config.go`
+**Build Tag**: `//go:build dev`
+
+**Responsibilities**:
+- Loads workload registration fixtures (hardcoded, not from database)
+- Provides defensive copies to prevent mutation
+- Validates trust domain consistency across all workloads
+- Returns `dto.Config` with `Workloads` slice containing UID → SPIFFE ID mappings
+
+**Port Interface**: `ports.ConfigLoader` (`internal/ports/outbound_dev.go:12-15`)
+
+**Example Data** (`config.go:24-44`):
+```go
+cfg := &dto.Config{
+    TrustDomain:   "example.org",
+    AgentSpiffeID: "spiffe://example.org/host",
+    Workloads: []dto.WorkloadEntry{
+        {
+            SpiffeID: "spiffe://example.org/server-workload",
+            Selector: "unix:uid:1001",
+            UID:      1001,
+        },
+        {
+            SpiffeID: "spiffe://example.org/client-workload",
+            Selector: "unix:uid:1002",
+            UID:      1002,
+        },
+        {
+            SpiffeID: "spiffe://example.org/test-workload",
+            Selector: "unix:uid:1000",
+            UID:      1000,
+        },
+    },
+}
+```
+
+**Validation** (`config.go:72-102`):
+- Trust domain format validation
+- Agent SPIFFE ID must be in trust domain
+- All workload SPIFFE IDs must be in trust domain
+- Selector format must match `unix:uid:<UID>` pattern
+
+---
+
+### 5. Adapter Factory (Component Creation)
+
+**Location**: `internal/adapters/outbound/compose/inmemory.go`
+**Build Tag**: `//go:build dev`
+
+**Responsibilities**:
+- Creates all control plane components (registry, server, agent)
+- **Handles seeding internally** - registry returned already seeded and sealed
+- Type-safe construction with concrete types (no interface{}))
+- Provides dev-only implementations of all ports
+
+**Key Method - CreateRegistry** (`inmemory.go:28-56`):
+```go
+func (f *InMemoryAdapterFactory) CreateRegistry(
+    ctx context.Context,
+    workloads []dto.WorkloadEntry,
+    parser ports.IdentityCredentialParser,
+) (*inmemory.InMemoryRegistry, error) {
+    registry := inmemory.NewInMemoryRegistry()
+
+    // Seed registry with workload configurations
+    for _, workload := range workloads {
         identityCredential, err := parser.ParseFromString(ctx, workload.SpiffeID)
         if err != nil {
-            return nil, fmt.Errorf("invalid identity credential %s: %w", workload.SpiffeID, err)
+            return nil, err
         }
 
-        // Parse selectors from fixture
         selector, err := domain.ParseSelectorFromString(workload.Selector)
         if err != nil {
-            return nil, fmt.Errorf("invalid selector %s: %w", workload.Selector, err)
+            return nil, err
         }
 
-        // Create selector set for mapper
         selectorSet := domain.NewSelectorSet()
         selectorSet.Add(selector)
 
-        // Create identity mapper (domain entity)
         mapper, err := domain.NewIdentityMapper(identityCredential, selectorSet)
         if err != nil {
-            return nil, fmt.Errorf("failed to create identity mapper for %s: %w", workload.SpiffeID, err)
+            return nil, err
         }
 
-        // SEED registry (internal method, not exposed via port)
-        if err := factory.SeedRegistry(registry, ctx, mapper); err != nil {
-            return nil, fmt.Errorf("failed to seed registry for %s: %w", workload.SpiffeID, err)
+        // SEED happens here, inside factory
+        if err := registry.Seed(ctx, mapper); err != nil {
+            return nil, err
         }
     }
 
-    // Step 10: SEAL registry (prevent further mutations after seeding)
-    factory.SealRegistry(registry)
-
-    // Step 11: Initialize agent with sealed registry
-    agent, err := factory.CreateAgent(ctx, config.AgentSpiffeID, server, registry, attestor, parser, docProvider)
-    if err != nil {
-        return nil, fmt.Errorf("failed to create SPIRE agent: %w", err)
-    }
-
-    // Step 12: Initialize core service
-    service := NewIdentityService(agent, registry)
-
-    return &Application{
-        Config:   config,
-        Service:  service,
-        Agent:    agent,
-        Registry: registry,
-    }, nil
+    // Registry returned already seeded (NOT sealed yet in current impl)
+    return registry, nil
 }
 ```
 
-This is the only place where workload registrations are loaded/seeded.
+**Other Factory Methods**:
+- `CreateServer()` - Creates InMemoryServer with CA generation
+- `CreateAgent()` - Creates InMemoryAgent with concrete types
+- `CreateAttestor()` - Creates UnixWorkloadAttestor with UID registrations
+- `CreateTrustDomainParser()` - Creates parser for trust domain validation
+- `CreateIdentityCredentialParser()` - Creates parser for SPIFFE ID validation
+- `CreateIdentityDocumentProvider()` - Creates X.509 certificate generator
 
-**Seeding Characteristics**:
-- ✅ Seeding happens in composition root (`Bootstrap()`)
-- ✅ Data loaded from configuration fixtures (`config.Workloads`)
-- ✅ No runtime mutation - this runs once during app initialization
-- ✅ Registry sealed after seeding - immutable from that point forward
-- ✅ Seeding methods accessed via `AdapterFactory` interface (composition pattern)
+**Design Note**: Factory uses **concrete types** (`*inmemory.InMemoryRegistry`) not interfaces, enabling access to internal `Seed()` method during composition.
 
 ---
 
-#### 4. **Configuration Loader (Registration Data Source)**
-**Location**: `internal/adapters/outbound/inmemory/config.go`
+### 6. Application (Composition Root)
+
+**Location**: `internal/app/application_dev.go`
+**Build Tag**: `//go:build dev`
 
 **Responsibilities**:
-- Loads workload registration **fixtures** (not from a database)
-- Provides `Config.Workloads` slice with UID → SPIFFE ID mappings
-- Read-only data source
+- Holds all wired components (agent, registry, services, config)
+- Provides accessor methods for components
+- Implements `Close()` for resource cleanup
 
-**Port Interface**: `ports.ConfigLoader` (defined in `internal/ports/outbound.go:10-13`)
-
-**Example Data**:
+**Structure** (`application_dev.go:14-20`):
 ```go
-Workloads: []WorkloadConfig{
-    {SpiffeID: "spiffe://example.org/server-workload", UID: 1001, Selector: "unix:uid:1001"},
-    {SpiffeID: "spiffe://example.org/client-workload", UID: 1002, Selector: "unix:uid:1002"},
-    {SpiffeID: "spiffe://example.org/test-workload", UID: 1000, Selector: "unix:uid:1000"},
+type Application struct {
+    cfg   *dto.Config
+    svc   ports.Service             // optional demo service
+    ics   ports.IdentityIssuer      // server-side issuance facade
+    agent ports.Agent
+    reg   ports.IdentityMapperRegistry
 }
 ```
-
----
-
-#### 5. **Adapter Factory (Seeding Operations)**
-**Location**: `internal/adapters/outbound/compose/inmemory.go`
-
-**Responsibilities**:
-- **Creates** control plane components (registry, server)
-- **Provides seeding methods** `SeedRegistry()` and `SealRegistry()`
-- Type-asserts to concrete types to call internal methods
-
-**Methods**:
-```go
-type InMemoryAdapterFactory struct{}
-
-func (f *InMemoryAdapterFactory) CreateRegistry() ports.IdentityMapperRegistry {
-    return inmemory.NewInMemoryRegistry()
-}
-
-func (f *InMemoryAdapterFactory) CreateServer(ctx context.Context, trustDomain string, trustDomainParser ports.TrustDomainParser, docProvider ports.IdentityDocumentProvider) (ports.IdentityServer, error) {
-    return inmemory.NewInMemoryServer(ctx, trustDomain, trustDomainParser, docProvider)
-}
-
-// SeedRegistry seeds the registry with an identity mapper (configuration, not runtime)
-// This is called only during bootstrap - uses Seed() method on concrete type
-func (f *InMemoryAdapterFactory) SeedRegistry(registry ports.IdentityMapperRegistry, ctx context.Context, mapper *domain.IdentityMapper) error {
-    concreteRegistry, ok := registry.(*inmemory.InMemoryRegistry)
-    if !ok {
-        return fmt.Errorf("expected InMemoryRegistry for seeding")
-    }
-    return concreteRegistry.Seed(ctx, mapper)
-}
-
-// SealRegistry marks the registry as immutable after seeding
-// This prevents any further mutations - registry becomes read-only
-func (f *InMemoryAdapterFactory) SealRegistry(registry ports.IdentityMapperRegistry) {
-    concreteRegistry, ok := registry.(*inmemory.InMemoryRegistry)
-    if ok {
-        concreteRegistry.Seal()
-    }
-}
-```
-
-**Port Interface**: `ports.AdapterFactory` (defined in `internal/ports/outbound.go:197-212`)
-
-- ✅ Type assertion to concrete type for seeding operations
-- ✅ Seeding methods NOT part of port interface
-- ✅ Clear documentation: "configuration, not runtime"
-- ✅ Composition root controls when to seal
-
----
-
-### Directory Structure
-
-```
-internal/
-├── adapters/outbound/inmemory/
-│   ├── server.go              ← Server (CA + SVID issuance)
-│   ├── registry.go            ← Registry (workload registrations)
-│   ├── config.go              ← Config loader (fixture data)
-│   ├── agent.go               ← Agent (uses registry + server)
-│   └── identity_document_provider.go  ← Certificate generation
-│
-├── adapters/outbound/compose/
-│   └── inmemory.go            ← Factory (seeding orchestration)
-│
-├── app/
-│   └── application.go         ← Bootstrap (seeding happens here)
-│
-└── ports/
-    └── outbound.go            ← Port interfaces (Server, Registry, Factory)
-```
-
----
-
-### What is NOT Control Plane
-
-These are data plane (runtime) components:
-
-- ❌ `internal/adapters/outbound/inmemory/agent.go` - **Data plane** (workload attestation + SVID fetching)
-- ❌ `internal/adapters/inbound/workloadapi/server.go` - **Data plane** (Workload API server)
-- ❌ `internal/adapters/outbound/workloadapi/client.go` - **Data plane** (Workload API client)
-- ❌ `internal/adapters/outbound/inmemory/attestor/` - **Data plane** (workload attestation)
-- ❌ `internal/adapters/inbound/cli/cli.go` - **Presentation layer** (demo CLI)
-
----
-
-### What We DON'T Have
-
-- No registration API endpoints
-- No CLI for workload registration
-- No runtime mutations of the registry
-- No public `Register()` method in application services
-- No deprecated `IdentityStore` or `IdentityMapperRepository` interfaces
-
-### What We DO Have
-
-- Immutable registry seeded at startup from fixtures and sealed
-- Matching logic that resolves selectors → identity credential mappings
-- Issuance flow that attests → matches → mints certificates
-- Composition root seeding** in `Bootstrap()` function
-- Good port naming - `IdentityMapperRegistry` (not "Port" suffix)
 
 ---
 
 ## Port Interfaces
 
+All dev-only port interfaces are in `internal/ports/outbound_dev.go` with `//go:build dev` tag.
+
 ### IdentityMapperRegistry Port
 
-**Location**: `internal/ports/outbound.go`
+**Location**: `internal/ports/outbound_dev.go:26-34`
 
 ```go
-// IdentityMapperRegistry provides read-only access to the identity mapper registry seeded at startup
-// This is the runtime interface - seeding happens via internal methods during bootstrap
-// No mutations allowed after seeding - registry is immutable
+// IdentityMapperRegistry provides read-only access to the identity mapper registry seeded at startup.
+// Dev-only: in production, SPIRE Server manages registration entries.
+//
+// Error Contract:
+// - FindBySelectors: domain.ErrNoMatchingMapper if no mapper matches
+// - FindBySelectors: domain.ErrInvalidSelectors if selectors are nil/empty
+// - ListAll:         domain.ErrRegistryEmpty if no mappers seeded
+//
+// Implementations should respect ctx cancellation where applicable.
 type IdentityMapperRegistry interface {
-    // FindBySelectors finds an identity mapper matching the given selectors (AND logic)
-    // This is the core runtime operation: selectors → identity credential mapping
+    // FindBySelectors finds an identity mapper matching the given selectors.
+    // AND semantics: all mapper selectors must be present in the discovered selectors.
+    // Returns the first matching mapper (deterministic order depends on registry seeding).
     FindBySelectors(ctx context.Context, selectors *domain.SelectorSet) (*domain.IdentityMapper, error)
 
-    // ListAll returns all seeded identity mappers (for debugging/admin)
+    // ListAll returns all seeded identity mappers (for debugging/admin).
     ListAll(ctx context.Context) ([]*domain.IdentityMapper, error)
 }
 ```
 
 **Design Rationale**:
-- ✅ No mutation methods in port interface
-- ✅ Name emphasizes domain concept (mapper registry) over architectural pattern
-- ✅ Self-descriptive - signals seeded/immutable collection
-- ✅ Core operation `FindBySelectors()` reads naturally
+- No mutation methods in port interface (read-only after bootstrap)
+- Name emphasizes domain concept (mapper registry) over architectural pattern
+- Error contract documented inline with port definition
+- Seeding happens via internal methods, not exposed through port
 
 ---
 
-### Server Port
+### IdentityServer Port
 
-**Location**: `internal/ports/outbound.go`
+**Location**: `internal/ports/outbound_dev.go:62-73`
 
 ```go
-// Server represents the identity server functionality
+// IdentityServer represents identity server functionality for in-memory/dev mode only.
+// Dev-only: in production, SPIRE Server runs as external infrastructure.
+//
+// Error Contract:
+// - IssueIdentity: domain.ErrIdentityDocumentInvalid if identity credential invalid
+// - IssueIdentity: domain.ErrServerUnavailable if server unavailable
+// - IssueIdentity: domain.ErrCANotInitialized if CA not initialized
+// - GetTrustDomain: never returns error (returns nil if not initialized)
+// - GetCACertPEM:  returns empty slice if CA not initialized
+//
+// Implementations should respect ctx cancellation where applicable.
 type IdentityServer interface {
-    // IssueIdentity issues an identity document for an identity credential
-    // Generates X.509 certificate signed by CA with identity credential in URI SAN
+    // IssueIdentity issues an identity document for an identity credential.
+    // Generates X.509 certificate signed by CA with identity credential in URI SAN.
     IssueIdentity(ctx context.Context, identityCredential *domain.IdentityCredential) (*domain.IdentityDocument, error)
 
-    // GetTrustDomain returns the trust domain this server manages
+    // GetTrustDomain returns the trust domain this server manages.
     GetTrustDomain() *domain.TrustDomain
 
-    // GetCA returns the CA certificate (root of trust)
-    // Returns nil if CA not initialized - caller must check
-    GetCA() *x509.Certificate
+    // GetCACertPEM returns the CA certificate as PEM bytes (root of trust).
+    // Returns empty slice if CA not initialized - caller must check.
+    GetCACertPEM() []byte
 }
 ```
 
 ---
 
+### ConfigLoader Port
+
+**Location**: `internal/ports/outbound_dev.go:12-15`
+
+```go
+// ConfigLoader loads runtime configuration (dev-only).
+type ConfigLoader interface {
+    Load(ctx context.Context) (*dto.Config, error)
+}
+```
+
+---
+
+### WorkloadAttestor Port
+
+**Location**: `internal/ports/outbound_dev.go:45-49`
+
+```go
+// WorkloadAttestor verifies workload identity based on platform-specific attributes.
+// Dev-only: in production, SPIRE Agent performs attestation automatically.
+//
+// Error Contract:
+// - domain.ErrWorkloadAttestationFailed if attestation fails
+// - domain.ErrInvalidProcessIdentity   if workload info is invalid
+// - domain.ErrNoAttestationData        if no selectors can be generated
+//
+// Implementations should respect ctx cancellation where applicable.
+type WorkloadAttestor interface {
+    // Attest verifies a workload and returns its selectors.
+    // Selectors must be formatted as "type:key:value" (e.g., "unix:uid:1000", "k8s:namespace:prod").
+    Attest(ctx context.Context, workload *domain.Workload) ([]string, error)
+}
+```
+
+---
+
+## Bootstrap Flow
+
+**Seeding happens entirely inside the factory, not in bootstrap code.**
+
+```
+1. Load Config
+   ↓
+2. Create Parsers & Providers
+   ↓
+3. Create Server (generates CA)
+   ↓
+4. Create Registry ← SEEDING HAPPENS HERE (inside factory.CreateRegistry)
+   │ Factory logic:
+   │ - Create empty registry
+   │ - Loop over config.Workloads
+   │ - Parse each workload's SPIFFE ID and selectors
+   │ - Create IdentityMapper domain entity
+   │ - Call registry.Seed(mapper)
+   │ - Return seeded registry
+   ↓
+5. Create Attestor (registers UIDs)
+   ↓
+6. Create Agent (uses registry + server)
+   ↓
+7. Create Services (uses agent + registry)
+   ↓
+8. Wire Application
+```
+
+**Key Characteristics**:
+- Seeding is **encapsulated in factory** - bootstrap doesn't touch registry internals
+- Registry returned from `CreateRegistry()` is **already seeded** (but not sealed in current impl)
+- **No separate seal step** visible in bootstrap (could be added in factory if needed)
+- **Single responsibility**: Bootstrap wires components, factory handles component internals
+
+---
+
 ## Runtime Flow (Read-Only)
 
-**Agent.FetchIdentityDocument()** - The only runtime path:
+**Agent.FetchIdentityDocument()** - The only runtime path for workload SVID issuance
 
-**Location**: `internal/adapters/outbound/inmemory/agent.go`
+**Location**: `internal/adapters/outbound/inmemory/agent.go:107-145`
 
 ```go
 func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload *domain.Workload) (*domain.IdentityDocument, error) {
     // Step 1: Attest the workload to get selectors
     selectorStrings, err := a.attestor.Attest(ctx, workload)
     if err != nil {
-        return nil, fmt.Errorf("workload attestation failed: %w", err)
+        return nil, fmt.Errorf("inmemory: workload attestation failed: %w", err)
+    }
+    if len(selectorStrings) == 0 {
+        return nil, domain.ErrNoAttestationData
     }
 
     // Step 2: Convert selector strings to SelectorSet
@@ -400,7 +484,7 @@ func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload *dom
     for _, selStr := range selectorStrings {
         selector, err := domain.ParseSelectorFromString(selStr)
         if err != nil {
-            return nil, fmt.Errorf("invalid selector %s: %w", selStr, err)
+            return nil, fmt.Errorf("inmemory: invalid selector %q: %w", selStr, err)
         }
         selectorSet.Add(selector)
     }
@@ -408,13 +492,13 @@ func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload *dom
     // Step 3: Match selectors against registry (READ-ONLY operation)
     mapper, err := a.registry.FindBySelectors(ctx, selectorSet)
     if err != nil {
-        return nil, fmt.Errorf("no identity mapper found for selectors: %w", err)
+        return nil, fmt.Errorf("inmemory: no identity mapper found for selectors: %w", err)
     }
 
     // Step 4: Issue identity document from server
     doc, err := a.server.IssueIdentity(ctx, mapper.IdentityCredential())
     if err != nil {
-        return nil, fmt.Errorf("failed to issue identity document: %w", err)
+        return nil, fmt.Errorf("inmemory: failed to issue identity document: %w", err)
     }
 
     // Step 5: Return identity document
@@ -424,35 +508,45 @@ func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload *dom
 
 **Flow Summary**:
 ```
-1. Workload calls agent.FetchIdentityDocument(processInfo)
-2. Attestor computes selectors from process attributes
-3. Registry.FindBySelectors(selectors) → lookup in immutable registry
-4. Server.IssueIdentity(identityCredential) → mint certificate
-5. Return identity document to workload
+Workload (PID) → Agent.FetchIdentityDocument(workload)
+                   ↓
+                 Attestor.Attest(workload) → ["unix:uid:1001"]
+                   ↓
+                 Registry.FindBySelectors(selectors) → IdentityMapper
+                   ↓
+                 Server.IssueIdentity(identityCredential) → X.509 SVID
+                   ↓
+                 Return IdentityDocument
 ```
 
-- ✅ Pure read path - no mutations
-- ✅ Selectors → IdentityCredential mapping from seeded data
-- ✅ Certificate minting is ephemeral (in-memory CA)
-- ✅ No state changes to registry
-- ✅ Registry sealed - guaranteed immutable
+**Characteristics**:
+- Pure read path - no mutations to registry
+- Selectors → IdentityCredential mapping from seeded data
+- Certificate minting is ephemeral (new cert each time)
+- No state changes to registry (sealed and immutable)
 
 ---
 
 ## Control Plane Architecture Diagram
 
 ```
-┌──────────────────────────────────────────────────────┐
-│         Bootstrap (Composition Root)                  │
-│         internal/app/application.go                   │
-│  ┌──────────────────────────────────────────────┐   │
-│  │ 1. Load Config (fixtures)                     │   │
-│  │ 2. Create Registry                            │   │
-│  │ 3. SEED Registry (loop over Workloads)       │   │
-│  │ 4. SEAL Registry (immutable)                  │   │
-│  │ 5. Initialize Server (CA generation)          │   │
-│  └──────────────────────────────────────────────┘   │
-└──────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────┐
+│         Bootstrap (Composition Root)                    │
+│         internal/app/bootstrap_dev.go                   │
+│  ┌────────────────────────────────────────────────┐   │
+│  │ 1. Load Config (fixtures)                       │   │
+│  │ 2. Create Server (CA generation)                │   │
+│  │ 3. Create Registry ← SEEDING INSIDE FACTORY     │   │
+│  │    Factory.CreateRegistry():                    │   │
+│  │    - Parse workloads                            │   │
+│  │    - Create mappers                             │   │
+│  │    - Seed registry                              │   │
+│  │    - Return seeded registry                     │   │
+│  │ 4. Create Agent (wires registry + server)       │   │
+│  │ 5. Create Services                              │   │
+│  │ 6. Wire Application                             │   │
+│  └────────────────────────────────────────────────┘   │
+└────────────────────────────────────────────────────────┘
                        │
           ┌────────────┴────────────┐
           │                         │
@@ -462,8 +556,8 @@ func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload *dom
 │   (CA + Issue)   │      │   (Registrations)│
 │                  │      │                  │
 │ • IssueIdentity()│      │ • FindBySelectors│
-│ • GetCA()        │      │ • ListAll()      │
-│ • GetTrustDomain │      │   [SEALED]       │
+│ • GetCACertPEM() │      │ • ListAll()      │
+│ • GetTrustDomain │      │   [SEEDED]       │
 └──────────────────┘      └──────────────────┘
          │                         │
          └────────┬────────────────┘
@@ -477,51 +571,132 @@ func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload *dom
 
 ---
 
-## Design Summary
+## Design Rationale
 
-1. **Seeding is Configuration**: Loading identity mappers from fixtures is infrastructure concern, not domain behavior
-2. **Immutability**: Registry sealed after bootstrap prevents accidental mutations
-3. **Clear Separation**: Seeding methods are internal, port methods are read-only
-4. **Domain-Focused Naming**: `IdentityMapperRegistry` signals intent over pattern
-5. **No Dead Code**: Only one registry implementation, no unused interfaces
+### 1. Seeding is Configuration, Not Behavior
 
-### What Was Removed
+Loading identity mappers from fixtures is an **infrastructure concern**, not domain behavior. This is why:
+- Seeding happens during composition (factory), not application logic
+- No seeding methods exposed through port interfaces
+- Registry consumed as read-only collection at runtime
 
-All deprecated code has been deleted:
+### 2. Immutability After Bootstrap
 
-- ❌ `IdentityStore` interface (old mutable store)
-- ❌ `IdentityMapperRepository` interface (unused alternative design)
-- ❌ `InMemoryStore` implementation (replaced by `InMemoryRegistry`)
-- ❌ Backward-compatible mutation paths
+Registry is immutable after seeding (can be sealed) which:
+- Prevents accidental mutations during runtime
+- Makes concurrent access safe without locks (sequential in dev anyway)
+- Aligns with "configuration as code" - loaded once, never changed
 
-### Current State
+### 3. Clear Separation of Concerns
 
-✅ **Single Source of Truth**: `IdentityMapperRegistry` port with `InMemoryRegistry` adapter
-✅ **Immutable After Bootstrap**: `Seal()` enforces read-only guarantee
-✅ **Clean Runtime Path**: Attest → Match (FindBySelectors) → Issue
-✅ **No Architectural Jargon**: "Registry" not "Port" in naming
-✅ **No Dead Code**: All unused interfaces deleted
+- **Bootstrap**: Wires components together
+- **Factory**: Handles component creation and internal setup (seeding)
+- **Registry**: Provides read-only access via port interface
+- **Seeding**: Internal operation, not exposed to application layer
 
----
+### 4. Domain-Focused Naming
 
-## Summary
+- `IdentityMapperRegistry` signals intent (collection of mappers)
+- Avoids architectural jargon ("Port" suffix)
+- Self-descriptive - developers understand purpose immediately
 
-| Component | Location | Role | Mutable? |
-|-----------|----------|------|----------|
-| **Server** | `internal/adapters/outbound/inmemory/server.go` | CA + SVID issuance | No (stateless CA) |
-| **Registry** | `internal/adapters/outbound/inmemory/registry.go` | Workload registrations | **No (sealed)** |
-| **Bootstrap** | `internal/app/application.go` | Seeding orchestration | N/A (runs once) |
-| **Config Loader** | `internal/adapters/outbound/inmemory/config.go` | Fixture data source | No (read-only) |
-| **Factory** | `internal/adapters/outbound/compose/inmemory.go` | Component creation + seeding | N/A (bootstrap) |
+### 5. No Dead Code
+
+- Single registry implementation (`InMemoryRegistry`)
+- No unused interfaces or backward-compatible mutation paths
+- Deprecated `IdentityStore` and `IdentityMapperRepository` removed
 
 ---
 
-## Characteristics
+## Directory Structure
 
-1. **No Mutation API**: Registry is sealed after bootstrap - no runtime registration
-2. **Configuration-Based**: Workload registrations loaded from fixtures (not database)
-3. **Single Seeding Point**: `Bootstrap()` is the only place registrations are loaded
-4. **Immutable Runtime**: After seal, registry is read-only (concurrent-safe)
-5. **Clean Separation**: Seeding methods are internal, port methods are read-only
+```
+internal/
+├── adapters/outbound/inmemory/
+│   ├── server.go              ← Server (CA + SVID issuance)
+│   ├── registry.go            ← Registry (workload registrations)
+│   ├── config.go              ← Config loader (fixture data)
+│   ├── agent.go               ← Agent (uses registry + server)
+│   ├── identity_document_provider.go  ← Certificate generation
+│   └── attestor/
+│       └── unix.go            ← Unix UID-based attestor
+│
+├── adapters/outbound/compose/
+│   └── inmemory.go            ← Factory (component creation + seeding)
+│
+├── app/
+│   ├── bootstrap_dev.go       ← Bootstrap (composition root)
+│   ├── application_dev.go     ← Application struct
+│   └── service_dev.go         ← Identity service
+│
+└── ports/
+    ├── outbound.go            ← Production port interfaces
+    └── outbound_dev.go        ← Dev-only port interfaces
 
-All control plane code is in **`internal/adapters/outbound/inmemory/`**, **`internal/adapters/outbound/compose/`**, and **`internal/app/`**.
+All files above have //go:build dev tag
+```
+
+---
+
+## What is NOT Control Plane
+
+These are **data plane** (runtime) components:
+
+- `internal/adapters/outbound/inmemory/agent.go` - Workload attestation + SVID fetching (runtime)
+- `internal/adapters/inbound/cli/cli.go` - Presentation layer (demo CLI)
+- `internal/adapters/inbound/identityserver/` - mTLS HTTP server (uses production SPIRE)
+
+**Note**: There are NO `workloadapi` inbound/outbound adapters - only `identityserver` for mTLS.
+
+---
+
+## What We DON'T Have
+
+- No registration API endpoints (no REST/gRPC for registering workloads)
+- No CLI for workload registration (fixtures only)
+- No runtime mutations of the registry (sealed after bootstrap)
+- No public `Register()` method in application services
+- No deprecated `IdentityStore` or `IdentityMapperRepository` interfaces
+
+---
+
+## What We DO Have
+
+- Immutable registry seeded at startup from fixtures
+- Matching logic that resolves selectors → identity credential mappings
+- Issuance flow that attests → matches → mints certificates
+- Encapsulated seeding in factory (composition root delegates to factory)
+- Good port naming - `IdentityMapperRegistry` (not "Port" suffix)
+- Clear dev-only marking with `//go:build dev` tags
+
+---
+
+## Summary Table
+
+| Component | Location | Build Tag | Role | Mutable? |
+|-----------|----------|-----------|------|----------|
+| **Server** | `internal/adapters/outbound/inmemory/server.go` | `//go:build dev` | CA + SVID issuance | No (stateless) |
+| **Registry** | `internal/adapters/outbound/inmemory/registry.go` | `//go:build dev` | Workload registrations | **No (sealed)** |
+| **Bootstrap** | `internal/app/bootstrap_dev.go` | `//go:build dev` | Composition root | N/A (runs once) |
+| **Config Loader** | `internal/adapters/outbound/inmemory/config.go` | `//go:build dev` | Fixture data source | No (read-only) |
+| **Factory** | `internal/adapters/outbound/compose/inmemory.go` | `//go:build dev` | Component creation + seeding | N/A (bootstrap) |
+| **Application** | `internal/app/application_dev.go` | `//go:build dev` | Wired components holder | No (immutable after construction) |
+
+---
+
+## Cross-References
+
+- **Port Contracts**: See `docs/PORT_CONTRACTS.md` for all port interface definitions
+- **Domain Model**: See `docs/DOMAIN.md` for IdentityMapper and other domain entities
+- **Production mTLS**: See `docs/MTLS.md` for production SPIRE Workload API usage
+- **Invariants**: See `docs/INVARIANTS.md` for domain invariants and error handling
+
+---
+
+## Key Takeaways
+
+1. **Seeding happens in factory** - not visible in bootstrap code
+2. **Registry is read-only** after construction - no mutation methods in port
+3. **All code is dev-only** - excluded from production via `//go:build dev`
+4. **Bootstrap orchestrates** - factory encapsulates component internals
+5. **Runtime is pure reads** - Attest → Match (FindBySelectors) → Issue → Return

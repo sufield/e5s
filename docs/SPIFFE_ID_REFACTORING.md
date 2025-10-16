@@ -1,6 +1,16 @@
 # IdentityCredential Refactoring: Eliminating SDK Duplication
 
-Refactored `internal/domain/identity_credential.go` (formerly `spiffe_id.go`) to eliminate duplication with go-spiffe SDK by moving parsing/validation logic to a port-adapter pattern. The domain now holds only minimal IdentityCredential data, while parsing is delegated to the `IdentityCredentialParser` port.
+**Status**: ✅ COMPLETED - This document describes the current implementation
+**Type**: Architecture Decision Record (ADR)
+**Last Updated**: 2025-10-15
+
+---
+
+## Overview
+
+This document explains **WHY** parsing logic was moved from the domain layer to adapters via the `IdentityCredentialParser` port interface. **This is not a TODO or migration guide** - this refactoring is complete and this is how the code currently works.
+
+The domain type `internal/domain/identity_credential.go` (formerly `spiffe_id.go`) was refactored to eliminate duplication with go-spiffe SDK by moving parsing/validation logic to a port-adapter pattern. The domain now holds only minimal IdentityCredential data, while parsing is delegated to the `IdentityCredentialParser` port.
 
 This type was renamed from `SpiffeID` to `IdentityCredential` to better emphasize the structured, namespaced nature of the unique identifier (scheme + trust domain + path).
 

@@ -6,7 +6,7 @@ This guide walks you through manually testing the mTLS identity server and clien
 
 Before testing, ensure you have:
 
-- Go 1.21 or later
+- Go 1.25 or later
 - SPIRE server and agent installed
 - `kubectl` (for Minikube testing)
 - `minikube` (optional, for local Kubernetes testing)
