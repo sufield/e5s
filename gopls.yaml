@@ -1,18 +1,21 @@
 # gopls configuration for SPIRE project
-# This configuration ensures gopls can analyze both production and dev-tagged files
+# This enables analysis of dev-tagged files (//go:build dev)
+#
+# IMPORTANT: With -tags=dev enabled, files with //go:build !dev are EXCLUDED.
+# Consider using separate profiles or workspace settings for prod vs dev work.
 
 # Build configuration
 build:
   # Include the 'dev' build tag so gopls can analyze development-only files
-  # Files with //go:build dev will be visible in the IDE
   buildFlags: ["-tags=dev"]
 
-  # Environment variables for build
-  env:
-    GOFLAGS: "-tags=dev"
+  # Optional: Filter out large/irrelevant directories to speed up analysis
+  directoryFilters: ["-vendor", "-node_modules", "-.git"]
 
-# UI/Editor settings
+# Completion settings
+completion:
+  usePlaceholders: true
+
+# UI settings
 ui:
   semanticTokens: true
-  completion:
-    usePlaceholders: true
