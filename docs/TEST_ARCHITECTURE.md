@@ -368,6 +368,5 @@ go test ./internal/adapters/inbound/httpapi -run TestGetSPIFFEID -v
 
 ## Related Documentation
 
-- [MTLS.md](MTLS.md) - mTLS architecture and implementation
 - [manual-testing.md](manual-testing.md) - Manual testing procedures
 - [ARCHITECTURE_REVIEW.md](ARCHITECTURE_REVIEW.md) - Architecture decisions

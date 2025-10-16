@@ -190,6 +190,5 @@ In the server implementation, we kept the variable name `clientID` when interact
 
 ## Related Documentation
 
-- [MTLS.md](MTLS.md) - User guide for mTLS server and client functionality
 - [PORT_CONTRACTS.md](PORT_CONTRACTS.md) - Complete port interface contracts
 - [MANUAL_TESTING_GUIDE.md](MANUAL_TESTING_GUIDE.md) - Manual testing procedures with examples

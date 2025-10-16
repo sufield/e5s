@@ -79,7 +79,7 @@ Listening on :8443 with mTLS authentication
 In a new terminal:
 
 ```bash
-cd examples/mtls-adapters/client
+cd examples/identityserver-example
 
 # Set environment variables
 export SPIRE_AGENT_SOCKET="unix:///tmp/spire-agent/public/api.sock"
@@ -259,7 +259,7 @@ pkill -TERM -f identityserver-example
 ### Test 1: Basic Client Connection
 
 ```bash
-cd examples/mtls-adapters/client
+cd examples/identityserver-example
 export SPIRE_AGENT_SOCKET="unix:///tmp/spire-agent/public/api.sock"
 export SERVER_URL="https://localhost:8443"
 export EXPECTED_SERVER_ID="spiffe://example.org/server"

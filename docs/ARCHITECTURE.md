@@ -518,7 +518,7 @@ Just because CLI calls it doesn't make it inbound. The agent is called BY the ap
 | Purpose | Architecture demo | Real mTLS communication |
 | Scope | Out of scope for "two services using mTLS" | **In scope** |
 
-**For HTTP mTLS**: Use `examples/identityserver-example/` and `examples/httpclient/` which connect to real SPIRE via Workload API. These do NOT use InMemoryAgent.
+**For HTTP mTLS**: Use `examples/identityserver-example/` which connects to real SPIRE via Workload API. This does NOT use InMemoryAgent.
 
 ---
 

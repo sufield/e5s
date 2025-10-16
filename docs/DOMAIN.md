@@ -570,7 +570,6 @@ Current domain implementation:
 
 - **[PORT_CONTRACTS.md](PORT_CONTRACTS.md)** - Complete port contracts and error handling
 - **[INVARIANTS.md](INVARIANTS.md)** - Domain invariants and validation rules
-- **[MTLS.md](MTLS.md)** - Production mTLS usage guide
 - [Hexagonal Architecture](https://alistair.cockburn.us/hexagonal-architecture/)
 - [Domain-Driven Design](https://martinfowler.com/bliki/DomainDrivenDesign.html)
 - [Anti-Corruption Layer Pattern](https://docs.microsoft.com/en-us/azure/architecture/patterns/anti-corruption-layer)

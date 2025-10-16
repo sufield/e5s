@@ -2,7 +2,7 @@
 
 **Build Tag**: `//go:build dev` - This entire document describes **development-only** implementation.
 
-In **production mode** with external SPIRE, the control plane (registry, attestation, matching) is managed entirely by SPIRE Server infrastructure. See `docs/MTLS.md` for production usage.
+In **production mode** with external SPIRE, the control plane (registry, attestation, matching) is managed entirely by SPIRE Server infrastructure.
 
 ## Overview
 
@@ -688,7 +688,7 @@ These are **data plane** (runtime) components:
 
 - **Port Contracts**: See `docs/PORT_CONTRACTS.md` for all port interface definitions
 - **Domain Model**: See `docs/DOMAIN.md` for IdentityMapper and other domain entities
-- **Production mTLS**: See `docs/MTLS.md` for production SPIRE Workload API usage
+- **Production mTLS**: See `examples/identityserver-example/` for production SPIRE Workload API usage
 - **Invariants**: See `docs/INVARIANTS.md` for domain invariants and error handling
 
 ---

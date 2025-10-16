@@ -127,7 +127,7 @@ if err != nil {
 server.Start(ctx)  // Blocks until shutdown
 ```
 
-**See Also**: [MTLS.md](MTLS.md) for complete usage guide
+**See Also**: `examples/identityserver-example/` for usage example
 
 ---
 
@@ -155,7 +155,7 @@ type MTLSConfig struct {
 }
 ```
 
-**Example Implementation** (from `examples/httpclient`):
+**Example Implementation**:
 ```go
 client, err := httpclient.New(ctx, httpclient.Config{
     WorkloadAPI: httpclient.WorkloadAPIConfig{
@@ -176,7 +176,7 @@ defer client.Close()
 resp, err := client.Get(ctx, "https://server:8443/api/hello")
 ```
 
-**See Also**: [MTLS.md](MTLS.md) for complete usage guide
+**See Also**: `examples/identityserver-example/` for usage example
 
 ---
 
@@ -649,7 +649,7 @@ When implementing a new adapter:
 - [ ] Port interface documented with error contract
 - [ ] Example usage provided
 - [ ] Build tags specified if dev-only (`//go:build dev`)
-- [ ] Cross-references to related docs (MTLS.md, etc.)
+- [ ] Cross-references to related docs
 
 ### Resource Management
 - [ ] `Close()` method is idempotent
@@ -661,7 +661,6 @@ When implementing a new adapter:
 
 ## See Also
 
-- **[MTLS.md](MTLS.md)** - Complete guide to production mTLS ports (MTLSServer, MTLSClient)
 - **[PROJECT_STATUS.md](PROJECT_STATUS.md)** - Current project status and architecture overview
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - Hexagonal architecture patterns and principles
 - **`internal/ports/*.go`** - Actual port interface definitions

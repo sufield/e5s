@@ -701,7 +701,7 @@ See `docs/PORT_CONTRACTS.md` for complete port interface documentation.
 - **Port Contracts**: See `docs/PORT_CONTRACTS.md` for port interface definitions using domain types
 - **Domain Invariants**: See `docs/INVARIANTS.md` for complete invariant and validation documentation
 - **Control Plane**: See `docs/CONTROL_PLANE.md` for how IdentityMapper is used in dev mode
-- **mTLS Architecture**: See `docs/MTLS.md` for how IdentityDocument is used in production
+- **mTLS Architecture**: See `examples/identityserver-example/` for how IdentityDocument is used in production
 
 ---
 

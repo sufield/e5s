@@ -432,16 +432,13 @@ func TestMTLSAuthentication(t *testing.T) {
 ### Core Documentation
 
 - [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) - Current state: Production vs Educational
-- [docs/MTLS.md](docs/MTLS.md) - Complete mTLS authentication guide
 - [docs/TEST_ARCHITECTURE.md](docs/TEST_ARCHITECTURE.md) - Testing strategy and best practices
 - [docs/CONTROL_PLANE.md](docs/CONTROL_PLANE.md) - SPIRE deployment and control plane
 - [docs/ARCHITECTURE_REVIEW.md](docs/ARCHITECTURE_REVIEW.md) - Port placement and design decisions
 
 ### Examples
 
-- [examples/identityserver-example/](examples/identityserver-example/) - Complete mTLS server
-- [examples/httpclient/](examples/httpclient/) - mTLS client examples
-- [examples/mtls/](examples/mtls/) - Additional mTLS examples
+- [examples/identityserver-example/](examples/identityserver-example/) - MTLSServer example demonstrating hexagonal architecture
 
 ## Running the Examples
 
