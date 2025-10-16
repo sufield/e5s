@@ -5,13 +5,14 @@ Step-by-step instructions for running the mTLS server examples on Ubuntu 24.04.
 ## Table of Contents
 
 1. [Prerequisites](#prerequisites)
-2. [Install SPIRE](#install-spire)
-3. [Start SPIRE Server](#start-spire-server)
-4. [Start SPIRE Agent](#start-spire-agent)
-5. [Create Registration Entries](#create-registration-entries)
-6. [Run the Example Server](#run-the-example-server)
-7. [Test the Server](#test-the-server)
-8. [Troubleshooting](#troubleshooting)
+2. [Build the Library Locally (Optional)](#build-the-library-locally-optional)
+3. [Install SPIRE](#install-spire)
+4. [Start SPIRE Server](#start-spire-server)
+5. [Start SPIRE Agent](#start-spire-agent)
+6. [Create Registration Entries](#create-registration-entries)
+7. [Run the Example Server](#run-the-example-server)
+8. [Test the Server](#test-the-server)
+9. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -48,6 +49,75 @@ cd ~
 git clone https://github.com/pocket/hexagon.git
 cd hexagon/spire
 ```
+
+---
+
+## Build the Library Locally (Optional)
+
+This section shows how to build and verify the library locally before running the examples. The examples automatically use the local library code since they're part of the same repository.
+
+### 1. Verify the Library Builds
+
+```bash
+# Navigate to the library root
+cd ~/hexagon/spire
+
+# Download dependencies
+go mod download
+
+# Verify all packages build successfully
+go build ./...
+
+# Run tests (optional but recommended)
+go test ./internal/...
+```
+
+**Expected Output:**
+```bash
+# Dependencies download
+go: downloading github.com/spiffe/go-spiffe/v2 v2.6.0
+...
+
+# All packages build successfully (no errors)
+```
+
+### 2. Build the Example Server
+
+```bash
+cd ~/hexagon/spire
+
+# Build the mTLS server example
+go build -o /tmp/mtls-server ./examples/identityserver-example
+
+# Verify the binary was created
+ls -lh /tmp/mtls-server
+```
+
+**Expected Output:**
+```bash
+-rwxr-xr-x 1 user user 15M Oct 16 12:34 /tmp/mtls-server
+```
+
+### 3. Testing Local Changes
+
+If you make changes to the library code, simply rebuild the example to use your changes:
+
+```bash
+# 1. Make changes to the library
+vim ~/hexagon/spire/internal/adapters/inbound/identityserver/spiffe_server.go
+
+# 2. Run tests to verify your changes
+cd ~/hexagon/spire
+go test ./internal/adapters/inbound/identityserver/...
+
+# 3. Rebuild the example (automatically uses your changes)
+go build -o /tmp/mtls-server ./examples/identityserver-example
+
+# 4. Run the updated example
+/tmp/mtls-server
+```
+
+**Note**: The examples in this repository (`./examples/identityserver-example`) automatically use the local library code. You don't need any `go.mod` replace directives or special configuration.
 
 ---
 
