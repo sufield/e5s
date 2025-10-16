@@ -1040,6 +1040,7 @@ kubectl apply -f examples/mtls-adapters/k8s/
 
 ### API Reference
 
+- **[PORT_CONTRACTS.md](PORT_CONTRACTS.md)** - Complete port contracts and error handling
 - `internal/ports/identityserver.go` - Port interfaces (MTLSServer, MTLSClient, MTLSConfig)
 - `internal/adapters/inbound/identityserver/` - Server implementation
 - `examples/httpclient/` - Client implementation (example code)
