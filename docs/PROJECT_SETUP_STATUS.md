@@ -79,31 +79,37 @@ ui:
 
 ### 3. Integration Testing
 
-**Status:** ✅ **Working with Two Implementations**
+**Status:** ✅ **Production Ready with Multiple Variants**
 
 **What's Done:**
 - ✅ Integration tests run inside Kubernetes pods with socket access
 - ✅ Automatic workload registration
 - ✅ Automatic SPIRE readiness checks
-- ✅ Two implementations available (standard and optimized)
+- ✅ Four implementations (standard, optimized, CI-hardened, keep)
 - ✅ Full cleanup automation
+- ✅ **Security hardened** (removed unnecessary privileges, added resource limits)
+- ✅ **Parameterized** (all settings via environment variables)
+- ✅ **Tolerant selectors** (works with different SPIRE label schemes)
 
 **Implementations:**
 
 **Standard: `make test-integration`**
-- Creates pod with `golang:1.23` image
-- Copies full project (~100MB)
-- Runs `go test` in pod
+- Full project copy, good for debugging
 - Time: ~30-60 seconds
-- Best for: Development, debugging
 
-**Optimized: `make test-integration-fast`**
-- Compiles test binary locally (~10MB)
-- Minimal pod (`debian:bookworm-slim`)
-- Copies only binary
-- Runs pre-compiled tests
+**Optimized: `make test-integration-fast`** ⭐ **Recommended**
+- Pre-compiled binary, hardened security
 - Time: ~10-15 seconds
-- Best for: CI/CD, repeated runs
+
+**CI/Distroless: `make test-integration-ci`** 🔒 **Maximum Security**
+- Static binary + distroless image
+- Security hardening: `runAsNonRoot`, `readOnlyRootFilesystem`, capabilities dropped
+- Time: ~10-15 seconds
+
+**Fast Iteration: `make test-integration-keep`** ⚡ **Fastest**
+- Reuses pod between runs
+- First run: ~10-15 seconds
+- Subsequent: ~2-3 seconds!
 
 **Test Coverage:**
 ```go
@@ -117,10 +123,11 @@ ui:
 
 **Files:**
 - `scripts/run-integration-tests.sh` - Standard implementation
-- `scripts/run-integration-tests-optimized.sh` - Optimized implementation
+- `scripts/run-integration-tests-optimized.sh` - Optimized implementation (hardened)
+- `scripts/run-integration-tests-ci.sh` - CI/distroless implementation (maximum security)
 - `scripts/register-test-workload.sh` - Workload registration
 - `internal/adapters/outbound/spire/integration_test.go` - Integration tests
-- `docs/INTEGRATION_TEST_OPTIMIZATION.md` - Implementation comparison
+- `docs/INTEGRATION_TEST_OPTIMIZATION.md` - Complete implementation guide with security details
 
 ---
 

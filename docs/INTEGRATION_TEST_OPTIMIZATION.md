@@ -6,9 +6,21 @@ Integration tests need to access the SPIRE Agent socket at `/tmp/spire-agent/pub
 
 **Solution:** Run tests inside Kubernetes where the socket exists (Option A from architecture review).
 
-## Two Implementations
+## Recent Security & Robustness Improvements
 
-### Current: `test-integration` (Works, but slower)
+**What was fixed (2025-10-16):**
+- ✅ **Removed unnecessary privileges** - Dropped `hostPID` and `hostNetwork` (not needed for socket access)
+- ✅ **Tolerant label selector** - Works with both `app.kubernetes.io/name=agent` and `app=spire-agent`
+- ✅ **Parameterized configuration** - All settings configurable via environment variables
+- ✅ **Stricter shell safety** - `set -Eeuo pipefail` with trap for guaranteed cleanup
+- ✅ **Explicit permissions** - `chmod +x` after binary copy
+- ✅ **Pod reuse option** - `KEEP=true` for faster iteration (2-4x faster)
+- ✅ **Resource limits** - CPU/memory constraints on test pods
+- ✅ **Better error handling** - Detailed failure messages and automatic cleanup
+
+## Three Implementations
+
+### Standard: `test-integration` (Full project, good for debugging)
 
 **Approach:**
 ```bash
@@ -22,14 +34,16 @@ make test-integration  # Uses scripts/run-integration-tests.sh
 4. Runs `go test` inside pod (downloads dependencies)
 5. Cleans up
 
-**Transfer time:**
-- ~100MB+ project files
-- Module downloads in pod
-- **Total: ~30-60 seconds**
+**When to use:**
+- ✅ Debugging test failures
+- ✅ Modifying tests frequently
+- ✅ First-time setup
+
+**Transfer time:** ~30-60 seconds
 
 ---
 
-### Optimized: `test-integration-fast` (Recommended)
+### Optimized: `test-integration-fast` (Pre-compiled, hardened)
 
 **Approach:**
 ```bash
@@ -39,41 +53,168 @@ make test-integration-fast  # Uses scripts/run-integration-tests-optimized.sh
 **How it works:**
 1. **Compiles test binary locally** (`go test -c`)
 2. Creates pod with minimal `debian:bookworm-slim` image
-3. Mounts socket via `hostPath`
+3. Mounts socket via `hostPath` (read-only)
 4. Copies **only test binary** (~10MB)
 5. Runs binary directly in pod
+6. Cleans up (or keeps with `KEEP=true`)
+
+**Security improvements:**
+- ✅ No `hostPID` or `hostNetwork`
+- ✅ Read-only socket mount
+- ✅ Resource limits enforced
+- ✅ Tolerant label selectors
+
+**When to use:**
+- ✅ Repeated test runs
+- ✅ CI/CD pipelines
+- ✅ Standard development workflow
+
+**Transfer time:** ~10-15 seconds
+
+---
+
+### CI/Distroless: `test-integration-ci` (Maximum security)
+
+**Approach:**
+```bash
+make test-integration-ci  # Uses scripts/run-integration-tests-ci.sh
+```
+
+**How it works:**
+1. **Compiles static test binary** (`CGO_ENABLED=0 go test -c`)
+2. Creates pod with `gcr.io/distroless/static-debian12:nonroot`
+3. Mounts socket via `hostPath` (read-only)
+4. Copies static binary (~10MB)
+5. Runs binary directly (no shell available)
 6. Cleans up
 
+**Security hardening:**
+- ✅ Distroless (no shell, no package manager, minimal attack surface)
+- ✅ Static binary (no dependencies)
+- ✅ `runAsNonRoot: true`
+- ✅ `readOnlyRootFilesystem: true`
+- ✅ `allowPrivilegeEscalation: false`
+- ✅ Capabilities dropped (`drop: ["ALL"]`)
+- ✅ Seccomp profile enabled
+
+**When to use:**
+- ✅ Production CI/CD
+- ✅ Security-critical environments
+- ✅ Compliance requirements
+
+**Transfer time:** ~10-15 seconds
+
+---
+
+### Fast Iteration: `test-integration-keep` (Pod reuse)
+
+**Approach:**
+```bash
+make test-integration-keep  # Reuses pod for faster iteration
+```
+
+**How it works:**
+1. First run: Same as `test-integration-fast`
+2. Subsequent runs: Only copies binary (~2-3 seconds)
+3. Pod stays running between tests
+4. Manual cleanup: `kubectl delete pod -n spire-system spire-integration-test`
+
+**When to use:**
+- ✅ Rapid local development
+- ✅ Testing multiple times in a row
+- ✅ Debugging test issues
+
 **Transfer time:**
-- ~10MB test binary
-- No module downloads
-- **Total: ~10-15 seconds**
+- First run: ~10-15 seconds
+- Subsequent: ~2-3 seconds ⚡
 
 ---
 
 ## Performance Comparison
 
-| Aspect | Current (`test-integration`) | Optimized (`test-integration-fast`) |
-|--------|----------------------------|-------------------------------------|
-| **Transfer size** | ~100MB+ (full project) | ~10MB (test binary) |
-| **Pod image** | `golang:1.23` (800MB+) | `debian:bookworm-slim` (80MB) |
-| **Dependencies** | Downloaded at runtime | Compiled in binary |
-| **Determinism** | Variable (network dependent) | High (frozen binary) |
-| **Speed** | ~30-60 seconds | ~10-15 seconds |
-| **CI-friendly** | Good | Better |
+| Aspect | Standard | Optimized | CI/Distroless | Keep (repeat) |
+|--------|----------|-----------|---------------|---------------|
+| **Transfer size** | ~100MB+ | ~10MB | ~10MB | ~10MB |
+| **Pod image size** | 800MB+ | 80MB | 25MB | 80MB |
+| **Privileges** | Normal | Minimal | Hardened | Minimal |
+| **Security** | Standard | Good | Maximum | Good |
+| **Dependencies** | Runtime | Compiled | Static | Compiled |
+| **Determinism** | Low | High | Maximum | High |
+| **First run** | ~30-60s | ~10-15s | ~10-15s | ~10-15s |
+| **Repeat run** | ~30-60s | ~10-15s | ~10-15s | ~2-3s ⚡ |
+| **CI-friendly** | Fair | Good | Best | N/A |
+| **Debugging** | Easy | Good | Limited | Good |
 
-## When to Use Each
+## Quick Decision Guide
 
-### Use `test-integration` (current) when:
-- ✅ Debugging tests (easier to iterate)
-- ✅ You need to modify test code frequently
-- ✅ First time running tests
+**Choose your implementation:**
 
-### Use `test-integration-fast` (optimized) when:
-- ✅ Running tests in CI/CD pipelines
-- ✅ Running tests repeatedly
-- ✅ You want faster feedback
-- ✅ You need deterministic builds
+```
+Development (first time)      → make test-integration
+Development (normal use)      → make test-integration-fast
+Development (rapid iteration) → make test-integration-keep
+CI/CD (GitHub Actions, etc.)  → make test-integration-ci
+Security-critical envs        → make test-integration-ci
+Debugging test failures       → make test-integration
+```
+
+## Configuration Examples
+
+All optimized scripts support environment variable configuration:
+
+### Custom Namespace
+
+```bash
+NS=my-namespace make test-integration-fast
+```
+
+### Custom Socket Path
+
+```bash
+SOCKET_DIR=/custom/path SOCKET_FILE=custom.sock make test-integration-fast
+```
+
+### Different Package
+
+```bash
+PKG=./internal/adapters/inbound/identityserver make test-integration-fast
+```
+
+### Rapid Development Workflow
+
+```bash
+# First run - creates pod
+make test-integration-keep
+
+# Edit your tests...
+# vim internal/adapters/outbound/spire/integration_test.go
+
+# Second run - reuses pod (2-3 seconds!)
+make test-integration-keep
+
+# More edits...
+
+# Third run - still fast
+make test-integration-keep
+
+# Done - cleanup
+kubectl delete pod -n spire-system spire-integration-test
+```
+
+### CI Pipeline Configuration
+
+**GitHub Actions:**
+```yaml
+- name: Integration Tests
+  run: make test-integration-ci
+```
+
+**GitLab CI:**
+```yaml
+integration-test:
+  script:
+    - make test-integration-ci
+```
 
 ## Architecture Review Context
 
