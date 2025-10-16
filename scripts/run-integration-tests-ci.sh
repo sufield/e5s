@@ -74,12 +74,14 @@ if ! kubectl get namespace "$NS" >/dev/null 2>&1; then
     exit 1
 fi
 
-# Get SPIRE Agent pod (tolerant label selector)
+# Get SPIRE Agent pod (tolerant label selector - tries 3 common patterns)
 AGENT_POD=$(
   kubectl get pods -n "$NS" \
     -l 'app.kubernetes.io/name=agent' -o jsonpath='{.items[0].metadata.name}' 2>/dev/null \
   || kubectl get pods -n "$NS" \
     -l 'app=spire-agent' -o jsonpath='{.items[0].metadata.name}' 2>/dev/null \
+  || kubectl get pods -n "$NS" \
+    -l 'name=spire-agent' -o jsonpath='{.items[0].metadata.name}' 2>/dev/null \
   || true
 )
 
@@ -90,9 +92,22 @@ fi
 
 success "Found SPIRE Agent: $AGENT_POD"
 
+# Verify socket exists on node
+info "Checking socket existence on node..."
+NODE="$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')"
+if ! minikube ssh -- "test -S ${SOCKET_DIR}/${SOCKET_FILE} -o -d ${SOCKET_DIR}" >/dev/null 2>&1; then
+    error "Socket or directory not present on node: ${SOCKET_DIR}/${SOCKET_FILE}"
+    exit 1
+fi
+success "Socket verified on node: $NODE"
+
 # Compile static test binary (no CGO, for distroless)
-info "Compiling static integration test binary..."
-if ! CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+# Auto-detect node architecture for cross-platform support
+NODE_ARCH=$(kubectl get nodes -o jsonpath='{.items[0].status.nodeInfo.architecture}')
+GOARCH="${GOARCH:-$NODE_ARCH}"
+
+info "Compiling static integration test binary (GOARCH=$GOARCH)..."
+if ! CGO_ENABLED=0 GOOS=linux GOARCH="$GOARCH" \
     go test -tags="$TAGS" -c -o "$TESTBIN" "$PKG"; then
     error "Failed to compile static test binary"
     exit 1
@@ -100,8 +115,8 @@ fi
 
 success "Static test binary compiled: $(du -h "$TESTBIN" | cut -f1)"
 
-# Create distroless test pod (maximum security)
-info "Creating distroless test pod..."
+# Create distroless test pod with initContainer (ALWAYS use this pattern for distroless)
+info "Creating distroless test pod with initContainer..."
 
 cat > "$POD_YAML" <<EOF
 apiVersion: v1
@@ -128,6 +143,18 @@ spec:
         type: Directory
     - name: work
       emptyDir: {}
+  initContainers:
+    - name: setup
+      image: busybox:stable-musl
+      # Wait for binary to be copied, then make it executable
+      command: ["sh", "-c", "while [ ! -f /work/integration.test ]; do sleep 0.2; done; chmod +x /work/integration.test"]
+      volumeMounts:
+        - name: work
+          mountPath: /work
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
   containers:
     - name: test
       # Distroless: minimal attack surface, no shell, no package manager
@@ -163,123 +190,49 @@ EOF
 # Delete existing pod
 kubectl delete pod -n "$NS" "$POD_NAME" --ignore-not-found=true >/dev/null 2>&1 || true
 
-# Create test pod (but don't wait - we need to copy binary first)
+# Create test pod
 kubectl apply -f "$POD_YAML" >/dev/null
 
-# Wait for pod to be created
-sleep 2
-
-# Copy test binary before pod starts (distroless has no shell, so we use initContainer approach via early copy)
-info "Copying static test binary to pod..."
-# Wait briefly for pod to be schedulable
-kubectl wait --for=condition=PodScheduled pod/"$POD_NAME" -n "$NS" --timeout=30s >/dev/null 2>&1 || true
-
-# Copy binary while pod is initializing
-if ! kubectl cp "$TESTBIN" "$NS"/"$POD_NAME":/work/integration.test -c test 2>/dev/null; then
-    # If direct copy fails, recreate pod with initContainer that waits
-    info "Recreating pod with init container for binary copy..."
-    kubectl delete pod -n "$NS" "$POD_NAME" --ignore-not-found=true >/dev/null 2>&1
-
-    # Add initContainer that sleeps to allow binary copy
-    cat > "$POD_YAML" <<EOF
-apiVersion: v1
-kind: Pod
-metadata:
-  name: ${POD_NAME}
-  namespace: ${NS}
-  labels:
-    app: spire-integration-test
-    role: ci-test
-    security: distroless
-spec:
-  restartPolicy: Never
-  securityContext:
-    runAsNonRoot: true
-    runAsUser: 65532
-    fsGroup: 65532
-  volumes:
-    - name: spire-socket
-      hostPath:
-        path: ${SOCKET_DIR}
-        type: Directory
-    - name: work
-      emptyDir: {}
-  initContainers:
-    - name: setup
-      image: busybox:stable-musl
-      command: ["sh", "-c", "sleep 5"]
-      volumeMounts:
-        - name: work
-          mountPath: /work
-  containers:
-    - name: test
-      image: gcr.io/distroless/static-debian12:nonroot
-      command: ["/work/integration.test"]
-      args: ["-test.v"]
-      env:
-        - name: SPIFFE_ENDPOINT_SOCKET
-          value: "unix:///spire-socket/${SOCKET_FILE}"
-      volumeMounts:
-        - name: spire-socket
-          mountPath: /spire-socket
-          readOnly: true
-        - name: work
-          mountPath: /work
-      resources:
-        requests:
-          cpu: "100m"
-          memory: "128Mi"
-        limits:
-          cpu: "500m"
-          memory: "256Mi"
-      securityContext:
-        allowPrivilegeEscalation: false
-        readOnlyRootFilesystem: true
-        capabilities:
-          drop: ["ALL"]
-EOF
-
-    kubectl apply -f "$POD_YAML" >/dev/null
-    sleep 2
-    kubectl cp "$TESTBIN" "$NS"/"$POD_NAME":/work/integration.test -c setup
-fi
-
-# Ensure binary is executable
-kubectl exec -n "$NS" "$POD_NAME" -c test -- /work/integration.test -test.v > /dev/null 2>&1 || true
-
-# Wait for pod to be ready
-info "Waiting for test pod to be ready..."
-if ! kubectl wait --for=condition=Ready pod/"$POD_NAME" -n "$NS" --timeout=60s >/dev/null 2>&1; then
-    error "Test pod failed to become ready"
+# Wait for pod to be scheduled
+info "Waiting for test pod to be scheduled..."
+if ! kubectl wait --for=condition=PodScheduled pod/"$POD_NAME" -n "$NS" --timeout=60s >/dev/null 2>&1; then
+    error "Test pod failed to be scheduled"
     kubectl describe pod -n "$NS" "$POD_NAME" || true
-    kubectl logs -n "$NS" "$POD_NAME" || true
     exit 1
 fi
 
-success "Distroless test pod ready"
+# Copy test binary to initContainer (which is waiting for it)
+info "Copying static test binary to pod..."
+if ! kubectl cp "$TESTBIN" "$NS"/"$POD_NAME":/work/integration.test -c setup 2>/dev/null; then
+    error "Failed to copy test binary to initContainer"
+    kubectl describe pod -n "$NS" "$POD_NAME" || true
+    exit 1
+fi
 
-# Run tests (binary executes automatically via command in pod spec)
+success "Binary copied, initContainer will chmod +x and test container will start"
+
+# Run tests by streaming logs
 echo ""
 info "Running integration tests in distroless container..."
 echo ""
 
-# Capture logs since binary runs automatically
-if kubectl logs -n "$NS" "$POD_NAME" -f 2>/dev/null; then
-    # Check exit code via pod phase
-    sleep 2
-    POD_PHASE=$(kubectl get pod -n "$NS" "$POD_NAME" -o jsonpath='{.status.phase}')
-    if [ "$POD_PHASE" = "Succeeded" ]; then
-        echo ""
-        success "Integration tests passed!"
-        EXIT_CODE=0
-    else
-        echo ""
-        error "Integration tests failed"
-        EXIT_CODE=1
-    fi
-else
-    error "Failed to get test output"
+# Stream logs from test container (it runs automatically)
+kubectl logs -n "$NS" "$POD_NAME" -c test -f 2>/dev/null || true
+
+# Check exit code from terminated container state
+echo ""
+info "Checking test results..."
+EXIT_CODE="$(kubectl get pod -n "$NS" "$POD_NAME" -o jsonpath='{.status.containerStatuses[?(@.name=="test")].state.terminated.exitCode}' 2>/dev/null || echo "")"
+
+# If exit code is empty, container might still be running or failed to start
+if [ -z "$EXIT_CODE" ]; then
+    error "Could not determine test exit code"
+    kubectl describe pod -n "$NS" "$POD_NAME" || true
     EXIT_CODE=1
+elif [ "$EXIT_CODE" = "0" ]; then
+    success "Integration tests passed!"
+else
+    error "Integration tests failed (exit code: $EXIT_CODE)"
 fi
 
 info "Cleaning up..."

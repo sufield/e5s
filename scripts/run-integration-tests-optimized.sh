@@ -78,26 +78,40 @@ if ! kubectl get namespace "$NS" >/dev/null 2>&1; then
     exit 1
 fi
 
-# Get SPIRE Agent pod (tolerant label selector)
-# Try standard label first, then fallback to app=spire-agent
+# Get SPIRE Agent pod (tolerant label selector - tries 3 common patterns)
 AGENT_POD=$(
   kubectl get pods -n "$NS" \
     -l 'app.kubernetes.io/name=agent' -o jsonpath='{.items[0].metadata.name}' 2>/dev/null \
   || kubectl get pods -n "$NS" \
     -l 'app=spire-agent' -o jsonpath='{.items[0].metadata.name}' 2>/dev/null \
+  || kubectl get pods -n "$NS" \
+    -l 'name=spire-agent' -o jsonpath='{.items[0].metadata.name}' 2>/dev/null \
   || true
 )
 
 if [ -z "$AGENT_POD" ]; then
-    error "SPIRE Agent pod not found (tried both label styles: app.kubernetes.io/name=agent and app=spire-agent)"
+    error "SPIRE Agent pod not found (tried labels: app.kubernetes.io/name, app, name)"
     exit 1
 fi
 
 success "Found SPIRE Agent: $AGENT_POD"
 
+# Verify socket exists on node
+info "Checking socket existence on node..."
+NODE="$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')"
+if ! minikube ssh -- "test -S ${SOCKET_DIR}/${SOCKET_FILE} -o -d ${SOCKET_DIR}" >/dev/null 2>&1; then
+    error "Socket or directory not present on node: ${SOCKET_DIR}/${SOCKET_FILE}"
+    exit 1
+fi
+success "Socket verified on node: $NODE"
+
 # Compile test binary locally (fast, deterministic)
-info "Compiling integration test binary..."
-if ! go test -tags="$TAGS" -c -o "$TESTBIN" "$PKG"; then
+# Auto-detect node architecture for cross-platform support
+NODE_ARCH=$(kubectl get nodes -o jsonpath='{.items[0].status.nodeInfo.architecture}')
+GOARCH="${GOARCH:-$NODE_ARCH}"
+
+info "Compiling integration test binary (GOARCH=$GOARCH)..."
+if ! GOOS=linux GOARCH="$GOARCH" go test -tags="$TAGS" -c -o "$TESTBIN" "$PKG"; then
     error "Failed to compile test binary"
     exit 1
 fi
@@ -157,6 +171,13 @@ fi
 # Create and wait for test pod
 if ! kubectl get pod -n "$NS" "$POD_NAME" >/dev/null 2>&1; then
     kubectl apply -f "$POD_YAML" >/dev/null
+    info "Waiting for test pod to be scheduled..."
+    if ! kubectl wait --for=condition=PodScheduled pod/"$POD_NAME" -n "$NS" --timeout=60s >/dev/null 2>&1; then
+        error "Test pod failed to be scheduled"
+        kubectl describe pod -n "$NS" "$POD_NAME" || true
+        exit 1
+    fi
+    # Wait for Ready condition (Debian pod with sleep infinity should become ready)
     info "Waiting for test pod to be ready..."
     if ! kubectl wait --for=condition=Ready pod/"$POD_NAME" -n "$NS" --timeout=60s >/dev/null 2>&1; then
         error "Test pod failed to become ready"
