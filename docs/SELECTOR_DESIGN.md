@@ -1,8 +1,15 @@
 # Selector Domain Entities - Design Rationale
 
-This document explains why we created custom selector domain entities instead of using SPIRE SDK types.
+**Type**: Architecture Decision Record (ADR)
+**Status**: ✅ COMPLETED - This document describes the current implementation
 
-## Important: Production vs Development
+---
+
+## Overview
+
+This document explains **WHY** we created custom selector domain entities instead of using SPIRE SDK types. This is a fundamental architectural decision for the hexagonal architecture implementation.
+
+## Production vs Development
 
 **Production Mode**: When using external SPIRE infrastructure (`SPIREAdapterFactory`), selector domain logic is **NOT required**. SPIRE Server manages all selector matching against registration entries. Your application simply fetches SVIDs via Workload API.
 
@@ -10,7 +17,7 @@ This document explains why we created custom selector domain entities instead of
 
 See `docs/PRODUCTION_VS_DEVELOPMENT.md` for detailed architectural comparison.
 
-## The Problem We're Solving
+## The Problem
 
 **SPIRE's Architecture has a Gap**: SPIRE is split into two main components:
 
@@ -27,7 +34,7 @@ However, the SDK does NOT provide the logic for:
 - Selector matching (finding which SPIFFE ID to assign)
 - Registration entry management (mapping selectors → SPIFFE IDs)
 
-## Why go-spiffe SDK Doesn't Have This
+## Why go-spiffe SDK Lacks This
 
 The go-spiffe SDK is intentionally minimal and focused on SVID consumption:
 
@@ -117,25 +124,30 @@ type Selector struct {
 
 ```go
 type SelectorSet struct {
-    selectors []*Selector
+    // Map key is the formatted selector string for O(1) lookup
+    selectors map[string]*Selector
 }
 
 func (ss *SelectorSet) Add(selector *Selector) {
-    if !ss.Contains(selector) {  // Uniqueness guarantee
-        ss.selectors = append(ss.selectors, selector)
+    if selector != nil {
+        // Map automatically deduplicates - uniqueness guarantee
+        ss.selectors[selector.formatted] = selector
     }
 }
 
 // All returns defensive copy (immutability)
 func (ss *SelectorSet) All() []*Selector {
-    result := make([]*Selector, len(ss.selectors))
-    copy(result, ss.selectors)
+    result := make([]*Selector, 0, len(ss.selectors))
+    for _, s := range ss.selectors {
+        result = append(result, s)
+    }
     return result
 }
 ```
 
 **Benefits**:
-- ✅ **Uniqueness**: Duplicate selectors automatically filtered
+- ✅ **Uniqueness**: Map-based storage automatically deduplicates (O(1))
+- ✅ **Performance**: O(1) add/contains instead of O(n) slice iteration
 - ✅ **Immutability**: Defensive copies prevent external mutation
 - ✅ **Type-safe**: Compile-time guarantees
 

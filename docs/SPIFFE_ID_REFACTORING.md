@@ -1,14 +1,8 @@
 # IdentityCredential Refactoring: Eliminating SDK Duplication
 
-**Status**: ✅ COMPLETED - This document describes the current implementation
-**Type**: Architecture Decision Record (ADR)
-**Last Updated**: 2025-10-15
-
----
-
 ## Overview
 
-This document explains **WHY** parsing logic was moved from the domain layer to adapters via the `IdentityCredentialParser` port interface. **This is not a TODO or migration guide** - this refactoring is complete and this is how the code currently works.
+This document explains why parsing logic was moved from the domain layer to adapters via the `IdentityCredentialParser` port interface. 
 
 The domain type `internal/domain/identity_credential.go` (formerly `spiffe_id.go`) was refactored to eliminate duplication with go-spiffe SDK by moving parsing/validation logic to a port-adapter pattern. The domain now holds only minimal IdentityCredential data, while parsing is delegated to the `IdentityCredentialParser` port.
 
@@ -16,7 +10,7 @@ This type was renamed from `SpiffeID` to `IdentityCredential` to better emphasiz
 
 ## Problem: SDK Duplication
 
-The original `IdentityCredential` domain type duplicated significant functionality from go-spiffe SDK's `spiffeid` package:
+The original `IdentityCredential` domain type duplicated functionality from go-spiffe SDK's `spiffeid` package:
 
 **go-spiffe SDK provides** (`spiffeid.ID`):
 - `FromString(id string) (ID, error)` - URI parsing with `url.Parse`, scheme validation, trust domain extraction
@@ -50,8 +44,6 @@ func NewIdentityCredential(id string) (*IdentityCredential, error) {
     // ... more duplication
 }
 ```
-
-### Why This Matters
 
 1. **Maintenance Burden**: SDK handles edge cases (escaped paths, invalid hosts, normalization) that we'd need to replicate/test
 2. **Hexagonal Violation**: Domain duplicating external SDK logic defeats the purpose - should either use SDK directly or abstract properly
@@ -336,7 +328,7 @@ func (d *InMemoryDeps) CreateIdentityCredentialParser() app.IdentityCredentialPa
 
 ## Benefits
 
-### 1. Eliminates SDK Duplication ✅
+### 1. Eliminates SDK Duplication
 
 **Before**:
 - Domain had ~50 lines of parsing logic duplicating `spiffeid.FromString`
@@ -348,7 +340,7 @@ func (d *InMemoryDeps) CreateIdentityCredentialParser() app.IdentityCredentialPa
 - Parsing delegated to adapter (can use SDK in real implementation)
 - Consistent with SDK behavior (or simple enough for in-memory)
 
-### 2. Proper Hexagonal Architecture ✅
+### 2. Proper Hexagonal Architecture
 
 **Before**:
 ```
@@ -368,7 +360,7 @@ Adapter → Uses SDK (or simple in-memory)
 - Adapter handles **technology** (SDK parsing or simple string ops)
 - Port provides **clean boundary**
 
-### 3. Flexible Implementations ✅
+### 3. Flexible Implementations
 
 **In-Memory** (current):
 ```go
@@ -389,7 +381,7 @@ parser := mocks.NewMockIdentityCredentialParser()
 parser.On("ParseFromString", "spiffe://example.org/test").Return(testID, nil)
 ```
 
-### 4. Domain Purity Maintained ✅
+### 4. Domain Purity Maintained
 
 **Domain file now**:
 - ✅ No `url.Parse` - no parsing logic
@@ -536,11 +528,11 @@ func (d *RealSPIREDeps) CreateIdentityCredentialParser() app.IdentityCredentialP
 
 The IdentityCredential refactoring successfully:
 
-- ✅ **Eliminated SDK duplication** - Parsing moved to adapter, domain minimal
-- ✅ **Proper hexagonal architecture** - Port-adapter pattern cleanly separates concerns
-- ✅ **Maintained domain purity** - No external dependencies, pure value object
-- ✅ **Enabled flexibility** - Can swap in-memory vs SDK implementations
-- ✅ **Reduced complexity** - Domain code reduced from ~105 to ~60 lines
-- ✅ **Preserved functionality** - All tests pass, application works correctly
+- **Eliminated SDK duplication** - Parsing moved to adapter, domain minimal
+- **Proper hexagonal architecture** - Port-adapter pattern cleanly separates concerns
+- **Maintained domain purity** - No external dependencies, pure value object
+- **Enabled flexibility** - Can swap in-memory vs SDK implementations
+- **Reduced complexity** - Domain code reduced from ~105 to ~60 lines
+- **Preserved functionality** - All tests pass, application works correctly
 
 Domain should model concepts, not replicate technology. The IdentityCredential concept ("identifier with trust domain and path") is separate from the parsing technology (SDK's `spiffeid.FromString`). By separating these via ports/adapters, we achieve both purity and practical utility.

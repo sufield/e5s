@@ -1,6 +1,10 @@
 # Unified Configuration Improvements
 
-This document describes the final set of improvements that unified the mTLS configuration structure and introduced generic "peer" terminology throughout the codebase.
+**Type**: Architecture Decision Record (ADR)
+
+## Overview
+
+This document explains why the mTLS configuration was unified into a single `MTLSConfig` structure and why generic "peer" terminology was adopted instead of separate "client" and "server" configurations. 
 
 ## Changes Made
 
@@ -186,5 +190,6 @@ In the server implementation, we kept the variable name `clientID` when interact
 
 ## Related Documentation
 
-- [Port-Based Improvements](PORT_BASED_IMPROVEMENTS.md) - Original port interface design
-- [Improvements Applied](IMPROVEMENTS_APPLIED.md) - sync.Once and GetMux() improvements
+- [MTLS.md](MTLS.md) - User guide for mTLS server and client functionality
+- [PORT_CONTRACTS.md](PORT_CONTRACTS.md) - Complete port interface contracts
+- [MANUAL_TESTING_GUIDE.md](MANUAL_TESTING_GUIDE.md) - Manual testing procedures with examples

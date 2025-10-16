@@ -1,6 +1,6 @@
 # Build Modes: Development vs Production
 
-This document explains the build tag architecture that separates development and production code.
+This document explains build tags that separates development and production code.
 
 ## Overview
 
