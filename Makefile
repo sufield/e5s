@@ -1,11 +1,14 @@
 .PHONY: test test-verbose test-race test-coverage test-coverage-html test-short \
-	clean help prereqs check-prereqs build prod-build dev-build test-prod-build \
+	clean help prereqs check-prereqs check-prereqs-k8s check-prereqs-lint check-prereqs-misc \
+	build prod-build dev-build test-prod-build compare-sizes test-inmem test-inmem-html \
 	helm-lint helm-template minikube-up minikube-down minikube-status \
-	minikube-delete ci-test ci-build verify verify-spire test-integration test-prod-binary \
-	refactor-baseline refactor-compare refactor-check refactor-install-tools refactor-clean
+	minikube-delete ci-test ci-build verify verify-spire check-spire-ready test-integration test-prod-binary \
+	refactor-baseline refactor-compare refactor-check refactor-install-tools refactor-clean \
+	test-dev test-prod register-test-workload
 
-# Use bash for consistency across platforms
+# Use bash with strict error handling
 SHELL := /bin/bash
+.SHELLFLAGS := -eu -o pipefail -c
 
 # Default target
 .DEFAULT_GOAL := help
@@ -18,15 +21,23 @@ BINARY_DEV=bin/cp-minikube
 LDFLAGS=-ldflags "-s -w"
 BUILD_TAGS_DEV=dev
 
-# Required tools
-REQUIRED_TOOLS=go helm kubectl minikube
+# Required tools (core minimum)
+REQUIRED_TOOLS=go
+
+# Optional tool groups
+TOOLS_K8S=helm kubectl minikube
+TOOLS_LINT=staticcheck golangci-lint gocyclo goimports
+TOOLS_MISC=jq sed awk
+
+# Package list
+PKGS=$(shell go list ./...)
 
 ## prereqs: Check for required tools (alias for check-prereqs)
 prereqs: check-prereqs
 
-## check-prereqs: Verify all required tools are installed
+## check-prereqs: Verify core required tools are installed
 check-prereqs:
-	@echo "Checking prerequisites..."
+	@echo "Checking core prerequisites..."
 	@for tool in $(REQUIRED_TOOLS); do \
 		if ! command -v $$tool >/dev/null 2>&1; then \
 			echo "✗ $$tool not found in PATH"; \
@@ -35,7 +46,46 @@ check-prereqs:
 			echo "✓ $$tool found"; \
 		fi; \
 	done
-	@echo "✓ All prerequisites satisfied"
+	@echo "✓ Core prerequisites satisfied"
+
+## check-prereqs-k8s: Verify Kubernetes tools are installed
+check-prereqs-k8s:
+	@echo "Checking Kubernetes tools..."
+	@for tool in $(TOOLS_K8S); do \
+		if ! command -v $$tool >/dev/null 2>&1; then \
+			echo "✗ $$tool not found in PATH"; \
+			exit 1; \
+		else \
+			echo "✓ $$tool found"; \
+		fi; \
+	done
+	@echo "✓ Kubernetes tools satisfied"
+
+## check-prereqs-lint: Verify linting tools are installed
+check-prereqs-lint:
+	@echo "Checking linting tools..."
+	@for tool in $(TOOLS_LINT); do \
+		if ! command -v $$tool >/dev/null 2>&1; then \
+			echo "✗ $$tool not found - run 'make refactor-install-tools'"; \
+			exit 1; \
+		else \
+			echo "✓ $$tool found"; \
+		fi; \
+	done
+	@echo "✓ Linting tools satisfied"
+
+## check-prereqs-misc: Verify misc tools are installed
+check-prereqs-misc:
+	@echo "Checking misc tools..."
+	@for tool in $(TOOLS_MISC); do \
+		if ! command -v $$tool >/dev/null 2>&1; then \
+			echo "✗ $$tool not found in PATH"; \
+			exit 1; \
+		else \
+			echo "✓ $$tool found"; \
+		fi; \
+	done
+	@echo "✓ Misc tools satisfied"
 
 ## test: Run all tests (same as test-dev)
 test: test-dev
@@ -141,25 +191,34 @@ compare-sizes:
 ## test-prod-build: Verify production build excludes dev code
 test-prod-build:
 	@echo "Testing production build..."
+	@echo "→ Checking production dependencies exclude dev packages..."
+	@PROD_DEPS=$$(go list -deps ./cmd); \
+	DEV_PKGS="internal/adapters/outbound/inmemory internal/adapters/inbound/cli internal/adapters/outbound/compose"; \
+	for pkg in $$DEV_PKGS; do \
+		if echo "$$PROD_DEPS" | grep -q "github.com/pocket/hexagon/spire/$$pkg"; then \
+			echo "✗ ERROR: Production build includes dev package: $$pkg"; \
+			exit 1; \
+		fi; \
+	done; \
+	echo "  ✓ No dev packages in production dependencies"
 	@echo "→ Building production binary..."
 	@go build -o /tmp/test-prod ./cmd 2>&1
+	@echo "  ✓ Production build successful"
 	@echo "→ Building dev binary..."
 	@go build -tags=dev -o /tmp/test-dev ./cmd 2>&1
+	@echo "  ✓ Dev build successful"
 	@echo "→ Verifying production tests exclude dev tests..."
 	@if go test -list . ./internal/domain 2>&1 | grep -q "TestSelector\|TestIdentityMapper"; then \
 		echo "✗ ERROR: Production build includes dev tests!"; \
 		exit 1; \
 	fi
+	@echo "  ✓ Dev tests excluded from production"
 	@echo "→ Verifying dev tests run with dev tags..."
 	@if ! go test -tags=dev -list . ./internal/domain 2>&1 | grep -q "TestSelector\|TestIdentityMapper"; then \
 		echo "✗ ERROR: Dev tests not found with -tags=dev!"; \
 		exit 1; \
 	fi
-	@echo "→ Checking production binary for dev symbols..."
-	@if go tool nm /tmp/test-prod 2>/dev/null | grep -i "selector\|identitymapper"; then \
-		echo "✗ ERROR: Dev symbols found in production binary!"; \
-		exit 1; \
-	fi
+	@echo "  ✓ Dev tests found with dev tags"
 	@rm -f /tmp/test-prod /tmp/test-dev
 	@echo "✓ Production build check passed"
 
@@ -171,15 +230,36 @@ verify-spire:
 	@echo "Running comprehensive SPIRE adapter verification..."
 	@bash scripts/verify-implementation.sh
 
+## check-spire-ready: Verify SPIRE infrastructure is running
+check-spire-ready: check-prereqs-k8s
+	@echo "Checking SPIRE infrastructure..."
+	@if ! minikube status -p minikube &>/dev/null; then \
+		echo "✗ ERROR: Minikube is not running"; \
+		echo "  Run 'make minikube-up' to start the cluster"; \
+		exit 1; \
+	fi
+	@echo "  ✓ Minikube is running"
+	@if ! kubectl get namespace spire-system &>/dev/null; then \
+		echo "✗ ERROR: SPIRE is not deployed"; \
+		echo "  Run 'make minikube-up' to deploy SPIRE"; \
+		exit 1; \
+	fi
+	@echo "  ✓ SPIRE namespace exists"
+	@if ! kubectl get pods -n spire-system 2>/dev/null | grep -q "Running"; then \
+		echo "✗ ERROR: SPIRE pods are not running"; \
+		echo "  Check status with 'make minikube-status'"; \
+		exit 1; \
+	fi
+	@echo "  ✓ SPIRE pods are running"
+	@echo "✓ SPIRE infrastructure is ready"
+
 ## register-test-workload: Register test workload in SPIRE (required before test-integration)
-register-test-workload:
+register-test-workload: check-spire-ready
 	@bash scripts/register-test-workload.sh
 
-## test-integration: Run integration tests against live SPIRE (requires minikube-up and register-test-workload)
-test-integration:
+## test-integration: Run integration tests against live SPIRE
+test-integration: check-spire-ready register-test-workload
 	@echo "Running integration tests against SPIRE in Kubernetes..."
-	@echo "Note: This creates a test pod with socket access"
-	@echo "Note: Run 'make register-test-workload' first if tests fail with 'no identity issued'"
 	@bash scripts/run-integration-tests.sh
 
 ## test-prod-binary: Test production binary against live SPIRE in Minikube
@@ -225,7 +305,7 @@ minikube-down:
 
 ## minikube-status: Show Minikube infrastructure status
 minikube-status:
-	@cd infra/dev/minikube/scripts && ./cluster-down.sh status
+	@cd infra/dev/minikube/scripts && ./cluster-status.sh
 
 ## minikube-delete: Delete Minikube cluster completely
 minikube-delete:
@@ -249,6 +329,7 @@ ci-build: check-prereqs prod-build dev-build test-prod-build
 ## refactor-install-tools: Install refactoring analysis tools
 refactor-install-tools:
 	@echo "Installing refactoring analysis tools..."
+	@go install honnef.co/go/tools/cmd/staticcheck@latest
 	@go install github.com/fzipp/gocyclo/cmd/gocyclo@latest
 	@go install github.com/uudashr/gocognit/cmd/gocognit@latest
 	@go install golang.org/x/tools/cmd/goimports@latest
@@ -260,17 +341,17 @@ refactor-baseline:
 	@echo "Generating refactoring baseline..."
 	@mkdir -p docs/refactoring
 	@$(shell date) > docs/refactoring/baseline.txt
-	@echo "\n=== File Sizes (Top 20) ===" >> docs/refactoring/baseline.txt
+	@printf "\n=== File Sizes (Top 20) ===\n" >> docs/refactoring/baseline.txt
 	@find . -name "*.go" -not -path "./vendor/*" -not -path "./.git/*" | \
 		xargs wc -l | sort -rn | head -20 >> docs/refactoring/baseline.txt
-	@echo "\n=== Cyclomatic Complexity (>15) ===" >> docs/refactoring/baseline.txt
+	@printf "\n=== Cyclomatic Complexity (>15) ===\n" >> docs/refactoring/baseline.txt
 	@gocyclo -over 15 . >> docs/refactoring/baseline.txt 2>&1 || echo "  (gocyclo not installed - run 'make refactor-install-tools')"
-	@echo "\n=== Test Coverage ===" >> docs/refactoring/baseline.txt
+	@printf "\n=== Test Coverage ===\n" >> docs/refactoring/baseline.txt
 	@go test ./... -coverprofile=docs/refactoring/coverage_before.out > /dev/null 2>&1
 	@go tool cover -func=docs/refactoring/coverage_before.out | tail -1 >> docs/refactoring/baseline.txt
-	@echo "\n=== Test Execution Time ===" >> docs/refactoring/baseline.txt
+	@printf "\n=== Test Execution Time ===\n" >> docs/refactoring/baseline.txt
 	@{ time go test ./... > /dev/null 2>&1; } 2>> docs/refactoring/baseline.txt || true
-	@echo "\nBaseline saved to docs/refactoring/baseline.txt"
+	@printf "\nBaseline saved to docs/refactoring/baseline.txt\n"
 	@cat docs/refactoring/baseline.txt
 
 ## refactor-compare: Compare before/after refactoring metrics
@@ -282,42 +363,42 @@ refactor-compare:
 	fi
 	@mkdir -p docs/refactoring
 	@$(shell date) > docs/refactoring/comparison.txt
-	@echo "\n=== FILE SIZES COMPARISON ===" >> docs/refactoring/comparison.txt
-	@echo "\nTop 5 BEFORE:" >> docs/refactoring/comparison.txt
+	@printf "\n=== FILE SIZES COMPARISON ===\n" >> docs/refactoring/comparison.txt
+	@printf "\nTop 5 BEFORE:\n" >> docs/refactoring/comparison.txt
 	@grep -A 5 "File Sizes" docs/refactoring/baseline.txt | tail -5 >> docs/refactoring/comparison.txt
-	@echo "\nTop 5 AFTER:" >> docs/refactoring/comparison.txt
+	@printf "\nTop 5 AFTER:\n" >> docs/refactoring/comparison.txt
 	@find . -name "*.go" -not -path "./vendor/*" -not -path "./.git/*" | \
 		xargs wc -l | sort -rn | head -5 >> docs/refactoring/comparison.txt
-	@echo "\n=== COVERAGE COMPARISON ===" >> docs/refactoring/comparison.txt
+	@printf "\n=== COVERAGE COMPARISON ===\n" >> docs/refactoring/comparison.txt
 	@go test ./... -coverprofile=docs/refactoring/coverage_after.out > /dev/null 2>&1
-	@echo "\nBEFORE:" >> docs/refactoring/comparison.txt
+	@printf "\nBEFORE:\n" >> docs/refactoring/comparison.txt
 	@grep "total:" docs/refactoring/baseline.txt >> docs/refactoring/comparison.txt || echo "  (coverage data not found in baseline)"
-	@echo "\nAFTER:" >> docs/refactoring/comparison.txt
+	@printf "\nAFTER:\n" >> docs/refactoring/comparison.txt
 	@go tool cover -func=docs/refactoring/coverage_after.out | tail -1 >> docs/refactoring/comparison.txt
-	@echo "\n=== SUMMARY ===" >> docs/refactoring/comparison.txt
-	@echo "\nComparison saved to docs/refactoring/comparison.txt"
+	@printf "\n=== SUMMARY ===\n" >> docs/refactoring/comparison.txt
+	@printf "\nComparison saved to docs/refactoring/comparison.txt\n"
 	@cat docs/refactoring/comparison.txt
 
 ## refactor-check: Run all refactoring validation checks
 refactor-check:
 	@echo "Running refactoring checks..."
-	@echo "\n→ Running tests..."
+	@printf "\n→ Running tests...\n"
 	@go test ./... -v -count=1 || (echo "✗ Tests failed" && exit 1)
-	@echo "\n→ Running staticcheck..."
+	@printf "\n→ Running staticcheck...\n"
 	@staticcheck ./... || (echo "✗ Staticcheck failed" && exit 1)
-	@echo "\n→ Running go vet..."
+	@printf "\n→ Running go vet...\n"
 	@go vet ./... || (echo "✗ Go vet failed" && exit 1)
-	@echo "\n→ Checking imports..."
+	@printf "\n→ Checking imports...\n"
 	@goimports -l . | (! grep .) || (echo "⚠ WARNING: Some files need goimports formatting" && goimports -l .)
-	@echo "\n→ Running golangci-lint..."
+	@printf "\n→ Running golangci-lint...\n"
 	@golangci-lint run --timeout=5m || echo "⚠ WARNING: golangci-lint found issues"
-	@echo "\n→ Checking cyclomatic complexity..."
+	@printf "\n→ Checking cyclomatic complexity...\n"
 	@if [ -n "$${STRICT}" ]; then \
 		gocyclo -over 15 . && (echo "✗ FAIL: High complexity detected in strict mode" && exit 1) || echo "✓ Complexity OK"; \
 	else \
 		gocyclo -over 15 . && echo "⚠ WARNING: High complexity detected" || echo "✓ Complexity OK"; \
 	fi
-	@echo "\n→ Checking file sizes..."
+	@printf "\n→ Checking file sizes...\n"
 	@LARGE_FILES=$$(find . -name "*.go" -not -path "./vendor/*" | xargs wc -l | awk '$$1 > 500 {print}' | wc -l); \
 		if [ $$LARGE_FILES -gt 0 ]; then \
 			if [ -n "$${STRICT}" ]; then \
@@ -331,7 +412,7 @@ refactor-check:
 		else \
 			echo "✓ All files under 500 lines"; \
 		fi
-	@echo "\n✅ All checks passed"
+	@printf "\n✅ All checks passed\n"
 
 ## refactor-clean: Remove generated refactoring files
 refactor-clean:
