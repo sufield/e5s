@@ -6,7 +6,7 @@ The End-to-End (E2E) test suite validates the complete SPIRE workload identity f
 
 The E2E test suite verifies that the SPIRE implementation works correctly in a realistic multi-service environment, testing the complete flow from workload attestation through mTLS-authenticated service-to-service communication.
 
-**Implemented** in `test/e2e/e2e_test.go`
+Implemented in `test/e2e/e2e_test.go`
 
 E2E tests validate:
 
@@ -289,7 +289,7 @@ Test → Create X.509 Source (with rotation enabled)
 - ✅ Certificate is currently valid
 - ✅ Rotation mechanism operational (serial may change in long tests)
 
-**Note**: To truly test rotation, SPIRE would need short TTLs configured (e.g., 30 seconds). In production, SVIDs typically have 1-hour TTLs. This test verifies the rotation mechanism is in place, even if rotation doesn't occur during the test window.
+To truly test rotation, SPIRE would need short TTLs configured (e.g., 30 seconds). In production, SVIDs typically have 1-hour TTLs. This test verifies the rotation mechanism is in place, even if rotation doesn't occur during the test window.
 
 **Example Output**:
 ```
@@ -914,7 +914,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: '1.21'
+          go-version: '1.25'
 
       - name: Start Minikube
         uses: medyagh/setup-minikube@latest

@@ -101,9 +101,9 @@ Create a test pod with socket access:
 ```bash
 # Create test pod (this will take a while)
 kubectl run spire-test \
-  --image=golang:1.21 \
+  --image=golang:1.25 \
   --namespace=spire-system \
-  --overrides='{"spec":{"volumes":[{"name":"spire-socket","hostPath":{"path":"/tmp/spire-agent/public","type":"Directory"}}],"containers":[{"name":"spire-test","image":"golang:1.21","command":["sleep","infinity"],"volumeMounts":[{"name":"spire-socket","mountPath":"/spire-socket"}],"env":[{"name":"SPIRE_AGENT_SOCKET","value":"unix:///spire-socket/api.sock"}]}]}}'
+  --overrides='{"spec":{"volumes":[{"name":"spire-socket","hostPath":{"path":"/tmp/spire-agent/public","type":"Directory"}}],"containers":[{"name":"spire-test","image":"golang:1.25","command":["sleep","infinity"],"volumeMounts":[{"name":"spire-socket","mountPath":"/spire-socket"}],"env":[{"name":"SPIRE_AGENT_SOCKET","value":"unix:///spire-socket/api.sock"}]}]}}'
 
 # Wait for pod
 kubectl wait --for=condition=Ready pod/spire-test -n spire-system --timeout=60s

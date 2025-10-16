@@ -178,7 +178,7 @@ jobs:
 ### Building for Production
 ```bash
 # Dockerfile
-FROM golang:1.21 AS builder
+FROM golang:1.25 AS builder
 WORKDIR /app
 COPY . .
 RUN go build -o /bin/agent ./cmd/agent  # Excludes dev code
