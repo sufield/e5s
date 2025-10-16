@@ -24,6 +24,11 @@ func main() {
 	// Load configuration from environment with SPIFFE-compatible naming
 	cfg := loadConfig()
 
+	// Validate configuration
+	if err := validateConfig(cfg); err != nil {
+		log.Fatalf("Configuration error: %v", err)
+	}
+
 	// Create the mTLS server
 	log.Println("Creating mTLS server with configuration:")
 	log.Printf("  Socket: %s", cfg.WorkloadAPI.SocketPath)
@@ -96,8 +101,23 @@ func loadConfig() ports.MTLSConfig {
 	cfg.HTTP.ReadTimeout = 15 * time.Second
 	cfg.HTTP.WriteTimeout = 30 * time.Second
 	cfg.HTTP.IdleTimeout = 120 * time.Second
+	// Note: MaxHeaderBytes would be set in adapter (not in port config)
 
 	return cfg
+}
+
+// validateConfig validates the configuration and returns an error if invalid.
+func validateConfig(cfg ports.MTLSConfig) error {
+	if cfg.WorkloadAPI.SocketPath == "" {
+		return fmt.Errorf("workload API socket path is required")
+	}
+	if cfg.SPIFFE.AllowedPeerID == "" && cfg.SPIFFE.AllowedTrustDomain == "" {
+		return fmt.Errorf("configure ALLOWED_CLIENT_ID or ALLOWED_TRUST_DOMAIN")
+	}
+	if cfg.HTTP.Address == "" {
+		return fmt.Errorf("server address is required")
+	}
+	return nil
 }
 
 // registerHandlers registers all HTTP handlers with the server.
@@ -107,8 +127,8 @@ func registerHandlers(server ports.MTLSServer) {
 		handler http.Handler
 	}{
 		{"/", http.HandlerFunc(handleRoot)},
-		{"/api/hello", http.HandlerFunc(handleHello)},
-		{"/api/identity", http.HandlerFunc(handleIdentity)},
+		{"/api/hello", requireMethods("GET")(http.HandlerFunc(handleHello))},
+		{"/api/identity", requireMethods("GET")(http.HandlerFunc(handleIdentity))},
 		{"/health", http.HandlerFunc(handleHealth)},
 	}
 
@@ -116,6 +136,23 @@ func registerHandlers(server ports.MTLSServer) {
 		if err := server.Handle(h.pattern, h.handler); err != nil {
 			log.Fatalf("Failed to register handler for %s: %v", h.pattern, err)
 		}
+	}
+}
+
+// requireMethods is a middleware that enforces HTTP method restrictions.
+func requireMethods(methods ...string) func(http.Handler) http.Handler {
+	allowed := make(map[string]struct{}, len(methods))
+	for _, m := range methods {
+		allowed[m] = struct{}{}
+	}
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if _, ok := allowed[r.Method]; !ok {
+				writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
 	}
 }
 
@@ -135,11 +172,11 @@ func handleRoot(w http.ResponseWriter, r *http.Request) {
 	// Use port-level identity accessor (adapter-agnostic)
 	id, ok := ports.IdentityFrom(r.Context())
 	if !ok {
-		http.Error(w, "No identity", http.StatusInternalServerError)
+		http.Error(w, "Unauthorized: missing identity", http.StatusUnauthorized)
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/plain")
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	fmt.Fprintf(w, "Success! Authenticated as: %s\n", id.SPIFFEID)
 	log.Printf("Root request from: %s", id.SPIFFEID)
 }
@@ -149,7 +186,7 @@ func handleHello(w http.ResponseWriter, r *http.Request) {
 	// Use port-level identity accessor (adapter-agnostic)
 	id, ok := ports.IdentityFrom(r.Context())
 	if !ok {
-		writeJSONError(w, http.StatusInternalServerError, "No identity")
+		writeJSONError(w, http.StatusUnauthorized, "missing identity")
 		return
 	}
 
@@ -167,7 +204,7 @@ func handleIdentity(w http.ResponseWriter, r *http.Request) {
 	// Use port-level identity accessor (adapter-agnostic)
 	id, ok := ports.IdentityFrom(r.Context())
 	if !ok {
-		writeJSONError(w, http.StatusInternalServerError, "No identity")
+		writeJSONError(w, http.StatusUnauthorized, "missing identity")
 		return
 	}
 
@@ -198,10 +235,12 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 
 // writeJSON writes a JSON response with the given status code.
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(v); err != nil {
-		log.Printf("Error encoding JSON: %v", err)
+	enc := json.NewEncoder(w)
+	enc.SetEscapeHTML(false) // No HTML escaping for SPIFFE IDs
+	if err := enc.Encode(v); err != nil {
+		log.Printf("json encode error: %v", err)
 	}
 }
 
