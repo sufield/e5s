@@ -357,11 +357,11 @@ The project has comprehensive test coverage with both unit and integration tests
 
 ```bash
 # Run unit tests (fast, no dependencies)
-go test ./internal/adapters/... -short
+make test
 
-# Run integration tests (requires SPIRE in Minikube)
-make minikube-up
-go test -tags=integration ./internal/adapters/... -v
+# Run integration tests (automatic - checks SPIRE, registers workloads, runs tests)
+make minikube-up         # Start SPIRE infrastructure (once)
+make test-integration    # Run integration tests
 
 # Run all tests with coverage
 go test -cover ./internal/...
