@@ -21,14 +21,15 @@ Step-by-step instructions for running the mTLS server examples on Ubuntu 24.04.
 ### 1. Install Go 1.25+
 
 ```bash
-# Download Go 1.25 (or later)
-wget https://go.dev/dl/go1.25.0.linux-amd64.tar.gz
+# Download Go 1.25 (use latest patch release)
+# Check https://go.dev/dl/ for the latest 1.25.x version
+wget https://go.dev/dl/go1.25.3.linux-amd64.tar.gz
 
 # Remove old Go installation (if exists)
 sudo rm -rf /usr/local/go
 
 # Extract and install
-sudo tar -C /usr/local -xzf go1.25.0.linux-amd64.tar.gz
+sudo tar -C /usr/local -xzf go1.25.3.linux-amd64.tar.gz
 
 # Add to PATH (add to ~/.bashrc for persistence)
 export PATH=$PATH:/usr/local/go/bin
@@ -37,8 +38,10 @@ export PATH=$PATH:$GOPATH/bin
 
 # Verify installation
 go version
-# Expected output: go version go1.25.0 linux/amd64
+# Expected output: go version go1.25.3 linux/amd64 (or latest patch)
 ```
+
+**Note**: Always use the latest patch release (e.g., 1.25.3 instead of 1.25.0) for bug fixes and security updates. Check [go.dev/dl](https://go.dev/dl/) for the current version.
 
 If you already have Go 1.25+ installed, skip this step and verify with `go version`.
 
@@ -223,7 +226,10 @@ In a new terminal:
 cd ~/spire/spire-1.13.2
 
 # Generate a join token for the agent
-JOIN_TOKEN=$(./bin/spire-server token generate -spiffeID spiffe://example.org/host -output json | jq -r '.value')
+JOIN_TOKEN=$(
+  ./bin/spire-server token generate -spiffeID spiffe://example.org/host \
+  | sed -n 's/^Token: //p'
+)
 
 echo "Join token: $JOIN_TOKEN"
 ```
@@ -239,6 +245,7 @@ agent {
     server_address = "127.0.0.1"
     server_port = "8081"
     socket_path = "/tmp/spire-agent/public/api.sock"
+    insecure_bootstrap = true
 }
 
 plugins {
@@ -259,6 +266,8 @@ plugins {
 EOF
 ```
 
+**Note**: `insecure_bootstrap = true` is used for testing/development only. In production, use `trust_bundle_path` or `trust_bundle_url` instead.
+
 ### 3. Start the Agent
 
 ```bash
@@ -277,7 +286,7 @@ cd ~/spire/spire-1.13.2
 ### 4. Verify Agent is Running
 
 ```bash
-# Check socket exists
+# Check socket exists and permissions
 ls -la /tmp/spire-agent/public/api.sock
 # Expected: srwxr-xr-x 1 user user 0 Oct 16 12:34 /tmp/spire-agent/public/api.sock
 
@@ -301,12 +310,13 @@ cd ~/spire/spire-1.13.2
 USER_UID=$(id -u)
 
 # Create server registration entry
+# The -dns localhost is required because clients connect to https://localhost:8443
+# TLS verification checks the server certificate's DNS SANs
 ./bin/spire-server entry create \
     -spiffeID spiffe://example.org/server \
     -parentID spiffe://example.org/host \
     -selector unix:uid:$USER_UID \
-    -dns localhost \
-    -dns 127.0.0.1
+    -dns localhost
 
 # Expected output:
 # Entry ID         : <uuid>
@@ -491,9 +501,9 @@ Body: {"status":"healthy"}
 # Fetch workload SVID (verifies agent is working)
 cd ~/spire/spire-1.13.2
 ./bin/spire-agent api fetch x509 -socketPath /tmp/spire-agent/public/api.sock
-
-# Expected: Shows X.509 SVID details with SPIFFE ID spiffe://example.org/server
 ```
+
+**Expected Output**: Shows X.509 SVID(s) for the calling process. Since both server and client are registered with your UID, you may see both SVIDs. This confirms the agent can issue SVIDs matching your workload's selectors (`unix:uid:$USER_UID`).
 
 ---
 
@@ -537,13 +547,15 @@ Returns detailed identity and request information.
 ```
 
 ### 4. `GET /health` - Health check
-Returns server health status (no authentication).
+Returns server health status (no authentication required).
 
 ```json
 {
   "status": "healthy"
 }
 ```
+
+**Note**: The `/health` endpoint returns 200 OK without requiring mTLS authentication, while `/`, `/api/hello`, and `/api/identity` require a valid SPIFFE SVID. Use this to differentiate authentication failures from health issues.
 
 ---
 
@@ -558,11 +570,13 @@ Returns server health status (no authentication).
 # Check agent is running
 ps aux | grep spire-agent
 
-# Check socket exists
+# Check socket exists and permissions
 ls -la /tmp/spire-agent/public/api.sock
 
-# Check socket permissions
-sudo chmod 777 /tmp/spire-agent/public/api.sock
+# If permission denied, ensure your user can access the socket
+# The agent creates the socket with proper permissions by default
+# Run client/server as the same user as the agent for best security
+# Only use chmod as a last resort (avoid chmod 777 in production)
 
 # Restart agent if needed
 pkill spire-agent
@@ -685,6 +699,8 @@ rm -rf /tmp/spire-server /tmp/spire-agent
 # Remove built binary
 rm /tmp/mtls-server
 ```
+
+**Note**: Be careful with `pkill` on shared development machines as it may kill processes owned by other users with similar names. For safer cleanup, run services in separate terminals and use Ctrl+C, or store PIDs in files and kill by PID.
 
 ---
 
