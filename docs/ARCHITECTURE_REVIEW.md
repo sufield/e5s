@@ -1,6 +1,4 @@
-# Architecture Review (Historical)
-
-**Status**: Archived - decisions implemented
+# Architecture Review
 
 This document analyzed two architectural concerns during initial design:
 1. Port placement (`internal/ports/` vs `internal/app/ports/`)

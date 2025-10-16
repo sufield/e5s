@@ -18,7 +18,7 @@ This document describes the hexagonal architecture implementation of the SPIRE W
 
 ## Overview
 
-This project implements SPIRE's Workload API using hexagonal (ports and adapters) architecture. The design enables:
+This project implements SPIRE's Workload API using hexagonal architecture. The design enables:
 
 1. **Separation of concerns**: Domain logic isolated from infrastructure
 2. **Testability**: In-memory implementations for testing without real SPIRE
@@ -269,6 +269,8 @@ func (s *IdentityClientService) IssueIdentity(
 
 **Purpose**: Implement ports with infrastructure
 
+TODO
+
 **Structure**:
 ```
 adapters/
@@ -428,8 +430,7 @@ func (r *InMemoryRegistry) FindBySelectors(
 └─────────────┘
 ```
 
-**Notes**:
-- **ALL operations delegated to external SPIRE**
+- ALL operations delegated to external SPIRE
 - No local registry, attestation, or selector matching
 - SPIRE Agent handles credential extraction automatically
 - SPIRE Server manages registration entries and selector matching
@@ -442,8 +443,6 @@ func (r *InMemoryRegistry) FindBySelectors(
 **Purpose**: Demonstrate hexagonal architecture without HTTP infrastructure
 
 **Important**: The CLI demo uses `InMemoryAgent` which is **NOT** used for HTTP mTLS examples. HTTP services use production `identityserver` adapter connecting to real SPIRE Workload API.
-
-#### CLI Demo
 
 ```
 ┌────────────────┐
@@ -493,6 +492,7 @@ The agent is placed as an outbound adapter because:
 4. **Hexagonal principle**: Inbound adapters drive the application, outbound adapters are driven by it
 
 **Flow**:
+
 ```
 CLI (drives application)
   ↓
@@ -612,7 +612,6 @@ Just because CLI calls it doesn't make it inbound. The agent is called BY the ap
 └────────────────────────────┘
 ```
 
-**Notes**:
 - Seeding happens **before** runtime (configuration phase)
 - Registry is **sealed** after seeding (immutable)
 - Agent gets own SVID during bootstrap
@@ -678,7 +677,7 @@ type IdentityMapperRegistry interface {
 
 **Status**: ✅ **Complete** - Production SPIRE adapters fully implemented and tested
 
-**Purpose**: Production integration with go-spiffe SDK that **fully delegates** to external SPIRE infrastructure
+**Purpose**: Production integration with go-spiffe SDK that fully delegates to external SPIRE infrastructure
 
 **Architecture**: Production mode delegates ALL operations to external SPIRE:
 - ❌ **No local registry** - SPIRE Server manages registration entries
@@ -693,7 +692,8 @@ type IdentityMapperRegistry interface {
 - ✅ X.509 SVID support
 - ✅ Automatic workload attestation through external SPIRE Agent
 
-**Implemented Components**:
+**Implemented**:
+
 - `SPIREClient`: go-spiffe Workload API client wrapper with connection management
 - `Agent`: Production agent that **fully delegates** to external SPIRE (no local registry/attestor)
   - Fetches SVIDs directly from SPIRE Workload API
@@ -807,7 +807,7 @@ var ErrNoAttestationData = errors.New("no attestation data available")
 // ... 20+ total errors
 ```
 
-**Usage Pattern**:
+**Usage**:
 ```go
 // Adapter wraps with context
 mapper, err := registry.FindBySelectors(ctx, selectors)
@@ -916,7 +916,7 @@ tlsConfig := &tls.Config{
 
 ### Unit Tests
 
-**Pattern**: Mock ports, test domain logic
+Mock ports, test domain logic
 
 ```go
 type MockRegistry struct {
@@ -942,7 +942,7 @@ func TestFetchWithNoMatch(t *testing.T) {
 
 ### Integration Tests
 
-**Pattern**: Use in-memory implementations for full flow
+Use in-memory implementations for full flow
 
 ```go
 func TestWorkloadAttestation(t *testing.T) {
@@ -1061,9 +1061,7 @@ func (p *SDKTrustDomainParser) FromString(ctx context.Context, name string) (*do
 ## References
 
 - [Hexagonal Architecture](https://alistair.cockburn.us/hexagonal-architecture/)
-- [Domain-Driven Design](https://martinfowler.com/bliki/DomainDrivenDesign.html)
 - [SPIFFE Specification](https://github.com/spiffe/spiffe)
 - [SPIRE Documentation](https://spiffe.io/docs/latest/spire/)
 - [go-spiffe SDK](https://github.com/spiffe/go-spiffe)
 - [Port Contracts](docs/PORT_CONTRACTS.md)
-- [SDK Migration Guide](docs/SDK_MIGRATION.md)
