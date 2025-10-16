@@ -9,6 +9,7 @@
 #   PKG             - Package to test (default: ./internal/adapters/outbound/spire)
 #   TESTBIN         - Test binary path (default: /tmp/spire-integration.test)
 #   TAGS            - Build tags (default: integration)
+#   KEEP            - Keep pod for inspection (default: false)
 #   TRUST_DOMAIN    - SPIRE trust domain (default: example.org)
 
 set -Eeuo pipefail
@@ -20,14 +21,17 @@ SOCKET_FILE="${SOCKET_FILE:-api.sock}"
 PKG="${PKG:-./internal/adapters/outbound/spire}"
 TESTBIN="${TESTBIN:-/tmp/spire-integration.test}"
 TAGS="${TAGS:-integration}"
+KEEP="${KEEP:-false}"
 TRUST_DOMAIN="${TRUST_DOMAIN:-example.org}"
 
 POD_NAME="spire-integration-test-ci"
 POD_YAML="/tmp/spire-test-pod-ci.yaml"
 
-# Cleanup on exit
+# Cleanup on exit (honors KEEP flag)
 cleanup() {
-    kubectl delete pod -n "$NS" "$POD_NAME" --ignore-not-found=true >/dev/null 2>&1 || true
+    if [ "$KEEP" != "true" ]; then
+        kubectl delete pod -n "$NS" "$POD_NAME" --ignore-not-found=true >/dev/null 2>&1 || true
+    fi
     rm -f "$POD_YAML" "$TESTBIN" || true
 }
 trap cleanup EXIT
@@ -58,6 +62,7 @@ info "Configuration:"
 echo "  Namespace: $NS"
 echo "  Socket: $SOCKET_DIR/$SOCKET_FILE"
 echo "  Package: $PKG"
+echo "  Keep pod: $KEEP"
 echo "  Mode: CI (static binary + distroless)"
 echo ""
 
@@ -92,14 +97,23 @@ fi
 
 success "Found SPIRE Agent: $AGENT_POD"
 
-# Verify socket exists on node
-info "Checking socket existence on node..."
-NODE="$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')"
-if ! minikube ssh -- "test -S ${SOCKET_DIR}/${SOCKET_FILE} -o -d ${SOCKET_DIR}" >/dev/null 2>&1; then
-    error "Socket or directory not present on node: ${SOCKET_DIR}/${SOCKET_FILE}"
+# Verify socket exists (prefer agent pod check - works on any cluster)
+info "Checking Workload API socket availability..."
+if ! kubectl exec -n "$NS" "$AGENT_POD" -- test -S /tmp/spire-agent/public/api.sock >/dev/null 2>&1; then
+    error "Workload API socket not visible inside SPIRE Agent pod"
     exit 1
 fi
-success "Socket verified on node: $NODE"
+success "Workload API socket verified via agent pod"
+
+# Optional: Additional node check if running on Minikube
+if command -v minikube >/dev/null 2>&1; then
+    info "Minikube detected - verifying socket on node..."
+    if ! minikube ssh -- "test -S ${SOCKET_DIR}/${SOCKET_FILE} || test -d ${SOCKET_DIR}" >/dev/null 2>&1; then
+        error "Socket/directory missing on Minikube node: ${SOCKET_DIR}/${SOCKET_FILE}"
+        exit 1
+    fi
+    success "Socket verified on Minikube node"
+fi
 
 # Compile static test binary (no CGO, for distroless)
 # Auto-detect node architecture for cross-platform support
@@ -161,7 +175,7 @@ spec:
       image: gcr.io/distroless/static-debian12:nonroot
       # Direct execution - no shell available in distroless
       command: ["/work/integration.test"]
-      args: ["-test.v"]
+      args: ["-test.v", "-test.timeout=3m"]
       env:
         - name: SPIFFE_ENDPOINT_SOCKET
           value: "unix:///spire-socket/${SOCKET_FILE}"
@@ -219,22 +233,37 @@ echo ""
 # Stream logs from test container (it runs automatically)
 kubectl logs -n "$NS" "$POD_NAME" -c test -f 2>/dev/null || true
 
-# Check exit code from terminated container state
+# Check exit code from terminated container state (with retry to avoid race)
 echo ""
 info "Checking test results..."
-EXIT_CODE="$(kubectl get pod -n "$NS" "$POD_NAME" -o jsonpath='{.status.containerStatuses[?(@.name=="test")].state.terminated.exitCode}' 2>/dev/null || echo "")"
+EXIT_CODE=""
+for i in {1..10}; do
+    EXIT_CODE="$(kubectl get pod -n "$NS" "$POD_NAME" \
+        -o jsonpath='{.status.containerStatuses[?(@.name=="test")].state.terminated.exitCode}' 2>/dev/null || true)"
+    [ -n "$EXIT_CODE" ] && break
+    sleep 0.5
+done
 
-# If exit code is empty, container might still be running or failed to start
+# If exit code is still empty, container might have failed to start
 if [ -z "$EXIT_CODE" ]; then
     error "Could not determine test exit code"
     kubectl describe pod -n "$NS" "$POD_NAME" || true
+    kubectl logs -n "$NS" "$POD_NAME" -c test --previous 2>/dev/null || true
     EXIT_CODE=1
 elif [ "$EXIT_CODE" = "0" ]; then
     success "Integration tests passed!"
 else
     error "Integration tests failed (exit code: $EXIT_CODE)"
+    # Surface failure context for debugging
+    kubectl describe pod -n "$NS" "$POD_NAME" || true
 fi
 
-info "Cleaning up..."
+# Cleanup (or keep for inspection)
+if [ "$KEEP" = "true" ]; then
+    info "Keeping test pod for inspection (KEEP=true)"
+    info "To delete manually: kubectl delete pod -n $NS $POD_NAME"
+else
+    info "Cleaning up..."
+fi
 
 exit $EXIT_CODE

@@ -96,23 +96,32 @@ fi
 
 success "Found SPIRE Agent: $AGENT_POD"
 
-# Verify socket exists on node
-info "Checking socket existence on node..."
-NODE="$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')"
-if ! minikube ssh -- "test -S ${SOCKET_DIR}/${SOCKET_FILE} -o -d ${SOCKET_DIR}" >/dev/null 2>&1; then
-    error "Socket or directory not present on node: ${SOCKET_DIR}/${SOCKET_FILE}"
+# Verify socket exists (prefer agent pod check - works on any cluster)
+info "Checking Workload API socket availability..."
+if ! kubectl exec -n "$NS" "$AGENT_POD" -- test -S /tmp/spire-agent/public/api.sock >/dev/null 2>&1; then
+    error "Workload API socket not visible inside SPIRE Agent pod"
     exit 1
 fi
-success "Socket verified on node: $NODE"
+success "Workload API socket verified via agent pod"
+
+# Optional: Additional node check if running on Minikube
+if command -v minikube >/dev/null 2>&1; then
+    info "Minikube detected - verifying socket on node..."
+    if ! minikube ssh -- "test -S ${SOCKET_DIR}/${SOCKET_FILE} || test -d ${SOCKET_DIR}" >/dev/null 2>&1; then
+        error "Socket/directory missing on Minikube node: ${SOCKET_DIR}/${SOCKET_FILE}"
+        exit 1
+    fi
+    success "Socket verified on Minikube node"
+fi
 
 # Compile test binary locally (fast, deterministic)
 # Auto-detect node architecture for cross-platform support
 NODE_ARCH=$(kubectl get nodes -o jsonpath='{.items[0].status.nodeInfo.architecture}')
 GOARCH="${GOARCH:-$NODE_ARCH}"
 
-info "Compiling integration test binary (GOARCH=$GOARCH)..."
-if ! GOOS=linux GOARCH="$GOARCH" go test -tags="$TAGS" -c -o "$TESTBIN" "$PKG"; then
-    error "Failed to compile test binary"
+info "Compiling static integration test binary (GOARCH=$GOARCH)..."
+if ! CGO_ENABLED=0 GOOS=linux GOARCH="$GOARCH" go test -tags="$TAGS" -c -o "$TESTBIN" "$PKG"; then
+    error "Failed to compile static test binary"
     exit 1
 fi
 
@@ -161,6 +170,9 @@ spec:
         limits:
           cpu: "500m"
           memory: "256Mi"
+      securityContext:
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
 EOF
 
 # Delete existing pod unless KEEP=true
@@ -201,16 +213,18 @@ kubectl exec -n "$NS" "$POD_NAME" -- chmod +x /work/integration.test >/dev/null 
 
 # Run tests
 echo ""
-info "Running integration tests..."
+info "Running integration tests (timeout: 3m)..."
 echo ""
 
-if kubectl exec -n "$NS" "$POD_NAME" -- /work/integration.test -test.v; then
+if kubectl exec -n "$NS" "$POD_NAME" -- /work/integration.test -test.v -test.timeout=3m; then
     echo ""
     success "Integration tests passed!"
     EXIT_CODE=0
 else
     echo ""
     error "Integration tests failed"
+    # Surface failure context for debugging
+    kubectl describe pod -n "$NS" "$POD_NAME" || true
     EXIT_CODE=1
 fi
 
