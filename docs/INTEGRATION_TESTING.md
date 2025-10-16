@@ -23,29 +23,43 @@ dial unix /tmp/spire-agent/public/api.sock: connect: no such file or directory
 To run integration tests that **ALL PASS**:
 
 ```bash
-make minikube-up              # Start SPIRE infrastructure
-make register-test-workload   # Register test pod as a workload
-make test-integration         # Run tests (should all pass)
+make minikube-up        # Start SPIRE infrastructure
+make test-integration   # Automatically checks SPIRE + registers workload + runs tests
 ```
+
+The `test-integration` target now automatically:
+1. ✅ Verifies SPIRE is running (`check-spire-ready`)
+2. ✅ Registers the test workload (`register-test-workload`)
+3. ✅ Runs the integration tests
+
+**Note:** You can still run `make register-test-workload` manually if needed, but it's no longer required.
 
 ## Test Results
 
-### Without Workload Registration
+### Automatic Prerequisites
 
-If you run `make test-integration` without registering the workload first:
+The `test-integration` target now includes built-in checks:
 
+```bash
+$ make test-integration
+Checking SPIRE infrastructure...
+  ✓ Minikube is running
+  ✓ SPIRE namespace exists
+  ✓ SPIRE pods are running
+✓ SPIRE infrastructure is ready
+Registering test workload...
+Running integration tests against SPIRE in Kubernetes...
 ```
-✅ TestSPIREClientConnection - Connects successfully to SPIRE Agent
-❌ TestFetchX509SVID - FAILS with "no identity issued"
-❌ TestFetchX509Bundle - FAILS with "no identity issued"
-...
+
+If SPIRE isn't running, you'll get clear error messages:
+```
+✗ ERROR: Minikube is not running
+  Run 'make minikube-up' to start the cluster
 ```
 
-This is expected! Run `make register-test-workload` to fix.
+### Expected Test Results
 
-### With Workload Registration
-
-After running `make register-test-workload`:
+When all prerequisites are met:
 
 ```
 ✅ TestSPIREClientConnection - Connects successfully
@@ -59,6 +73,27 @@ After running `make register-test-workload`:
 ```
 
 **All tests pass!** This validates the SPIRE adapters work correctly with live SPIRE infrastructure.
+
+### Troubleshooting
+
+**If tests fail with "no identity issued":**
+```bash
+# Verify workload was registered
+kubectl exec -n spire-system spire-server-0 -- \
+  /opt/spire/bin/spire-server entry show
+
+# Re-register manually if needed
+make register-test-workload
+```
+
+**If Minikube check fails:**
+```bash
+# Check Minikube status
+make minikube-status
+
+# Restart if needed
+make minikube-up
+```
 
 ## Solutions
 
@@ -181,15 +216,19 @@ Even without running integration tests, we know the implementation is correct be
 
 **For Development:**
 ```bash
-# Fast feedback with in-memory
-go test ./...
-make verify
+# Fast unit tests (no infrastructure needed)
+make test
+
+# Full verification (requires SPIRE infrastructure)
+make minikube-up
+make test-integration
 ```
 
 **Before Deployment:**
-1. Verify SPIRE is accessible (Option 1 above)
-2. Test production binary in Minikube (Option 3 above)
-3. Deploy to staging and monitor logs
+1. Run integration tests: `make test-integration`
+2. Test production binary: `make test-prod-binary`
+3. Verify manually (Option 1 below)
+4. Deploy to staging and monitor logs
 
 **In Production:**
 - Monitor SVID fetching via logs
@@ -236,16 +275,30 @@ Create a proper E2E test that:
 
 **Current State**:
 - ✅ Implementation is correct and complete
-- ✅ Unit tests pass (45.8% coverage)
+- ✅ Unit tests pass
 - ✅ SPIRE is running and accessible
-- ⚠️  Integration tests blocked by socket access
+- ✅ Integration tests pass (after workload registration)
+- ✅ Automated testing workflow via `make test-integration`
 
-**Workaround**:
-- Use kubectl to manually verify SPIRE works
-- Trust that correct SDK usage = correct behavior
-- Test in production with monitoring
+**Testing Workflow**:
+```bash
+# 1. Start SPIRE infrastructure
+make minikube-up
 
-**This is a tooling limitation, not an implementation issue.**
+# 2. Run integration tests (automatic prerequisites)
+make test-integration
 
-The adapters are production-ready. The socket access issue is an artifact of the Minikube test environment, not a problem with the code.
+# 3. Test production binary (optional)
+make test-prod-binary
+
+# 4. Check SPIRE status anytime
+make minikube-status
+```
+
+**Manual Verification** (if needed):
+- Use `kubectl exec` to verify SPIRE directly (see Option 1 above)
+- Check workload registration status
+- Monitor logs for debugging
+
+The adapters are **production-ready** and fully tested against live SPIRE infrastructure.
 
