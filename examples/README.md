@@ -117,7 +117,7 @@ go build -o /tmp/mtls-server ./examples/identityserver-example
 /tmp/mtls-server
 ```
 
-**Note**: The examples in this repository (`./examples/identityserver-example`) automatically use the local library code. You don't need any `go.mod` replace directives or special configuration.
+The examples in this repository (`./examples/identityserver-example`) automatically use the local library code. You don't need any `go.mod` replace directives or special configuration.
 
 ---
 
