@@ -1,6 +1,6 @@
 # Control Plane: Registration as Seeded Data
 
-> **Note**: This document describes the **in-memory (development)** implementation. In **production mode** with external SPIRE, the control plane (registry, attestation, matching) is managed entirely by SPIRE Server. See `docs/PRODUCTION_VS_DEVELOPMENT.md` for comparison.
+This document describes the **in-memory (development)** implementation. In **production mode** with external SPIRE, the control plane (registry, attestation, matching) is managed entirely by SPIRE Server. See `docs/PRODUCTION_VS_DEVELOPMENT.md` for comparison.
 
 In this hexagonal, in-memory SPIRE implementation, registration is NOT a runtime operation. There is no "Register workload" API or mutation endpoint. Instead:
 
@@ -18,7 +18,7 @@ This implementation does NOT have a traditional mutable control plane. Instead, 
 
 ---
 
-### ore Control Plane Components
+### Control Plane Components
 
 #### 1. **Server (Identity Issuance)**
 **Location**: `internal/adapters/outbound/inmemory/server.go`
@@ -301,7 +301,7 @@ internal/
 
 ---
 
-### 🔍 What is NOT Control Plane
+### What is NOT Control Plane
 
 These are data plane (runtime) components:
 
@@ -313,9 +313,7 @@ These are data plane (runtime) components:
 
 ---
 
-## Architecture Principles
-
-### ❌ What We DON'T Have
+### What We DON'T Have
 
 - No registration API endpoints
 - No CLI for workload registration
@@ -323,7 +321,7 @@ These are data plane (runtime) components:
 - No public `Register()` method in application services
 - No deprecated `IdentityStore` or `IdentityMapperRepository` interfaces
 
-### ✅ What We DO Have
+### What We DO Have
 
 - Immutable registry seeded at startup from fixtures and sealed
 - Matching logic that resolves selectors → identity credential mappings
@@ -480,8 +478,6 @@ func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload *dom
 ---
 
 ## Design Summary
-
-### Why This Design Works
 
 1. **Seeding is Configuration**: Loading identity mappers from fixtures is infrastructure concern, not domain behavior
 2. **Immutability**: Registry sealed after bootstrap prevents accidental mutations

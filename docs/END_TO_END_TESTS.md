@@ -1,18 +1,14 @@
 # End-to-End Tests Documentation
 
-This document provides comprehensive documentation for the End-to-End (E2E) test suite that validates the complete SPIRE workload identity flow across multiple services.
+The End-to-End (E2E) test suite validates the complete SPIRE workload identity flow across multiple services.
 
 ## Overview
 
 The E2E test suite verifies that the SPIRE implementation works correctly in a realistic multi-service environment, testing the complete flow from workload attestation through mTLS-authenticated service-to-service communication.
 
-**Status**: ✅ **Implemented** in `test/e2e/e2e_test.go`
+**Implemented** in `test/e2e/e2e_test.go`
 
-**Location**: `test/e2e/`
-
-## What E2E Tests Validate
-
-Unlike unit tests (which test individual components in isolation) and integration tests (which test adapter connectivity to SPIRE), E2E tests validate:
+E2E tests validate:
 
 1. **Multi-Service Orchestration**: Three services deployed in Kubernetes communicating via mTLS
 2. **Complete Identity Flow**: Attestation → Registration Matching → SVID Issuance → mTLS Authentication
@@ -21,8 +17,6 @@ Unlike unit tests (which test individual components in isolation) and integratio
 5. **Identity Rotation**: SVID renewal and rotation mechanisms
 6. **Authorization Policies**: Zero-trust security model enforcement
 7. **System-Level Behavior**: Real workload API, real SPIRE Agent/Server, real Kubernetes
-
-## Test Architecture
 
 ### Service Topology
 
@@ -410,7 +404,7 @@ Trust bundle contains 1 CA certificate(s)
 
 ### Software Requirements
 
-- Go 1.21+ (for running tests)
+- Go 1.25+ (for running tests)
 - kubectl configured with cluster access
 - Docker (for building service images)
 - make (for convenience commands)
@@ -881,7 +875,7 @@ make minikube-down
 kubectl delete namespace spire-system
 ```
 
-### Complete Cleanup
+### Cleanup
 
 ```bash
 # Remove everything
@@ -989,39 +983,6 @@ jobs:
 
 ---
 
-### GitLab CI Example
-
-```yaml
-e2e-tests:
-  stage: test
-  image: google/cloud-sdk:latest
-  services:
-    - docker:dind
-  variables:
-    KUBERNETES_VERSION: "1.28.0"
-    MINIKUBE_VERSION: "latest"
-  before_script:
-    - curl -LO "https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64"
-    - install minikube-linux-amd64 /usr/local/bin/minikube
-    - minikube start --driver=docker --kubernetes-version=v${KUBERNETES_VERSION}
-  script:
-    - make minikube-up
-    - kubectl wait --for=condition=ready pod -n spire-system --all --timeout=300s
-    - cd test/e2e && ./build-images.sh
-    - kubectl apply -f test/e2e/manifests/
-    - kubectl wait --for=condition=ready pod -n spire-e2e-test --all --timeout=300s
-    - go test -tags=e2e ./test/e2e/... -v -timeout 15m
-  after_script:
-    - kubectl delete namespace spire-e2e-test || true
-    - minikube delete || true
-  artifacts:
-    when: on_failure
-    paths:
-      - "*.log"
-```
-
----
-
 ## Performance Considerations
 
 ### Expected Test Duration
@@ -1101,7 +1062,7 @@ Authorization: SPIFFE ID validation
 
 ## Summary
 
-The E2E test suite provides comprehensive validation of the complete SPIRE workload identity flow across multiple services. It verifies:
+The E2E test suite provides validation of SPIRE workload identity flow across multiple services. It verifies:
 
 1. ✅ All services can attest and receive valid SVIDs
 2. ✅ Mutual TLS authentication works between services

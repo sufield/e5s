@@ -4,7 +4,7 @@
 
 Applied improvements to the identity server implementation based on best practices and cleaner code patterns.
 
-## Key Improvements
+## Improvements
 
 ### 1. Added `GetMux()` Method to Interface
 
@@ -276,10 +276,3 @@ go func() {
 
 - [sync.Once Documentation](https://pkg.go.dev/sync#Once)
 - [go-spiffe SDK](https://github.com/spiffe/go-spiffe)
-- [PORT_BASED_IMPROVEMENTS.md](PORT_BASED_IMPROVEMENTS.md)
-
----
-
-**Status**: ✅ Complete
-**Date**: 2025-10-07
-**Backward Compatible**: Yes
