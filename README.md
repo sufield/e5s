@@ -65,12 +65,13 @@ func main() {
 
     // Register handlers
     server.Handle("/api/hello", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        clientID, ok := identityserver.GetIdentity(r)
+        // Use port-level identity accessor (adapter-agnostic)
+        id, ok := ports.IdentityFrom(r.Context())
         if !ok {
             http.Error(w, "Unauthorized", http.StatusUnauthorized)
             return
         }
-        fmt.Fprintf(w, "Hello, %s!\n", clientID.String())
+        fmt.Fprintf(w, "Hello, %s!\n", id.SPIFFEID)
     }))
 
     log.Println("Server listening on :8443")
@@ -273,25 +274,27 @@ type MTLSClient interface {
 
 ### Identity Extraction
 
-**Location**: `internal/adapters/inbound/identityserver`
+**Location**: `internal/ports/identity.go`
+
+Handlers access authenticated identity using port-level abstractions:
 
 ```go
-// GetIdentity extracts the authenticated client identity from the request
-// Returns the identity and true if present, zero value and false otherwise
-func GetIdentity(r *http.Request) (spiffeid.ID, bool)
+// Identity represents an authenticated workload identity (port-level abstraction)
+type Identity struct {
+    SPIFFEID    string  // e.g., "spiffe://example.org/client"
+    TrustDomain string  // e.g., "example.org"
+    Path        string  // e.g., "/client"
+}
 
-// RequireIdentity extracts the authenticated client identity from the request
-// Returns ErrNoSPIFFEID if the identity is not present
-func RequireIdentity(r *http.Request) (spiffeid.ID, error)
+// IdentityFrom retrieves the Identity from the request context
+// Returns (identity, true) if present, (zero, false) otherwise
+func IdentityFrom(ctx context.Context) (Identity, bool)
 
-// IdentityFromContext extracts the SPIFFE ID from the context
-// Useful for non-HTTP code or testing
-func IdentityFromContext(ctx context.Context) (spiffeid.ID, bool)
-
-// ContextWithIdentity adds a SPIFFE ID to the context
-// Useful for testing or propagating identity
-func ContextWithIdentity(ctx context.Context, id spiffeid.ID) context.Context
+// WithIdentity stores an Identity in the context (used by adapters)
+func WithIdentity(ctx context.Context, id Identity) context.Context
 ```
+
+The adapter automatically injects `ports.Identity` into the request context during mTLS authentication. Handlers depend on ports, not on adapter-specific code.
 
 ## Domain Entities
 
@@ -399,9 +402,10 @@ func TestMTLSAuthentication(t *testing.T) {
 
     // Register handler
     server.Handle("/test", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        id, ok := identityserver.GetIdentity(r)
+        // Use port-level identity accessor (adapter-agnostic)
+        id, ok := ports.IdentityFrom(r.Context())
         require.True(t, ok)
-        fmt.Fprintf(w, "Hello, %s", id.String())
+        fmt.Fprintf(w, "Hello, %s", id.SPIFFEID)
     }))
 
     // Start server in goroutine (blocks until shutdown)
@@ -522,14 +526,15 @@ The library only authenticates clients via SPIFFE IDs. Authorization decisions a
 
 ```go
 server.Handle("/admin", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-    clientID, ok := identityserver.GetIdentity(r)
+    // Use port-level identity accessor (adapter-agnostic)
+    id, ok := ports.IdentityFrom(r.Context())
     if !ok {
         http.Error(w, "Unauthorized", http.StatusUnauthorized)
         return
     }
 
     // Application decides access control
-    if !isAdmin(clientID) {
+    if !isAdmin(id.SPIFFEID) {
         http.Error(w, "Forbidden", http.StatusForbidden)
         return
     }

@@ -101,6 +101,29 @@ type MTLSConfig struct {
 - `AllowedPeerID`: Specific client SPIFFE ID (exact match)
 - `AllowedTrustDomain`: Any client from trust domain
 
+**Identity Extraction**:
+
+Handlers access authenticated identity using port-level abstractions:
+
+```go
+func handler(w http.ResponseWriter, r *http.Request) {
+    // Use port-level identity accessor (adapter-agnostic)
+    id, ok := ports.IdentityFrom(r.Context())
+    if !ok {
+        http.Error(w, "No identity", http.StatusInternalServerError)
+        return
+    }
+
+    // id.SPIFFEID = "spiffe://example.org/client"
+    // id.TrustDomain = "example.org"
+    // id.Path = "/client"
+
+    fmt.Fprintf(w, "Authenticated as: %s\n", id.SPIFFEID)
+}
+```
+
+The adapter automatically injects `ports.Identity` into the request context during mTLS authentication. Handlers depend on ports, not on adapter-specific code.
+
 **Example Usage**:
 ```go
 server, err := identityserver.New(ctx, ports.MTLSConfig{
@@ -127,7 +150,7 @@ if err != nil {
 server.Start(ctx)  // Blocks until shutdown
 ```
 
-**See Also**: `examples/identityserver-example/` for usage example
+**See Also**: `examples/identityserver-example/` for complete usage example
 
 ---
 

@@ -212,7 +212,8 @@ func (s *spiffeServer) Close() error {
 	return nil
 }
 
-// wrapHandler adds SPIFFE ID extraction middleware to the handler
+// wrapHandler adds identity extraction middleware to the handler.
+// Translates SPIFFE ID from TLS connection → port-level ports.Identity.
 func (s *spiffeServer) wrapHandler(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Verify TLS connection
@@ -221,15 +222,26 @@ func (s *spiffeServer) wrapHandler(handler http.Handler) http.Handler {
 			return
 		}
 
-		// Extract peer SPIFFE ID from TLS connection
+		// Extract peer SPIFFE ID from TLS connection (adapter-specific)
 		peerID, err := spiffetls.PeerIDFromConnectionState(*r.TLS)
 		if err != nil {
 			http.Error(w, "Failed to get peer identity", http.StatusUnauthorized)
 			return
 		}
 
-		// Add SPIFFE ID to request context
-		ctx := context.WithValue(r.Context(), spiffeIDCtxKey, peerID)
+		// Translate SDK type → port-level Identity (adapter responsibility)
+		identity := ports.Identity{
+			SPIFFEID:    peerID.String(),
+			TrustDomain: peerID.TrustDomain().String(),
+			Path:        peerID.Path(),
+		}
+
+		// Inject port-level identity into context (handlers depend on ports, not adapter)
+		ctx := ports.WithIdentity(r.Context(), identity)
+
+		// Also keep SDK-specific ID for internal adapter use (backward compat)
+		ctx = context.WithValue(ctx, spiffeIDCtxKey, peerID)
+
 		handler.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

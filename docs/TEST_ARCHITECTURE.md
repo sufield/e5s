@@ -10,11 +10,11 @@ The test suite is properly organized into **unit tests** and **integration tests
 
 These tests run without external dependencies:
 
-- **Config Validation**: `TestNewHTTPServer_Missing*`, `TestNewSPIFFEHTTPClient_Missing*`
-- **Identity Extraction**: `TestGetSPIFFEID`, `TestGetTrustDomain`, `TestGetPath`
-- **Helper Functions**: `TestGetIDString`, `TestGetPathSegments`
-- **Handler Wrapping**: `TestWrapHandler_NoTLS`, `TestRegisterHandler`
-- **Default Values**: `TestSPIFFEHTTPClient_Defaults` (config struct validation)
+- **Config Validation**: `TestNew_MissingSocketPath`, `TestNew_MissingAllowedClientID`, `TestNew_InvalidClientID`
+- **Identity Extraction**: `TestGetIdentity_Present`, `TestGetIdentity_NotPresent`, `TestRequireIdentity_*`
+- **Handler Wrapping**: `TestWrapHandler_NoTLS`, `TestSpiffeServer_Handle`
+- **Default Values**: `TestNew_AppliesDefaults` (config struct validation)
+- **Resource Cleanup**: `TestSpiffeServer_Close_Idempotent`
 
 **Status**: ✅ All passing (0.003s execution time)
 
@@ -22,11 +22,10 @@ These tests run without external dependencies:
 
 These tests need a live SPIRE agent:
 
-- **Server Creation**: `TestNewHTTPServer_ValidConfig`
-- **Client Creation**: `TestSPIFFEHTTPClient_ValidConfig`, `TestSPIFFEHTTPClient_Defaults`
+- **Server Creation**: `TestNew_ValidConfig`
 - **Full mTLS Flow**: `TestMTLSClientServer` (with `//go:build integration` tag)
 - **Authorization**: `TestMTLSClientServer_AuthorizationFailure`
-- **Health Checks**: `TestMTLSServer_HealthCheck`
+- **Identity Verification**: End-to-end SPIFFE ID extraction and validation
 
 **Status**: ⏭️ Gracefully skip when SPIRE unavailable
 
@@ -35,7 +34,7 @@ These tests need a live SPIRE agent:
 ### 1. Quick Unit Tests (CI/Dev)
 
 ```bash
-go test ./internal/adapters/inbound/httpapi -run 'Test(NewHTTPServer_Missing|GetSPIFFEID|GetTrustDomain)' -v
+go test ./internal/adapters/inbound/identityserver -run 'Test(New_Missing|GetIdentity|RequireIdentity)' -v
 ```
 
 ✅ Fast, no dependencies, always pass
@@ -47,10 +46,10 @@ go test ./internal/adapters/inbound/httpapi -run 'Test(NewHTTPServer_Missing|Get
 make minikube-up
 
 # Run all tests including integration
-go test -tags=integration ./internal/adapters/inbound/httpapi -v
+go test -tags=integration ./internal/adapters/inbound/identityserver -v
 
 # Or run specific integration test
-go test -tags=integration ./internal/adapters/inbound/httpapi -run TestMTLSClientServer -v
+go test -tags=integration ./internal/adapters/inbound/identityserver -run TestMTLSClientServer -v
 ```
 
 ### 3. Check SPIRE Status
@@ -129,11 +128,11 @@ go test -tags=integration ./internal/adapters/inbound/httpapi -v
 ### Expected Output (SPIRE Not Running)
 
 ```
-=== RUN   TestNewHTTPServer_MissingAddress
---- PASS: TestNewHTTPServer_MissingAddress (0.00s)
-=== RUN   TestSPIFFEHTTPClient_Defaults
-    client_test.go:75: Skipping test - SPIRE agent not available: failed to create X509Source: context deadline exceeded
---- SKIP: TestSPIFFEHTTPClient_Defaults (5.00s)
+=== RUN   TestNew_MissingSocketPath
+--- PASS: TestNew_MissingSocketPath (0.00s)
+=== RUN   TestNew_ValidConfig
+    spiffe_server_test.go:75: Skipping test - SPIRE agent not available: failed to create X509Source: context deadline exceeded
+--- SKIP: TestNew_ValidConfig (5.00s)
 ```
 
 ✅ **This is correct behavior** - graceful skip, not failure
@@ -143,8 +142,8 @@ go test -tags=integration ./internal/adapters/inbound/httpapi -v
 ```
 === RUN   TestMTLSClientServer
 --- PASS: TestMTLSClientServer (1.23s)
-=== RUN   TestSPIFFEHTTPClient_Defaults
---- PASS: TestSPIFFEHTTPClient_Defaults (0.52s)
+=== RUN   TestNew_ValidConfig
+--- PASS: TestNew_ValidConfig (0.52s)
 ```
 
 ✅ **Full integration validation**
@@ -153,18 +152,19 @@ go test -tags=integration ./internal/adapters/inbound/httpapi -v
 
 ### Server Tests
 
-**File**: `internal/adapters/inbound/httpapi/server_test.go`
+**File**: `internal/adapters/inbound/identityserver/spiffe_server_test.go`
 
 - Unit tests for config validation
-- Unit tests for identity extraction helpers
+- Unit tests for identity extraction helpers (GetIdentity, RequireIdentity)
+- Unit tests for handler wrapping and registration
 - Integration tests for server creation (skip if SPIRE unavailable)
 
-**File**: `internal/adapters/inbound/httpapi/integration_test.go`
+**File**: `internal/adapters/inbound/identityserver/integration_test.go`
 
 - Tagged with `//go:build integration`
 - Full mTLS client-server communication
 - Authorization and authentication flows
-- Health check endpoints
+- Identity extraction from mTLS connections
 
 ### Client Tests
 
@@ -175,12 +175,12 @@ go test -tags=integration ./internal/adapters/inbound/httpapi -v
 - Unit tests for custom configuration
 - Integration tests (skip if SPIRE unavailable)
 
-**File**: `internal/adapters/outbound/httpclient/integration_test.go`
+**File**: `internal/adapters/outbound/httpclient/integration_test.go` (if exists)
 
 - Tagged with `//go:build integration`
 - HTTP method testing (GET, POST, PUT, DELETE, PATCH)
 - Timeout handling
-- Error scenarios
+- Error scenarios with mTLS
 
 ## Best Practices Implemented
 
@@ -189,19 +189,24 @@ go test -tags=integration ./internal/adapters/inbound/httpapi -v
 Unit tests don't depend on external infrastructure:
 
 ```go
-func TestNewHTTPServer_MissingAddress(t *testing.T) {
+func TestNew_MissingSocketPath(t *testing.T) {
     ctx := context.Background()
-    authorizer := tlsconfig.AuthorizeAny()
 
-    server, err := NewHTTPServer(ctx, ServerConfig{
-        Address:    "", // Missing - should fail
-        SocketPath: "unix:///tmp/socket",
-        Authorizer: authorizer,
+    server, err := New(ctx, ports.MTLSConfig{
+        WorkloadAPI: ports.WorkloadAPIConfig{
+            SocketPath: "", // Missing - should fail
+        },
+        SPIFFE: ports.SPIFFEConfig{
+            AllowedPeerID: "spiffe://example.org/client",
+        },
+        HTTP: ports.HTTPConfig{
+            Address: ":8443",
+        },
     })
 
     require.Error(t, err)
     assert.Nil(t, server)
-    assert.Contains(t, err.Error(), "address is required")
+    assert.Contains(t, err.Error(), "socket path is required")
 }
 ```
 
@@ -210,22 +215,29 @@ func TestNewHTTPServer_MissingAddress(t *testing.T) {
 Integration tests skip when SPIRE unavailable:
 
 ```go
-func TestSPIFFEHTTPClient_Defaults(t *testing.T) {
+func TestNew_AppliesDefaults(t *testing.T) {
     ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
     defer cancel()
 
-    client, err := NewSPIFFEHTTPClient(ctx, ClientConfig{
-        SocketPath:       socketPath,
-        ServerAuthorizer: authorizer,
+    server, err := New(ctx, ports.MTLSConfig{
+        WorkloadAPI: ports.WorkloadAPIConfig{
+            SocketPath: socketPath,
+        },
+        SPIFFE: ports.SPIFFEConfig{
+            AllowedTrustDomain: "example.org",
+        },
+        HTTP: ports.HTTPConfig{
+            Address: ":8443",
+            // Timeouts not specified - should apply defaults
+        },
     })
     if err != nil {
         t.Skipf("Skipping test - SPIRE agent not available: %v", err)
         return
     }
-    defer client.Close()
+    defer server.Close()
 
-    // Test default values
-    assert.Equal(t, 30*time.Second, client.client.Timeout)
+    // Verify defaults were applied internally
 }
 ```
 
@@ -234,8 +246,8 @@ func TestSPIFFEHTTPClient_Defaults(t *testing.T) {
 Unit tests execute in milliseconds:
 
 ```bash
-$ go test ./internal/adapters/inbound/httpapi -run 'TestNewHTTPServer_Missing'
-ok      github.com/pocket/hexagon/spire/internal/adapters/inbound/httpapi    0.003s
+$ go test ./internal/adapters/inbound/identityserver -run 'TestNew_Missing'
+ok      github.com/pocket/hexagon/spire/internal/adapters/inbound/identityserver    0.003s
 ```
 
 ### 4. ✅ Comprehensive Coverage
@@ -363,7 +375,7 @@ go test -tags=integration ./internal/adapters/... -v
 kubectl logs -n spire-system daemonset/spire-agent
 
 # Run specific test
-go test ./internal/adapters/inbound/httpapi -run TestGetSPIFFEID -v
+go test ./internal/adapters/inbound/identityserver -run TestGetIdentity -v
 ```
 
 ## Related Documentation
