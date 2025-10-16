@@ -11,11 +11,11 @@ This document identifies and describes **invariants**—properties or conditions
 - **Data Integrity**: Consistency guarantees across layers and components
 
 **Benefits of Identifying Invariants:**
-- 🎯 **Clarity**: Makes implicit assumptions explicit in code and documentation
-- 🐛 **Bug Prevention**: Catches violations early through assertions and tests
-- 🧪 **Testing**: Provides clear properties to validate in test cases
-- 🔧 **Refactoring**: Ensures correctness is maintained during code changes
-- 📚 **Onboarding**: Helps new developers understand critical constraints
+- **Clarity**: Makes implicit assumptions explicit in code and documentation
+- **Bug Prevention**: Catches violations early through assertions and tests
+- **Testing**: Provides clear properties to validate in test cases
+- **Refactoring**: Ensures correctness is maintained during code changes
+- **Onboarding**: Helps new developers understand critical constraints
 
 ---
 
@@ -766,7 +766,6 @@ func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload *dom
 
 ## References
 
-- [Design by Contract](https://en.wikipedia.org/wiki/Design_by_contract) - Formal invariant specification
 - [Go Best Practices: Effective Go](https://go.dev/doc/effective_go) - Constructor validation patterns
 - [Hexagonal Architecture](https://alistair.cockburn.us/hexagonal-architecture/) - Port invariants
 - [SPIFFE Specification](https://github.com/spiffe/spiffe/blob/main/standards/SPIFFE.md) - Trust domain and SPIFFE ID invariants
