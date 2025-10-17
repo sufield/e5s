@@ -1,3 +1,5 @@
+//go:build dev
+
 // Package inmemory contains concrete, in-memory implementations of outbound
 // adapters used by the walking-skeleton in this repository.
 //

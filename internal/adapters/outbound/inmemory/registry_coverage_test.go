@@ -1,3 +1,5 @@
+//go:build dev
+
 package inmemory_test
 
 // InMemory Registry Coverage Tests

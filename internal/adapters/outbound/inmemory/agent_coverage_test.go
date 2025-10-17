@@ -1,3 +1,5 @@
+//go:build dev
+
 package inmemory_test
 
 // Agent Coverage Tests

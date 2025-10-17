@@ -41,7 +41,7 @@ go version
 # Expected output: go version go1.25.3 linux/amd64 (or latest patch)
 ```
 
-**Note**: Always use the latest patch release (e.g., 1.25.3 instead of 1.25.0) for bug fixes and security updates. Check [go.dev/dl](https://go.dev/dl/) for the current version.
+Use the latest patch release (e.g., 1.25.3 instead of 1.25.0) for bug fixes and security updates. Check [go.dev/dl](https://go.dev/dl/) for the current version.
 
 If you already have Go 1.25+ installed, skip this step and verify with `go version`.
 
