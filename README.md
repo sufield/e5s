@@ -65,13 +65,17 @@ func main() {
 
     // Register handlers
     server.Handle("/api/hello", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        // Use port-level identity accessor (adapter-agnostic)
         id, ok := ports.IdentityFrom(r.Context())
         if !ok {
             http.Error(w, "Unauthorized", http.StatusUnauthorized)
             return
         }
         fmt.Fprintf(w, "Hello, %s!\n", id.SPIFFEID)
+    }))
+
+    server.Handle("/health", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        w.WriteHeader(http.StatusOK)
+        _, _ = w.Write([]byte(`{"status":"ok"}`))
     }))
 
     log.Println("Server listening on :8443")
@@ -85,42 +89,56 @@ func main() {
 
 ### mTLS Client
 
+> **Note**: The `httpclient` adapter is planned but not yet implemented. The example below shows raw SDK usage.
+
 ```go
 package main
 
 import (
     "context"
+    "crypto/tls"
     "fmt"
     "io"
     "log"
+    "net/http"
     "time"
 
-    "github.com/pocket/hexagon/spire/internal/adapters/outbound/httpclient"
-    "github.com/pocket/hexagon/spire/internal/ports"
     "github.com/spiffe/go-spiffe/v2/spiffeid"
     "github.com/spiffe/go-spiffe/v2/spiffetls/tlsconfig"
+    "github.com/spiffe/go-spiffe/v2/workloadapi"
 )
 
 func main() {
     ctx := context.Background()
 
-    // Configure the mTLS client
-    var cfg ports.MTLSConfig
-    cfg.WorkloadAPI.SocketPath = "unix:///tmp/spire-agent/public/api.sock"
-
-    // Authorize specific server
-    serverID := spiffeid.RequireFromString("spiffe://example.org/server")
-    cfg.SPIFFE.AllowedPeerID = serverID.String()
-    // Create the mTLS client
-    client, err := httpclient.New(ctx, cfg)
+    // Create X.509 source for automatic SVID rotation
+    x509Source, err := workloadapi.NewX509Source(
+        ctx,
+        workloadapi.WithClientOptions(workloadapi.WithAddr("unix:///tmp/spire-agent/public/api.sock")),
+    )
     if err != nil {
-        log.Fatalf("Failed to create client: %v", err)
+        log.Fatalf("Failed to create X.509 source: %v", err)
     }
-    defer client.Close()
+    defer x509Source.Close()
+
+    // Authorize specific server SPIFFE ID
+    serverID, err := spiffeid.FromString("spiffe://example.org/server")
+    if err != nil {
+        log.Fatalf("Failed to parse server SPIFFE ID: %v", err)
+    }
+
+    // Create mTLS HTTP client
+    tlsConfig := tlsconfig.MTLSClientConfig(x509Source, x509Source, tlsconfig.AuthorizeID(serverID))
+    tlsConfig.MinVersion = tls.VersionTLS13 // Enforce TLS 1.3
+    httpClient := &http.Client{
+        Transport: &http.Transport{
+            TLSClientConfig: tlsConfig,
+        },
+        Timeout: 10 * time.Second,
+    }
 
     // Make request
-    req, _ := http.NewRequestWithContext(ctx, "GET", "https://server:8443/api/hello", nil)
-    resp, err := client.Do(ctx, req)
+    resp, err := httpClient.Get("https://localhost:8443/api/hello")
     if err != nil {
         log.Fatalf("Request failed: %v", err)
     }
@@ -155,12 +173,34 @@ type SPIFFEConfig struct {
 // HTTP server configuration
 type HTTPConfig struct {
     Address           string        // Server address (e.g., ":8443")
-    ReadHeaderTimeout time.Duration // Prevents Slowloris attacks
-    ReadTimeout       time.Duration
-    WriteTimeout      time.Duration
-    IdleTimeout       time.Duration
+    ReadHeaderTimeout time.Duration // Prevents Slowloris attacks (default: 10s)
+    ReadTimeout       time.Duration // Default: 30s
+    WriteTimeout      time.Duration // Default: 30s
+    IdleTimeout       time.Duration // Default: 120s
 }
 ```
+
+#### Configuration Precedence and Validation
+
+**Authorization Policy** (`SPIFFEConfig`):
+- **Exactly one** of `AllowedPeerID` or `AllowedTrustDomain` must be set
+- Both empty: Returns validation error (deny-all not supported)
+- Both set: Returns validation error (ambiguous policy)
+- `AllowedPeerID`: Exact match against a specific SPIFFE ID (e.g., `spiffe://example.org/client`)
+- `AllowedTrustDomain`: Allow any ID in the trust domain (e.g., any `spiffe://example.org/*`)
+
+**Socket Path** (`WorkloadAPIConfig.SocketPath`):
+- Must be non-empty
+- Must use `unix://` scheme (e.g., `unix:///tmp/spire-agent/public/api.sock`)
+- Invalid scheme returns error
+
+**HTTP Timeouts** (`HTTPConfig`):
+- All timeouts are optional; adapters apply sensible defaults if unset/zero
+- Defaults (from `internal/config`):
+  - `ReadHeaderTimeout`: 10 seconds (prevents Slowloris)
+  - `ReadTimeout`: 30 seconds
+  - `WriteTimeout`: 30 seconds
+  - `IdleTimeout`: 120 seconds
 
 ## Architecture
 
@@ -183,7 +223,6 @@ internal/
     │   └── cli/            # CLI demonstration
     └── outbound/
         ├── spire/          # Production SPIRE adapters (go-spiffe SDK)
-        ├── httpclient/     # Production mTLS client (go-spiffe SDK)
         ├── inmemory/       # In-memory SPIRE implementation (dev/learning)
         └── compose/        # Dependency injection factory
 
@@ -194,8 +233,7 @@ cmd/
 
 examples/
 ├── identityserver-example/ # mTLS server example
-├── httpclient/             # mTLS client examples
-└── mtls/                   # Additional mTLS examples
+└── README.md               # Examples documentation
 ```
 
 ### Hexagonal Architecture
@@ -324,13 +362,15 @@ type IdentityCredential struct {
 type IdentityDocument struct {
     identityCredential *IdentityCredential
     certificate        *x509.Certificate
-    privateKey         crypto.PrivateKey
+    privateKey         crypto.PrivateKey // ⚠️ Planned for removal (see TODO in source)
     certificateChain   []*x509.Certificate
     expiresAt          time.Time
 }
 ```
 
 **Why X.509-only?** Focus on simplicity and the primary use case (mTLS). JWT can be added via adapters if needed without changing the domain model.
+
+> **Note**: The `privateKey` field is planned for removal to keep the domain entity purely descriptive. Private keys will be managed by adapters. See TODO in `identity_document.go` for migration plan.
 
 ### Selector
 
@@ -402,9 +442,11 @@ func TestMTLSAuthentication(t *testing.T) {
 
     // Register handler
     server.Handle("/test", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        // Use port-level identity accessor (adapter-agnostic)
         id, ok := ports.IdentityFrom(r.Context())
-        require.True(t, ok)
+        if !ok {
+            http.Error(w, "Unauthorized", http.StatusUnauthorized)
+            return
+        }
         fmt.Fprintf(w, "Hello, %s", id.SPIFFEID)
     }))
 
@@ -413,17 +455,25 @@ func TestMTLSAuthentication(t *testing.T) {
         server.Start(ctx)
     }()
 
-    // Create client
-    var clientCfg ports.MTLSConfig
-    clientCfg.WorkloadAPI.SocketPath = "unix:///tmp/spire-agent/public/api.sock"
-    clientCfg.SPIFFE.AllowedTrustDomain = "example.org"
-    client, err := httpclient.New(ctx, clientCfg)
+    // Create client (using raw SDK until httpclient adapter is implemented)
+    x509Source, err := workloadapi.NewX509Source(ctx, workloadapi.WithClientOptions(workloadapi.WithAddr("unix:///tmp/spire-agent/public/api.sock")))
     require.NoError(t, err)
-    defer client.Close()
+    defer x509Source.Close()
+
+    trustDomain, err := spiffeid.TrustDomainFromString("example.org")
+    require.NoError(t, err)
+
+    tlsConfig := tlsconfig.MTLSClientConfig(x509Source, x509Source, tlsconfig.AuthorizeMemberOf(trustDomain))
+    tlsConfig.MinVersion = tls.VersionTLS13 // Enforce TLS 1.3
+    httpClient := &http.Client{
+        Transport: &http.Transport{
+            TLSClientConfig: tlsConfig,
+        },
+        Timeout: 10 * time.Second,
+    }
 
     // Make request
-    req, _ := http.NewRequestWithContext(ctx, "GET", "https://localhost:8443/test", nil)
-    resp, err := client.Do(ctx, req)
+    resp, err := httpClient.Get("https://localhost:8443/test")
     require.NoError(t, err)
     defer resp.Body.Close()
 
@@ -526,7 +576,6 @@ The library only authenticates clients via SPIFFE IDs. Authorization decisions a
 
 ```go
 server.Handle("/admin", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-    // Use port-level identity accessor (adapter-agnostic)
     id, ok := ports.IdentityFrom(r.Context())
     if !ok {
         http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -572,9 +621,9 @@ The project uses the real `go-spiffe` SDK v2.6.0 for production deployments:
 
 **Production adapters**:
 - ✅ `internal/adapters/inbound/identityserver` - mTLS server using go-spiffe SDK
-- ✅ `internal/adapters/outbound/httpclient` - mTLS client using go-spiffe SDK
-- ✅ `internal/adapters/outbound/spire` - SPIRE agent adapters
+- ✅ `internal/adapters/outbound/spire` - SPIRE Workload API client adapters
 - ✅ Integration tests - Full mTLS with real SPIRE agent
+- ⏳ `internal/adapters/outbound/httpclient` - mTLS HTTP client (planned)
 
 **Development adapters**:
 - `internal/adapters/outbound/inmemory` - In-memory SPIRE implementation for learning
