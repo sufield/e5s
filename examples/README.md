@@ -1,68 +1,102 @@
-Several steps in your Quick Start will fail as-is because the workloads never mount the Workload API socket and the `parentID` you hard-code may not match your agent. Below is a verified, corrected version. I keep your structure, but I fix the breaking parts and add minimal YAML you can paste.
+# SPIRE mTLS Examples - Kubernetes/Minikube Deployment
 
----
+This guide shows how to deploy and test the mTLS server example on Kubernetes using Minikube with SPIRE infrastructure.
 
-# SPIRE mTLS Examples – Quick Start (Minikube, working)
+## Overview
 
-## 1) Prerequisites
+This example demonstrates:
+- Deploying the mTLS server (`examples/identityserver-example`) to Kubernetes
+- Automatic SPIFFE identity issuance via SPIRE Workload API
+- Mutual TLS authentication between workloads
+- Identity extraction in HTTP handlers
 
-* Your versions table is fine. After installing, also set:
+**Architecture**: The example uses the production `identityserver` adapter with real SPIRE infrastructure, not the in-memory implementation.
+
+## Prerequisites
+
+### Required Tools
+
+| Tool | Version | Installation |
+|------|---------|--------------|
+| Go | 1.25.1+ | https://go.dev/dl/ |
+| Minikube | 1.32.0+ | https://minikube.sigs.k8s.io/docs/start/ |
+| kubectl | 1.28.0+ | https://kubernetes.io/docs/tasks/tools/ |
+| Helm | 3.13.0+ | https://helm.sh/docs/intro/install/ |
+
+### Verify Installation
 
 ```bash
+# Set kubectl context to minikube
 kubectl config use-context minikube
-```
 
-* Verify K8s tools (example target names; adapt to your Makefile):
-
-```bash
+# Verify tools (optional - runs make target)
 make check-prereqs-k8s
 ```
 
 ---
 
-## 2) Start SPIRE Infrastructure
+## Quick Start
+
+### 1. Start SPIRE Infrastructure
+
+Start Minikube and deploy SPIRE (server + agent):
 
 ```bash
-cd ~/hexagon/spire
+# Start Minikube and deploy SPIRE
 make minikube-up
+
+# Verify SPIRE is running
 make minikube-status
+
+# Check pods are ready
 kubectl get pods -n spire-system
 ```
 
-Expected pods (names can vary):
-
+**Expected output**:
 ```
 NAMESPACE      NAME               READY   STATUS
 spire-system   spire-server-0     2/2     Running
-spire-system   spire-agent-abcde  1/1     Running
+spire-system   spire-agent-xxxxx  1/1     Running
 ```
 
 ---
 
-## 3) Build the Example Server
+### 2. Build the Example Server
+
+Build the mTLS server binary:
 
 ```bash
+# Run tests first (optional but recommended)
 make test
+
+# Build the example server
 go build -o bin/mtls-server ./examples/identityserver-example
+
+# Verify binary was created
 ls -lh bin/mtls-server
 ```
 
 ---
 
-## 4) Register Workloads (server + client)
+### 3. Register Workloads with SPIRE
 
-⚠️ Don’t guess the **parentID**. Get the actual agent SPIFFE ID first:
+Create SPIRE registration entries for the server and client workloads.
+
+#### Get Agent SPIFFE ID
+
+**Important**: Always fetch the actual agent SPIFFE ID dynamically. Do not hardcode it.
 
 ```bash
+# Get the agent's SPIFFE ID
 AGENT_ID=$(kubectl exec -n spire-system statefulset/spire-server -c spire-server -- \
   /opt/spire/bin/spire-server agent list | awk '/SPIFFE ID/{print $3; exit}')
-echo "$AGENT_ID"
+
+echo "Agent SPIFFE ID: $AGENT_ID"
 ```
 
-Create entries that match how you’ll run the workloads (Kubernetes pods in the `default` namespace, default SA). Include DNS SANs you’ll use:
+#### Register Server Workload
 
 ```bash
-# Server entry (DNS SANs for Service name + localhost for convenience)
 kubectl exec -n spire-system statefulset/spire-server -c spire-server -- \
   /opt/spire/bin/spire-server entry create \
     -spiffeID spiffe://example.org/server \
@@ -75,8 +109,13 @@ kubectl exec -n spire-system statefulset/spire-server -c spire-server -- \
     -dns mtls-server.default.svc \
     -dns mtls-server.default.svc.cluster.local \
     -dns localhost
+```
 
-# Client entry
+**Why DNS SANs?** The server certificate includes these DNS names for TLS hostname verification. Include all DNS names you'll use to reach the service.
+
+#### Register Client Workload
+
+```bash
 kubectl exec -n spire-system statefulset/spire-server -c spire-server -- \
   /opt/spire/bin/spire-server entry create \
     -spiffeID spiffe://example.org/client \
@@ -86,201 +125,436 @@ kubectl exec -n spire-system statefulset/spire-server -c spire-server -- \
     -selector k8s:container-name:test-client
 ```
 
-Verify:
+#### Verify Entries
 
 ```bash
 kubectl exec -n spire-system statefulset/spire-server -c spire-server -- \
   /opt/spire/bin/spire-server entry show
 ```
 
+You should see both `spiffe://example.org/server` and `spiffe://example.org/client` entries.
+
 ---
 
-## 5) Run the Example Server (Kubernetes)
+### 4. Deploy the mTLS Server
 
-Your original steps launched a pod but **did not mount the SPIRE socket**, so the server can’t reach the Workload API.
-
-Use this minimal Deployment + Service (hostPath from node → pod, mount at `/spire-socket`, and set `SPIFFE_ENDPOINT_SOCKET=unix:///spire-socket/api.sock`):
-
-```yaml
-# mtls-server.yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: mtls-server
-  namespace: default
-spec:
-  replicas: 1
-  selector:
-    matchLabels: { app: mtls-server }
-  template:
-    metadata:
-      labels: { app: mtls-server }
-    spec:
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 65534  # nobody user
-        fsGroup: 65534
-      volumes:
-        - name: spire-socket
-          hostPath:
-            path: /tmp/spire-agent/public   # path on the Minikube node (matches chart defaults)
-            type: Directory
-      containers:
-        - name: mtls-server
-          image: debian:bookworm-slim
-          command: ["sleep", "infinity"]  # Keep pod alive for binary copy
-          env:
-            - name: SPIFFE_ENDPOINT_SOCKET
-              value: "unix:///spire-socket/api.sock"
-            - name: SERVER_ADDRESS
-              value: ":8443"
-            - name: ALLOWED_TRUST_DOMAIN
-              value: "example.org"
-          volumeMounts:
-            - name: spire-socket
-              mountPath: /spire-socket
-              readOnly: true
-          ports:
-            - containerPort: 8443
-          securityContext:
-            allowPrivilegeEscalation: false
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: mtls-server
-  namespace: default
-spec:
-  selector: { app: mtls-server }
-  ports:
-    - name: https
-      port: 8443
-      targetPort: 8443
-```
-
-Deploy + run your binary:
+Deploy the server to Kubernetes:
 
 ```bash
-# Apply the server deployment (YAML file included in examples/ directory)
+# Deploy the server deployment and service
 kubectl apply -f examples/mtls-server.yaml
 
-# Wait for pod Ready
+# Wait for pod to be ready
 kubectl wait --for=condition=Ready deploy/mtls-server --timeout=60s
 
-# Copy compiled binary into the container
+# Get the pod name
 POD=$(kubectl get pod -l app=mtls-server -o jsonpath='{.items[0].metadata.name}')
-kubectl cp bin/mtls-server "$POD":/tmp/mtls-server
-kubectl exec "$POD" -- chmod +x /tmp/mtls-server
+echo "Server pod: $POD"
+```
 
-# Run the server (in a separate terminal, or use screen/tmux)
+#### Copy Binary to Pod
+
+```bash
+# Copy the compiled binary into the pod
+kubectl cp bin/mtls-server "$POD":/tmp/mtls-server
+
+# Make it executable
+kubectl exec "$POD" -- chmod +x /tmp/mtls-server
+```
+
+#### Run the Server
+
+```bash
+# Run the server (this will block - use a separate terminal or use screen/tmux)
 kubectl exec -it "$POD" -- /tmp/mtls-server
 ```
 
-The server will start and log to stdout. Keep this terminal open.
+**Expected output**:
+```
+Creating mTLS server with configuration:
+  Socket: unix:///spire-socket/api.sock
+  Address: :8443
+  Allowed peer: spiffe://example.org/client
+✓ Server created and handlers registered successfully
+Listening on :8443 with mTLS authentication
+Press Ctrl+C to stop
+```
 
-> **Production alternative**: Build a container image with your binary baked in, push to a registry, and update the Deployment to use that image instead of `kubectl cp`.
+**What's happening?**
+1. The server reads `SPIFFE_ENDPOINT_SOCKET` env var (set in `mtls-server.yaml`)
+2. Connects to SPIRE agent via mounted socket at `/spire-socket/api.sock`
+3. Obtains its X.509 SVID (certificate) from SPIRE
+4. Starts HTTPS server on port 8443 with mTLS authentication
+5. Only accepts clients with SPIFFE ID `spiffe://example.org/client`
 
 ---
 
-## 6) Test the Server (client in Kubernetes)
+### 5. Test the Server
 
-Your original client pod also **lacked the socket mount**. The included `test-client.yaml` mounts the SPIRE socket correctly.
+Deploy a client pod and make requests to the server.
 
-Run the client:
+#### Deploy Client Pod
 
 ```bash
-# Apply the client deployment (YAML file included in examples/ directory)
+# Deploy the test client
 kubectl apply -f examples/test-client.yaml
-kubectl wait --for=condition=Ready deploy/test-client --timeout=120s
-CLIENT_POD=$(kubectl get pod -l app=test-client -o jsonpath='{.items[0].metadata.name}')
 
-# Drop into the pod and run your test client program
+# Wait for pod to be ready
+kubectl wait --for=condition=Ready deploy/test-client --timeout=120s
+
+# Get the client pod name
+CLIENT_POD=$(kubectl get pod -l app=test-client -o jsonpath='{.items[0].metadata.name}')
+echo "Client pod: $CLIENT_POD"
+```
+
+#### Run Test Client
+
+Execute this command to create and run a test client inside the pod:
+
+```bash
 kubectl exec -it "$CLIENT_POD" -- bash -lc '
+# Create a simple Go test client
 cat > /tmp/test-client.go <<EOF
 package main
 import (
-  "context"; "fmt"; "io"; "log"; "net/http"; "time"
+  "context"
+  "fmt"
+  "io"
+  "log"
+  "net/http"
+  "time"
   "github.com/spiffe/go-spiffe/v2/spiffeid"
   "github.com/spiffe/go-spiffe/v2/spiffetls/tlsconfig"
   "github.com/spiffe/go-spiffe/v2/workloadapi"
 )
 func main() {
-  ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second); defer cancel()
-  src, err := workloadapi.NewX509Source(ctx); if err != nil { log.Fatal(err) }
+  ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+  defer cancel()
+
+  // Connect to SPIRE agent and get X.509 SVID
+  src, err := workloadapi.NewX509Source(ctx)
+  if err != nil {
+    log.Fatal(err)
+  }
   defer src.Close()
+
+  // Allow any server in example.org trust domain
   td := spiffeid.RequireTrustDomainFromString("example.org")
   tlsCfg := tlsconfig.MTLSClientConfig(src, src, tlsconfig.AuthorizeMemberOf(td))
-  c := &http.Client{ Transport: &http.Transport{ TLSClientConfig: tlsCfg }, Timeout: 10*time.Second }
-  for _, u := range []string{"https://mtls-server:8443/", "https://mtls-server:8443/api/hello", "https://mtls-server:8443/health"} {
-    fmt.Println("=== GET", u)
-    resp, err := c.Get(u); if err != nil { log.Println("ERR:", err); continue }
-    b, _ := io.ReadAll(resp.Body); resp.Body.Close()
-    fmt.Println("Status:", resp.StatusCode, "Body:", string(b))
+
+  // Create HTTP client
+  client := &http.Client{
+    Transport: &http.Transport{TLSClientConfig: tlsCfg},
+    Timeout:   10 * time.Second,
+  }
+
+  // Test different endpoints
+  endpoints := []string{
+    "https://mtls-server:8443/",
+    "https://mtls-server:8443/api/hello",
+    "https://mtls-server:8443/api/identity",
+    "https://mtls-server:8443/health",
+  }
+
+  for _, url := range endpoints {
+    fmt.Printf("\n=== Testing: %s ===\n", url)
+    resp, err := client.Get(url)
+    if err != nil {
+      log.Printf("ERROR: %v\n", err)
+      continue
+    }
+    body, _ := io.ReadAll(resp.Body)
+    resp.Body.Close()
+    fmt.Printf("Status: %d\n", resp.StatusCode)
+    fmt.Printf("Body: %s\n", string(body))
   }
 }
 EOF
-cd /tmp && go mod init tc && go get github.com/spiffe/go-spiffe/v2@latest && go run /tmp/test-client.go
+
+# Initialize Go module and run the client
+cd /tmp
+go mod init testclient
+go get github.com/spiffe/go-spiffe/v2@latest
+go run test-client.go
 '
 ```
 
-> Note: `/health` is unauthenticated by design; the other endpoints require mTLS.
+**Expected output**:
+```
+=== Testing: https://mtls-server:8443/ ===
+Status: 200
+Body: Success! Authenticated as: spiffe://example.org/client
 
-### Port-forward (host)
+=== Testing: https://mtls-server:8443/api/hello ===
+Status: 200
+Body: {"message":"Hello from mTLS server!","identity":"spiffe://example.org/client"}
 
-Port-forwarding to `mtls-server` won’t help from your **host** unless your host has a Workload API socket/SVID. Use the in-cluster client above.
+=== Testing: https://mtls-server:8443/api/identity ===
+Status: 200
+Body: {"identity":{"path":"/client","spiffe_id":"spiffe://example.org/client","trust_domain":"example.org"},...}
 
----
-
-## 7) Cleanup
-
-```bash
-kubectl delete -f examples/test-client.yaml -f examples/mtls-server.yaml
-make minikube-down     # keep data
-# or
-make minikube-delete   # destroy cluster
+=== Testing: https://mtls-server:8443/health ===
+Status: 200
+Body: {"status":"healthy"}
 ```
 
+**What's happening?**
+1. Client gets its own X.509 SVID (`spiffe://example.org/client`) from SPIRE
+2. Establishes mTLS connection to server
+3. Both client and server verify each other's SPIFFE IDs
+4. Server extracts client identity and includes it in responses
+
 ---
 
-## 8) Troubleshooting
+## Understanding the Setup
 
-**Check SPIRE status**
+### SPIRE Socket Mounting
+
+Both server and client pods mount the SPIRE agent socket using `hostPath`:
+
+```yaml
+volumes:
+  - name: spire-socket
+    hostPath:
+      path: /tmp/spire-agent/public   # On Minikube node
+      type: Directory
+
+volumeMounts:
+  - name: spire-socket
+    mountPath: /spire-socket           # Inside pod
+    readOnly: true
+```
+
+The workload connects via:
+```
+SPIFFE_ENDPOINT_SOCKET=unix:///spire-socket/api.sock
+```
+
+### SPIFFE ID Attestation
+
+SPIRE agent attests workload identity using Kubernetes selectors:
 
 ```bash
+-selector k8s:ns:default           # Namespace
+-selector k8s:sa:default           # ServiceAccount
+-selector k8s:container-name:mtls-server  # Container name
+```
+
+**All selectors must match** for the workload to receive the registered SPIFFE ID.
+
+### mTLS Authentication Flow
+
+1. **Server startup**:
+   - Connects to SPIRE agent via socket
+   - Receives X.509 SVID (`spiffe://example.org/server`)
+   - Starts HTTPS server with this certificate
+
+2. **Client request**:
+   - Client gets its own X.509 SVID (`spiffe://example.org/client`)
+   - Initiates TLS handshake
+   - Both present certificates
+   - Both verify peer SPIFFE ID
+
+3. **Authorization**:
+   - Server checks client SPIFFE ID against allowed list
+   - `cfg.SPIFFE.AllowedPeerID = "spiffe://example.org/client"`
+   - Request is accepted/rejected based on identity
+
+---
+
+## Troubleshooting
+
+### Check SPIRE Status
+
+```bash
+# Check SPIRE pods
 kubectl get pods -n spire-system
+
+# View server logs
 kubectl logs -n spire-system statefulset/spire-server -c spire-server --tail=100
+
+# View agent logs
 kubectl logs -n spire-system ds/spire-agent -c spire-agent --tail=100
 ```
 
-**Socket present inside agent**
+### Verify Socket Exists
 
 ```bash
+# Get agent pod name
 AGENT_POD=$(kubectl get pods -n spire-system -l app.kubernetes.io/name=agent -o jsonpath='{.items[0].metadata.name}')
+
+# Check socket exists inside agent
 kubectl exec -n spire-system "$AGENT_POD" -- ls -la /tmp/spire-agent/public/api.sock
 ```
 
-**Workload failing to get SVID**
+### Workload Can't Get SVID
 
-* Ensure **selectors** match (namespace, serviceAccount, container name).
-* Ensure **parentID** equals your agent’s SPIFFE ID (`spire-server agent list`).
-* After fixing, wait a few seconds for cache refresh.
+**Symptoms**:
+- `no such file or directory` for socket
+- `no identity issued`
+- `permission denied`
 
-**Server can’t start / TLS handshake errors**
+**Solutions**:
+1. **Verify selectors match**:
+   ```bash
+   kubectl exec -n spire-system statefulset/spire-server -c spire-server -- \
+     /opt/spire/bin/spire-server entry show
+   ```
+   - Check namespace, serviceAccount, container-name match your pod
 
-* Confirm the server pod has the **volume + mount** and `SPIFFE_ENDPOINT_SOCKET`.
-* Confirm the server **Service** DNS names are in the server entry’s `-dns` list.
-* Look at server logs (stdout) and client errors for verification failures.
+2. **Verify parentID**:
+   - Must match the agent SPIFFE ID exactly
+   - Don't hardcode - always fetch dynamically
+
+3. **Check socket mount**:
+   ```bash
+   kubectl exec $POD -- ls -la /spire-socket/api.sock
+   ```
+   - Should show socket file
+   - If missing, check hostPath and volumeMount in YAML
+
+4. **Wait for cache refresh**:
+   - After creating/updating entries, wait 5-10 seconds
+   - SPIRE caches registration entries
+
+### TLS Handshake Errors
+
+**Symptoms**:
+- `certificate verify failed`
+- `bad certificate`
+- `unknown authority`
+
+**Solutions**:
+1. **Check DNS SANs**:
+   - Server entry must include `-dns` for all hostnames you use
+   - Example: `-dns mtls-server -dns mtls-server.default.svc`
+
+2. **Verify trust domain**:
+   - Client and server must be in same trust domain
+   - Check SPIFFE IDs: `spiffe://example.org/...`
+
+3. **Check authorization config**:
+   - Server: `ALLOWED_CLIENT_ID` or `ALLOWED_TRUST_DOMAIN` env var
+   - Must match client's SPIFFE ID
+
+### Server Won't Start
+
+**Check logs**:
+```bash
+kubectl logs $POD
+```
+
+**Common issues**:
+- Missing `SPIFFE_ENDPOINT_SOCKET` env var
+- Socket path wrong or not mounted
+- Invalid configuration (check env vars)
 
 ---
 
-## Why your original steps broke
+## Cleanup
 
-* **No socket mount** in either the server or client pods ⇒ `dial unix /…/api.sock: no such file or directory`.
-* **Hard-coded `parentID`** can be wrong ⇒ workload never gets an SVID.
-* **Port-forward from host** without a host SVID ⇒ host cannot complete mTLS handshake.
+```bash
+# Delete deployments
+kubectl delete -f examples/test-client.yaml
+kubectl delete -f examples/mtls-server.yaml
+
+# Stop SPIRE but keep data
+make minikube-down
+
+# Or destroy everything
+make minikube-delete
+```
 
 ---
 
-* In Kubernetes, you must **mount the Workload API socket** (hostPath → pod) and point `SPIFFE_ENDPOINT_SOCKET` at the mount.
-* Always **read the agent SPIFFE ID** and use it as the **parentID** when creating entries.
-* Put Service DNS names you’ll use in the **server entry’s `-dns`** list so TLS name verification succeeds.
+## Advanced Usage
+
+### Using Custom Trust Domain
+
+Edit the server entries and environment variables:
+
+```bash
+# Register with custom trust domain
+kubectl exec -n spire-system statefulset/spire-server -c spire-server -- \
+  /opt/spire/bin/spire-server entry create \
+    -spiffeID spiffe://mycompany.com/server \
+    -parentID "$AGENT_ID" \
+    ...
+```
+
+Update `mtls-server.yaml`:
+```yaml
+env:
+  - name: ALLOWED_TRUST_DOMAIN
+    value: "mycompany.com"
+```
+
+### Allow Multiple Clients
+
+Use trust domain authorization instead of specific peer ID:
+
+```yaml
+env:
+  # Remove ALLOWED_CLIENT_ID
+  # Add trust domain authorization
+  - name: ALLOWED_TRUST_DOMAIN
+    value: "example.org"
+```
+
+This allows **any** client with SPIFFE ID `spiffe://example.org/*`.
+
+### Production Deployment
+
+For production:
+
+1. **Build container image**:
+   ```dockerfile
+   FROM golang:1.25 AS builder
+   WORKDIR /app
+   COPY . .
+   RUN go build -o mtls-server ./examples/identityserver-example
+
+   FROM debian:bookworm-slim
+   COPY --from=builder /app/mtls-server /usr/local/bin/
+   CMD ["/usr/local/bin/mtls-server"]
+   ```
+
+2. **Update deployment**:
+   ```yaml
+   containers:
+     - name: mtls-server
+       image: your-registry/mtls-server:v1.0.0  # Use your image
+       # Remove "sleep infinity" command
+   ```
+
+3. **Use real certificates**:
+   - Don't use `-dns localhost` in production
+   - Use actual service DNS names
+   - Consider using Ingress with SPIFFE authentication
+
+---
+
+## Next Steps
+
+- Read [docs/TEST_ARCHITECTURE.md](../docs/TEST_ARCHITECTURE.md) for integration testing patterns
+- Explore [internal/adapters/inbound/identityserver/](../internal/adapters/inbound/identityserver/) to understand the adapter implementation
+- Review [docs/CONTROL_PLANE.md](../docs/CONTROL_PLANE.md) for SPIRE deployment architecture
+- See [main README](../README.md) for API reference and design patterns
+
+---
+
+## Summary
+
+This guide showed you how to:
+- ✅ Deploy SPIRE infrastructure on Minikube
+- ✅ Register workload identities with SPIRE
+- ✅ Deploy an mTLS server using SPIFFE authentication
+- ✅ Test mutual TLS between workloads
+- ✅ Troubleshoot common issues
+
+**Key Takeaways**:
+1. Always mount the SPIRE agent socket into workload pods
+2. Registration selectors must exactly match pod metadata
+3. Never hardcode agent parentID - fetch it dynamically
+4. DNS SANs are required for TLS hostname verification
+5. SPIFFE authentication is identity-based, not DNS-based

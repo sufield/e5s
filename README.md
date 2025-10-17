@@ -499,9 +499,12 @@ func TestMTLSAuthentication(t *testing.T) {
 
 ### Examples
 
+- [examples/README.md](examples/README.md) - Kubernetes/Minikube deployment guide (Quick Start)
 - [examples/identityserver-example/](examples/identityserver-example/) - MTLSServer example demonstrating hexagonal architecture
 
 ## Running the Examples
+
+> **For Kubernetes/Minikube deployment**: See [examples/README.md](examples/README.md) for a complete guide on deploying to Kubernetes with SPIRE.
 
 ### Prerequisites
 
@@ -509,7 +512,7 @@ func TestMTLSAuthentication(t *testing.T) {
 - SPIRE Agent running locally (for production examples)
 - Or Minikube with SPIRE (for integration tests)
 
-### Run mTLS Server Example
+### Run mTLS Server Example (Local)
 
 ```bash
 # Run the example server
