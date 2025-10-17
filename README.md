@@ -9,6 +9,7 @@ This is an mTLS library using the real `go-spiffe` SDK v2.6.0 for identity-based
 ### mTLS Library
 
 The library provides:
+- ✅ **Zero-Config API**: One-call setup with automatic socket and trust domain detection
 - ✅ **Automatic Certificate Management**: Zero-downtime certificate rotation via SPIRE
 - ✅ **mTLS Authentication**: Both client and server authenticate each other
 - ✅ **Identity Extraction**: SPIFFE ID available to application handlers
@@ -29,7 +30,54 @@ An in-memory SPIRE implementation demonstrates:
 
 ## Quick Start
 
-### mTLS Server
+### Zero-Config mTLS Server (Recommended)
+
+The simplest way to create an mTLS server - everything is auto-detected:
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+    "net/http"
+    "os/signal"
+    "syscall"
+
+    "github.com/pocket/hexagon/spire/pkg/zerotrustserver"
+)
+
+func main() {
+    ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+    defer stop()
+
+    err := zerotrustserver.Serve(ctx, map[string]http.Handler{
+        "/": http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            id, ok := zerotrustserver.Identity(r.Context())
+            if !ok {
+                http.Error(w, "unauthorized", http.StatusUnauthorized)
+                return
+            }
+            fmt.Fprintf(w, "Success! Authenticated as: %s\n", id.SPIFFEID)
+        }),
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+}
+```
+
+**What's auto-detected?**
+- SPIRE agent socket (checks `SPIFFE_ENDPOINT_SOCKET` env var and common paths)
+- Trust domain (extracted from workload's SVID)
+- TLS configuration (enforces TLS 1.3+ with mTLS)
+- Health endpoint (auto-mounted at `/health`)
+- HTTP timeouts (sensible defaults)
+
+### Advanced Configuration
+
+For fine-grained control, use the lower-level adapter API:
 
 ```go
 package main
@@ -50,8 +98,6 @@ func main() {
 
     // Configure the mTLS server
     var cfg ports.MTLSConfig
-    // Socket path for this repo's Minikube setup
-    // (Common default in other clusters: unix:///run/spire/sockets/agent.sock)
     cfg.WorkloadAPI.SocketPath = "unix:///tmp/spire-agent/public/api.sock"
     cfg.SPIFFE.AllowedPeerID = "spiffe://example.org/client"  // Or use AllowedTrustDomain
     cfg.HTTP.Address = ":8443"
@@ -73,11 +119,6 @@ func main() {
             return
         }
         fmt.Fprintf(w, "Hello, %s!\n", id.SPIFFEID)
-    }))
-
-    server.Handle("/health", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        w.WriteHeader(http.StatusOK)
-        _, _ = w.Write([]byte(`{"status":"ok"}`))
     }))
 
     log.Println("Server listening on :8443")
@@ -211,6 +252,13 @@ type HTTPConfig struct {
 ### Directory Structure
 
 ```
+pkg/
+└── zerotrustserver/     # Zero-config mTLS server API (public)
+    ├── server.go        # Serve() - one-call server
+    ├── defaults.go      # Auto-detection logic
+    ├── identity.go      # Identity helper
+    └── doc.go           # Package documentation
+
 internal/
 ├── domain/              # Domain entities (TrustDomain, IdentityCredential, etc.)
 ├── ports/               # Port interfaces (contracts between layers)
@@ -236,8 +284,11 @@ cmd/
 └── cp-minikube/         # Control plane for Minikube deployment
 
 examples/
-├── identityserver-example/ # mTLS server example
-└── README.md               # Examples documentation
+├── zeroconfig-example/  # Zero-config server example (recommended)
+├── test-client.go       # Test client code
+├── mtls-server.yaml     # Kubernetes deployment manifest
+├── test-client.yaml     # Test client deployment manifest
+└── README.md            # Kubernetes deployment guide
 ```
 
 ### Hexagonal Architecture
@@ -499,8 +550,8 @@ func TestMTLSAuthentication(t *testing.T) {
 
 ### Examples
 
-- [examples/README.md](examples/README.md) - Kubernetes/Minikube deployment guide (Quick Start)
-- [examples/identityserver-example/](examples/identityserver-example/) - MTLSServer example demonstrating hexagonal architecture
+- [examples/README.md](examples/README.md) - Kubernetes/Minikube deployment guide
+- [examples/zeroconfig-example/](examples/zeroconfig-example/) - Zero-config server (recommended for all users)
 
 ## Running the Examples
 
@@ -512,20 +563,21 @@ func TestMTLSAuthentication(t *testing.T) {
 - SPIRE Agent running locally (for production examples)
 - Or Minikube with SPIRE (for integration tests)
 
-### Run mTLS Server Example (Local)
+### Run Zero-Config Server Example
 
 ```bash
-# Run the example server
-# (Socket path is configured in code: cfg.WorkloadAPI.SocketPath)
-go run ./examples/identityserver-example
+# The zero-config example auto-detects everything
+go run ./examples/zeroconfig-example
+
+# SPIRE agent must be running and accessible via:
+# - SPIFFE_ENDPOINT_SOCKET env var, or
+# - Common paths: /tmp/spire-agent/public/api.sock, /var/run/spire/sockets/agent.sock
 
 # Output:
-# Creating mTLS server with configuration:
-#   Socket: unix:///tmp/spire-agent/public/api.sock
-#   Address: :8443
-#   Allowed client: spiffe://example.org/client
-# ✓ Server created and handlers registered successfully
-# Listening on :8443 with mTLS authentication
+# Server starting on :8443 with zero-trust mTLS
+# Auto-detected socket: unix:///tmp/spire-agent/public/api.sock
+# Auto-detected trust domain: example.org
+# Server listening on :8443
 ```
 
 ### Run CLI Demo (In-Memory)
@@ -626,6 +678,9 @@ This implementation follows Go best practices and production-ready patterns:
 ## SPIRE Integration
 
 The project uses the real `go-spiffe` SDK v2.6.0 for production deployments:
+
+**Public APIs**:
+- ✅ `pkg/zerotrustserver` - Zero-config mTLS server (recommended for most users)
 
 **Production adapters**:
 - ✅ `internal/adapters/inbound/identityserver` - mTLS server using go-spiffe SDK

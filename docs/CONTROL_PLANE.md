@@ -688,7 +688,7 @@ These are **data plane** (runtime) components:
 
 - **Port Contracts**: See `docs/PORT_CONTRACTS.md` for all port interface definitions
 - **Domain Model**: See `docs/DOMAIN.md` for IdentityMapper and other domain entities
-- **Production mTLS**: See `examples/identityserver-example/` for production SPIRE Workload API usage
+- **Production mTLS**: See `examples/zeroconfig-example/` for production SPIRE Workload API usage
 - **Invariants**: See `docs/INVARIANTS.md` for domain invariants and error handling
 
 ---

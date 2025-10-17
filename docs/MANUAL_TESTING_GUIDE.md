@@ -53,7 +53,7 @@ spire-server entry create \
 ### Step 3: Run the Example Server
 
 ```bash
-cd examples/identityserver-example
+cd examples/zeroconfig-example
 
 # Set environment variables
 export SPIRE_AGENT_SOCKET="unix:///tmp/spire-agent/public/api.sock"
@@ -79,7 +79,7 @@ Listening on :8443 with mTLS authentication
 In a new terminal:
 
 ```bash
-cd examples/identityserver-example
+cd examples/zeroconfig-example
 
 # Set environment variables
 export SPIRE_AGENT_SOCKET="unix:///tmp/spire-agent/public/api.sock"
@@ -153,7 +153,7 @@ kubectl port-forward -n spire-system svc/test-server 8443:8443
 **Goal**: Verify server starts and connects to SPIRE agent
 
 ```bash
-cd examples/identityserver-example
+cd examples/zeroconfig-example
 export SPIRE_AGENT_SOCKET="unix:///tmp/spire-agent/public/api.sock"
 export ALLOWED_CLIENT_ID="spiffe://example.org/client"
 go run main.go
@@ -243,7 +243,7 @@ Path: /client
 With server running:
 ```bash
 # Send SIGTERM
-pkill -TERM -f identityserver-example
+pkill -TERM -f zeroconfig-example
 ```
 
 **Expected**:
@@ -259,7 +259,7 @@ pkill -TERM -f identityserver-example
 ### Test 1: Basic Client Connection
 
 ```bash
-cd examples/identityserver-example
+cd examples/zeroconfig-example
 export SPIRE_AGENT_SOCKET="unix:///tmp/spire-agent/public/api.sock"
 export SERVER_URL="https://localhost:8443"
 export EXPECTED_SERVER_ID="spiffe://example.org/server"
@@ -311,7 +311,7 @@ cfg.HTTP.Timeout = 1 * time.Millisecond
 pkill spire-agent
 
 # Try to start server
-cd examples/identityserver-example
+cd examples/zeroconfig-example
 go run main.go
 ```
 
@@ -475,7 +475,7 @@ Use this checklist to verify full functionality:
 **Fix**:
 ```bash
 # Check if server is running
-ps aux | grep identityserver-example
+ps aux | grep zeroconfig-example
 
 # Check what's listening on port 8443
 lsof -i :8443
@@ -606,5 +606,5 @@ func main() {
 
 - [Port-Based Improvements](PORT_BASED_IMPROVEMENTS.md) - Architecture overview
 - [Unified Configuration](UNIFIED_CONFIG_IMPROVEMENTS.md) - Configuration details
-- [Example Server](../examples/identityserver-example/main.go) - Complete server example
+- [Example Server](../examples/zeroconfig-example/main.go) - Complete server example
 - [SPIRE Documentation](https://spiffe.io/docs/latest/spire/) - Official SPIRE docs

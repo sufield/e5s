@@ -150,7 +150,7 @@ if err != nil {
 server.Start(ctx)  // Blocks until shutdown
 ```
 
-**See Also**: `examples/identityserver-example/` for complete usage example
+**See Also**: `examples/zeroconfig-example/` for complete usage example
 
 ---
 
@@ -199,7 +199,7 @@ defer client.Close()
 resp, err := client.Get(ctx, "https://server:8443/api/hello")
 ```
 
-**See Also**: `examples/identityserver-example/` for usage example
+**See Also**: `examples/zeroconfig-example/` for usage example
 
 ---
 

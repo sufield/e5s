@@ -1,16 +1,72 @@
-# SPIRE mTLS Examples - Kubernetes/Minikube Deployment
+# SPIRE mTLS Examples
 
-This guide shows how to deploy and test the mTLS server example on Kubernetes using Minikube with SPIRE infrastructure.
+This directory contains examples demonstrating mTLS authentication using SPIFFE/SPIRE.
 
-## Overview
+## Available Examples
+
+### 1. Zero-Config Example (Recommended for Quick Start)
+
+**Location**: `examples/zeroconfig-example/`
+
+The simplest way to get started - a minimal server that auto-detects everything:
+
+```go
+func main() {
+    ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+    defer stop()
+
+    err := zerotrustserver.Serve(ctx, map[string]http.Handler{
+        "/": http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            id, ok := zerotrustserver.Identity(r.Context())
+            if !ok {
+                http.Error(w, "unauthorized", http.StatusUnauthorized)
+                return
+            }
+            fmt.Fprintf(w, "Success! Authenticated as: %s\n", id.SPIFFEID)
+        }),
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+}
+```
+
+**What it provides**:
+- ✅ Zero configuration required
+- ✅ Auto-detects SPIRE socket and trust domain
+- ✅ Built-in health endpoint
+- ✅ Production-ready defaults
+
+**Requirements**: SPIRE agent must be running locally or accessible via standard paths.
+
+### 2. Kubernetes/Minikube Deployment (Full Infrastructure)
+
+**Location**: This guide below + `examples/zeroconfig-example/`
+
+Complete guide for deploying to Kubernetes with SPIRE infrastructure. This demonstrates:
+- Deploying SPIRE server and agent on Minikube
+- Workload registration with Kubernetes selectors
+- mTLS communication between pods
+- Zero-config mTLS server deployment
+
+Use this example to understand how to deploy in a real Kubernetes environment.
+
+---
+
+## Kubernetes/Minikube Deployment Guide
+
+This section shows how to deploy and test the zero-config mTLS server example on Kubernetes using Minikube with SPIRE infrastructure.
+
+### Overview
 
 This example demonstrates:
-- Deploying the mTLS server (`examples/identityserver-example`) to Kubernetes
+- Deploying the zero-config mTLS server (`examples/zeroconfig-example`) to Kubernetes
 - Automatic SPIFFE identity issuance via SPIRE Workload API
+- Automatic socket and trust domain detection
 - Mutual TLS authentication between workloads
 - Identity extraction in HTTP handlers
 
-**Architecture**: The example uses the production `identityserver` adapter with real SPIRE infrastructure, not the in-memory implementation.
+**Architecture**: The example uses the zero-config API which wraps the production `identityserver` adapter with intelligent defaults.
 
 ## Prerequisites
 
@@ -63,14 +119,14 @@ spire-system   spire-agent-xxxxx  1/1     Running
 
 ### 2. Build the Example Server
 
-Build the mTLS server binary:
+Build the zero-config mTLS server binary:
 
 ```bash
 # Run tests first (optional but recommended)
 make test
 
-# Build the example server
-go build -o bin/mtls-server ./examples/identityserver-example
+# Build the zero-config example server
+go build -o bin/mtls-server ./examples/zeroconfig-example
 
 # Verify binary was created
 ls -lh bin/mtls-server
@@ -171,21 +227,19 @@ kubectl exec -it "$POD" -- /tmp/mtls-server
 
 **Expected output**:
 ```
-Creating mTLS server with configuration:
-  Socket: unix:///spire-socket/api.sock
-  Address: :8443
-  Allowed peer: spiffe://example.org/client
-✓ Server created and handlers registered successfully
-Listening on :8443 with mTLS authentication
+Server starting on :8443 with zero-trust mTLS
+Auto-detected socket: unix:///spire-socket/api.sock
+Auto-detected trust domain: example.org
+Server listening on :8443
 Press Ctrl+C to stop
 ```
 
 **What's happening?**
-1. The server reads `SPIFFE_ENDPOINT_SOCKET` env var (set in `mtls-server.yaml`)
+1. The zero-config server auto-detects the SPIRE agent socket (checks `SPIFFE_ENDPOINT_SOCKET` env var and common paths)
 2. Connects to SPIRE agent via mounted socket at `/spire-socket/api.sock`
-3. Obtains its X.509 SVID (certificate) from SPIRE
+3. Obtains its X.509 SVID and extracts the trust domain automatically
 4. Starts HTTPS server on port 8443 with mTLS authentication
-5. Only accepts clients with SPIFFE ID `spiffe://example.org/client`
+5. Authorizes any client in the same trust domain (`example.org`)
 
 ---
 
@@ -296,9 +350,9 @@ All selectors must match for the workload to receive the registered SPIFFE ID.
    - Both verify peer SPIFFE ID
 
 3. **Authorization**:
-   - Server checks client SPIFFE ID against allowed list
-   - `cfg.SPIFFE.AllowedPeerID = "spiffe://example.org/client"`
-   - Request is accepted/rejected based on identity
+   - Server auto-detects trust domain from its own SVID
+   - Authorizes any client in the same trust domain
+   - Request is accepted/rejected based on client's trust domain membership
 
 ---
 
@@ -373,9 +427,9 @@ kubectl exec -n spire-system "$AGENT_POD" -- ls -la /tmp/spire-agent/public/api.
    - Client and server must be in same trust domain
    - Check SPIFFE IDs: `spiffe://example.org/...`
 
-3. **Check authorization config**:
-   - Server: `ALLOWED_CLIENT_ID` or `ALLOWED_TRUST_DOMAIN` env var
-   - Must match client's SPIFFE ID
+3. **Check trust domain**:
+   - The zero-config server auto-detects trust domain and authorizes all clients in that domain
+   - Client and server must be in the same trust domain
 
 ### Server Won't Start
 
@@ -385,9 +439,9 @@ kubectl logs $POD
 ```
 
 **Common issues**:
-- Missing `SPIFFE_ENDPOINT_SOCKET` env var
+- Socket not found in standard locations (the zero-config server checks common paths automatically)
 - Socket path wrong or not mounted
-- Invalid configuration (check env vars)
+- Unable to fetch SVID from SPIRE agent
 
 ---
 
@@ -411,7 +465,10 @@ make minikube-delete
 
 ### Using Custom Trust Domain
 
-Edit the server entries and environment variables:
+The zero-config server automatically detects and uses the trust domain from its SVID. To use a custom trust domain:
+
+1. Configure SPIRE server with your custom trust domain
+2. Register workloads with that trust domain:
 
 ```bash
 # Register with custom trust domain
@@ -419,29 +476,12 @@ kubectl exec -n spire-system statefulset/spire-server -c spire-server -- \
   /opt/spire/bin/spire-server entry create \
     -spiffeID spiffe://mycompany.com/server \
     -parentID "$AGENT_ID" \
-    ...
+    -selector k8s:ns:default \
+    -selector k8s:sa:default \
+    -selector k8s:container-name:mtls-server
 ```
 
-Update `mtls-server.yaml`:
-```yaml
-env:
-  - name: ALLOWED_TRUST_DOMAIN
-    value: "mycompany.com"
-```
-
-### Allow Multiple Clients
-
-Use trust domain authorization instead of specific peer ID:
-
-```yaml
-env:
-  # Remove ALLOWED_CLIENT_ID
-  # Add trust domain authorization
-  - name: ALLOWED_TRUST_DOMAIN
-    value: "example.org"
-```
-
-This allows **any** client with SPIFFE ID `spiffe://example.org/*`.
+The server will automatically detect `mycompany.com` as the trust domain and authorize all clients in that domain.
 
 ### Production Deployment
 
@@ -452,7 +492,7 @@ For production:
    FROM golang:1.25 AS builder
    WORKDIR /app
    COPY . .
-   RUN go build -o mtls-server ./examples/identityserver-example
+   RUN go build -o mtls-server ./examples/zeroconfig-example
 
    FROM debian:bookworm-slim
    COPY --from=builder /app/mtls-server /usr/local/bin/
@@ -476,6 +516,7 @@ For production:
 
 ## Next Steps
 
+- Try [zeroconfig-example/](zeroconfig-example/) for a simpler, zero-configuration approach
 - Read [docs/TEST_ARCHITECTURE.md](../docs/TEST_ARCHITECTURE.md) for integration testing patterns
 - Explore [internal/adapters/inbound/identityserver/](../internal/adapters/inbound/identityserver/) to understand the adapter implementation
 - Review [docs/CONTROL_PLANE.md](../docs/CONTROL_PLANE.md) for SPIRE deployment architecture

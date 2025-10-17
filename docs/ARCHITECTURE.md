@@ -511,14 +511,14 @@ Just because CLI calls it doesn't make it inbound. The agent is called BY the ap
 
 | Aspect | CLI Demo | HTTP mTLS (Production) |
 |--------|----------|----------------------|
-| Entry Point | `cmd/main.go` | `examples/identityserver-example/main.go` |
+| Entry Point | `cmd/main.go` | `examples/zeroconfig-example/main.go` |
 | Inbound Adapter | CLI (console) | identityserver (HTTP) |
 | Agent Used | InMemoryAgent | Production SPIRE Workload API |
 | Build Tag | `dev` | None (production code) |
 | Purpose | Architecture demo | Real mTLS communication |
 | Scope | Out of scope for "two services using mTLS" | **In scope** |
 
-**For HTTP mTLS**: Use `examples/identityserver-example/` which connects to real SPIRE via Workload API. This does NOT use InMemoryAgent.
+**For HTTP mTLS**: Use `examples/zeroconfig-example/` which connects to real SPIRE via Workload API. This does NOT use InMemoryAgent.
 
 ---
 

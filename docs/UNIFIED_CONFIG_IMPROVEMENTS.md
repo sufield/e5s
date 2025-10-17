@@ -114,7 +114,7 @@ if cfg.SPIFFE.AllowedPeerID == "" {
    - Updated `ToServerConfig()` to use `AllowedPeerID`
    - Updated `ToClientConfig()` to use `AllowedPeerID`
 
-5. **examples/identityserver-example/main.go**
+5. **examples/zeroconfig-example/main.go**
    - Updated to use `cfg.SPIFFE.AllowedPeerID`
    - Updated environment variable usage
 
