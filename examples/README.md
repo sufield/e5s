@@ -84,7 +84,7 @@ Create SPIRE registration entries for the server and client workloads.
 
 #### Get Agent SPIFFE ID
 
-**Important**: Always fetch the actual agent SPIFFE ID dynamically. Do not hardcode it.
+Fetch the actual agent SPIFFE ID dynamically. Do not hardcode it.
 
 ```bash
 # Get the agent's SPIFFE ID
@@ -340,7 +340,7 @@ SPIRE agent attests workload identity using Kubernetes selectors:
 -selector k8s:container-name:mtls-server  # Container name
 ```
 
-**All selectors must match** for the workload to receive the registered SPIFFE ID.
+All selectors must match for the workload to receive the registered SPIFFE ID.
 
 ### mTLS Authentication Flow
 
@@ -545,14 +545,13 @@ For production:
 
 ## Summary
 
-This guide showed you how to:
+This guide covers how to:
 - ✅ Deploy SPIRE infrastructure on Minikube
 - ✅ Register workload identities with SPIRE
 - ✅ Deploy an mTLS server using SPIFFE authentication
 - ✅ Test mutual TLS between workloads
 - ✅ Troubleshoot common issues
 
-**Key Takeaways**:
 1. Always mount the SPIRE agent socket into workload pods
 2. Registration selectors must exactly match pod metadata
 3. Never hardcode agent parentID - fetch it dynamically
