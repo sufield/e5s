@@ -50,6 +50,8 @@ func main() {
 
     // Configure the mTLS server
     var cfg ports.MTLSConfig
+    // Socket path for this repo's Minikube setup
+    // (Common default in other clusters: unix:///run/spire/sockets/agent.sock)
     cfg.WorkloadAPI.SocketPath = "unix:///tmp/spire-agent/public/api.sock"
     cfg.SPIFFE.AllowedPeerID = "spiffe://example.org/client"  // Or use AllowedTrustDomain
     cfg.HTTP.Address = ":8443"
@@ -138,6 +140,8 @@ func main() {
     }
 
     // Make request
+    // Note: SPIFFE authentication verifies the server's SPIFFE ID (via AuthorizeID),
+    // not the DNS hostname. Using "localhost" here is fine.
     resp, err := httpClient.Get("https://localhost:8443/api/hello")
     if err != nil {
         log.Fatalf("Request failed: %v", err)
@@ -378,16 +382,19 @@ type IdentityDocument struct {
 
 ```go
 // Selector represents a workload attribute used for attestation
+// Format: type:key:value
 type Selector struct {
-    selectorType  string  // e.g., "unix"
-    selectorValue string  // e.g., "uid:1000"
+    selectorType SelectorType // e.g., "unix" | "workload" | "k8s"
+    key          string       // e.g., "uid", "namespace"
+    value        string       // e.g., "1000" (value MAY contain colons)
+    formatted    string       // Cached "type:key:value" representation
 }
 ```
 
 **Examples**:
-- `unix:uid:1000`
-- `unix:user:server-workload`
-- `k8s:namespace:production`
+- `unix:uid:1000` → type="unix", key="uid", value="1000"
+- `k8s:namespace:production` → type="k8s", key="namespace", value="production"
+- `k8s:pod:ns:default:name` → type="k8s", key="pod", value="ns:default:name" (multi-colon value)
 
 ## Testing
 
@@ -505,10 +512,8 @@ func TestMTLSAuthentication(t *testing.T) {
 ### Run mTLS Server Example
 
 ```bash
-# Set SPIRE socket path
-export SPIRE_AGENT_SOCKET="unix:///tmp/spire-agent/public/api.sock"
-
 # Run the example server
+# (Socket path is configured in code: cfg.WorkloadAPI.SocketPath)
 go run ./examples/identityserver-example
 
 # Output:
@@ -612,8 +617,8 @@ This implementation follows Go best practices and production-ready patterns:
 3. **Certificate Rotation**: Automatic via SPIRE (zero downtime)
 4. **No Authorization**: Library only authenticates - app decides access
 5. **Timeout Configuration**: All operations have configurable timeouts
-6. **TLS 1.3**: Minimum TLS version enforced
-7. **Secure Defaults**: Go's secure cipher suites used
+6. **TLS 1.3**: Minimum TLS version enforced; cipher suites negotiated per TLS 1.3
+7. **SPIFFE Verification**: Server identity verified via SPIFFE ID, not DNS hostname
 
 ## SPIRE Integration
 
