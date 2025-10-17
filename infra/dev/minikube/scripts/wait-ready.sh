@@ -113,24 +113,45 @@ wait_for_daemonset() {
     done
 }
 
-# Wait for pods to be running
+# Wait for essential SPIRE pods to be running
 wait_for_pods() {
-    log_info "Waiting for all pods in '${NAMESPACE}' to be running..."
+    log_info "Waiting for essential SPIRE pods to be running..."
 
-    if ! kubectl wait --for=condition=ready \
-        --timeout="${TIMEOUT}s" \
-        -n "${NAMESPACE}" \
-        --all pods 2>/dev/null; then
-
-        log_error "Timeout waiting for pods"
-
-        log_info "Current pod status:"
-        kubectl get pods -n "${NAMESPACE}" || true
-
-        return 1
+    # Wait for SPIRE server pod (StatefulSet)
+    if kubectl get statefulset -n "${NAMESPACE}" spire-server &>/dev/null; then
+        if ! kubectl wait --for=condition=ready \
+            --timeout="${TIMEOUT}s" \
+            -n "${NAMESPACE}" \
+            pod/spire-server-0 2>/dev/null; then
+            log_error "Timeout waiting for spire-server-0"
+            kubectl get pods -n "${NAMESPACE}" -l app.kubernetes.io/name=spire-server || true
+            return 1
+        fi
     fi
 
-    log_success "All pods are running"
+    # Wait for SPIRE agent pods (DaemonSet)
+    if kubectl get daemonset -n "${NAMESPACE}" spire-agent &>/dev/null; then
+        if ! kubectl wait --for=condition=ready \
+            --timeout="${TIMEOUT}s" \
+            -n "${NAMESPACE}" \
+            -l app.kubernetes.io/name=agent pods 2>/dev/null; then
+            log_error "Timeout waiting for spire-agent pods"
+            kubectl get pods -n "${NAMESPACE}" -l app.kubernetes.io/name=agent || true
+            return 1
+        fi
+    fi
+
+    # Wait for CSI driver pods (DaemonSet) if present - optional component
+    if kubectl get daemonset -n "${NAMESPACE}" spire-spiffe-csi-driver &>/dev/null; then
+        if ! kubectl wait --for=condition=ready \
+            --timeout="${TIMEOUT}s" \
+            -n "${NAMESPACE}" \
+            -l app.kubernetes.io/name=spiffe-csi-driver pods 2>/dev/null; then
+            log_info "CSI driver pods not ready (optional component, continuing...)"
+        fi
+    fi
+
+    log_success "Essential SPIRE pods are running"
 }
 
 # Check SPIRE server health
@@ -139,7 +160,12 @@ check_spire_server_health() {
 
     local elapsed=0
     while true; do
-        if kubectl exec -n "${NAMESPACE}" deployment/spire-server -- \
+        # Try StatefulSet pod first, then fall back to deployment
+        if kubectl exec -n "${NAMESPACE}" spire-server-0 -c spire-server -- \
+            /opt/spire/bin/spire-server healthcheck 2>/dev/null; then
+            log_success "SPIRE server is healthy"
+            return 0
+        elif kubectl exec -n "${NAMESPACE}" deployment/spire-server -- \
             /opt/spire/bin/spire-server healthcheck 2>/dev/null; then
             log_success "SPIRE server is healthy"
             return 0
@@ -161,7 +187,7 @@ check_spire_agent_health() {
 
     # Get first agent pod
     local pod
-    pod=$(kubectl get pods -n "${NAMESPACE}" -l "app.kubernetes.io/name=spire-agent" \
+    pod=$(kubectl get pods -n "${NAMESPACE}" -l "app.kubernetes.io/name=agent" \
         -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
 
     if [ -z "${pod}" ]; then
@@ -222,7 +248,9 @@ main() {
     fi
 
     # Health checks
-    if kubectl get deployment -n "${NAMESPACE}" spire-server &>/dev/null; then
+    # Check for either StatefulSet or Deployment
+    if kubectl get statefulset -n "${NAMESPACE}" spire-server &>/dev/null || \
+       kubectl get deployment -n "${NAMESPACE}" spire-server &>/dev/null; then
         if ! check_spire_server_health; then
             log_error "SPIRE server health check failed"
             exit 1

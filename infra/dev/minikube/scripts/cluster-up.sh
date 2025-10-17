@@ -253,7 +253,7 @@ display_info() {
     echo ""
     log_info "Useful commands:"
     echo "  kubectl get pods -n spire-system"
-    echo "  kubectl logs -n spire-system deployment/spire-server"
+    echo "  kubectl logs -n spire-system spire-server-0 -c spire-server"
     echo "  kubectl logs -n spire-system daemonset/spire-agent"
     echo "  minikube dashboard -p ${CLUSTER_NAME}"
     echo "  minikube service list -p ${CLUSTER_NAME}"
