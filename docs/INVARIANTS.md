@@ -166,7 +166,8 @@ func ParseSelectorFromString(s string) (*Selector, error)
 - **Pre**: Input format is "type:key:value[:more...]"
 - **Post**: If `err == nil`, selector has non-empty `selectorType`, `key`, `value`
 - **Post**: Values with colons are preserved (e.g., "unix:uid:1000:extra" → value="1000:extra")
-- **Rationale**: Selector format is strictly defined
+- **Post**: Parser splits on first two colons only; everything after the second colon becomes the value (joined with colons)
+- **Rationale**: Selector format is strictly defined; values may contain multi-part data with embedded colons
 
 ```go
 // Invariant: Equals() is reflexive, symmetric, transitive

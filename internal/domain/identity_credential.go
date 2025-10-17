@@ -39,12 +39,17 @@ type IdentityCredential struct {
 // NewIdentityCredentialFromComponents creates an IdentityCredential from
 // validated and normalized components.
 //
+// ⚠️  WARNING: This constructor PANICS on invalid input. It is intended for use
+// by IdentityCredentialParser adapters after SDK validation. For user-facing
+// code, prefer using the parser adapter which validates first and returns errors.
+//
 // This constructor is typically called by IdentityCredentialParser adapters
 // after SDK validation. It performs final normalization and immutable construction.
 //
 // Validation:
 //   - trustDomain must be non-nil (panics if nil to catch programming errors early)
 //   - path is normalized: leading slash, collapsed //, root → "/"
+//   - path must not contain '.' or '..' segments (panics if present)
 //   - URI precomputed from normalized components
 //
 // Path Normalization:
@@ -60,6 +65,7 @@ type IdentityCredential struct {
 //
 // Panics:
 //   - If trustDomain is nil (programming error, not runtime input validation)
+//   - If path contains '.' or '..' segments (normalizePath panics)
 //
 // Concurrency: Safe for concurrent use (pure function, no shared state).
 func NewIdentityCredentialFromComponents(trustDomain *TrustDomain, path string) *IdentityCredential {
@@ -85,16 +91,23 @@ func NewIdentityCredentialFromComponents(trustDomain *TrustDomain, path string) 
 
 // normalizePath normalizes a path component for SPIFFE ID construction.
 //
+// ⚠️  WARNING: This function PANICS on invalid input (dot/dotdot segments).
+// It is intended for internal use by constructors after adapter validation.
+//
 // Normalization Rules:
 //  1. Trim leading/trailing whitespace
 //  2. Empty or "/" → "/" (root identity)
 //  3. Ensure leading slash (e.g., "foo" → "/foo")
 //  4. Collapse multiple slashes (e.g., "//foo//bar" → "/foo/bar")
 //  5. Remove trailing slashes (e.g., "/foo/bar/" → "/foo/bar")
-//  6. Reject dot (`.`) and dotdot (`..`) segments - SPIFFE forbids traversal
+//  6. Reject dot (`.`) and dotdot (`..`) segments (panics if present)
 //
-// This ensures canonical representation for equality checks and prevents
-// duplicate identities like "/foo" and "//foo" from being treated differently.
+// SPIFFE IDs follow RFC 3986 URI syntax. Dot (`.`) and dotdot (`..`) segments
+// are disallowed here to prevent path traversal normalization ambiguity and
+// ensure canonical representation for equality checks.
+//
+// This prevents duplicate identities like "/foo" and "//foo" from being
+// treated differently.
 //
 // Examples:
 //   normalizePath("")             → "/"
@@ -105,15 +118,16 @@ func NewIdentityCredentialFromComponents(trustDomain *TrustDomain, path string) 
 //   normalizePath("//foo//bar")   → "/foo/bar"
 //   normalizePath("///foo///")    → "/foo"
 //   normalizePath("/foo/bar/")    → "/foo/bar"
+//   normalizePath("/db:rw/user")  → "/db:rw/user" (colons allowed)
 //
 // Panics:
-//   - If path contains `.` or `..` segments - SPIFFE forbids traversal
+//   - If path contains `.` or `..` segments (path traversal)
 //
-// Note: Query parameters and fragments are not handled here as they're
-// invalid in SPIFFE IDs. Adapters using go-spiffe SDK reject such inputs
-// during parsing.
+// Note: Query parameters (`?`) and fragments (`#`) are not handled here as
+// they're invalid in SPIFFE IDs. Adapters using go-spiffe SDK reject such
+// inputs during parsing.
 //
-// Note: Colons are allowed in path segments per RFC 3986 and SPIFFE spec.
+// Note: Colons (`:`) are allowed in path segments per RFC 3986 and SPIFFE spec.
 func normalizePath(p string) string {
 	// Step 1: Trim whitespace
 	p = strings.TrimSpace(p)

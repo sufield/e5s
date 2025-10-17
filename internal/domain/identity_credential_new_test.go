@@ -185,6 +185,24 @@ func TestIdentityCredential_PathNormalization(t *testing.T) {
 			expectedPath: "/workload/server",
 			expectedURI:  "spiffe://example.org/workload/server",
 		},
+		{
+			name:         "colons allowed in path segments",
+			inputPath:    "/db:rw/user",
+			expectedPath: "/db:rw/user",
+			expectedURI:  "spiffe://example.org/db:rw/user",
+		},
+		{
+			name:         "multiple colons in path",
+			inputPath:    "/service:v1.2.3:prod",
+			expectedPath: "/service:v1.2.3:prod",
+			expectedURI:  "spiffe://example.org/service:v1.2.3:prod",
+		},
+		{
+			name:         "trailing slashes removed",
+			inputPath:    "/foo/bar/",
+			expectedPath: "/foo/bar",
+			expectedURI:  "spiffe://example.org/foo/bar",
+		},
 	}
 
 	for _, tt := range tests {
@@ -417,4 +435,53 @@ func TestIdentityCredential_NilTrustDomain_Panics(t *testing.T) {
 	assert.Panics(t, func() {
 		domain.NewIdentityCredentialFromComponents(nil, "/workload")
 	}, "Should panic when trust domain is nil")
+}
+
+// TestIdentityCredential_DotSegments_Panics tests that dot and dotdot segments panic
+func TestIdentityCredential_DotSegments_Panics(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		inputPath string
+	}{
+		{
+			name:      "single dot segment",
+			inputPath: "/.",
+		},
+		{
+			name:      "double dot segment",
+			inputPath: "/..",
+		},
+		{
+			name:      "dot in middle of path",
+			inputPath: "/a/./b",
+		},
+		{
+			name:      "dotdot in middle of path",
+			inputPath: "/a/../b",
+		},
+		{
+			name:      "multiple dot segments",
+			inputPath: "/./foo/./bar",
+		},
+		{
+			name:      "dotdot at end",
+			inputPath: "/foo/bar/..",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			// Arrange
+			td := domain.NewTrustDomainFromName("example.org")
+
+			// Assert: Should panic on dot/dotdot segments
+			assert.Panics(t, func() {
+				domain.NewIdentityCredentialFromComponents(td, tt.inputPath)
+			}, "Should panic when path contains dot or dotdot segments")
+		})
+	}
 }
