@@ -50,7 +50,7 @@ This document identifies and describes **invariants**—properties or conditions
 
 ```go
 // Invariant: name is never empty after construction
-// Location: NewTrustDomainFromName (line 19)
+// Location: NewTrustDomainFromName
 func NewTrustDomainFromName(name string) *TrustDomain
 ```
 - **Pre**: `name` must not be empty (validated by TrustDomainParser adapter before calling)
@@ -59,7 +59,7 @@ func NewTrustDomainFromName(name string) *TrustDomain
 
 ```go
 // Invariant: Equals() returns false for nil input
-// Location: Equals (line 30)
+// Location: Equals
 func (td *TrustDomain) Equals(other *TrustDomain) bool
 ```
 - **Post**: Returns `false` if `other == nil`, never panics
@@ -67,7 +67,7 @@ func (td *TrustDomain) Equals(other *TrustDomain) bool
 
 ```go
 // Invariant: String() never returns empty string for valid TrustDomain
-// Location: String (line 24)
+// Location: String
 func (td *TrustDomain) String() string
 ```
 - **Post**: `len(td.String()) > 0` for all valid trust domains
@@ -83,27 +83,27 @@ func (td *TrustDomain) String() string
 
 ```go
 // Invariant: trustDomain is never nil after construction
-// Location: NewIdentityCredentialFromComponents (line 25)
+// Location: NewIdentityCredentialFromComponents
 func NewIdentityCredentialFromComponents(trustDomain *TrustDomain, path string) *IdentityCredential
 ```
-- **Pre**: `trustDomain != nil` (enforced by caller, see line 24 comment)
+- **Pre**: `trustDomain != nil` (enforced by caller)
 - **Post**: `i.trustDomain != nil` always holds
 - **Rationale**: IdentityCredential without trust domain is meaningless
 
 ```go
 // Invariant: path is normalized and validated on construction
-// Location: NewIdentityCredentialFromComponents, normalizePath (line 26-28, 117-157)
+// Location: NewIdentityCredentialFromComponents, normalizePath
 func NewIdentityCredentialFromComponents(trustDomain *TrustDomain, path string) *IdentityCredential
 ```
 - **Post**: `i.path != ""` (always "/" or normalized non-empty path)
-- **Post**: Path never contains colon (`:`) - reserved by SPIFFE spec (panics if violated)
 - **Post**: Path never contains `.` or `..` segments - SPIFFE forbids traversal (panics if violated)
 - **Post**: Path has leading slash, no repeated slashes, no trailing slash (except root "/")
-- **Rationale**: SPIFFE IDs require normalized path; colons and dot segments are security risks
+- **Post**: Colons are allowed in path segments per RFC 3986 and SPIFFE spec
+- **Rationale**: SPIFFE IDs require normalized path; dot segments are security risks
 
 ```go
 // Invariant: uri is always formatted as "spiffe://<trustDomain><path>"
-// Location: NewIdentityCredentialFromComponents (line 30)
+// Location: NewIdentityCredentialFromComponents
 func NewIdentityCredentialFromComponents(trustDomain *TrustDomain, path string) *IdentityCredential
 ```
 - **Post**: `i.uri` starts with `"spiffe://"` and matches `trustDomain + path`
@@ -111,7 +111,7 @@ func NewIdentityCredentialFromComponents(trustDomain *TrustDomain, path string) 
 
 ```go
 // Invariant: Equals() is reflexive, symmetric, transitive
-// Location: Equals (line 54)
+// Location: Equals
 func (i *IdentityCredential) Equals(other *IdentityCredential) bool
 ```
 - **Post**: `i.Equals(i) == true` (reflexive)
@@ -122,7 +122,7 @@ func (i *IdentityCredential) Equals(other *IdentityCredential) bool
 
 ```go
 // Invariant: IsInTrustDomain(td) iff i.trustDomain.Equals(td)
-// Location: IsInTrustDomain (line 62)
+// Location: IsInTrustDomain
 func (i *IdentityCredential) IsInTrustDomain(td *TrustDomain) bool
 ```
 - **Post**: Result matches `i.trustDomain.Equals(td)`
@@ -138,7 +138,7 @@ func (i *IdentityCredential) IsInTrustDomain(td *TrustDomain) bool
 
 ```go
 // Invariant: type, key, and value are validated on construction
-// Location: NewSelector (line 38-93)
+// Location: NewSelector
 func NewSelector(selectorType SelectorType, key, value string) (*Selector, error)
 ```
 - **Pre**: `selectorType != ""`, `key != ""`, `value != ""` (validated, returns error otherwise)
@@ -152,7 +152,7 @@ func NewSelector(selectorType SelectorType, key, value string) (*Selector, error
 
 ```go
 // Invariant: formatted matches "type:key:value" pattern
-// Location: NewSelector (line 35)
+// Location: NewSelector
 func NewSelector(selectorType SelectorType, key, value string) (*Selector, error)
 ```
 - **Post**: `s.formatted == fmt.Sprintf("%s:%s:%s", type, key, value)`
@@ -160,7 +160,7 @@ func NewSelector(selectorType SelectorType, key, value string) (*Selector, error
 
 ```go
 // Invariant: ParseSelectorFromString requires at least 3 parts (type:key:value)
-// Location: ParseSelectorFromString (line 76)
+// Location: ParseSelectorFromString
 func ParseSelectorFromString(s string) (*Selector, error)
 ```
 - **Pre**: Input format is "type:key:value[:more...]"
@@ -170,7 +170,7 @@ func ParseSelectorFromString(s string) (*Selector, error)
 
 ```go
 // Invariant: Equals() is reflexive, symmetric, transitive
-// Location: Equals (line 112)
+// Location: Equals
 func (s *Selector) Equals(other *Selector) bool
 ```
 - **Post**: `s.Equals(s) == true` (reflexive)
@@ -189,7 +189,7 @@ func (s *Selector) Equals(other *Selector) bool
 
 ```go
 // Invariant: Set preserves insertion order and ensures uniqueness
-// Location: Add (line 61-84)
+// Location: Add 
 func (ss *SelectorSet) Add(selector *Selector)
 ```
 - **Pre**: Any selector can be added
@@ -201,7 +201,7 @@ func (ss *SelectorSet) Add(selector *Selector)
 
 ```go
 // Invariant: Implementation uses both map and slice for O(1) add/contains
-// Location: SelectorSet struct (line 31-36)
+// Location: SelectorSet struct 
 type SelectorSet struct { seen map[string]struct{}; list []*Selector }
 ```
 - **Post**: `seen` map is used for O(1) deduplication checks
@@ -211,7 +211,7 @@ type SelectorSet struct { seen map[string]struct{}; list []*Selector }
 
 ```go
 // Invariant: Contains() never modifies the set
-// Location: Contains (line 86-100)
+// Location: Contains 
 func (ss *SelectorSet) Contains(selector *Selector) bool
 ```
 - **Post**: Calling `Contains()` never changes `ss.seen` or `ss.list`
@@ -219,7 +219,7 @@ func (ss *SelectorSet) Contains(selector *Selector) bool
 
 ```go
 // Invariant: All() returns defensive copy in insertion order
-// Location: All (line 126-143)
+// Location: All 
 func (ss *SelectorSet) All() []*Selector
 ```
 - **Post**: Modifying returned slice does not affect `ss.list`
@@ -236,7 +236,7 @@ func (ss *SelectorSet) All() []*Selector
 
 ```go
 // Invariant: identityCredential is never nil for valid document
-// Location: NewIdentityDocumentFromComponents (line 43)
+// Location: NewIdentityDocumentFromComponents 
 func NewIdentityDocumentFromComponents(...) *IdentityDocument
 ```
 - **Pre**: `identityCredential != nil` (enforced by caller)
@@ -245,7 +245,7 @@ func NewIdentityDocumentFromComponents(...) *IdentityDocument
 
 ```go
 // Invariant: For X.509 documents, cert/privateKey/chain are non-nil
-// Location: NewIdentityDocumentFromComponents (line 43)
+// Location: NewIdentityDocumentFromComponents 
 func NewIdentityDocumentFromComponents(...) *IdentityDocument
 ```
 - **Pre**: If `identityDocumentType == IdentityDocumentTypeX509`, then `cert != nil`, `privateKey != nil`, `chain != nil`
@@ -254,7 +254,7 @@ func NewIdentityDocumentFromComponents(...) *IdentityDocument
 
 ```go
 // Invariant: For JWT documents, cert/privateKey/chain are nil
-// Location: NewIdentityDocumentFromComponents (line 43)
+// Location: NewIdentityDocumentFromComponents 
 func NewIdentityDocumentFromComponents(...) *IdentityDocument
 ```
 - **Pre**: If `identityDocumentType == IdentityDocumentTypeJWT`, then `cert == nil`, `privateKey == nil`, `chain == nil`
@@ -262,7 +262,7 @@ func NewIdentityDocumentFromComponents(...) *IdentityDocument
 
 ```go
 // Invariant: IsExpired() delegates to IsExpiredAt(time.Now())
-// Location: IsExpired (line 244-258)
+// Location: IsExpired 
 func (id *IdentityDocument) IsExpired() bool
 ```
 - **Post**: Returns same result as `IsExpiredAt(time.Now())`
@@ -271,7 +271,7 @@ func (id *IdentityDocument) IsExpired() bool
 
 ```go
 // Invariant: IsExpiredAt(t) checks expiration at given time (clock injection)
-// Location: IsExpiredAt (line 260-280)
+// Location: IsExpiredAt 
 func (id *IdentityDocument) IsExpiredAt(t time.Time) bool
 ```
 - **Post**: Returns `true` when `t.After(cert.NotAfter)`, `false` otherwise
@@ -280,7 +280,7 @@ func (id *IdentityDocument) IsExpiredAt(t time.Time) bool
 
 ```go
 // Invariant: IsValid() == !IsExpired() for current implementation
-// Location: IsValid (line 98)
+// Location: IsValid 
 func (id *IdentityDocument) IsValid() bool
 ```
 - **Post**: `IsValid() == !IsExpired()` always holds
@@ -297,7 +297,7 @@ func (id *IdentityDocument) IsValid() bool
 
 ```go
 // Invariant: identityCredential is never nil after construction
-// Location: NewIdentityMapper (line 15)
+// Location: NewIdentityMapper 
 func NewIdentityMapper(identityCredential *IdentityCredential, selectors *SelectorSet) (*IdentityMapper, error)
 ```
 - **Pre**: `identityCredential != nil` (validated, returns `ErrInvalidIdentityCredential` otherwise)
@@ -306,7 +306,7 @@ func NewIdentityMapper(identityCredential *IdentityCredential, selectors *Select
 
 ```go
 // Invariant: selectors is never nil or empty after construction
-// Location: NewIdentityMapper (line 15)
+// Location: NewIdentityMapper 
 func NewIdentityMapper(identityCredential *IdentityCredential, selectors *SelectorSet) (*IdentityMapper, error)
 ```
 - **Pre**: `selectors != nil && len(selectors.All()) > 0` (validated, returns `ErrInvalidSelectors` otherwise)
@@ -315,7 +315,7 @@ func NewIdentityMapper(identityCredential *IdentityCredential, selectors *Select
 
 ```go
 // Invariant: MatchesSelectors() uses AND logic (ALL mapper selectors must be present)
-// Location: MatchesSelectors (line 53)
+// Location: MatchesSelectors 
 func (im *IdentityMapper) MatchesSelectors(selectors *SelectorSet) bool
 ```
 - **Post**: Returns `true` iff ALL selectors in `im.selectors` are contained in input `selectors`
@@ -334,7 +334,7 @@ func (im *IdentityMapper) MatchesSelectors(selectors *SelectorSet) bool
 
 ```go
 // Invariant: ExchangeMessage requires non-nil identity credentials
-// Location: ExchangeMessage (line 28)
+// Location: ExchangeMessage 
 func (s *IdentityService) ExchangeMessage(ctx context.Context, from dto.Identity, to dto.Identity, content string) (*dto.Message, error)
 ```
 - **Pre**: `from.IdentityCredential != nil` and `to.IdentityCredential != nil`
@@ -343,7 +343,7 @@ func (s *IdentityService) ExchangeMessage(ctx context.Context, from dto.Identity
 
 ```go
 // Invariant: ExchangeMessage requires valid (non-expired) identity documents
-// Location: ExchangeMessage (line 28)
+// Location: ExchangeMessage 
 func (s *IdentityService) ExchangeMessage(ctx context.Context, from dto.Identity, to dto.Identity, content string) (*dto.Message, error)
 ```
 - **Pre**: `from.IdentityDocument != nil && from.IdentityDocument.IsValid()`
@@ -353,7 +353,7 @@ func (s *IdentityService) ExchangeMessage(ctx context.Context, from dto.Identity
 
 ```go
 // Invariant: ExchangeMessage never returns msg != nil when err != nil
-// Location: ExchangeMessage (line 28)
+// Location: ExchangeMessage 
 func (s *IdentityService) ExchangeMessage(ctx context.Context, from dto.Identity, to dto.Identity, content string) (*dto.Message, error)
 ```
 - **Post**: If `err != nil`, then `msg == nil` always holds
@@ -362,7 +362,7 @@ func (s *IdentityService) ExchangeMessage(ctx context.Context, from dto.Identity
 
 ```go
 // Invariant: Created message preserves input identities and content
-// Location: ExchangeMessage (line 46)
+// Location: ExchangeMessage 
 func (s *IdentityService) ExchangeMessage(ctx context.Context, from dto.Identity, to dto.Identity, content string) (*dto.Message, error)
 ```
 - **Post**: If `err == nil`, then:
@@ -383,7 +383,7 @@ func (s *IdentityService) ExchangeMessage(ctx context.Context, from dto.Identity
 
 ```go
 // Invariant: Registry is immutable after sealing
-// Location: Seal (line 52)
+// Location: Seal 
 func (r *InMemoryRegistry) Seal()
 ```
 - **Post**: Once `r.sealed == true`, `Seed()` always returns `ErrRegistrySealed`
@@ -392,7 +392,7 @@ func (r *InMemoryRegistry) Seal()
 
 ```go
 // Invariant: Seed() rejects duplicates by identity credential
-// Location: Seed (line 33)
+// Location: Seed 
 func (r *InMemoryRegistry) Seed(ctx context.Context, mapper *domain.IdentityMapper) error
 ```
 - **Pre**: Registry is not sealed (`r.sealed == false`)
@@ -402,7 +402,7 @@ func (r *InMemoryRegistry) Seed(ctx context.Context, mapper *domain.IdentityMapp
 
 ```go
 // Invariant: FindBySelectors() is read-only (never modifies registry)
-// Location: FindBySelectors (line 61)
+// Location: FindBySelectors 
 func (r *InMemoryRegistry) FindBySelectors(ctx context.Context, selectors *domain.SelectorSet) (*domain.IdentityMapper, error)
 ```
 - **Post**: Calling `FindBySelectors()` never changes `r.mappers` or `r.sealed`
@@ -411,7 +411,7 @@ func (r *InMemoryRegistry) FindBySelectors(ctx context.Context, selectors *domai
 
 ```go
 // Invariant: FindBySelectors() validates input before search
-// Location: FindBySelectors (line 66)
+// Location: FindBySelectors 
 func (r *InMemoryRegistry) FindBySelectors(ctx context.Context, selectors *domain.SelectorSet) (*domain.IdentityMapper, error)
 ```
 - **Pre**: `selectors != nil && len(selectors.All()) > 0`
@@ -420,7 +420,7 @@ func (r *InMemoryRegistry) FindBySelectors(ctx context.Context, selectors *domai
 
 ```go
 // Invariant: FindBySelectors() returns first match using AND logic
-// Location: FindBySelectors (line 71)
+// Location: FindBySelectors 
 func (r *InMemoryRegistry) FindBySelectors(ctx context.Context, selectors *domain.SelectorSet) (*domain.IdentityMapper, error)
 ```
 - **Post**: Returns mapper where `mapper.MatchesSelectors(selectors) == true`
@@ -429,7 +429,7 @@ func (r *InMemoryRegistry) FindBySelectors(ctx context.Context, selectors *domai
 
 ```go
 // Invariant: ListAll() never returns nil slice when mappers exist
-// Location: ListAll (line 81)
+// Location: ListAll 
 func (r *InMemoryRegistry) ListAll(ctx context.Context) ([]*domain.IdentityMapper, error)
 ```
 - **Post**: If `len(r.mappers) > 0`, returns non-nil slice
@@ -446,7 +446,7 @@ func (r *InMemoryRegistry) ListAll(ctx context.Context) ([]*domain.IdentityMappe
 
 ```go
 // Invariant: trustDomain is never nil after construction
-// Location: NewInMemoryServer (line 28)
+// Location: NewInMemoryServer 
 func NewInMemoryServer(ctx context.Context, trustDomainStr string, trustDomainParser ports.TrustDomainParser, certProvider ports.IdentityDocumentProvider) (*InMemoryServer, error)
 ```
 - **Pre**: `trustDomainStr` is valid (validated by `trustDomainParser`)
@@ -455,7 +455,7 @@ func NewInMemoryServer(ctx context.Context, trustDomainStr string, trustDomainPa
 
 ```go
 // Invariant: CA certificate and key are never nil after construction
-// Location: NewInMemoryServer (line 36)
+// Location: NewInMemoryServer 
 func NewInMemoryServer(ctx context.Context, trustDomainStr string, trustDomainParser ports.TrustDomainParser, certProvider ports.IdentityDocumentProvider) (*InMemoryServer, error)
 ```
 - **Post**: If `err == nil`, then `s.caCert != nil && s.caKey != nil` always hold
@@ -463,7 +463,7 @@ func NewInMemoryServer(ctx context.Context, trustDomainStr string, trustDomainPa
 
 ```go
 // Invariant: IssueIdentity() validates inputs before issuing
-// Location: IssueIdentity (line 51)
+// Location: IssueIdentity 
 func (s *InMemoryServer) IssueIdentity(ctx context.Context, identityCredential *domain.IdentityCredential) (*domain.IdentityDocument, error)
 ```
 - **Pre**: `identityCredential != nil`
@@ -473,7 +473,7 @@ func (s *InMemoryServer) IssueIdentity(ctx context.Context, identityCredential *
 
 ```go
 // Invariant: IssueIdentity() delegates document creation to provider
-// Location: IssueIdentity (line 65)
+// Location: IssueIdentity 
 func (s *InMemoryServer) IssueIdentity(ctx context.Context, identityCredential *domain.IdentityCredential) (*domain.IdentityDocument, error)
 ```
 - **Post**: If `err == nil`, returned document is created by `certificateProvider`
@@ -482,7 +482,7 @@ func (s *InMemoryServer) IssueIdentity(ctx context.Context, identityCredential *
 
 ```go
 // Invariant: GetTrustDomain() and GetCA() are read-only
-// Location: GetTrustDomain (line 74), GetCA (line 79)
+// Location: GetTrustDomain, GetCA
 func (s *InMemoryServer) GetTrustDomain() *domain.TrustDomain
 func (s *InMemoryServer) GetCA() *x509.Certificate
 ```
@@ -499,7 +499,7 @@ func (s *InMemoryServer) GetCA() *x509.Certificate
 
 ```go
 // Invariant: identityCredential is never nil after construction
-// Location: NewInMemoryAgent (line 24)
+// Location: NewInMemoryAgent 
 func NewInMemoryAgent(...) (*InMemoryAgent, error)
 ```
 - **Pre**: `agentSpiffeIDStr` is valid (validated by `parser`)
@@ -508,7 +508,7 @@ func NewInMemoryAgent(...) (*InMemoryAgent, error)
 
 ```go
 // Invariant: agentIdentity is initialized before agent is returned
-// Location: NewInMemoryAgent (line 50)
+// Location: NewInMemoryAgent 
 func NewInMemoryAgent(...) (*InMemoryAgent, error)
 ```
 - **Post**: If `err == nil`, then `a.agentIdentity != nil` and `a.agentIdentity.IdentityDocument.IsValid() == true`
@@ -516,7 +516,7 @@ func NewInMemoryAgent(...) (*InMemoryAgent, error)
 
 ```go
 // Invariant: GetIdentity() never returns nil identity for initialized agent
-// Location: GetIdentity (line 78)
+// Location: GetIdentity 
 func (a *InMemoryAgent) GetIdentity(ctx context.Context) (*domain.IdentityDocument, error)
 ```
 - **Post**: If agent is initialized, `doc != nil && err == nil`
@@ -525,7 +525,7 @@ func (a *InMemoryAgent) GetIdentity(ctx context.Context) (*domain.IdentityDocume
 
 ```go
 // Invariant: FetchIdentityDocument() follows strict flow: Attest → Match → Issue
-// Location: FetchIdentityDocument (line 87)
+// Location: FetchIdentityDocument 
 func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload *domain.Workload) (*domain.IdentityDocument, error)
 ```
 - **Post**: If `err == nil`, then:
@@ -537,7 +537,7 @@ func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload *dom
 
 ```go
 // Invariant: FetchIdentityDocument() validates attestation result
-// Location: FetchIdentityDocument (line 94)
+// Location: FetchIdentityDocument 
 func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload *domain.Workload) (*domain.IdentityDocument, error)
 ```
 - **Post**: If attestation returns empty selectors, returns error (never proceeds to match)
@@ -545,7 +545,7 @@ func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload *dom
 
 ```go
 // Invariant: FetchIdentityDocument() returns identity document with non-nil credential
-// Location: FetchIdentityDocument (line 121)
+// Location: FetchIdentityDocument 
 func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload *domain.Workload) (*domain.IdentityDocument, error)
 ```
 - **Post**: If `err == nil`, then:
