@@ -44,7 +44,7 @@ All control plane code is under `//go:build dev` and excluded from production bu
 
 **Port Interface**: `ports.IdentityServer` (`internal/ports/outbound_dev.go:62-73`)
 
-**Key Methods**:
+**Methods**:
 ```go
 // IssueIdentity issues an X.509 identity document for an identity credential
 func (s *InMemoryServer) IssueIdentity(ctx context.Context, identityCredential *domain.IdentityCredential) (*domain.IdentityDocument, error)
@@ -61,12 +61,12 @@ func (s *InMemoryServer) GetCACertPEM() []byte
 type InMemoryServer struct {
     trustDomain         *domain.TrustDomain
     caCert              *x509.Certificate
-    caKey               *rsa.PrivateKey
+    ca               *rsa.Private
     certificateProvider ports.IdentityDocumentProvider
 }
 ```
 
-**Key Behavior**:
+**Behavior**:
 - Trust domain enforcement: `server.go:66-68` validates credential trust domain matches server
 - CA initialization check: `server.go:71-73` ensures CA materials exist before issuance
 - Deterministic CA generation: Uses fixed time (2099-01-01) and seeded RNG for testing
@@ -86,7 +86,7 @@ type InMemoryServer struct {
 
 **Port Interface**: `ports.IdentityMapperRegistry` (`internal/ports/outbound_dev.go:26-34`)
 
-**Key Methods**:
+** Methods**:
 ```go
 // Seed adds an identity mapper (INTERNAL - used only during bootstrap)
 // Not part of port interface - called only by factory during composition
@@ -112,9 +112,9 @@ type InMemoryRegistry struct {
 // NOTE: No sync.RWMutex - "No concurrency support needed - all access is sequential in test/dev mode"
 ```
 
-**Key Behavior**:
+** Behavior**:
 - Seeding validation: `registry.go:37-38` prevents seeding after seal
-- Deterministic ordering: `registry.go:82-87` sorts keys for stable iteration
+- Deterministic ordering: `registry.go:82-87` sorts s for stable iteration
 - Sealed enforcement: Once `Seal()` called, `Seed()` returns `domain.ErrRegistrySealed`
 
 **Design Note**: No `Register()` or mutation methods exposed via port interface - seeding happens internally during bootstrap only.
@@ -132,7 +132,7 @@ type InMemoryRegistry struct {
 - Wires all control plane components (server, agent, registry, services)
 - Guards against infinite waits with default 10-second timeout
 
-**Key Function** (`bootstrap_dev.go:23-83`):
+** Function** (`bootstrap_dev.go:23-83`):
 ```go
 func Bootstrap(ctx context.Context, configLoader ports.ConfigLoader, factory *compose.InMemoryAdapterFactory) (*Application, error) {
     // Step 1: Load configuration (fixtures)
@@ -180,7 +180,7 @@ func Bootstrap(ctx context.Context, configLoader ports.ConfigLoader, factory *co
 }
 ```
 
-**Key Differences from Old Documentation**:
+** Differences from Old Documentation**:
 - **NO manual seeding loop** in bootstrap - seeding happens inside `factory.CreateRegistry()`
 - **NO separate `SealRegistry()` call** - registry returned already sealed from factory
 - Registry creation is ONE call: `factory.CreateRegistry(ctx, cfg.Workloads, idParser)`
@@ -245,7 +245,7 @@ cfg := &dto.Config{
 - Type-safe construction with concrete types (no interface{}))
 - Provides dev-only implementations of all ports
 
-**Key Method - CreateRegistry** (`inmemory.go:28-56`):
+** Method - CreateRegistry** (`inmemory.go:28-56`):
 ```go
 func (f *InMemoryAdapterFactory) CreateRegistry(
     ctx context.Context,
@@ -418,7 +418,7 @@ type ConfigLoader interface {
 // Implementations should respect ctx cancellation where applicable.
 type WorkloadAttestor interface {
     // Attest verifies a workload and returns its selectors.
-    // Selectors must be formatted as "type:key:value" (e.g., "unix:uid:1000", "k8s:namespace:prod").
+    // Selectors must be formatted as "type::value" (e.g., "unix:uid:1000", "k8s:namespace:prod").
     Attest(ctx context.Context, workload *domain.Workload) ([]string, error)
 }
 ```
@@ -454,7 +454,7 @@ type WorkloadAttestor interface {
 8. Wire Application
 ```
 
-**Key Characteristics**:
+** Characteristics**:
 - Seeding is **encapsulated in factory** - bootstrap doesn't touch registry internals
 - Registry returned from `CreateRegistry()` is **already seeded** (but not sealed in current impl)
 - **No separate seal step** visible in bootstrap (could be added in factory if needed)
@@ -692,8 +692,6 @@ These are **data plane** (runtime) components:
 - **Invariants**: See `docs/INVARIANTS.md` for domain invariants and error handling
 
 ---
-
-## Key Takeaways
 
 1. **Seeding happens in factory** - not visible in bootstrap code
 2. **Registry is read-only** after construction - no mutation methods in port
