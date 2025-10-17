@@ -89,9 +89,9 @@ Create SPIRE registration entries for the server and client workloads.
 ```bash
 # Get the agent's SPIFFE ID
 AGENT_ID=$(kubectl exec -n spire-system statefulset/spire-server -c spire-server -- \
-  /opt/spire/bin/spire-server agent list | awk '/SPIFFE ID/{print $3; exit}')
+    /opt/spire/bin/spire-server agent list | grep "SPIFFE ID" | awk -F': ' '{print $2}')
 
-echo "Agent SPIFFE ID: $AGENT_ID"
+  echo "Agent SPIFFE ID: $AGENT_ID"
 ```
 
 #### Register Server Workload
@@ -209,74 +209,14 @@ echo "Client pod: $CLIENT_POD"
 
 #### Run Test Client
 
-Execute this command to create and run a test client inside the pod:
+Copy the test client from the repository and run it:
 
 ```bash
-kubectl exec -it "$CLIENT_POD" -- bash -lc '
-# Create a simple Go test client
-cat > /tmp/test-client.go <<EOF
-package main
-import (
-  "context"
-  "fmt"
-  "io"
-  "log"
-  "net/http"
-  "time"
-  "github.com/spiffe/go-spiffe/v2/spiffeid"
-  "github.com/spiffe/go-spiffe/v2/spiffetls/tlsconfig"
-  "github.com/spiffe/go-spiffe/v2/workloadapi"
-)
-func main() {
-  ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-  defer cancel()
+# Copy the test client code
+kubectl cp examples/test-client.go "$CLIENT_POD":/workspace/testclient/test-client.go -c test-client
 
-  // Connect to SPIRE agent and get X.509 SVID
-  src, err := workloadapi.NewX509Source(ctx)
-  if err != nil {
-    log.Fatal(err)
-  }
-  defer src.Close()
-
-  // Allow any server in example.org trust domain
-  td := spiffeid.RequireTrustDomainFromString("example.org")
-  tlsCfg := tlsconfig.MTLSClientConfig(src, src, tlsconfig.AuthorizeMemberOf(td))
-
-  // Create HTTP client
-  client := &http.Client{
-    Transport: &http.Transport{TLSClientConfig: tlsCfg},
-    Timeout:   10 * time.Second,
-  }
-
-  // Test different endpoints
-  endpoints := []string{
-    "https://mtls-server:8443/",
-    "https://mtls-server:8443/api/hello",
-    "https://mtls-server:8443/api/identity",
-    "https://mtls-server:8443/health",
-  }
-
-  for _, url := range endpoints {
-    fmt.Printf("\n=== Testing: %s ===\n", url)
-    resp, err := client.Get(url)
-    if err != nil {
-      log.Printf("ERROR: %v\n", err)
-      continue
-    }
-    body, _ := io.ReadAll(resp.Body)
-    resp.Body.Close()
-    fmt.Printf("Status: %d\n", resp.StatusCode)
-    fmt.Printf("Body: %s\n", string(body))
-  }
-}
-EOF
-
-# Initialize Go module and run the client
-cd /tmp
-go mod init testclient
-go get github.com/spiffe/go-spiffe/v2@latest
-go run test-client.go
-'
+# Run the test client
+kubectl exec -it "$CLIENT_POD" -c test-client -- bash -c "cd /workspace/testclient && go mod tidy && go run test-client.go"
 ```
 
 **Expected output**:
