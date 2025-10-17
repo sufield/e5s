@@ -1,4 +1,4 @@
-# SPIRE mTLS Library - Hexagonal Architecture
+# SPIRE mTLS Library
 
 An mTLS authentication library using SPIFFE/SPIRE for service-to-service communication, built with hexagonal architecture.
 
