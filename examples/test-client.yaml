@@ -1,0 +1,42 @@
+# test-client.yaml - Test client pod with SPIRE Workload API access
+#
+# This Deployment creates a client pod that can obtain SPIFFE identities
+# and make mTLS requests to the mtls-server.
+#
+# Usage:
+#   1. Deploy: kubectl apply -f examples/test-client.yaml
+#   2. Wait: kubectl wait --for=condition=Ready deploy/test-client --timeout=60s
+#   3. Exec: kubectl exec -it $(kubectl get pod -l app=test-client -o jsonpath='{.items[0].metadata.name}') -- bash
+#   4. Inside the pod, create and run the test client (see examples/README.md)
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-client
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: test-client
+  template:
+    metadata:
+      labels:
+        app: test-client
+    spec:
+      volumes:
+        - name: spire-socket
+          hostPath:
+            path: /tmp/spire-agent/public
+            type: Directory
+      containers:
+        - name: test-client
+          image: golang:1.25
+          command: ["sleep", "infinity"]
+          env:
+            - name: SPIFFE_ENDPOINT_SOCKET
+              value: "unix:///spire-socket/api.sock"
+          volumeMounts:
+            - name: spire-socket
+              mountPath: /spire-socket
+              readOnly: true

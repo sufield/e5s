@@ -118,6 +118,8 @@ spec:
     spec:
       securityContext:
         runAsNonRoot: true
+        runAsUser: 65534  # nobody user
+        fsGroup: 65534
       volumes:
         - name: spire-socket
           hostPath:
@@ -126,7 +128,7 @@ spec:
       containers:
         - name: mtls-server
           image: debian:bookworm-slim
-          command: ["/usr/local/bin/mtls-server"]
+          command: ["sleep", "infinity"]  # Keep pod alive for binary copy
           env:
             - name: SPIFFE_ENDPOINT_SOCKET
               value: "unix:///spire-socket/api.sock"
@@ -140,14 +142,8 @@ spec:
               readOnly: true
           ports:
             - containerPort: 8443
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 8443
-              scheme: HTTPS
           securityContext:
             allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
 ---
 apiVersion: v1
 kind: Service
@@ -162,69 +158,39 @@ spec:
       targetPort: 8443
 ```
 
-Deploy + copy your binary:
+Deploy + run your binary:
 
 ```bash
-kubectl apply -f mtls-server.yaml
+# Apply the server deployment (YAML file included in examples/ directory)
+kubectl apply -f examples/mtls-server.yaml
 
-# Wait for pod Ready (probe hits /health which is unauthenticated)
-kubectl wait --for=condition=Ready deploy/mtls-server --timeout=120s
+# Wait for pod Ready
+kubectl wait --for=condition=Ready deploy/mtls-server --timeout=60s
 
-# Copy compiled binary into the container image (simple dev flow)
+# Copy compiled binary into the container
 POD=$(kubectl get pod -l app=mtls-server -o jsonpath='{.items[0].metadata.name}')
-kubectl cp bin/mtls-server "$POD":/usr/local/bin/mtls-server
-kubectl exec "$POD" -- chmod +x /usr/local/bin/mtls-server
+kubectl cp bin/mtls-server "$POD":/tmp/mtls-server
+kubectl exec "$POD" -- chmod +x /tmp/mtls-server
 
-# Restart the container to run the server with your binary
-kubectl delete pod "$POD" --wait=false
-kubectl wait --for=condition=Ready deploy/mtls-server --timeout=120s
+# Run the server (in a separate terminal, or use screen/tmux)
+kubectl exec -it "$POD" -- /tmp/mtls-server
 ```
 
-> Alternative: build a tiny image that already contains your binary and skip `kubectl cp`.
+The server will start and log to stdout. Keep this terminal open.
+
+> **Production alternative**: Build a container image with your binary baked in, push to a registry, and update the Deployment to use that image instead of `kubectl cp`.
 
 ---
 
 ## 6) Test the Server (client in Kubernetes)
 
-Your original client pod also **lacked the socket mount**. Use a similar pattern:
-
-```yaml
-# test-client.yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: test-client
-  namespace: default
-spec:
-  replicas: 1
-  selector:
-    matchLabels: { app: test-client }
-  template:
-    metadata:
-      labels: { app: test-client }
-    spec:
-      volumes:
-        - name: spire-socket
-          hostPath:
-            path: /tmp/spire-agent/public
-            type: Directory
-      containers:
-        - name: test-client
-          image: golang:1.25
-          command: ["sleep","infinity"]
-          env:
-            - name: SPIFFE_ENDPOINT_SOCKET
-              value: "unix:///spire-socket/api.sock"
-          volumeMounts:
-            - name: spire-socket
-              mountPath: /spire-socket
-              readOnly: true
-```
+Your original client pod also **lacked the socket mount**. The included `test-client.yaml` mounts the SPIRE socket correctly.
 
 Run the client:
 
 ```bash
-kubectl apply -f test-client.yaml
+# Apply the client deployment (YAML file included in examples/ directory)
+kubectl apply -f examples/test-client.yaml
 kubectl wait --for=condition=Ready deploy/test-client --timeout=120s
 CLIENT_POD=$(kubectl get pod -l app=test-client -o jsonpath='{.items[0].metadata.name}')
 
@@ -268,7 +234,7 @@ Port-forwarding to `mtls-server` won’t help from your **host** unless your hos
 ## 7) Cleanup
 
 ```bash
-kubectl delete -f test-client.yaml -f mtls-server.yaml
+kubectl delete -f examples/test-client.yaml -f examples/mtls-server.yaml
 make minikube-down     # keep data
 # or
 make minikube-delete   # destroy cluster
@@ -289,7 +255,7 @@ kubectl logs -n spire-system ds/spire-agent -c spire-agent --tail=100
 **Socket present inside agent**
 
 ```bash
-AGENT_POD=$(kubectl get pods -n spire-system -l app=spire-agent -o jsonpath='{.items[0].metadata.name}')
+AGENT_POD=$(kubectl get pods -n spire-system -l app.kubernetes.io/name=agent -o jsonpath='{.items[0].metadata.name}')
 kubectl exec -n spire-system "$AGENT_POD" -- ls -la /tmp/spire-agent/public/api.sock
 ```
 

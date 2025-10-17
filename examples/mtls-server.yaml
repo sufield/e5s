@@ -1,0 +1,69 @@
+# mtls-server.yaml - Example mTLS server deployment with SPIRE Workload API access
+#
+# This Deployment runs the example mTLS server with access to the SPIRE agent socket.
+# The socket is mounted from the Minikube host node into the pod.
+#
+# Usage:
+#   1. Build the server: go build -o bin/mtls-server ./examples/identityserver-example
+#   2. Deploy: kubectl apply -f examples/mtls-server.yaml
+#   3. Wait: kubectl wait --for=condition=Ready deploy/mtls-server --timeout=60s
+#   4. Copy binary: kubectl cp bin/mtls-server $(kubectl get pod -l app=mtls-server -o jsonpath='{.items[0].metadata.name}'):/tmp/mtls-server
+#   5. Make executable: kubectl exec $(kubectl get pod -l app=mtls-server -o jsonpath='{.items[0].metadata.name}') -- chmod +x /tmp/mtls-server
+#   6. Run: kubectl exec -it $(kubectl get pod -l app=mtls-server -o jsonpath='{.items[0].metadata.name}') -- /tmp/mtls-server
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mtls-server
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mtls-server
+  template:
+    metadata:
+      labels:
+        app: mtls-server
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534  # nobody user
+        fsGroup: 65534
+      volumes:
+        - name: spire-socket
+          hostPath:
+            path: /tmp/spire-agent/public   # path on the Minikube node (matches chart defaults)
+            type: Directory
+      containers:
+        - name: mtls-server
+          image: debian:bookworm-slim
+          command: ["sleep", "infinity"]  # Keep pod alive for binary copy
+          env:
+            - name: SPIFFE_ENDPOINT_SOCKET
+              value: "unix:///spire-socket/api.sock"
+            - name: SERVER_ADDRESS
+              value: ":8443"
+            - name: ALLOWED_TRUST_DOMAIN
+              value: "example.org"
+          volumeMounts:
+            - name: spire-socket
+              mountPath: /spire-socket
+              readOnly: true
+          ports:
+            - containerPort: 8443
+          securityContext:
+            allowPrivilegeEscalation: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mtls-server
+  namespace: default
+spec:
+  selector:
+    app: mtls-server
+  ports:
+    - name: https
+      port: 8443
+      targetPort: 8443
