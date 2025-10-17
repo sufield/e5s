@@ -53,8 +53,8 @@ type WorkloadAttestor interface {
 //
 // Error Contract:
 // - IssueIdentity: domain.ErrIdentityDocumentInvalid if identity credential invalid
-// - IssueIdentity: domain.ErrServerUnavailable if server unavailable
-// - IssueIdentity: domain.ErrCANotInitialized if CA not initialized
+// - IssueIdentity: ports.ErrServerUnavailable if server unavailable
+// - IssueIdentity: ports.ErrCANotInitialized if CA not initialized
 // - GetTrustDomain: never returns error (returns nil if not initialized)
 // - GetCACertPEM:  returns empty slice if CA not initialized
 //
@@ -77,7 +77,7 @@ type IdentityServer interface {
 //
 // Error Contract:
 // - CreateX509IdentityDocument: domain.ErrIdentityDocumentInvalid for invalid inputs
-// - CreateX509IdentityDocument: domain.ErrCANotInitialized if CA not available
+// - CreateX509IdentityDocument: ports.ErrCANotInitialized if CA not available
 //
 // Implementations should respect ctx cancellation where applicable.
 type IdentityDocumentCreator interface {

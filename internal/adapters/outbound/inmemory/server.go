@@ -69,12 +69,12 @@ func (s *InMemoryServer) IssueIdentity(ctx context.Context, identityCredential *
 	}
 
 	if s.caCert == nil || s.caKey == nil {
-		return nil, fmt.Errorf("inmemory: %w: CA not initialized", domain.ErrCANotInitialized)
+		return nil, fmt.Errorf("inmemory: %w: CA not initialized", ports.ErrCANotInitialized)
 	}
 
 	doc, err := s.certificateProvider.CreateX509IdentityDocument(ctx, identityCredential, s.caCert, s.caKey)
 	if err != nil {
-		return nil, fmt.Errorf("inmemory: %w: %w", domain.ErrServerUnavailable, err)
+		return nil, fmt.Errorf("inmemory: %w: %w", ports.ErrServerUnavailable, err)
 	}
 
 	return doc, nil

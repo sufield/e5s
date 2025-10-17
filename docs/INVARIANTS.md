@@ -91,12 +91,15 @@ func NewIdentityCredentialFromComponents(trustDomain *TrustDomain, path string) 
 - **Rationale**: IdentityCredential without trust domain is meaningless
 
 ```go
-// Invariant: path defaults to "/" if empty, never stored as empty string
-// Location: NewIdentityCredentialFromComponents (line 26-28)
+// Invariant: path is normalized and validated on construction
+// Location: NewIdentityCredentialFromComponents, normalizePath (line 26-28, 117-157)
 func NewIdentityCredentialFromComponents(trustDomain *TrustDomain, path string) *IdentityCredential
 ```
-- **Post**: `i.path != ""` (always "/" or user-provided non-empty path)
-- **Rationale**: SPIFFE IDs require path component, "/" is valid root
+- **Post**: `i.path != ""` (always "/" or normalized non-empty path)
+- **Post**: Path never contains colon (`:`) - reserved by SPIFFE spec (panics if violated)
+- **Post**: Path never contains `.` or `..` segments - SPIFFE forbids traversal (panics if violated)
+- **Post**: Path has leading slash, no repeated slashes, no trailing slash (except root "/")
+- **Rationale**: SPIFFE IDs require normalized path; colons and dot segments are security risks
 
 ```go
 // Invariant: uri is always formatted as "spiffe://<trustDomain><path>"
@@ -134,13 +137,18 @@ func (i *IdentityCredential) IsInTrustDomain(td *TrustDomain) bool
 #### Invariants:
 
 ```go
-// Invariant: key and value are never empty after construction
-// Location: NewSelector (line 27)
+// Invariant: type, key, and value are validated on construction
+// Location: NewSelector (line 38-93)
 func NewSelector(selectorType SelectorType, key, value string) (*Selector, error)
 ```
-- **Pre**: `key != ""` and `value != ""` (validated, returns error otherwise)
-- **Post**: If `err == nil`, then `s.key != ""` and `s.value != ""` always hold
-- **Rationale**: Empty key/value makes selector meaningless
+- **Pre**: `selectorType != ""`, `key != ""`, `value != ""` (validated, returns error otherwise)
+- **Pre**: `selectorType` must not contain colon (`:`) - reserved separator
+- **Pre**: `key` must not contain colon (`:`) - reserved separator
+- **Post**: If `err == nil`, then:
+  - `s.selectorType != ""` and contains no colons
+  - `s.key != ""` and contains no colons
+  - `s.value != ""` (value MAY contain colons for multi-part values)
+- **Rationale**: Selector format "type:key:value" requires strict parsing; colons in type/key break parsing
 
 ```go
 // Invariant: formatted matches "type:key:value" pattern
@@ -175,36 +183,48 @@ func (s *Selector) Equals(other *Selector) bool
 
 ### 4. `domain.SelectorSet`
 
-**File**: `internal/domain/selector.go`
+**File**: `internal/domain/selector_set.go`
 
 #### Invariants:
 
 ```go
-// Invariant: Set contains no duplicate selectors (uniqueness)
-// Location: Add (line 152)
+// Invariant: Set preserves insertion order and ensures uniqueness
+// Location: Add (line 61-84)
 func (ss *SelectorSet) Add(selector *Selector)
 ```
 - **Pre**: Any selector can be added
 - **Post**: After `Add(s)`, `ss.Contains(s) == true`
-- **Post**: If selector already exists, set size unchanged
+- **Post**: If selector already exists, set size and order unchanged (no-op)
 - **Post**: No two selectors `s1, s2` where `s1.Equals(s2)` exist in set
-- **Rationale**: Set semantics require uniqueness
+- **Post**: Selectors are returned by `All()` in insertion order (deterministic)
+- **Rationale**: Set semantics require uniqueness; order preservation ensures reproducible behavior
+
+```go
+// Invariant: Implementation uses both map and slice for O(1) add/contains
+// Location: SelectorSet struct (line 31-36)
+type SelectorSet struct { seen map[string]struct{}; list []*Selector }
+```
+- **Post**: `seen` map is used for O(1) deduplication checks
+- **Post**: `list` slice preserves insertion order for `All()`
+- **Post**: `len(seen) == len(list)` always holds (both updated atomically in Add)
+- **Rationale**: Combines O(1) operations with deterministic iteration order
 
 ```go
 // Invariant: Contains() never modifies the set
-// Location: Contains (line 159)
+// Location: Contains (line 86-100)
 func (ss *SelectorSet) Contains(selector *Selector) bool
 ```
-- **Post**: Calling `Contains()` never changes `ss.selectors` slice
+- **Post**: Calling `Contains()` never changes `ss.seen` or `ss.list`
 - **Rationale**: Query operation must be side-effect free
 
 ```go
-// Invariant: All() returns defensive copy to prevent external mutation
-// Location: All (line 169)
+// Invariant: All() returns defensive copy in insertion order
+// Location: All (line 126-143)
 func (ss *SelectorSet) All() []*Selector
 ```
-- **Post**: Modifying returned slice does not affect `ss.selectors`
-- **Rationale**: Immutability protection (DDD pattern)
+- **Post**: Modifying returned slice does not affect `ss.list`
+- **Post**: Order matches insertion order (deterministic, reproducible)
+- **Rationale**: Immutability protection (DDD pattern) with predictable iteration
 
 ---
 
@@ -241,12 +261,22 @@ func NewIdentityDocumentFromComponents(...) *IdentityDocument
 - **Rationale**: JWT documents don't use X.509 certificates
 
 ```go
-// Invariant: IsExpired() iff time.Now().After(expiresAt)
-// Location: IsExpired (line 92)
+// Invariant: IsExpired() delegates to IsExpiredAt(time.Now())
+// Location: IsExpired (line 244-258)
 func (id *IdentityDocument) IsExpired() bool
 ```
-- **Post**: Returns `true` when current time > `expiresAt`, `false` otherwise
-- **Rationale**: Simple time-based expiration check
+- **Post**: Returns same result as `IsExpiredAt(time.Now())`
+- **Post**: Returns `true` when current time > `cert.NotAfter`, `false` otherwise
+- **Rationale**: Convenience method that uses IsExpiredAt for clock injection
+
+```go
+// Invariant: IsExpiredAt(t) checks expiration at given time (clock injection)
+// Location: IsExpiredAt (line 260-280)
+func (id *IdentityDocument) IsExpiredAt(t time.Time) bool
+```
+- **Post**: Returns `true` when `t.After(cert.NotAfter)`, `false` otherwise
+- **Post**: Does NOT call time.Now() - pure function for testability
+- **Rationale**: Allows injecting time for testing; avoids time.Now() dependency in tests
 
 ```go
 // Invariant: IsValid() == !IsExpired() for current implementation

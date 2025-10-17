@@ -91,6 +91,8 @@ func NewIdentityCredentialFromComponents(trustDomain *TrustDomain, path string) 
 //  3. Ensure leading slash (e.g., "foo" → "/foo")
 //  4. Collapse multiple slashes (e.g., "//foo//bar" → "/foo/bar")
 //  5. Remove trailing slashes (e.g., "/foo/bar/" → "/foo/bar")
+//  6. Reject paths with colons (`:`) - reserved by SPIFFE spec
+//  7. Reject dot (`.`) and dotdot (`..`) segments - SPIFFE forbids these
 //
 // This ensures canonical representation for equality checks and prevents
 // duplicate identities like "/foo" and "//foo" from being treated differently.
@@ -105,6 +107,10 @@ func NewIdentityCredentialFromComponents(trustDomain *TrustDomain, path string) 
 //   normalizePath("///foo///")    → "/foo"
 //   normalizePath("/foo/bar/")    → "/foo/bar"
 //
+// Panics:
+//   - If path contains colon (`:`) - reserved character
+//   - If path contains `.` or `..` segments - SPIFFE forbids traversal
+//
 // Note: Query parameters and fragments are not handled here as they're
 // invalid in SPIFFE IDs. Adapters using go-spiffe SDK reject such inputs
 // during parsing.
@@ -117,21 +123,34 @@ func normalizePath(p string) string {
 		return "/"
 	}
 
-	// Step 3: Ensure leading slash
+	// Step 3: Validate no colons (reserved by SPIFFE spec)
+	if strings.Contains(p, ":") {
+		panic(fmt.Errorf("%w: path cannot contain colon ':' (reserved character)", ErrInvalidIdentityCredential))
+	}
+
+	// Step 4: Ensure leading slash
 	if !strings.HasPrefix(p, "/") {
 		p = "/" + p
 	}
 
-	// Step 4: Collapse repeated slashes
+	// Step 5: Collapse repeated slashes
 	// Loop instead of regex for simplicity and no regex dependency
 	for strings.Contains(p, "//") {
 		p = strings.ReplaceAll(p, "//", "/")
 	}
 
-	// Step 5: Remove trailing slashes (but preserve root "/")
+	// Step 6: Remove trailing slashes (but preserve root "/")
 	p = strings.TrimRight(p, "/")
 	if p == "" {
 		return "/"
+	}
+
+	// Step 7: Validate no dot or dotdot segments (SPIFFE forbids traversal)
+	segments := strings.Split(p, "/")
+	for _, seg := range segments {
+		if seg == "." || seg == ".." {
+			panic(fmt.Errorf("%w: path cannot contain '.' or '..' segments", ErrInvalidIdentityCredential))
+		}
 	}
 
 	return p

@@ -105,20 +105,20 @@ var (
 	ErrInvalidProcessIdentity = errors.New("invalid process identity")
 )
 
-// Server and agent errors
-var (
-	// ErrServerUnavailable indicates SPIRE server is unavailable.
-	// Used by: Server.IssueIdentity
-	ErrServerUnavailable = errors.New("server unavailable")
-
-	// ErrAgentUnavailable indicates SPIRE agent is unavailable.
-	// Used by: Agent.FetchIdentityDocument, SPIREClient.FetchX509SVID
-	ErrAgentUnavailable = errors.New("agent unavailable")
-
-	// ErrCANotInitialized indicates CA certificate is not initialized.
-	// Used by: Server.GetCA, Server.IssueIdentity
-	ErrCANotInitialized = errors.New("CA not initialized")
-)
+// REMOVED: Infrastructure errors moved to internal/ports/errors.go
+//
+// The following errors have been moved per architecture review (docs/5.md):
+//   - ErrServerUnavailable → ports.ErrServerUnavailable
+//   - ErrAgentUnavailable → ports.ErrAgentUnavailable
+//   - ErrCANotInitialized → ports.ErrCANotInitialized
+//
+// Rationale: These represent infrastructure/adapter concerns, not domain concepts.
+// Domain errors should be semantic/business failures only.
+//
+// Adapters should use ports.Err* variants. If infrastructure errors need to be
+// surfaced to application layer, adapters can wrap them with domain errors when
+// they have domain meaning (e.g., wrap ports.ErrAgentUnavailable with
+// ErrNoAttestationData if attestation fails due to agent being down).
 
 // Entity validation errors
 var (
@@ -194,9 +194,8 @@ var (
 	_ error = ErrWorkloadAttestationFailed
 	_ error = ErrNoAttestationData
 	_ error = ErrInvalidProcessIdentity
-	_ error = ErrServerUnavailable
-	_ error = ErrAgentUnavailable
-	_ error = ErrCANotInitialized
+	// Removed: ErrServerUnavailable, ErrAgentUnavailable, ErrCANotInitialized
+	// (moved to ports.Err* - see ports/errors.go)
 	_ error = ErrIdentityMapperInvalid
 	_ error = ErrWorkloadInvalid
 	_ error = ErrNotSupported

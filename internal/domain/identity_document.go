@@ -15,6 +15,17 @@ import (
 //   - Private key: crypto.Signer for mTLS and signing operations
 //   - Chain: Certificate chain (leaf-first)
 //
+// TODO(architecture): Private key (crypto.Signer) should be removed from domain entity
+// per docs/5.md review. Domain should be purely descriptive (identity, cert, chain, times).
+// Adapters should hold the signer or return (doc, signer) tuple. This is a breaking change:
+//   1. Remove privateKey field from IdentityDocument struct
+//   2. Remove PrivateKey() method
+//   3. Update NewIdentityDocumentFromComponents to not accept privateKey parameter
+//   4. Update all adapters to return (doc, signer) separately or use adapter-level key storage
+//   5. Update all uses of doc.PrivateKey() to get key from adapter layer
+// Rationale: Keeps domain free of sensitive/opaque infrastructure concerns, simplifies
+// serialization and testing, and follows clean architecture principles.
+//
 // Design Philosophy:
 //   - Immutable: All fields validated once at construction, never modified
 //   - Defensive: Chain is copied on read/write to prevent aliasing bugs
@@ -246,12 +257,37 @@ func (id *IdentityDocument) Remaining() time.Duration {
 // This is a simple time comparison without clock skew handling.
 // For production use with clock skew tolerance, use IsCurrentlyValid(skew).
 //
+// Note: This method calls time.Now() internally. For testability,
+// use IsExpiredAt(t) which accepts an explicit time parameter.
+//
 // Example:
 //   if id.IsExpired() {
 //       // Need to rotate certificate
 //   }
 func (id *IdentityDocument) IsExpired() bool {
-	return time.Now().After(id.ExpiresAt())
+	return id.IsExpiredAt(time.Now())
+}
+
+// IsExpiredAt reports whether the document is past its NotAfter time at a given time.
+//
+// This method allows injecting the clock for testing and avoids time.Now()
+// dependency in domain logic. Use this in tests to control time.
+//
+// Parameters:
+//   - t: The time to check expiration against
+//
+// Returns:
+//   - true if t is after the document's expiration time
+//   - false if t is before or equal to the expiration time
+//
+// Example:
+//   // In tests
+//   testTime := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
+//   if id.IsExpiredAt(testTime) {
+//       // Document expired at test time
+//   }
+func (id *IdentityDocument) IsExpiredAt(t time.Time) bool {
+	return t.After(id.ExpiresAt())
 }
 
 // IsValid checks if the identity document is currently valid (not expired).

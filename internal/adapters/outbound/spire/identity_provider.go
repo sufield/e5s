@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/pocket/hexagon/spire/internal/domain"
+	"github.com/pocket/hexagon/spire/internal/ports"
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	"github.com/spiffe/go-spiffe/v2/svid/x509svid"
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
@@ -24,7 +25,7 @@ import (
 //  3. Else → pick lexicographically smallest ID from all SVIDs (fallback)
 //
 // Error handling:
-//   - Returns domain.ErrAgentUnavailable for nil/uninitialized client
+//   - Returns ports.ErrAgentUnavailable for nil/uninitialized client
 //   - Returns domain.ErrNoAttestationData when Workload API returns no SVIDs
 //   - Wraps all SDK errors with %w for errors.Is/As compatibility
 //
@@ -33,7 +34,7 @@ import (
 func (c *SPIREClient) FetchX509SVID(ctx context.Context) (*domain.IdentityDocument, error) {
 	// Guard: ensure client is initialized
 	if c == nil || c.client == nil {
-		return nil, fmt.Errorf("%w: SPIRE client is not initialized", domain.ErrAgentUnavailable)
+		return nil, fmt.Errorf("%w: SPIRE client is not initialized", ports.ErrAgentUnavailable)
 	}
 
 	// Defensive: handle nil context

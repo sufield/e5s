@@ -42,8 +42,13 @@ type Selector struct {
 //   - key: The selector attribute name (e.g., "uid", "namespace")
 //   - value: The selector attribute value (e.g., "1000", "default")
 //
+// Validation:
+//   - selectorType must not be empty
+//   - key must not be empty and must not contain colon (`:`)
+//   - value must not be empty (value MAY contain colons for multi-part values)
+//
 // Returns:
-//   - ErrSelectorInvalid (with context) if key or value is empty
+//   - ErrSelectorInvalid (with context) if validation fails
 //
 // Example:
 //   selector, err := NewSelector(SelectorTypeWorkload, "uid", "1000")
@@ -52,13 +57,32 @@ type Selector struct {
 //   }
 //   // selector.String() == "workload:uid:1000"
 func NewSelector(selectorType SelectorType, key, value string) (*Selector, error) {
+	// Validate type is not empty
+	if string(selectorType) == "" {
+		return nil, fmt.Errorf("%w: selector type is empty", ErrSelectorInvalid)
+	}
+
+	// Validate type does not contain colon
+	if strings.Contains(string(selectorType), ":") {
+		return nil, fmt.Errorf("%w: selector type cannot contain colon ':', got %q", ErrSelectorInvalid, selectorType)
+	}
+
+	// Validate key is not empty
 	if key == "" {
 		return nil, fmt.Errorf("%w: key is empty", ErrSelectorInvalid)
 	}
+
+	// Validate key does not contain colon
+	if strings.Contains(key, ":") {
+		return nil, fmt.Errorf("%w: key cannot contain colon ':', got %q", ErrSelectorInvalid, key)
+	}
+
+	// Validate value is not empty (value MAY contain colons)
 	if value == "" {
 		return nil, fmt.Errorf("%w: value is empty", ErrSelectorInvalid)
 	}
 
+	// Pre-compute formatted string once for goroutine-safe immutability
 	formatted := fmt.Sprintf("%s:%s:%s", selectorType, key, value)
 	return &Selector{
 		selectorType: selectorType,

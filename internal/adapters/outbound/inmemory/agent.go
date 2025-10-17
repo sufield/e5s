@@ -97,7 +97,7 @@ func (a *InMemoryAgent) initializeAgentIdentity(ctx context.Context) error {
 // GetIdentity returns the agent's own identity document.
 func (a *InMemoryAgent) GetIdentity(ctx context.Context) (*domain.IdentityDocument, error) {
 	if a.agentIdentity == nil {
-		return nil, fmt.Errorf("inmemory: %w: agent identity not initialized", domain.ErrAgentUnavailable)
+		return nil, fmt.Errorf("inmemory: %w: agent identity not initialized", ports.ErrAgentUnavailable)
 	}
 	return a.agentIdentity.IdentityDocument, nil
 }
