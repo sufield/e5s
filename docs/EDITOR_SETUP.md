@@ -93,7 +93,7 @@ ui:
   semanticTokens: true
 ```
 
-**Key fixes from review:**
+**Fixes from review:**
 - ✅ Removed duplicate `GOFLAGS` env var (was conflicting with `buildFlags`)
 - ✅ Moved `usePlaceholders` to correct location (`completion.*` not `ui.completion.*`)
 - ✅ Added directory filters to speed up analysis

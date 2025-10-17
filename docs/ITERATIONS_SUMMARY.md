@@ -1,4 +1,4 @@
-# Implementation Iterations Summary
+# Iterations Summary
 
 This document summarizes the implementation phases for the SPIRE adapter library.
 

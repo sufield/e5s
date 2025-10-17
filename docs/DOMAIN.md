@@ -1,8 +1,6 @@
 # Domain Model
 
-This directory contains the core domain model for the SPIRE identity system. The domain model follows **hexagonal architecture** principles and maintains **technology independence**.
-
-## Domain Purity
+The domain directory contains the domain model for the SPIRE identity system.
 
 The domain layer is **technology-agnostic** and **does NOT depend on external SDKs** (including go-spiffe). This ensures:
 
@@ -63,6 +61,7 @@ The adapters act as an **anti-corruption layer** between the domain and external
 Value objects are immutable and identified by their values, not by identity.
 
 #### **TrustDomain** (`trust_domain.go`)
+
 Represents the scope of SPIFFE identities.
 
 ```go
@@ -72,12 +71,14 @@ td.Equals(other) // bool
 ```
 
 **Invariants**:
+
 - Name is never empty (guaranteed by constructor)
 - Immutable after construction
 - Equality is based on name string comparison
 - See [INVARIANTS.md](INVARIANTS.md) for complete list
 
 #### **IdentityCredential** (`identity_credential.go`)
+
 URI-based workload identifier in SPIFFE format. **Minimal value object** - parsing delegated to `IdentityCredentialParser` port.
 
 ```go
@@ -100,6 +101,7 @@ id.IsInTrustDomain(td) // bool
 **Refactoring Note**: Parsing logic moved to adapter to avoid duplicating go-spiffe SDK's `spiffeid.FromString`. Domain holds only parsed data.
 
 **Invariants**:
+
 - TrustDomain is never nil
 - Path defaults to "/" if empty (never stored as empty string)
 - URI is always formatted as "spiffe://<trustDomain><path>"
@@ -107,6 +109,7 @@ id.IsInTrustDomain(td) // bool
 - See [INVARIANTS.md](INVARIANTS.md) for complete list
 
 #### **Selector** (`selector.go`)
+
 Key-value pair for workload attestation matching.
 
 ```go
@@ -122,18 +125,21 @@ k8sSelector.Value() // "ns:default:podname"
 ```
 
 **Improvements**:
+
 - Uses sentinel errors (`ErrSelectorInvalid`) for validation
 - Robust multi-colon value parsing with `strings.Join()`
 - Field-by-field equality checking
 - Formatted string caching for performance
 
 **Invariants**:
+
 - Key and value are never empty after construction
 - Formatted matches "type:key:value" pattern
 - Type, key, and value are immutable
 - See [INVARIANTS.md](INVARIANTS.md) for complete list
 
 #### **SelectorSet** (`selector_set.go`)
+
 Collection of selectors for matching with automatic deduplication.
 
 ```go
@@ -145,12 +151,14 @@ len(set.All()) // 1 (no duplicates)
 ```
 
 **Set Semantics**:
+
 - Enforces uniqueness automatically in `Add()`
 - True mathematical set behavior
 - Order-preserving (slice-based)
 - Defensive copy returned by `All()`
 
 **Invariants**:
+
 - Set contains no duplicate selectors (uniqueness)
 - `All()` returns defensive copy to prevent external mutation
 - See [INVARIANTS.md](INVARIANTS.md) for complete list
@@ -160,6 +168,7 @@ len(set.All()) // 1 (no duplicates)
 Entities have identity and lifecycle.
 
 #### **IdentityDocument** (`identity_document.go`)
+
 SPIFFE Verifiable Identity Document - the issued credential.
 
 ```go
@@ -176,9 +185,10 @@ doc.ExpiresAt() // Returns expiration time
 doc.IdentityCredential() // Returns identity
 ```
 
-**Note**: Uses `crypto/x509.Certificate` from standard library (acceptable as it's not an external SDK).
+Uses `crypto/x509.Certificate` from standard library (acceptable as it's not an external SDK).
 
 **Invariants**:
+
 - IdentityCredential is never nil for valid document
 - For X.509 documents, cert/privateKey/chain are non-nil
 - IsExpired() iff time.Now().After(expiresAt)
@@ -186,6 +196,7 @@ doc.IdentityCredential() // Returns identity
 - See [INVARIANTS.md](INVARIANTS.md) for complete list
 
 #### **Workload** (`workload.go`)
+
 Running software process to be identified.
 
 ```go
@@ -200,6 +211,7 @@ err := workload.Validate()
 ```
 
 **Invariants**:
+
 - PID must be > 0
 - Path must be non-empty
 - See [INVARIANTS.md](INVARIANTS.md) for complete list
@@ -246,16 +258,19 @@ if mapper.MatchesSelectors(discoveredSelectors) {
 ```
 
 **AND Semantics**:
+
 - ALL mapper selectors must be present in discovered selectors
 - Extra discovered selectors are ignored
 - Per SPIRE specification for strong attestation
 
 **Why Dev-Only**:
+
 - Real SPIRE Server manages registration via persistent database
 - Production workloads only fetch identities via Workload API
 - In-memory version enables local development and testing
 
 **Invariants**:
+
 - IdentityCredential is never nil after construction
 - Selectors is never nil or empty after construction
 - MatchesSelectors() uses AND logic (ALL selectors required)
@@ -264,6 +279,7 @@ if mapper.MatchesSelectors(discoveredSelectors) {
 ### Domain Services
 
 #### **AttestationService** (`attestation.go`)
+
 Domain logic for attestation processes with sentinel error returns.
 
 ```go
@@ -284,6 +300,7 @@ if err != nil {
 ```
 
 **Sentinel Errors**: The domain uses sentinel errors (`errors.go`) for better error handling:
+
 - `ErrNoMatchingMapper` - No identity mapper matches selectors
 - `ErrInvalidSelectors` - Selectors are nil or empty
 - `ErrInvalidIdentityCredential` - SPIFFE ID is nil or malformed
@@ -294,7 +311,7 @@ if err != nil {
 
 Use with `errors.Is()` for checking and `fmt.Errorf("%w", ...)` for wrapping with context.
 
-**Note**: Full chain-of-trust validation is handled by adapters using go-spiffe SDK's `x509svid.ParseAndVerify` and `Verify`, not reimplemented in domain.
+Full chain-of-trust validation is handled by adapters using go-spiffe SDK's `x509svid.ParseAndVerify` and `Verify`, not reimplemented in domain.
 
 ## Usage in Ports
 
@@ -533,6 +550,7 @@ func TranslateIdentityCredentialToSPIFFEID(identityCredential *domain.IdentityCr
 ### Why Translation is in Adapters, Not Domain
 
 **The adapter provides anti-corruption**:
+
 - go-spiffe SDK provides `spiffeid.FromString()`, `x509svid.ParseAndVerify()`, etc.
 - Reimplementing in domain would duplicate SDK functionality
 - Domain remains SDK-agnostic and focused on business rules
