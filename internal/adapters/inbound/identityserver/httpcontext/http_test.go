@@ -26,28 +26,28 @@ func TestGetSPIFFEID(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name    string
-		req     *http.Request
-		wantID  spiffeid.ID
-		wantOK  bool
+		name   string
+		req    *http.Request
+		wantID spiffeid.ID
+		wantOK bool
 	}{
 		{
-			name:    "valid ID in context",
-			req:     spiffeidhttp.WithSPIFFEID(httptest.NewRequest("GET", "/", nil), testID),
-			wantID:  testID,
-			wantOK:  true,
+			name:   "valid ID in context",
+			req:    spiffeidhttp.WithSPIFFEID(httptest.NewRequest("GET", "/", nil), testID),
+			wantID: testID,
+			wantOK: true,
 		},
 		{
-			name:    "no ID in context",
-			req:     httptest.NewRequest("GET", "/", nil),
-			wantID:  spiffeid.ID{},
-			wantOK:  false,
+			name:   "no ID in context",
+			req:    httptest.NewRequest("GET", "/", nil),
+			wantID: spiffeid.ID{},
+			wantOK: false,
 		},
 		{
-			name:    "nil request",
-			req:     nil,
-			wantID:  spiffeid.ID{},
-			wantOK:  false,
+			name:   "nil request",
+			req:    nil,
+			wantID: spiffeid.ID{},
+			wantOK: false,
 		},
 	}
 

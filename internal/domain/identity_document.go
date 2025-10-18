@@ -18,11 +18,12 @@ import (
 // TODO(architecture): Private key (crypto.Signer) should be removed from domain entity
 // per docs/5.md review. Domain should be purely descriptive (identity, cert, chain, times).
 // Adapters should hold the signer or return (doc, signer) tuple. This is a breaking change:
-//   1. Remove privateKey field from IdentityDocument struct
-//   2. Remove PrivateKey() method
-//   3. Update NewIdentityDocumentFromComponents to not accept privateKey parameter
-//   4. Update all adapters to return (doc, signer) separately or use adapter-level key storage
-//   5. Update all uses of doc.PrivateKey() to get key from adapter layer
+//  1. Remove privateKey field from IdentityDocument struct
+//  2. Remove PrivateKey() method
+//  3. Update NewIdentityDocumentFromComponents to not accept privateKey parameter
+//  4. Update all adapters to return (doc, signer) separately or use adapter-level key storage
+//  5. Update all uses of doc.PrivateKey() to get key from adapter layer
+//
 // Rationale: Keeps domain free of sensitive/opaque infrastructure concerns, simplifies
 // serialization and testing, and follows clean architecture principles.
 //
@@ -46,8 +47,8 @@ import (
 type IdentityDocument struct {
 	identityCredential *IdentityCredential
 	cert               *x509.Certificate
-	privateKey         crypto.Signer            // Typed for TLS/mTLS usage
-	chain              []*x509.Certificate      // Leaf-first (cert), then intermediates
+	privateKey         crypto.Signer       // Typed for TLS/mTLS usage
+	chain              []*x509.Certificate // Leaf-first (cert), then intermediates
 }
 
 // NewIdentityDocumentFromComponents creates a validated, immutable identity document.
@@ -78,14 +79,15 @@ type IdentityDocument struct {
 //   - ErrIdentityDocumentInvalid (wrapped with %w) if validation fails
 //
 // Examples:
-//   // Chain includes leaf (common from SDK)
-//   doc, err := NewIdentityDocumentFromComponents(id, leaf, key, []*x509.Certificate{leaf, ca})
 //
-//   // Chain doesn't include leaf (will be added)
-//   doc, err := NewIdentityDocumentFromComponents(id, leaf, key, []*x509.Certificate{ca})
+//	// Chain includes leaf (common from SDK)
+//	doc, err := NewIdentityDocumentFromComponents(id, leaf, key, []*x509.Certificate{leaf, ca})
 //
-//   // No intermediates (leaf-only chain)
-//   doc, err := NewIdentityDocumentFromComponents(id, leaf, key, nil)
+//	// Chain doesn't include leaf (will be added)
+//	doc, err := NewIdentityDocumentFromComponents(id, leaf, key, []*x509.Certificate{ca})
+//
+//	// No intermediates (leaf-only chain)
+//	doc, err := NewIdentityDocumentFromComponents(id, leaf, key, nil)
 //
 // Concurrency: Safe for concurrent use (pure function, no shared state).
 //
@@ -140,7 +142,8 @@ func NewIdentityDocumentFromComponents(
 // The identity credential is treated as immutable per the domain's immutability contract.
 //
 // Example:
-//   id.IdentityCredential().String() // "spiffe://example.org/workload"
+//
+//	id.IdentityCredential().String() // "spiffe://example.org/workload"
 func (id *IdentityDocument) IdentityCredential() *IdentityCredential {
 	return id.identityCredential
 }
@@ -151,8 +154,9 @@ func (id *IdentityDocument) IdentityCredential() *IdentityCredential {
 // and is the certificate presented during TLS handshakes.
 //
 // Example:
-//   cert := id.Certificate()
-//   fmt.Println(cert.Subject.CommonName)
+//
+//	cert := id.Certificate()
+//	fmt.Println(cert.Subject.CommonName)
 func (id *IdentityDocument) Certificate() *x509.Certificate {
 	return id.cert
 }
@@ -163,8 +167,9 @@ func (id *IdentityDocument) Certificate() *x509.Certificate {
 // Common implementations: *rsa.PrivateKey, *ecdsa.PrivateKey, ed25519.PrivateKey.
 //
 // Example:
-//   signer := id.PrivateKey()
-//   signature, err := signer.Sign(rand.Reader, digest, crypto.SHA256)
+//
+//	signer := id.PrivateKey()
+//	signature, err := signer.Sign(rand.Reader, digest, crypto.SHA256)
 func (id *IdentityDocument) PrivateKey() crypto.Signer {
 	return id.privateKey
 }
@@ -179,9 +184,10 @@ func (id *IdentityDocument) PrivateKey() crypto.Signer {
 //   - Certificate pointers remain shared (x509.Certificate is immutable)
 //
 // Example:
-//   chain := id.Chain()
-//   leaf := chain[0]          // Always the leaf certificate
-//   intermediates := chain[1:] // CA certificates
+//
+//	chain := id.Chain()
+//	leaf := chain[0]          // Always the leaf certificate
+//	intermediates := chain[1:] // CA certificates
 func (id *IdentityDocument) Chain() []*x509.Certificate {
 	out := make([]*x509.Certificate, len(id.chain))
 	copy(out, id.chain)
@@ -199,11 +205,12 @@ func (id *IdentityDocument) Chain() []*x509.Certificate {
 //   - intermediates: Defensive copy of intermediate CA certificates (may be empty)
 //
 // Example:
-//   leaf, intermediates := id.LeafAndChain()
-//   tlsConfig.Certificates = []tls.Certificate{{
-//       Certificate: append([][]byte{leaf.Raw}, intermediateDERs...),
-//       PrivateKey:  id.PrivateKey(),
-//   }}
+//
+//	leaf, intermediates := id.LeafAndChain()
+//	tlsConfig.Certificates = []tls.Certificate{{
+//	    Certificate: append([][]byte{leaf.Raw}, intermediateDERs...),
+//	    PrivateKey:  id.PrivateKey(),
+//	}}
 func (id *IdentityDocument) LeafAndChain() (*x509.Certificate, []*x509.Certificate) {
 	if len(id.chain) <= 1 {
 		return id.cert, nil
@@ -219,8 +226,9 @@ func (id *IdentityDocument) LeafAndChain() (*x509.Certificate, []*x509.Certifica
 // is stored to avoid drift between certificate and cached timestamp.
 //
 // Example:
-//   expires := id.ExpiresAt()
-//   fmt.Printf("Expires: %s\n", expires.Format(time.RFC3339))
+//
+//	expires := id.ExpiresAt()
+//	fmt.Printf("Expires: %s\n", expires.Format(time.RFC3339))
 func (id *IdentityDocument) ExpiresAt() time.Time {
 	return id.cert.NotAfter
 }
@@ -231,10 +239,11 @@ func (id *IdentityDocument) ExpiresAt() time.Time {
 // IsCurrentlyValid() for proper time-based validity checks.
 //
 // Example:
-//   notBefore := id.NotBefore()
-//   if time.Now().Before(notBefore) {
-//       // Certificate not yet valid
-//   }
+//
+//	notBefore := id.NotBefore()
+//	if time.Now().Before(notBefore) {
+//	    // Certificate not yet valid
+//	}
 func (id *IdentityDocument) NotBefore() time.Time {
 	return id.cert.NotBefore
 }
@@ -244,10 +253,11 @@ func (id *IdentityDocument) NotBefore() time.Time {
 // Returns negative duration if already expired.
 //
 // Example:
-//   remaining := id.Remaining()
-//   if remaining < 5*time.Minute {
-//       // Rotate soon
-//   }
+//
+//	remaining := id.Remaining()
+//	if remaining < 5*time.Minute {
+//	    // Rotate soon
+//	}
 func (id *IdentityDocument) Remaining() time.Duration {
 	return time.Until(id.ExpiresAt())
 }
@@ -261,9 +271,10 @@ func (id *IdentityDocument) Remaining() time.Duration {
 // use IsExpiredAt(t) which accepts an explicit time parameter.
 //
 // Example:
-//   if id.IsExpired() {
-//       // Need to rotate certificate
-//   }
+//
+//	if id.IsExpired() {
+//	    // Need to rotate certificate
+//	}
 func (id *IdentityDocument) IsExpired() bool {
 	return id.IsExpiredAt(time.Now())
 }
@@ -281,11 +292,12 @@ func (id *IdentityDocument) IsExpired() bool {
 //   - false if t is before or equal to the expiration time
 //
 // Example:
-//   // In tests
-//   testTime := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
-//   if id.IsExpiredAt(testTime) {
-//       // Document expired at test time
-//   }
+//
+//	// In tests
+//	testTime := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
+//	if id.IsExpiredAt(testTime) {
+//	    // Document expired at test time
+//	}
 func (id *IdentityDocument) IsExpiredAt(t time.Time) bool {
 	return t.After(id.ExpiresAt())
 }
@@ -296,9 +308,10 @@ func (id *IdentityDocument) IsExpiredAt(t time.Time) bool {
 // For production use with clock skew tolerance, use IsCurrentlyValid(skew).
 //
 // Example:
-//   if id.IsValid() {
-//       // Certificate is valid
-//   }
+//
+//	if id.IsValid() {
+//	    // Certificate is valid
+//	}
 func (id *IdentityDocument) IsValid() bool {
 	return !id.IsExpired()
 }
@@ -311,11 +324,12 @@ func (id *IdentityDocument) IsValid() bool {
 // Validity window: NotBefore <= t < NotAfter
 //
 // Example:
-//   // Check if valid 1 hour from now
-//   future := time.Now().Add(1 * time.Hour)
-//   if id.IsValidAt(future) {
-//       // Still valid in 1 hour
-//   }
+//
+//	// Check if valid 1 hour from now
+//	future := time.Now().Add(1 * time.Hour)
+//	if id.IsValidAt(future) {
+//	    // Still valid in 1 hour
+//	}
 func (id *IdentityDocument) IsValidAt(t time.Time) bool {
 	return !t.Before(id.NotBefore()) && t.Before(id.ExpiresAt())
 }
@@ -330,11 +344,12 @@ func (id *IdentityDocument) IsValidAt(t time.Time) bool {
 //   - NotAfter: Allow documents expired up to skew duration ago
 //
 // Example with 5-minute skew:
-//   NotBefore: 10:00, NotAfter: 11:00, skew: 5min
-//   - 09:55: Valid (within skew of NotBefore)
-//   - 10:30: Valid (within validity window)
-//   - 11:04: Valid (within skew of NotAfter)
-//   - 11:06: Invalid (beyond skew tolerance)
+//
+//	NotBefore: 10:00, NotAfter: 11:00, skew: 5min
+//	- 09:55: Valid (within skew of NotBefore)
+//	- 10:30: Valid (within validity window)
+//	- 11:04: Valid (within skew of NotAfter)
+//	- 11:06: Invalid (beyond skew tolerance)
 //
 // Recommended skew values:
 //   - Development: 1 * time.Minute
@@ -342,10 +357,11 @@ func (id *IdentityDocument) IsValidAt(t time.Time) bool {
 //   - High-latency networks: 10 * time.Minute
 //
 // Example:
-//   // Production with 5-minute clock skew tolerance
-//   if id.IsCurrentlyValid(5 * time.Minute) {
-//       // Certificate is valid accounting for clock drift
-//   }
+//
+//	// Production with 5-minute clock skew tolerance
+//	if id.IsCurrentlyValid(5 * time.Minute) {
+//	    // Certificate is valid accounting for clock drift
+//	}
 func (id *IdentityDocument) IsCurrentlyValid(skew time.Duration) bool {
 	now := time.Now()
 	return !now.Before(id.NotBefore().Add(-skew)) && now.Before(id.ExpiresAt().Add(skew))
@@ -361,10 +377,11 @@ func (id *IdentityDocument) IsCurrentlyValid(skew time.Duration) bool {
 // Use this to detect zero-value instances or programming errors.
 //
 // Example:
-//   var doc *IdentityDocument
-//   if doc.IsZero() {
-//       // Need to fetch identity document
-//   }
+//
+//	var doc *IdentityDocument
+//	if doc.IsZero() {
+//	    // Need to fetch identity document
+//	}
 func (id *IdentityDocument) IsZero() bool {
 	return id == nil || id.identityCredential == nil || id.cert == nil
 }

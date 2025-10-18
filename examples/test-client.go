@@ -14,21 +14,24 @@
 //   - As a reference for building production SPIFFE clients
 //
 // How it works:
-//   1. Connects to SPIRE Workload API via socket (auto-detected or from env)
-//   2. Obtains its own X.509 SVID (SPIFFE Verifiable Identity Document)
-//   3. Creates an mTLS HTTP client that trusts the same trust domain
-//   4. Tests multiple server endpoints and reports results
+//  1. Connects to SPIRE Workload API via socket (auto-detected or from env)
+//  2. Obtains its own X.509 SVID (SPIFFE Verifiable Identity Document)
+//  3. Creates an mTLS HTTP client that trusts the same trust domain
+//  4. Tests multiple server endpoints and reports results
 //
 // Usage (in Kubernetes):
-//   kubectl cp examples/test-client.go $POD:/workspace/test-client.go
-//   kubectl exec $POD -- go run test-client.go
+//
+//	kubectl cp examples/test-client.go $POD:/workspace/test-client.go
+//	kubectl exec $POD -- go run test-client.go
 //
 // Usage (local with SPIRE):
-//   export SPIFFE_ENDPOINT_SOCKET=unix:///tmp/spire-agent/public/api.sock
-//   go run examples/test-client.go
+//
+//	export SPIFFE_ENDPOINT_SOCKET=unix:///tmp/spire-agent/public/api.sock
+//	go run examples/test-client.go
 //
 // Environment variables:
-//   SPIFFE_ENDPOINT_SOCKET - Path to SPIRE agent socket (optional, auto-detected)
+//
+//	SPIFFE_ENDPOINT_SOCKET - Path to SPIRE agent socket (optional, auto-detected)
 //
 // Note: This is a testing/verification tool. For production client code, see the
 // internal/adapters/outbound/httpclient package which provides a production-ready

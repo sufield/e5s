@@ -35,7 +35,7 @@ type SPIFFEConfig struct {
 
 // HTTPConfig holds HTTP server/client configuration.
 type HTTPConfig struct {
-	Address           string        // e.g., ":8443"
+	Address           string // e.g., ":8443"
 	ReadHeaderTimeout time.Duration
 	ReadTimeout       time.Duration
 	WriteTimeout      time.Duration

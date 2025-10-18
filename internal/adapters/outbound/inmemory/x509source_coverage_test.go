@@ -259,10 +259,10 @@ func TestX509Source_Coverage_CaseInsensitiveTrustDomain(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name           string
-		sourceTD       string
-		requestTD      string
-		shouldMatch    bool
+		name        string
+		sourceTD    string
+		requestTD   string
+		shouldMatch bool
 	}{
 		{"exact match", "example.org", "example.org", true},
 		{"different domain", "example.org", "other.org", false},
@@ -384,4 +384,3 @@ func createTestIdentityDocument(
 
 	return doc
 }
-

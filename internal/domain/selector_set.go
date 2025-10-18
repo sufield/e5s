@@ -21,13 +21,14 @@ package domain
 // Production builds exclude this file entirely.
 //
 // Example:
-//   set := NewSelectorSet()
-//   set.Add(selector1)
-//   set.Add(selector2)
-//   if set.Contains(selector1) {
-//       // Process matching selector
-//   }
-//   all := set.All() // Returns selectors in insertion order
+//
+//	set := NewSelectorSet()
+//	set.Add(selector1)
+//	set.Add(selector2)
+//	if set.Contains(selector1) {
+//	    // Process matching selector
+//	}
+//	all := set.All() // Returns selectors in insertion order
 type SelectorSet struct {
 	// Map for O(1) deduplication check
 	seen map[string]struct{}
@@ -42,11 +43,12 @@ type SelectorSet struct {
 // Time complexity: O(n) where n is the number of input selectors
 //
 // Example:
-//   s1, _ := ParseSelectorFromString("workload:uid:1000")
-//   s2, _ := ParseSelectorFromString("workload:user:app")
-//   set := NewSelectorSet(s1, s2)
-//   // set.Len() == 2
-//   // set.All() returns [s1, s2] in that order
+//
+//	s1, _ := ParseSelectorFromString("workload:uid:1000")
+//	s2, _ := ParseSelectorFromString("workload:user:app")
+//	set := NewSelectorSet(s1, s2)
+//	// set.Len() == 2
+//	// set.All() returns [s1, s2] in that order
 func NewSelectorSet(selectors ...*Selector) *SelectorSet {
 	ss := &SelectorSet{
 		seen: make(map[string]struct{}),
@@ -66,8 +68,9 @@ func NewSelectorSet(selectors ...*Selector) *SelectorSet {
 // Time complexity: O(1)
 //
 // Example:
-//   set.Add(selector)
-//   set.Add(selector) // No-op, already exists
+//
+//	set.Add(selector)
+//	set.Add(selector) // No-op, already exists
 func (ss *SelectorSet) Add(selector *Selector) {
 	if selector == nil {
 		return
@@ -89,9 +92,10 @@ func (ss *SelectorSet) Add(selector *Selector) {
 // Time complexity: O(1)
 //
 // Example:
-//   if set.Contains(selector) {
-//       // Selector found
-//   }
+//
+//	if set.Contains(selector) {
+//	    // Selector found
+//	}
 func (ss *SelectorSet) Contains(selector *Selector) bool {
 	if selector == nil {
 		return false
@@ -105,7 +109,8 @@ func (ss *SelectorSet) Contains(selector *Selector) bool {
 // Time complexity: O(1)
 //
 // Example:
-//   count := set.Len()
+//
+//	count := set.Len()
 func (ss *SelectorSet) Len() int {
 	return len(ss.list)
 }
@@ -116,9 +121,10 @@ func (ss *SelectorSet) Len() int {
 // Time complexity: O(1)
 //
 // Example:
-//   if set.IsEmpty() {
-//       return ErrNoSelectors
-//   }
+//
+//	if set.IsEmpty() {
+//	    return ErrNoSelectors
+//	}
 func (ss *SelectorSet) IsEmpty() bool {
 	return len(ss.list) == 0
 }
@@ -132,9 +138,10 @@ func (ss *SelectorSet) IsEmpty() bool {
 // Time complexity: O(n) where n is the number of selectors
 //
 // Example:
-//   for _, selector := range set.All() {
-//       fmt.Println(selector)
-//   }
+//
+//	for _, selector := range set.All() {
+//	    fmt.Println(selector)
+//	}
 func (ss *SelectorSet) All() []*Selector {
 	// Return defensive copy to prevent external mutation
 	result := make([]*Selector, len(ss.list))
@@ -151,8 +158,9 @@ func (ss *SelectorSet) All() []*Selector {
 // Time complexity: O(n) where n is the number of selectors
 //
 // Example:
-//   log.Printf("Selectors: %v", set.Strings())
-//   // Output: Selectors: [workload:uid:1000 workload:user:app]
+//
+//	log.Printf("Selectors: %v", set.Strings())
+//	// Output: Selectors: [workload:uid:1000 workload:user:app]
 func (ss *SelectorSet) Strings() []string {
 	result := make([]string, 0, len(ss.list))
 	for _, s := range ss.list {

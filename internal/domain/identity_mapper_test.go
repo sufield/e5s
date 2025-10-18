@@ -74,18 +74,18 @@ func TestIdentityMapper_MatchesSelectors_NilSafety(t *testing.T) {
 	selectors.Add(sel)
 
 	tests := []struct {
-		name         string
-		mapper       *domain.IdentityMapper
-		input        *domain.SelectorSet
-		expectMatch  bool
-		description  string
+		name        string
+		mapper      *domain.IdentityMapper
+		input       *domain.SelectorSet
+		expectMatch bool
+		description string
 	}{
 		{
-			name:         "nil mapper returns false",
-			mapper:       nil,
-			input:        selectors,
-			expectMatch:  false,
-			description:  "Nil receiver should be safe and return false",
+			name:        "nil mapper returns false",
+			mapper:      nil,
+			input:       selectors,
+			expectMatch: false,
+			description: "Nil receiver should be safe and return false",
 		},
 		{
 			name: "valid mapper with nil input returns false",
@@ -93,9 +93,9 @@ func TestIdentityMapper_MatchesSelectors_NilSafety(t *testing.T) {
 				m, _ := domain.NewIdentityMapper(id, selectors)
 				return m
 			}(),
-			input:        nil,
-			expectMatch:  false,
-			description:  "Nil input should return false",
+			input:       nil,
+			expectMatch: false,
+			description: "Nil input should return false",
 		},
 		{
 			name: "valid mapper with valid input matches",
@@ -103,9 +103,9 @@ func TestIdentityMapper_MatchesSelectors_NilSafety(t *testing.T) {
 				m, _ := domain.NewIdentityMapper(id, selectors)
 				return m
 			}(),
-			input:        selectors,
-			expectMatch:  true,
-			description:  "Valid inputs should match when selectors are present",
+			input:       selectors,
+			expectMatch: true,
+			description: "Valid inputs should match when selectors are present",
 		},
 	}
 

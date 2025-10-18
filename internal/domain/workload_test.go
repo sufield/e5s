@@ -14,13 +14,13 @@ func TestWorkload_NewWorkloadValidated(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name      string
-		pid       int
-		uid       int
-		gid       int
-		path      string
-		wantErr   bool
-		wantPath  string // expected normalized path
+		name     string
+		pid      int
+		uid      int
+		gid      int
+		path     string
+		wantErr  bool
+		wantPath string // expected normalized path
 	}{
 		{
 			name:     "valid workload",
@@ -200,9 +200,9 @@ func TestWorkload_Validate(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name    string
+		name     string
 		workload *domain.Workload
-		wantErr bool
+		wantErr  bool
 	}{
 		{
 			name:     "valid workload",

@@ -56,9 +56,9 @@ func TestTrustBundleProvider_Coverage_EmptyProvider(t *testing.T) {
 	td := domain.NewTrustDomainFromName("example.org")
 
 	tests := []struct {
-		name     string
-		caCerts  []*x509.Certificate
-		wantErr  string
+		name    string
+		caCerts []*x509.Certificate
+		wantErr string
 	}{
 		{"nil slice", nil, "not found"},
 		{"empty slice", []*x509.Certificate{}, "not found"},
@@ -90,10 +90,10 @@ func TestTrustBundleProvider_Coverage_MixedSliceFiltering(t *testing.T) {
 	td := domain.NewTrustDomainFromName("example.org")
 
 	tests := []struct {
-		name          string
-		caCerts       []*x509.Certificate
-		wantCACount   int
-		wantErr       bool
+		name        string
+		caCerts     []*x509.Certificate
+		wantCACount int
+		wantErr     bool
 	}{
 		{
 			name:        "all nil entries",
@@ -186,8 +186,8 @@ func TestTrustBundleProvider_Coverage_PEMEncoding(t *testing.T) {
 	td := domain.NewTrustDomainFromName("example.org")
 
 	tests := []struct {
-		name      string
-		caCount   int
+		name    string
+		caCount int
 	}{
 		{"single CA", 1},
 		{"two CAs", 2},

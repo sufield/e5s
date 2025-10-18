@@ -51,11 +51,12 @@ type Selector struct {
 //   - ErrSelectorInvalid (with context) if validation fails
 //
 // Example:
-//   selector, err := NewSelector(SelectorTypeWorkload, "uid", "1000")
-//   if err != nil {
-//       return err
-//   }
-//   // selector.String() == "workload:uid:1000"
+//
+//	selector, err := NewSelector(SelectorTypeWorkload, "uid", "1000")
+//	if err != nil {
+//	    return err
+//	}
+//	// selector.String() == "workload:uid:1000"
 func NewSelector(selectorType SelectorType, key, value string) (*Selector, error) {
 	// Validate type is not empty
 	if string(selectorType) == "" {
@@ -104,11 +105,12 @@ func NewSelector(selectorType SelectorType, key, value string) (*Selector, error
 //   - ErrSelectorInvalid (with context) if format is invalid, key is empty, or value is empty
 //
 // Example:
-//   selector, err := ParseSelector(SelectorTypeWorkload, "uid:1000")
-//   // selector: workload:uid:1000
 //
-//   selector, err := ParseSelector(SelectorTypeWorkload, "user:server:prod")
-//   // selector: workload:user:server:prod (value="server:prod")
+//	selector, err := ParseSelector(SelectorTypeWorkload, "uid:1000")
+//	// selector: workload:uid:1000
+//
+//	selector, err := ParseSelector(SelectorTypeWorkload, "user:server:prod")
+//	// selector: workload:user:server:prod (value="server:prod")
 func ParseSelector(selectorType SelectorType, s string) (*Selector, error) {
 	if s == "" {
 		return nil, fmt.Errorf("%w: input string is empty", ErrSelectorInvalid)
@@ -144,13 +146,14 @@ func ParseSelector(selectorType SelectorType, s string) (*Selector, error) {
 //   - ErrSelectorInvalid (with context) if format is invalid, key is empty, or value is empty
 //
 // Example:
-//   selector, err := ParseSelectorFromString("workload:uid:1000")
-//   // selector.Type() == SelectorTypeWorkload
-//   // selector.Key() == "uid"
-//   // selector.Value() == "1000"
 //
-//   selector, err := ParseSelectorFromString("workload:pod:ns:default:name")
-//   // selector.Value() == "ns:default:name" (multi-colon support)
+//	selector, err := ParseSelectorFromString("workload:uid:1000")
+//	// selector.Type() == SelectorTypeWorkload
+//	// selector.Key() == "uid"
+//	// selector.Value() == "1000"
+//
+//	selector, err := ParseSelectorFromString("workload:pod:ns:default:name")
+//	// selector.Value() == "ns:default:name" (multi-colon support)
 func ParseSelectorFromString(s string) (*Selector, error) {
 	if s == "" {
 		return nil, fmt.Errorf("%w: input string is empty", ErrSelectorInvalid)
@@ -175,7 +178,8 @@ func ParseSelectorFromString(s string) (*Selector, error) {
 // The format is always "type:key:value" for consistency.
 //
 // Example:
-//   selector.String() // "workload:uid:1000"
+//
+//	selector.String() // "workload:uid:1000"
 func (s *Selector) String() string {
 	return s.formatted
 }
@@ -183,9 +187,10 @@ func (s *Selector) String() string {
 // Type returns the selector type (node or workload).
 //
 // Example:
-//   if selector.Type() == SelectorTypeWorkload {
-//       // Process workload selector
-//   }
+//
+//	if selector.Type() == SelectorTypeWorkload {
+//	    // Process workload selector
+//	}
 func (s *Selector) Type() SelectorType {
 	return s.selectorType
 }
@@ -193,12 +198,13 @@ func (s *Selector) Type() SelectorType {
 // Key returns the selector key (e.g., "uid", "namespace", "pod").
 //
 // Example:
-//   switch selector.Key() {
-//   case "uid":
-//       // Process UID selector
-//   case "namespace":
-//       // Process namespace selector
-//   }
+//
+//	switch selector.Key() {
+//	case "uid":
+//	    // Process UID selector
+//	case "namespace":
+//	    // Process namespace selector
+//	}
 func (s *Selector) Key() string {
 	return s.key
 }
@@ -208,7 +214,8 @@ func (s *Selector) Key() string {
 // with colons preserved (e.g., "ns:default:podname").
 //
 // Example:
-//   uid := selector.Value() // "1000"
+//
+//	uid := selector.Value() // "1000"
 func (s *Selector) Value() string {
 	return s.value
 }
@@ -220,12 +227,13 @@ func (s *Selector) Value() string {
 // This is used for deduplication in SelectorSet and for matching operations.
 //
 // Example:
-//   s1, _ := ParseSelectorFromString("workload:uid:1000")
-//   s2, _ := ParseSelectorFromString("workload:uid:1000")
-//   s1.Equals(s2) // true
 //
-//   s3, _ := ParseSelectorFromString("workload:uid:1001")
-//   s1.Equals(s3) // false
+//	s1, _ := ParseSelectorFromString("workload:uid:1000")
+//	s2, _ := ParseSelectorFromString("workload:uid:1000")
+//	s1.Equals(s2) // true
+//
+//	s3, _ := ParseSelectorFromString("workload:uid:1001")
+//	s1.Equals(s3) // false
 func (s *Selector) Equals(other *Selector) bool {
 	if s == nil || other == nil {
 		return false
@@ -240,7 +248,8 @@ func (s *Selector) Equals(other *Selector) bool {
 // strings are known to be valid at compile time.
 //
 // Example:
-//   selector := domain.MustNewSelector(SelectorTypeWorkload, "uid", "1000")
+//
+//	selector := domain.MustNewSelector(SelectorTypeWorkload, "uid", "1000")
 func MustNewSelector(selectorType SelectorType, key, value string) *Selector {
 	s, err := NewSelector(selectorType, key, value)
 	if err != nil {
@@ -254,7 +263,8 @@ func MustNewSelector(selectorType SelectorType, key, value string) *Selector {
 // strings are known to be valid at compile time.
 //
 // Example:
-//   selector := domain.MustParseSelectorFromString("workload:uid:1000")
+//
+//	selector := domain.MustParseSelectorFromString("workload:uid:1000")
 func MustParseSelectorFromString(s string) *Selector {
 	sel, err := ParseSelectorFromString(s)
 	if err != nil {

@@ -24,10 +24,11 @@ import (
 //   - Serializable: Implements json.Marshaler for ergonomics
 //
 // SPIFFE Context:
-//   This type models what SPIFFE calls a "SPIFFE ID". The scheme "spiffe://"
-//   is hardcoded as this service is SPIFFE-specific. Parsing and validation
-//   are delegated to IdentityCredentialParser port (implemented in adapters
-//   using go-spiffe SDK).
+//
+//	This type models what SPIFFE calls a "SPIFFE ID". The scheme "spiffe://"
+//	is hardcoded as this service is SPIFFE-specific. Parsing and validation
+//	are delegated to IdentityCredentialParser port (implemented in adapters
+//	using go-spiffe SDK).
 //
 // Concurrency: Safe for concurrent use (immutable value object).
 type IdentityCredential struct {
@@ -59,9 +60,10 @@ type IdentityCredential struct {
 //   - Whitespace trimmed
 //
 // Examples:
-//   NewIdentityCredentialFromComponents(td, "/workload")     → spiffe://example.org/workload
-//   NewIdentityCredentialFromComponents(td, "")              → spiffe://example.org/
-//   NewIdentityCredentialFromComponents(td, "//foo//bar")    → spiffe://example.org/foo/bar
+//
+//	NewIdentityCredentialFromComponents(td, "/workload")     → spiffe://example.org/workload
+//	NewIdentityCredentialFromComponents(td, "")              → spiffe://example.org/
+//	NewIdentityCredentialFromComponents(td, "//foo//bar")    → spiffe://example.org/foo/bar
 //
 // Panics:
 //   - If trustDomain is nil (programming error, not runtime input validation)
@@ -110,15 +112,16 @@ func NewIdentityCredentialFromComponents(trustDomain *TrustDomain, path string) 
 // treated differently.
 //
 // Examples:
-//   normalizePath("")             → "/"
-//   normalizePath("  /  ")        → "/"
-//   normalizePath("/")            → "/"
-//   normalizePath("workload")     → "/workload"
-//   normalizePath("/workload")    → "/workload"
-//   normalizePath("//foo//bar")   → "/foo/bar"
-//   normalizePath("///foo///")    → "/foo"
-//   normalizePath("/foo/bar/")    → "/foo/bar"
-//   normalizePath("/db:rw/user")  → "/db:rw/user" (colons allowed)
+//
+//	normalizePath("")             → "/"
+//	normalizePath("  /  ")        → "/"
+//	normalizePath("/")            → "/"
+//	normalizePath("workload")     → "/workload"
+//	normalizePath("/workload")    → "/workload"
+//	normalizePath("//foo//bar")   → "/foo/bar"
+//	normalizePath("///foo///")    → "/foo"
+//	normalizePath("/foo/bar/")    → "/foo/bar"
+//	normalizePath("/db:rw/user")  → "/db:rw/user" (colons allowed)
 //
 // Panics:
 //   - If path contains `.` or `..` segments (path traversal)
@@ -173,7 +176,8 @@ func normalizePath(p string) string {
 // (immutability contract).
 //
 // Example:
-//   id.String() // "spiffe://example.org/workload/server"
+//
+//	id.String() // "spiffe://example.org/workload/server"
 func (i *IdentityCredential) String() string {
 	return i.uri
 }
@@ -184,7 +188,8 @@ func (i *IdentityCredential) String() string {
 // Never returns nil for properly constructed instances.
 //
 // Example:
-//   id.TrustDomain().String() // "example.org"
+//
+//	id.TrustDomain().String() // "example.org"
 func (i *IdentityCredential) TrustDomain() *TrustDomain {
 	return i.trustDomain
 }
@@ -197,7 +202,8 @@ func (i *IdentityCredential) TrustDomain() *TrustDomain {
 //   - Never empty (defaults to "/" for root identity)
 //
 // Example:
-//   id.Path() // "/workload/server"
+//
+//	id.Path() // "/workload/server"
 func (i *IdentityCredential) Path() string {
 	return i.path
 }
@@ -218,9 +224,10 @@ func (i *IdentityCredential) Path() string {
 //   - Nil-safe: i.Equals(nil) == false (never panics)
 //
 // Example:
-//   id1 := NewIdentityCredentialFromComponents(td, "/workload")
-//   id2 := NewIdentityCredentialFromComponents(td, "/workload")
-//   id1.Equals(id2) // true
+//
+//	id1 := NewIdentityCredentialFromComponents(td, "/workload")
+//	id2 := NewIdentityCredentialFromComponents(td, "/workload")
+//	id1.Equals(id2) // true
 func (i *IdentityCredential) Equals(other *IdentityCredential) bool {
 	// Nil-safe check (both receiver and parameter)
 	if i == nil || other == nil {
@@ -234,12 +241,14 @@ func (i *IdentityCredential) Equals(other *IdentityCredential) bool {
 //
 // Returns true if and only if the identity's trust domain equals the provided
 // trust domain. This is a convenience method equivalent to:
-//   i.TrustDomain().Equals(td)
+//
+//	i.TrustDomain().Equals(td)
 //
 // Example:
-//   id := NewIdentityCredentialFromComponents(td1, "/workload")
-//   id.IsInTrustDomain(td1) // true
-//   id.IsInTrustDomain(td2) // false
+//
+//	id := NewIdentityCredentialFromComponents(td1, "/workload")
+//	id.IsInTrustDomain(td1) // true
+//	id.IsInTrustDomain(td2) // false
 func (i *IdentityCredential) IsInTrustDomain(td *TrustDomain) bool {
 	return i.trustDomain.Equals(td)
 }
@@ -254,11 +263,12 @@ func (i *IdentityCredential) IsInTrustDomain(td *TrustDomain) bool {
 // Use this to detect uninitialized values or programming errors.
 //
 // Example:
-//   var id *IdentityCredential
-//   id.IsZero() // true
 //
-//   id = NewIdentityCredentialFromComponents(td, "/workload")
-//   id.IsZero() // false
+//	var id *IdentityCredential
+//	id.IsZero() // true
+//
+//	id = NewIdentityCredentialFromComponents(td, "/workload")
+//	id.IsZero() // false
 func (i *IdentityCredential) IsZero() bool {
 	return i == nil || i.trustDomain == nil || i.uri == ""
 }
@@ -269,9 +279,10 @@ func (i *IdentityCredential) IsZero() bool {
 // semantics in collections.
 //
 // Example:
-//   cache := make(map[string]*SomeData)
-//   cache[id.Key()] = data
-//   data, ok := cache[id.Key()]
+//
+//	cache := make(map[string]*SomeData)
+//	cache[id.Key()] = data
+//	data, ok := cache[id.Key()]
 func (i *IdentityCredential) Key() string {
 	return i.uri
 }
@@ -279,13 +290,15 @@ func (i *IdentityCredential) Key() string {
 // MarshalJSON implements json.Marshaler for JSON serialization.
 //
 // The identity is serialized as its canonical URI string:
-//   {"identity": "spiffe://example.org/workload"}
+//
+//	{"identity": "spiffe://example.org/workload"}
 //
 // Returns error if the identity is zero-value (nil or invalid).
 //
 // Example:
-//   data, err := json.Marshal(id)
-//   // data: "spiffe://example.org/workload"
+//
+//	data, err := json.Marshal(id)
+//	// data: "spiffe://example.org/workload"
 func (i *IdentityCredential) MarshalJSON() ([]byte, error) {
 	if i.IsZero() {
 		return nil, fmt.Errorf("%w: cannot marshal zero-value identity credential", ErrInvalidIdentityCredential)
@@ -303,16 +316,11 @@ func (i *IdentityCredential) MarshalJSON() ([]byte, error) {
 //   - Ensures all parsing uses SDK validation (DNS, normalization, security)
 //   - Prevents creating invalid IdentityCredential instances via JSON
 //
-// To deserialize, use IdentityCredentialParser.ParseFromString() with the JSON string value.
+// To deserialize, unmarshal to a string then use IdentityCredentialParser:
 //
-// Example:
-//   // Don't do this:
-//   json.Unmarshal(data, &id) // Returns ErrNotSupported
-//
-//   // Do this instead:
-//   var uriString string
-//   json.Unmarshal(data, &uriString)
-//   id, err := parser.ParseFromString(ctx, uriString)
+//	var uriString string
+//	json.Unmarshal(data, &uriString)
+//	id, err := parser.ParseFromString(ctx, uriString)
 func (i *IdentityCredential) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("%w: unmarshaling requires IdentityCredentialParser adapter", ErrNotSupported)
 }
@@ -325,8 +333,9 @@ func (i *IdentityCredential) UnmarshalJSON(data []byte) error {
 // Returns error if the identity is zero-value (nil or invalid).
 //
 // Example:
-//   text, err := id.MarshalText()
-//   // text: []byte("spiffe://example.org/workload")
+//
+//	text, err := id.MarshalText()
+//	// text: []byte("spiffe://example.org/workload")
 func (i *IdentityCredential) MarshalText() ([]byte, error) {
 	if i.IsZero() {
 		return nil, fmt.Errorf("%w: cannot marshal zero-value identity credential", ErrInvalidIdentityCredential)
@@ -339,12 +348,9 @@ func (i *IdentityCredential) MarshalText() ([]byte, error) {
 // This method returns ErrNotSupported for the same reasons as UnmarshalJSON:
 // parsing must go through IdentityCredentialParser adapters.
 //
-// Example:
-//   // Don't do this:
-//   id.UnmarshalText([]byte("spiffe://example.org/workload")) // Returns ErrNotSupported
+// To deserialize, use IdentityCredentialParser:
 //
-//   // Do this instead:
-//   id, err := parser.ParseFromString(ctx, string(text))
+//	id, err := parser.ParseFromString(ctx, string(text))
 func (i *IdentityCredential) UnmarshalText(text []byte) error {
 	return fmt.Errorf("%w: unmarshaling requires IdentityCredentialParser adapter", ErrNotSupported)
 }

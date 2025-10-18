@@ -34,10 +34,11 @@ const (
 // Use this to validate user input or parsed selector types.
 //
 // Example:
-//   t := SelectorType("workload")
-//   if !t.IsValid() {
-//       return fmt.Errorf("invalid selector type: %s", t)
-//   }
+//
+//	t := SelectorType("workload")
+//	if !t.IsValid() {
+//	    return fmt.Errorf("invalid selector type: %s", t)
+//	}
 func (t SelectorType) IsValid() bool {
 	return t == SelectorTypeNode || t == SelectorTypeWorkload
 }

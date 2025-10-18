@@ -624,10 +624,11 @@ Consists of domain, port interfaces, swappable adapters:
 - In-memory implementation for development/testing
 - No domain coupling to infrastructure
 
-### 2. Config Structs over Multiple Parameters
+### 2. Config Structs for Grouped Parameters
+
+APIs use config structs for maintainability and extensibility. This allows adding new fields without breaking existing code and provides clear documentation of related settings.
 
 ```go
-// ✅ Good: Grouped parameters with defaults
 server, err := identityserver.New(ctx, ports.MTLSConfig{
     WorkloadAPI: ports.WorkloadAPIConfig{
         SocketPath: socketPath,
@@ -639,9 +640,6 @@ server, err := identityserver.New(ctx, ports.MTLSConfig{
         Address: ":8443",
     },
 })
-
-// ❌ Bad: Too many parameters
-server, err := NewServer(ctx, socketPath, allowedID, ":8443", 10*time.Second, ...)
 ```
 
 ### 3. Separate Shutdown and Close

@@ -14,9 +14,10 @@ package domain
 // discovered selectors for the workload to qualify for this identity.
 //
 // Example:
-//   Mapper selectors: [unix:uid:1000, k8s:namespace:prod]
-//   Workload selectors: [unix:uid:1000, k8s:namespace:prod, k8s:pod:web]
-//   Result: MATCH (all mapper selectors present, extra selectors are ignored)
+//
+//	Mapper selectors: [unix:uid:1000, k8s:namespace:prod]
+//	Workload selectors: [unix:uid:1000, k8s:namespace:prod, k8s:pod:web]
+//	Result: MATCH (all mapper selectors present, extra selectors are ignored)
 //
 // Design Philosophy:
 //   - Immutable: All fields are set once at construction and never modified (except parentID)
@@ -47,12 +48,13 @@ type IdentityMapper struct {
 //   - ErrInvalidSelectors if selectors is nil or empty
 //
 // Example:
-//   td := domain.NewTrustDomainFromName("example.org")
-//   id := domain.NewIdentityCredentialFromComponents(td, "/workload/db")
-//   selectors := domain.NewSelectorSet()
-//   selectors.Add(domain.MustParseSelectorFromString("unix:uid:1000"))
-//   selectors.Add(domain.MustParseSelectorFromString("k8s:namespace:prod"))
-//   mapper, err := domain.NewIdentityMapper(id, selectors)
+//
+//	td := domain.NewTrustDomainFromName("example.org")
+//	id := domain.NewIdentityCredentialFromComponents(td, "/workload/db")
+//	selectors := domain.NewSelectorSet()
+//	selectors.Add(domain.MustParseSelectorFromString("unix:uid:1000"))
+//	selectors.Add(domain.MustParseSelectorFromString("k8s:namespace:prod"))
+//	mapper, err := domain.NewIdentityMapper(id, selectors)
 //
 // Concurrency: Safe for concurrent use (pure function, no shared state).
 func NewIdentityMapper(identityCredential *IdentityCredential, selectors *SelectorSet) (*IdentityMapper, error) {
@@ -74,7 +76,8 @@ func NewIdentityMapper(identityCredential *IdentityCredential, selectors *Select
 // The identity credential is treated as immutable per the domain's immutability contract.
 //
 // Example:
-//   mapper.IdentityCredential().String() // "spiffe://example.org/workload/db"
+//
+//	mapper.IdentityCredential().String() // "spiffe://example.org/workload/db"
 func (im *IdentityMapper) IdentityCredential() *IdentityCredential {
 	return im.identityCredential
 }
@@ -84,9 +87,10 @@ func (im *IdentityMapper) IdentityCredential() *IdentityCredential {
 // The selector set is treated as immutable. Do not modify the returned set.
 //
 // Example:
-//   for _, sel := range mapper.Selectors().All() {
-//       fmt.Println(sel.Formatted()) // "unix:uid:1000", "k8s:namespace:prod", etc.
-//   }
+//
+//	for _, sel := range mapper.Selectors().All() {
+//	    fmt.Println(sel.Formatted()) // "unix:uid:1000", "k8s:namespace:prod", etc.
+//	}
 func (im *IdentityMapper) Selectors() *SelectorSet {
 	return im.selectors
 }
@@ -97,9 +101,10 @@ func (im *IdentityMapper) Selectors() *SelectorSet {
 // an agent, and the agent's identity is the parent.
 //
 // Example:
-//   if parent := mapper.ParentID(); parent != nil {
-//       fmt.Println("Parent agent:", parent.String())
-//   }
+//
+//	if parent := mapper.ParentID(); parent != nil {
+//	    fmt.Println("Parent agent:", parent.String())
+//	}
 func (im *IdentityMapper) ParentID() *IdentityCredential {
 	return im.parentID
 }
@@ -113,8 +118,9 @@ func (im *IdentityMapper) ParentID() *IdentityCredential {
 // if SetParentID might be called concurrently with reads.
 //
 // Example:
-//   agentID := domain.NewIdentityCredentialFromComponents(td, "/spire/agent/k8s/node-1")
-//   mapper.SetParentID(agentID)
+//
+//	agentID := domain.NewIdentityCredentialFromComponents(td, "/spire/agent/k8s/node-1")
+//	mapper.SetParentID(agentID)
 func (im *IdentityMapper) SetParentID(parentID *IdentityCredential) {
 	im.parentID = parentID
 }
@@ -122,8 +128,9 @@ func (im *IdentityMapper) SetParentID(parentID *IdentityCredential) {
 // MatchesSelectors checks if this mapper matches the given workload selectors using AND logic.
 //
 // AND Semantics:
-//   ALL selectors in im.selectors must be present in the input selectors for a match.
-//   Extra selectors in the input are ignored (they don't prevent a match).
+//
+//	ALL selectors in im.selectors must be present in the input selectors for a match.
+//	Extra selectors in the input are ignored (they don't prevent a match).
 //
 // Nil Safety:
 //   - Returns false if im is nil (allows safe method calls on nil receivers)
@@ -131,19 +138,20 @@ func (im *IdentityMapper) SetParentID(parentID *IdentityCredential) {
 //   - Returns false if input selectors is nil
 //
 // Examples:
-//   Mapper selectors: [unix:uid:1000, k8s:namespace:prod]
 //
-//   Input: [unix:uid:1000, k8s:namespace:prod, k8s:pod:web]
-//   Result: true (all mapper selectors present, extra k8s:pod:web ignored)
+//	Mapper selectors: [unix:uid:1000, k8s:namespace:prod]
 //
-//   Input: [unix:uid:1000]
-//   Result: false (missing k8s:namespace:prod)
+//	Input: [unix:uid:1000, k8s:namespace:prod, k8s:pod:web]
+//	Result: true (all mapper selectors present, extra k8s:pod:web ignored)
 //
-//   Input: [k8s:namespace:prod]
-//   Result: false (missing unix:uid:1000)
+//	Input: [unix:uid:1000]
+//	Result: false (missing k8s:namespace:prod)
 //
-//   Input: []
-//   Result: false (missing both required selectors)
+//	Input: [k8s:namespace:prod]
+//	Result: false (missing unix:uid:1000)
+//
+//	Input: []
+//	Result: false (missing both required selectors)
 //
 // Concurrency: Safe for concurrent use (read-only operation on immutable data).
 func (im *IdentityMapper) MatchesSelectors(selectors *SelectorSet) bool {
@@ -172,10 +180,11 @@ func (im *IdentityMapper) MatchesSelectors(selectors *SelectorSet) bool {
 // This is useful for detecting zero-value instances or programming errors.
 //
 // Example:
-//   var mapper *IdentityMapper
-//   if mapper.IsZero() {
-//       // Need to create a valid mapper
-//   }
+//
+//	var mapper *IdentityMapper
+//	if mapper.IsZero() {
+//	    // Need to create a valid mapper
+//	}
 //
 // Concurrency: Safe for concurrent use.
 func (im *IdentityMapper) IsZero() bool {

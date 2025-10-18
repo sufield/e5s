@@ -13,8 +13,8 @@ import (
 // Includes Registry for local identity mapping (dev-only).
 type Application struct {
 	cfg   *dto.Config
-	svc   ports.Service             // optional demo service
-	ics   ports.IdentityIssuer      // server-side issuance facade
+	svc   ports.Service        // optional demo service
+	ics   ports.IdentityIssuer // server-side issuance facade
 	agent ports.Agent
 	reg   ports.IdentityMapperRegistry
 }

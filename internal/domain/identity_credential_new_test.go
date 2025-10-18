@@ -311,7 +311,7 @@ func TestIdentityCredential_MarshalJSON_InStruct(t *testing.T) {
 
 	// Arrange
 	type Workload struct {
-		Name     string                      `json:"name"`
+		Name     string                     `json:"name"`
 		Identity *domain.IdentityCredential `json:"identity"`
 	}
 

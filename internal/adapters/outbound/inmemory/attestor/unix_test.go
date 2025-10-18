@@ -284,4 +284,3 @@ func TestUnixWorkloadAttestor_ContextCancellation(t *testing.T) {
 	// This test documents expected behavior
 	assert.NoError(t, err)
 }
-

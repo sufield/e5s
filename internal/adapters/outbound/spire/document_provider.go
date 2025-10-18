@@ -18,10 +18,10 @@ import (
 // Design Note: In production SPIRE deployments:
 //   - Certificate CREATION happens on SPIRE Server (this provider returns error if called)
 //   - Certificate VALIDATION uses SDK's x509svid.Verify for:
-//     * Chain-of-trust verification against trust bundles
-//     * Signature validation
-//     * Expiration checks
-//     * SPIFFE ID extraction and validation
+//   - Chain-of-trust verification against trust bundles
+//   - Signature validation
+//   - Expiration checks
+//   - SPIFFE ID extraction and validation
 //
 // This replaces the lightweight inmemory validator with spec-compliant SDK validation.
 //
@@ -71,10 +71,11 @@ func WithClock(f func() time.Time) ValidatorOption {
 // Defaults: Clock skew tolerance of 5 minutes, time.Now for clock.
 //
 // Example with custom options:
-//   validator := NewSDKIdentityDocumentValidator(bundleSource,
-//       WithClockSkew(10 * time.Minute),
-//       WithClock(mockClock),
-//   )
+//
+//	validator := NewSDKIdentityDocumentValidator(bundleSource,
+//	    WithClockSkew(10 * time.Minute),
+//	    WithClock(mockClock),
+//	)
 func NewSDKIdentityDocumentValidator(bundleSource x509bundle.Source, opts ...ValidatorOption) ports.IdentityDocumentValidator {
 	v := &SDKDocumentProvider{
 		bundleSource: bundleSource,

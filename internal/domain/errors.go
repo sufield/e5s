@@ -13,16 +13,11 @@ import (
 //   - Callers branch with errors.Is(err, <sentinel>) or errors.As
 //   - Do not export adapter-specific error types beyond these domain sentinels
 //
-// Error Wrapping Pattern:
-//
-//	// Good: Single wrap with context
-//	return fmt.Errorf("%w: chain verification failed: %v", ErrCertificateChainInvalid, sdkErr)
-//
-//	// Good: Preserve underlying error with %w
-//	return fmt.Errorf("%w: %w", ErrInvalidTrustDomain, sdkErr)
-//
-//	// Bad: Double-wrapping in one call
-//	return fmt.Errorf("%w: %w: chain failed", ErrCertificateChainInvalid, ErrIdentityDocumentInvalid)
+// Error Wrapping:
+//   Wrap with single sentinel and context:
+//     return fmt.Errorf("%w: chain verification failed: %v", ErrCertificateChainInvalid, sdkErr)
+//   Preserve underlying error chain:
+//     return fmt.Errorf("%w: %w", ErrInvalidTrustDomain, sdkErr)
 //
 // Stability: These sentinels define the contract between domain and ports.
 // All adapters must return these exact errors for consistent error handling.
