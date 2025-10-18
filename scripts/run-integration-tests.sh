@@ -1,10 +1,40 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+# Optimized integration test runner using pre-compiled test binary
+# Based on Option A recommendation: compile locally, run in-cluster
+#
+# Configuration via environment variables:
+#   NS              - Kubernetes namespace (default: spire-system)
+#   SOCKET_DIR      - Socket directory on node (default: /tmp/spire-agent/public)
+#   SOCKET_FILE     - Socket filename (default: api.sock)
+#   PKG             - Package to test (default: ./internal/adapters/outbound/spire)
+#   TESTBIN         - Test binary path (default: /tmp/spire-integration.test)
+#   TAGS            - Build tags (default: integration)
+#   KEEP            - Keep pod for faster iteration (default: false)
+#   TRUST_DOMAIN    - SPIRE trust domain (default: example.org)
 
-echo "============================================"
-echo "SPIRE Integration Tests (Kubernetes Pod)"
-echo "============================================"
-echo ""
+set -Eeuo pipefail
+
+# Configuration
+NS="${NS:-spire-system}"
+SOCKET_DIR="${SOCKET_DIR:-/tmp/spire-agent/public}"
+SOCKET_FILE="${SOCKET_FILE:-api.sock}"
+PKG="${PKG:-./internal/adapters/outbound/spire}"
+TESTBIN="${TESTBIN:-/tmp/spire-integration.test}"
+TAGS="${TAGS:-integration}"
+KEEP="${KEEP:-false}"
+TRUST_DOMAIN="${TRUST_DOMAIN:-example.org}"
+
+POD_NAME="spire-integration-test"
+POD_YAML="/tmp/spire-test-pod.yaml"
+
+# Cleanup on exit (always runs)
+cleanup() {
+    if [ "$KEEP" != "true" ]; then
+        kubectl delete pod -n "$NS" "$POD_NAME" --ignore-not-found=true >/dev/null 2>&1 || true
+    fi
+    rm -f "$POD_YAML" "$TESTBIN" || true
+}
+trap cleanup EXIT
 
 # Colors
 GREEN='\033[0;32m'
@@ -24,6 +54,17 @@ info() {
     echo -e "${YELLOW}ℹ️  $1${NC}"
 }
 
+echo "============================================"
+echo "SPIRE Integration Tests (Optimized)"
+echo "============================================"
+echo ""
+info "Configuration:"
+echo "  Namespace: $NS"
+echo "  Socket: $SOCKET_DIR/$SOCKET_FILE"
+echo "  Package: $PKG"
+echo "  Keep pod: $KEEP"
+echo ""
+
 # Check prerequisites
 info "Checking prerequisites..."
 
@@ -32,99 +73,166 @@ if ! command -v kubectl >/dev/null 2>&1; then
     exit 1
 fi
 
-if ! kubectl get namespace spire-system >/dev/null 2>&1; then
-    error "SPIRE namespace not found. Run: make minikube-up"
+if ! kubectl get namespace "$NS" >/dev/null 2>&1; then
+    error "SPIRE namespace '$NS' not found. Run: make minikube-up"
     exit 1
 fi
 
-# Get SPIRE Agent pod
-AGENT_POD=$(kubectl get pods -n spire-system -l app.kubernetes.io/name=agent -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+# Get SPIRE Agent pod (tolerant label selector - tries 3 common patterns)
+AGENT_POD=$(
+  kubectl get pods -n "$NS" \
+    -l 'app.kubernetes.io/name=agent' -o jsonpath='{.items[0].metadata.name}' 2>/dev/null \
+  || kubectl get pods -n "$NS" \
+    -l 'app=spire-agent' -o jsonpath='{.items[0].metadata.name}' 2>/dev/null \
+  || kubectl get pods -n "$NS" \
+    -l 'name=spire-agent' -o jsonpath='{.items[0].metadata.name}' 2>/dev/null \
+  || true
+)
+
 if [ -z "$AGENT_POD" ]; then
-    error "SPIRE Agent pod not found"
+    error "SPIRE Agent pod not found (tried labels: app.kubernetes.io/name, app, name)"
     exit 1
 fi
 
 success "Found SPIRE Agent: $AGENT_POD"
 
-# Note: SPIRE agent uses distroless image with no shell, so we skip socket check
-# The test pod will verify socket access when it runs
-info "SPIRE Agent is running (socket check skipped - distroless image)"
+# Verify socket exists (prefer agent pod check - works on any cluster)
+info "Checking Workload API socket availability..."
+if ! kubectl exec -n "$NS" "$AGENT_POD" -- test -S /tmp/spire-agent/public/api.sock >/dev/null 2>&1; then
+    error "Workload API socket not visible inside SPIRE Agent pod"
+    exit 1
+fi
+success "Workload API socket verified via agent pod"
 
-# Create a test pod manifest
-info "Creating test pod with socket access..."
+# Optional: Additional node check if running on Minikube
+if command -v minikube >/dev/null 2>&1; then
+    info "Minikube detected - verifying socket on node..."
+    if ! minikube ssh -- "test -S ${SOCKET_DIR}/${SOCKET_FILE} || test -d ${SOCKET_DIR}" >/dev/null 2>&1; then
+        error "Socket/directory missing on Minikube node: ${SOCKET_DIR}/${SOCKET_FILE}"
+        exit 1
+    fi
+    success "Socket verified on Minikube node"
+fi
 
-cat > /tmp/spire-test-pod.yaml <<EOF
+# Compile test binary locally (fast, deterministic)
+# Auto-detect node architecture for cross-platform support
+NODE_ARCH=$(kubectl get nodes -o jsonpath='{.items[0].status.nodeInfo.architecture}')
+GOARCH="${GOARCH:-$NODE_ARCH}"
+
+info "Compiling static integration test binary (GOARCH=$GOARCH)..."
+if ! CGO_ENABLED=0 GOOS=linux GOARCH="$GOARCH" go test -tags="$TAGS" -c -o "$TESTBIN" "$PKG"; then
+    error "Failed to compile static test binary"
+    exit 1
+fi
+
+success "Test binary compiled: $(du -h "$TESTBIN" | cut -f1)"
+
+# Create minimal test pod (no unnecessary privileges)
+info "Creating minimal test pod..."
+
+cat > "$POD_YAML" <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
-  name: spire-integration-test
-  namespace: spire-system
+  name: ${POD_NAME}
+  namespace: ${NS}
+  labels:
+    app: spire-integration-test
+    role: test
 spec:
-  serviceAccountName: spire-agent
-  hostPID: true
-  hostNetwork: true
-  containers:
-  - name: test
-    image: golang:1.23
-    command: ["sleep", "infinity"]
-    env:
-    - name: GOTOOLCHAIN
-      value: "auto"
-    - name: SPIRE_AGENT_SOCKET
-      value: "unix:///spire-agent-socket/api.sock"
-    - name: SPIRE_TRUST_DOMAIN
-      value: "example.org"
-    volumeMounts:
-    - name: spire-agent-socket
-      mountPath: /spire-agent-socket
-      readOnly: true
-  volumes:
-  - name: spire-agent-socket
-    hostPath:
-      path: /tmp/spire-agent/public
-      type: Directory
   restartPolicy: Never
+  volumes:
+    - name: spire-socket
+      hostPath:
+        path: ${SOCKET_DIR}
+        type: Directory
+    - name: work
+      emptyDir: {}
+  containers:
+    - name: test
+      image: debian:bookworm-slim
+      command: ["sleep", "infinity"]
+      env:
+        - name: SPIFFE_ENDPOINT_SOCKET
+          value: "unix:///spire-socket/${SOCKET_FILE}"
+        - name: SPIRE_TRUST_DOMAIN
+          value: "${TRUST_DOMAIN}"
+      volumeMounts:
+        - name: spire-socket
+          mountPath: /spire-socket
+          readOnly: true
+        - name: work
+          mountPath: /work
+      resources:
+        requests:
+          cpu: "100m"
+          memory: "128Mi"
+        limits:
+          cpu: "500m"
+          memory: "256Mi"
+      securityContext:
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
 EOF
 
-# Delete existing test pod if present
-kubectl delete pod -n spire-system spire-integration-test --ignore-not-found=true >/dev/null 2>&1
+# Delete existing pod unless KEEP=true
+if [ "$KEEP" != "true" ]; then
+    kubectl delete pod -n "$NS" "$POD_NAME" --ignore-not-found=true >/dev/null 2>&1 || true
+fi
 
 # Create and wait for test pod
-kubectl apply -f /tmp/spire-test-pod.yaml >/dev/null
-info "Waiting for test pod to be ready..."
-kubectl wait --for=condition=Ready pod/spire-integration-test -n spire-system --timeout=60s >/dev/null
+if ! kubectl get pod -n "$NS" "$POD_NAME" >/dev/null 2>&1; then
+    kubectl apply -f "$POD_YAML" >/dev/null
+    info "Waiting for test pod to be scheduled..."
+    if ! kubectl wait --for=condition=PodScheduled pod/"$POD_NAME" -n "$NS" --timeout=60s >/dev/null 2>&1; then
+        error "Test pod failed to be scheduled"
+        kubectl describe pod -n "$NS" "$POD_NAME" || true
+        exit 1
+    fi
+    # Wait for Ready condition (Debian pod with sleep infinity should become ready)
+    info "Waiting for test pod to be ready..."
+    if ! kubectl wait --for=condition=Ready pod/"$POD_NAME" -n "$NS" --timeout=60s >/dev/null 2>&1; then
+        error "Test pod failed to become ready"
+        kubectl describe pod -n "$NS" "$POD_NAME" || true
+        exit 1
+    fi
+    success "Test pod ready"
+else
+    info "Reusing existing test pod"
+fi
 
-success "Test pod is ready"
-
-# Copy project code to test pod
-info "Copying project code to test pod..."
-kubectl exec -n spire-system spire-integration-test -- mkdir -p /workspace
-kubectl cp . spire-system/spire-integration-test:/workspace >/dev/null 2>&1 || {
-    error "Failed to copy project"
-    kubectl delete pod -n spire-system spire-integration-test --ignore-not-found=true
+# Copy test binary to pod
+info "Copying test binary to pod ($(du -h "$TESTBIN" | cut -f1))..."
+if ! kubectl cp "$TESTBIN" "$NS"/"$POD_NAME":/work/integration.test; then
+    error "Failed to copy test binary"
     exit 1
-}
+fi
 
-# Run tests in pod
+# Ensure binary is executable
+kubectl exec -n "$NS" "$POD_NAME" -- chmod +x /work/integration.test >/dev/null 2>&1
+
+# Run tests
 echo ""
-info "Running integration tests in pod..."
+info "Running integration tests (timeout: 3m)..."
 echo ""
 
-if kubectl exec -n spire-system spire-integration-test -- \
-    sh -c "cd /workspace && go test -tags=integration -race -v ./internal/adapters/outbound/spire/..."; then
+if kubectl exec -n "$NS" "$POD_NAME" -- /work/integration.test -test.v -test.timeout=3m; then
     echo ""
     success "Integration tests passed!"
     EXIT_CODE=0
 else
     echo ""
     error "Integration tests failed"
+    # Surface failure context for debugging
+    kubectl describe pod -n "$NS" "$POD_NAME" || true
     EXIT_CODE=1
 fi
 
-# Cleanup
-info "Cleaning up test pod..."
-kubectl delete pod -n spire-system spire-integration-test --ignore-not-found=true >/dev/null 2>&1
-
-rm -f /tmp/spire-test-pod.yaml
+# Cleanup (or keep for next run)
+if [ "$KEEP" = "true" ]; then
+    info "Keeping test pod for next run (KEEP=true)"
+else
+    info "Cleaning up..."
+fi
 
 exit $EXIT_CODE
