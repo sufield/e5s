@@ -1,0 +1,80 @@
+# mtls-server-image.yaml - Production/Demo deployment using container image
+#
+# This is the recommended approach for:
+# - Production deployments
+# - Conference demos and presentations
+# - Automated CI/CD pipelines
+#
+# Prerequisites:
+#   1. Build and push the container image:
+#      docker build -t your-registry/mtls-server:latest -f examples/zeroconfig-example/Dockerfile .
+#      docker push your-registry/mtls-server:latest
+#
+#   2. Update the image field below with your registry
+#
+#   3. Register the server workload with SPIRE (see examples/README.md)
+#
+# Usage:
+#   kubectl apply -f examples/mtls-server-image.yaml
+#   kubectl wait --for=condition=Ready deploy/mtls-server --timeout=60s
+#   kubectl port-forward svc/mtls-server 8443:8443
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mtls-server
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mtls-server
+  template:
+    metadata:
+      labels:
+        app: mtls-server
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      volumes:
+        - name: spire-socket
+          hostPath:
+            path: /tmp/spire-agent/public
+            type: Directory
+      containers:
+        - name: mtls-server
+          # TODO: Replace with your container registry
+          image: ghcr.io/yourorg/mtls-server:latest
+          imagePullPolicy: Always
+          ports:
+            - name: https
+              containerPort: 8443
+          volumeMounts:
+            - name: spire-socket
+              mountPath: /spire-socket
+              readOnly: true
+          # TCP readiness probe - doesn't require client certificates
+          readinessProbe:
+            tcpSocket:
+              port: 8443
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          # Optional: Environment variables (zero-config auto-detects these)
+          # env:
+          #   - name: SPIFFE_ENDPOINT_SOCKET
+          #     value: "unix:///spire-socket/api.sock"
+          #   - name: SERVER_ADDRESS
+          #     value: ":8443"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mtls-server
+  namespace: default
+spec:
+  selector:
+    app: mtls-server
+  ports:
+    - name: https
+      port: 8443
+      targetPort: 8443

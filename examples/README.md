@@ -220,6 +220,29 @@ You should see both `spiffe://example.org/server` and `spiffe://example.org/clie
 
 ### 4. Deploy the mTLS Server
 
+There are two approaches for deploying the server:
+
+#### Approach A: Production/Demo (Container Image) - **Recommended**
+
+Best for:
+- Production deployments
+- Conference demos and presentations
+- Automated CI/CD pipelines
+- Clean, minimal deployment steps
+
+#### Approach B: Development (kubectl cp)
+
+Best for:
+- Local development and testing
+- Iterating on code changes quickly
+- When you don't have a container registry
+
+Choose the approach that fits your use case. For this guide, we'll use **Approach B (Development)** for simplicity. See [Production Deployment](#production-deployment) section for Approach A.
+
+---
+
+#### Deploy Server (Development Approach)
+
 Deploy the server to Kubernetes:
 
 ```bash
@@ -525,32 +548,84 @@ The server will automatically detect `mycompany.com` as the trust domain and aut
 
 ### Production Deployment
 
-For production:
+For production deployments or conference demos, use the container image approach for a cleaner workflow.
 
-1. **Build container image**:
-   ```dockerfile
-   FROM golang:1.25 AS builder
-   WORKDIR /app
-   COPY . .
-   RUN go build -o mtls-server ./examples/zeroconfig-example
+#### 1. Build Container Image
 
-   FROM debian:bookworm-slim
-   COPY --from=builder /app/mtls-server /usr/local/bin/
-   CMD ["/usr/local/bin/mtls-server"]
-   ```
+A Dockerfile is provided in `examples/zeroconfig-example/Dockerfile`:
 
-2. **Update deployment**:
-   ```yaml
-   containers:
-     - name: mtls-server
-       image: your-registry/mtls-server:v1.0.0  # Use your image
-       # Remove "sleep infinity" command
-   ```
+```bash
+# Build the container image
+docker build -t your-registry/mtls-server:latest -f examples/zeroconfig-example/Dockerfile .
 
-3. **Use real certificates**:
-   - Don't use `-dns localhost` in production
-   - Use actual service DNS names
-   - Consider using Ingress with SPIFFE authentication
+# For multi-architecture builds
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -t your-registry/mtls-server:latest \
+  -f examples/zeroconfig-example/Dockerfile .
+
+# Push to your registry
+docker push your-registry/mtls-server:latest
+```
+
+The Dockerfile uses a multi-stage build:
+- Builder stage: Compiles the Go binary
+- Production stage: Uses `gcr.io/distroless/static-debian12:nonroot` for minimal attack surface
+- Runs as non-root user by default
+- Final image is ~20MB
+
+#### 2. Deploy with Container Image
+
+Use the production-ready manifest:
+
+```bash
+# Edit the image field in mtls-server-image.yaml first
+vim examples/mtls-server-image.yaml  # Update image: to your registry
+
+# Deploy
+kubectl apply -f examples/mtls-server-image.yaml
+
+# Wait for ready (uses TCP readiness probe)
+kubectl wait --for=condition=Ready deploy/mtls-server --timeout=60s
+
+# Port-forward to test
+kubectl port-forward svc/mtls-server 8443:8443
+```
+
+**Benefits of this approach**:
+- ✅ One-step deployment (no kubectl cp needed)
+- ✅ Faster demo/presentation flow
+- ✅ Production-ready security (distroless, non-root)
+- ✅ TCP readiness probe for instant feedback
+- ✅ Proper container image versioning
+- ✅ Works with CI/CD pipelines
+
+#### 3. Configuration for Production
+
+When deploying to production:
+
+**Network**:
+- Don't use `-dns localhost` in SPIRE registration
+- Use actual service DNS names (`mtls-server.default.svc.cluster.local`)
+- Consider using Ingress with SPIFFE authentication
+
+**Security**:
+- Use distroless or minimal base images (already done in provided Dockerfile)
+- Run as non-root user (already done)
+- Set resource limits:
+  ```yaml
+  resources:
+    requests:
+      memory: "64Mi"
+      cpu: "100m"
+    limits:
+      memory: "128Mi"
+      cpu: "200m"
+  ```
+
+**Observability**:
+- Add liveness probe if needed
+- Configure logging and metrics
+- Use structured logging for better observability
 
 ---
 

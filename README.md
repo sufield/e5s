@@ -285,8 +285,11 @@ cmd/
 
 examples/
 ├── zeroconfig-example/  # Zero-config server example (recommended)
+│   ├── main.go          # Server code
+│   └── Dockerfile       # Container image for production/demo
 ├── test-client.go       # Infrastructure testing tool (verifies SPIRE setup and mTLS)
-├── mtls-server.yaml     # Kubernetes deployment manifest
+├── mtls-server.yaml     # Development deployment (kubectl cp approach)
+├── mtls-server-image.yaml  # Production deployment (container image approach)
 ├── test-client.yaml     # Test client deployment manifest
 └── README.md            # Kubernetes deployment guide
 ```
