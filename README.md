@@ -285,7 +285,7 @@ cmd/
 
 examples/
 ├── zeroconfig-example/  # Zero-config server example (recommended)
-├── test-client.go       # Test client code
+├── test-client.go       # Infrastructure testing tool (verifies SPIRE setup and mTLS)
 ├── mtls-server.yaml     # Kubernetes deployment manifest
 ├── test-client.yaml     # Test client deployment manifest
 └── README.md            # Kubernetes deployment guide
@@ -578,6 +578,29 @@ go run ./examples/zeroconfig-example
 # Auto-detected socket: unix:///tmp/spire-agent/public/api.sock
 # Auto-detected trust domain: example.org
 # Server listening on :8443
+```
+
+### Run Infrastructure Testing Tool
+
+The `examples/test-client.go` tool verifies that SPIRE infrastructure is working correctly:
+
+```bash
+# Run the infrastructure testing tool
+go run ./examples/test-client.go
+
+# What it does:
+# 1. Connects to SPIRE Workload API
+# 2. Obtains client X.509 SVID
+# 3. Tests mTLS connectivity to the server
+# 4. Reports results for each endpoint
+
+# When to use:
+# - After deploying SPIRE to Kubernetes
+# - To verify workload registration is correct
+# - For troubleshooting mTLS connectivity issues
+# - As a reference for building SPIFFE clients
+
+# See examples/README.md for full Kubernetes deployment guide
 ```
 
 ### Run CLI Demo (In-Memory)

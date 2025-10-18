@@ -39,15 +39,41 @@ func main() {
 
 **Requirements**: SPIRE agent must be running locally or accessible via standard paths.
 
-### 2. Kubernetes/Minikube Deployment (Full Infrastructure)
+### 2. Infrastructure Testing Tool
 
-**Location**: This guide below + `examples/zeroconfig-example/`
+**Location**: `examples/test-client.go`
+
+A standalone testing tool for verifying SPIRE infrastructure and mTLS connectivity:
+
+```go
+// Connects to SPIRE, gets SVID, tests server endpoints
+go run examples/test-client.go
+```
+
+**What it provides**:
+- ✅ Validates SPIRE infrastructure is working
+- ✅ Tests mTLS connectivity between workloads
+- ✅ Verifies server endpoints with SPIFFE authentication
+- ✅ Confirms trust domain configuration
+
+**When to use**:
+- After deploying SPIRE to Kubernetes/Minikube
+- When troubleshooting mTLS connectivity
+- To verify workload registration is correct
+- As a reference for building SPIFFE clients
+
+**Not for production**: This is a testing/verification tool. For production client code, use `internal/adapters/outbound/httpclient` which provides a production-ready SPIFFE HTTP client with advanced features.
+
+### 3. Kubernetes/Minikube Deployment (Full Infrastructure)
+
+**Location**: This guide below + `examples/zeroconfig-example/` + `examples/test-client.go`
 
 Complete guide for deploying to Kubernetes with SPIRE infrastructure. This demonstrates:
 - Deploying SPIRE server and agent on Minikube
 - Workload registration with Kubernetes selectors
 - mTLS communication between pods
 - Zero-config mTLS server deployment
+- Using the test client to verify infrastructure
 
 Use this example to understand how to deploy in a real Kubernetes environment.
 
@@ -262,6 +288,20 @@ echo "Client pod: $CLIENT_POD"
 ```
 
 #### Run Test Client
+
+Now we'll use the infrastructure testing tool (`examples/test-client.go`) to verify the mTLS server is working correctly.
+
+**What is test-client.go?**
+- Infrastructure verification tool that validates SPIRE setup
+- Connects to SPIRE Workload API and obtains its own SPIFFE identity
+- Creates an mTLS HTTP client and tests server endpoints
+- Reports success/failure for each endpoint
+
+**Why use it?**
+- Confirms SPIRE infrastructure is configured correctly
+- Verifies workload registration is working
+- Tests that mTLS authentication succeeds between client and server
+- Troubleshoots connectivity issues
 
 Copy the test client from the repository and run it:
 
