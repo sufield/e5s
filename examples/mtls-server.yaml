@@ -1,15 +1,11 @@
-# mtls-server.yaml - Example mTLS server deployment with SPIRE Workload API access
+# mtls-server.yaml - Zero-config mTLS server deployment with SPIRE Workload API access
 #
-# This Deployment runs the example mTLS server with access to the SPIRE agent socket.
+# This Deployment runs the zero-config mTLS server with access to the SPIRE agent socket.
 # The socket is mounted from the Minikube host node into the pod.
+# The zero-config server auto-detects the socket and trust domain - no manual configuration needed!
 #
 # Usage:
-#   1. Build the server: go build -o bin/mtls-server ./examples/identityserver-example
-#   2. Deploy: kubectl apply -f examples/mtls-server.yaml
-#   3. Wait: kubectl wait --for=condition=Ready deploy/mtls-server --timeout=60s
-#   4. Copy binary: kubectl cp bin/mtls-server $(kubectl get pod -l app=mtls-server -o jsonpath='{.items[0].metadata.name}'):/tmp/mtls-server
-#   5. Make executable: kubectl exec $(kubectl get pod -l app=mtls-server -o jsonpath='{.items[0].metadata.name}') -- chmod +x /tmp/mtls-server
-#   6. Run: kubectl exec -it $(kubectl get pod -l app=mtls-server -o jsonpath='{.items[0].metadata.name}') -- /tmp/mtls-server
+#   See examples/README.md for complete deployment guide
 
 apiVersion: apps/v1
 kind: Deployment
@@ -44,8 +40,6 @@ spec:
               value: "unix:///spire-socket/api.sock"
             - name: SERVER_ADDRESS
               value: ":8443"
-            - name: ALLOWED_TRUST_DOMAIN
-              value: "example.org"
           volumeMounts:
             - name: spire-socket
               mountPath: /spire-socket
