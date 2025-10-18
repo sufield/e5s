@@ -53,6 +53,9 @@ func (f *InMemoryAdapterFactory) CreateRegistry(ctx context.Context, workloads [
 		}
 	}
 
+	// Seal registry to make it immutable
+	registry.Seal()
+
 	return registry, nil
 }
 

@@ -418,7 +418,7 @@ type ConfigLoader interface {
 // Implementations should respect ctx cancellation where applicable.
 type WorkloadAttestor interface {
     // Attest verifies a workload and returns its selectors.
-    // Selectors must be formatted as "type::value" (e.g., "unix:uid:1000", "k8s:namespace:prod").
+    // Selectors must be formatted as "type:key:value" (e.g., "unix:uid:1000", "k8s:namespace:prod").
     Attest(ctx context.Context, workload *domain.Workload) ([]string, error)
 }
 ```
