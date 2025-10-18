@@ -2,11 +2,11 @@
 
 ## Overview
 
-The test suite is properly organized into **unit tests** and **integration tests**, each serving different purposes. This document explains the test structure, execution patterns, and best practices.
+The test suite is properly organized into unit tests and integration tests, each serving different purposes. This document explains the test structure, execution patterns, and best practices.
 
 ## Current Test Structure
 
-### ✅ Unit Tests (Always Pass)
+### Unit Tests (Always Pass)
 
 These tests run without external dependencies:
 
@@ -16,9 +16,9 @@ These tests run without external dependencies:
 - **Default Values**: `TestNew_AppliesDefaults` (config struct validation)
 - **Resource Cleanup**: `TestSpiffeServer_Close_Idempotent`
 
-**Status**: ✅ All passing (0.003s execution time)
+**Status**: All passing (0.003s execution time)
 
-### ⏭️ Integration Tests (Require SPIRE)
+### Integration Tests
 
 These tests need a live SPIRE agent:
 
@@ -27,7 +27,7 @@ These tests need a live SPIRE agent:
 - **Authorization**: `TestMTLSClientServer_AuthorizationFailure`
 - **Identity Verification**: End-to-end SPIFFE ID extraction and validation
 
-**Status**: ⏭️ Gracefully skip when SPIRE unavailable
+**Status**: Gracefully skip when SPIRE unavailable
 
 ## Test Execution Patterns
 
@@ -37,7 +37,7 @@ These tests need a live SPIRE agent:
 go test ./internal/adapters/inbound/identityserver -run 'Test(New_Missing|GetIdentity|RequireIdentity)' -v
 ```
 
-✅ Fast, no dependencies, always pass
+Fast, no dependencies, always pass
 
 ### 2. Full Integration Tests (Requires SPIRE)
 
@@ -74,21 +74,21 @@ ls -la /tmp/spire-agent/public/api.sock
 
 ### Unit Tests (No SPIRE needed)
 
-- ✅ Config validation (empty/nil checks)
-- ✅ Identity extraction from context
-- ✅ SPIFFE ID parsing and path handling
-- ✅ Default value application
-- ✅ Transport configuration
-- ✅ Shutdown and resource cleanup logic
+- Config validation (empty/nil checks)
+- Identity extraction from context
+- SPIFFE ID parsing and path handling
+- Default value application
+- Transport configuration
+- Shutdown and resource cleanup logic
 
 ### Integration Tests (SPIRE needed)
 
-- ⏭️ X509Source creation
-- ⏭️ Certificate rotation
-- ⏭️ mTLS handshake
-- ⏭️ Client-server authentication
-- ⏭️ Authorization failures
-- ⏭️ Health check endpoints
+- X509Source creation
+- Certificate rotation
+- mTLS handshake
+- Client-server authentication
+- Authorization failures
+- Health check endpoints
 
 ## Running Tests in Different Environments
 
@@ -99,7 +99,7 @@ ls -la /tmp/spire-agent/public/api.sock
 go test ./internal/adapters/... -short
 ```
 
-Output: All validation and helper tests pass ✅
+Output: All validation and helper tests pass
 
 ### CI Pipeline (With SPIRE)
 
@@ -111,7 +111,7 @@ make minikube-up
 go test -tags=integration ./internal/adapters/... -v
 ```
 
-Output: All tests including integration pass ✅
+Output: All tests including integration pass
 
 ### Integration Environment
 
@@ -123,7 +123,7 @@ export SPIRE_AGENT_SOCKET="unix:///tmp/spire-agent/public/api.sock"
 go test -tags=integration ./internal/adapters/inbound/httpapi -v
 ```
 
-## Test Output Analysis
+## Test Output
 
 ### Expected Output (SPIRE Not Running)
 
@@ -135,7 +135,7 @@ go test -tags=integration ./internal/adapters/inbound/httpapi -v
 --- SKIP: TestNew_ValidConfig (5.00s)
 ```
 
-✅ **This is correct behavior** - graceful skip, not failure
+This is correct behavior - graceful skip, not failure
 
 ### Expected Output (SPIRE Running)
 
@@ -146,7 +146,7 @@ go test -tags=integration ./internal/adapters/inbound/httpapi -v
 --- PASS: TestNew_ValidConfig (0.52s)
 ```
 
-✅ **Full integration validation**
+**Full integration validation**
 
 ## Test Organization
 
@@ -184,7 +184,7 @@ go test -tags=integration ./internal/adapters/inbound/httpapi -v
 
 ## Best Practices Implemented
 
-### 1. ✅ Separation of Concerns
+### 1. Separation of Concerns
 
 Unit tests don't depend on external infrastructure:
 
@@ -210,7 +210,7 @@ func TestNew_MissingSocketPath(t *testing.T) {
 }
 ```
 
-### 2. ✅ Graceful Skipping
+### 2. Graceful Skipping
 
 Integration tests skip when SPIRE unavailable:
 
@@ -241,7 +241,7 @@ func TestNew_AppliesDefaults(t *testing.T) {
 }
 ```
 
-### 3. ✅ Fast Feedback
+### 3. Fast Feedback
 
 Unit tests execute in milliseconds:
 
@@ -250,14 +250,14 @@ $ go test ./internal/adapters/inbound/identityserver -run 'TestNew_Missing'
 ok      github.com/pocket/hexagon/spire/internal/adapters/inbound/identityserver    0.003s
 ```
 
-### 4. ✅ Comprehensive Coverage
+### 4. Comprehensive Coverage
 
 Both validation logic and real behavior tested:
 
 - **Unit**: Config validation, parsing, defaults
 - **Integration**: mTLS handshake, certificate verification, authorization
 
-### 5. ✅ Environment Aware
+### 5. Environment Aware
 
 Tests detect SPIRE automatically:
 
@@ -268,7 +268,7 @@ if socketPath == "" {
 }
 ```
 
-### 6. ✅ Proper Resource Cleanup
+### 6. Proper Resource Cleanup
 
 All tests use proper cleanup:
 
@@ -287,7 +287,7 @@ defer func() {
 
 ### Tests Skip with "SPIRE agent not available"
 
-This is **expected behavior** when SPIRE is not running. To run integration tests:
+This is expected behavior when SPIRE is not running. To run integration tests:
 
 1. Start SPIRE infrastructure:
    ```bash
@@ -346,12 +346,12 @@ This indicates a code issue (not infrastructure):
 
 The current setup follows Go best practices:
 
-1. ✅ **Separation of Concerns**: Unit vs Integration tests clearly separated
-2. ✅ **Graceful Skipping**: Tests don't fail CI when SPIRE unavailable
-3. ✅ **Fast Feedback**: Unit tests run in milliseconds
-4. ✅ **Comprehensive Coverage**: Both validation logic and real mTLS tested
-5. ✅ **Environment Aware**: Tests detect SPIRE availability automatically
-6. ✅ **Proper Cleanup**: Resources always released correctly
+1. **Separation of Concerns**: Unit vs Integration tests clearly separated
+2. **Graceful Skipping**: Tests don't fail CI when SPIRE unavailable
+3. **Fast Feedback**: Unit tests run in milliseconds
+4. **Comprehensive Coverage**: Both validation logic and real mTLS tested
+5. **Environment Aware**: Tests detect SPIRE availability automatically
+6. **Proper Cleanup**: Resources always released correctly
 
 ### Test Execution Summary
 

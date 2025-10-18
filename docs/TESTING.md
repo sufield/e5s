@@ -47,7 +47,7 @@ Note the `[no test files]` for the SPIRE adapter - this is expected! Unit tests 
 
 ---
 
-### 2. Integration Tests (Live SPIRE) 🚀
+### 2. Integration Tests (Live SPIRE)
 
 **Command**:
 ```bash
@@ -196,7 +196,7 @@ This confirms the SPIRE adapter works with real SPIRE infrastructure!
 ## Troubleshooting
 
 ### "no test files" for SPIRE adapter
-**This is normal** for unit tests. The SPIRE adapter only has integration tests (with `-tags=integration`).
+This is normal for unit tests. The SPIRE adapter only has integration tests (with `-tags=integration`).
 
 ### Integration tests fail with "connection refused"
 ```bash
@@ -249,5 +249,5 @@ func TestExample(t *testing.T) {
 - **`make test-integration`** = Integration tests with live SPIRE (YES live SPIRE)
 - **`make verify`** = Comprehensive verification (builds, tests, quality checks)
 
-Always run `make verify` before committing!
-Run `make test-integration` before deploying!
+Run `make verify` before committing.
+Run `make test-integration` before deploying.

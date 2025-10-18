@@ -1,4 +1,4 @@
-# IdentityCredential Refactoring: Eliminating SDK Duplication
+# IdentityCredential Refactoring
 
 ## Overview
 
@@ -152,10 +152,10 @@ type IdentityCredentialParser interface {
 ```
 
 **Benefits**:
-- ✅ Clear contract for parsing responsibilities
-- ✅ Documents that SDK provides this functionality
-- ✅ Enables multiple implementations (in-memory simple, SDK-based robust)
-- ✅ Context-aware (could support cancellation in real implementations)
+- Clear contract for parsing responsibilities
+- Documents that SDK provides this functionality
+- Enables multiple implementations (in-memory simple, SDK-based robust)
+- Context-aware (could support cancellation in real implementations)
 
 ### In-Memory Adapter Implementation
 
@@ -384,17 +384,17 @@ parser.On("ParseFromString", "spiffe://example.org/test").Return(testID, nil)
 ### 4. Domain Purity Maintained
 
 **Domain file now**:
-- ✅ No `url.Parse` - no parsing logic
-- ✅ No validation - accepts pre-validated data
-- ✅ Only stdlib (no imports beyond `domain` package concepts)
-- ✅ Pure value object with getters and equality
+- No `url.Parse` - no parsing logic
+- No validation - accepts pre-validated data
+- Only stdlib (no imports beyond `domain` package concepts)
+- Pure value object with getters and equality
 
 **Adapters handle**:
-- ✅ URI parsing (`url.Parse`)
-- ✅ Scheme validation
-- ✅ Trust domain extraction
-- ✅ Path normalization
-- ✅ Error wrapping with domain errors
+- URI parsing (`url.Parse`)
+- Scheme validation
+- Trust domain extraction
+- Path normalization
+- Error wrapping with domain errors
 
 ## Comparison with go-spiffe SDK
 
@@ -448,9 +448,9 @@ id.IsInTrustDomain(td *domain.TrustDomain) bool
 | **Use Case** | Real SPIRE integration | Walking skeleton + future SDK |
 
 **No Duplication Now**:
-- ✅ Domain doesn't parse (SDK does in adapter)
-- ✅ Domain doesn't validate (SDK does in adapter)
-- ✅ Domain models the concept (SDK handles tech in adapter)
+- Domain doesn't parse (SDK does in adapter)
+- Domain doesn't validate (SDK does in adapter)
+- Domain models the concept (SDK handles tech in adapter)
 
 ## Testing
 
@@ -486,11 +486,11 @@ Performing authenticated message exchange...
 ```
 
 **All functionality works**:
-- ✅ SPIFFE ID parsing via adapter
-- ✅ Workload registration with parsed IDs
-- ✅ IdentityDocument issuance
-- ✅ Identity verification
-- ✅ Message exchange
+- SPIFFE ID parsing via adapter
+- Workload registration with parsed IDs
+- IdentityDocument issuance
+- Identity verification
+- Message exchange
 
 ## Migration Path to Real SPIRE
 
