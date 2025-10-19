@@ -1,338 +1,176 @@
-checklist to run **security checks** for a Go library that uses the **SPIFFE/SPIRE SDK** for identity-based mTLS. It covers static analysis, dependency vulns, secret leaks, hardening, and runtime/authZ tests. Pick what you need; you can wire all of it into CI.
+ Your workflow already covers the big items (vulns, lint, SAST, secrets, tests). A few correctness + quality nits and some simplifications to make it more reliable and faster:
 
----
+### High-impact fixes
 
-# 1) Prereqs
+1. **Go version**
+   `go-version: '1.23'` may not match your repo. Prefer **pinning to `go.mod`** so CI always uses the project’s declared version:
 
-```bash
-# In your repo root
-go version         # Go 1.21+ recommended (has govulncheck support)
-```
+   * `with: go-version-file: 'go.mod'` (and remove the manual cache step—`setup-go` handles it).
 
-Optional tooling (install once):
+2. **Duplicate/contradictory gosec runs**
+   You run gosec twice (one with `|| true`, then another that can fail the job). Pick **one** behavior:
 
-```bash
-# Vulnerability scanning (Go advisories + OSV)
-go install golang.org/x/vuln/cmd/govulncheck@latest
+   * Demo/CI hygiene: generate a report but **don’t fail** → keep `-fmt sarif -out gosec.sarif` and don’t re-run.
+   * Gatekeeping: **fail the build** on findings → single run without `|| true`.
 
-# Security-focused static analysis
-go install github.com/securego/gosec/v2/cmd/gosec@latest
+3. **govulncheck & reports**
+   Prefer the maintained action and produce **SARIF** so results show up in GitHub Security:
 
-# Meta-linter with security rules (fast, broad)
-go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+   * Use `golang/govulncheck-action`.
+   * Upload SARIF with `github/codeql-action/upload-sarif`.
 
-# Secret scanning
-go install github.com/gitleaks/gitleaks/v8@latest
-```
+4. **gitleaks path**
+   `--no-git` scans working tree only; fine for PRs, but **include `--source .`** explicitly and emit SARIF for code scanning UI.
 
----
+5. **Caching duplication**
+   You’re caching with both `setup-go` and `actions/cache`. **Remove the extra cache step**—`setup-go`’s `cache: true` is enough.
 
-# 2) Dependency & Binary Vulnerability Scans
+6. **Module hygiene**
+   `go mod tidy` can be **non-deterministic across OS/Go versions** (especially with tool deps). Consider:
 
-### A. Go dependency vulnerabilities
+   * Keep it, but run **after** `go list ./...`/`go build ./...` so the graph is complete.
+   * Or move “tidy drift check” to a separate, developer-only workflow.
 
-```bash
-govulncheck ./...
-```
+7. **Concurrency**
+   Prevent CI stampedes on PR updates:
 
-### B. Module hygiene (stale/indirect)
+   ```yaml
+   concurrency:
+     group: ${{ github.workflow }}-${{ github.ref }}
+     cancel-in-progress: true
+   ```
 
-```bash
-go list -m -u all | grep -E '=>|v[0-9]+\.[0-9]+'    # see upgradable mods
-go mod tidy && go mod verify
-```
+### Polished workflow (drop-in)
 
----
+Here’s a cleaned-up version that bakes in the fixes, emits SARIF, and avoids redundant steps while keeping your original intent:
 
-# 3) Static Code Security Analysis
+````yaml
+name: Security
 
-### A. gosec (security rules: crypto misuse, file perms, unsafe ops, etc.)
-
-```bash
-gosec ./...
-# Or narrow to your packages
-gosec ./internal/... ./pkg/...
-```
-
-Useful flags:
-
-* `-fmt=json -out gosec.json` (CI artifact)
-* `-exclude-dir examples` (if examples are intentionally less strict)
-
-### B. golangci-lint (enable security linters)
-
-Create `.golangci.yml`:
-
-```yaml
-run:
-  timeout: 5m
-linters:
-  enable:
-    - gosec
-    - govet
-    - staticcheck
-    - errcheck
-    - gocritic
-    - revive
-    - ineffassign
-    - bodyclose
-issues:
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - gosec  # allow benign test patterns
-```
-
-Run:
-
-```bash
-golangci-lint run ./...
-```
-
----
-
-# 4) Secrets / Keys / Tokens
-
-```bash
-gitleaks detect --no-git -v
-# Or scan history too:
-gitleaks detect -v
-```
-
----
-
-# 5) Build Hardening & Tests
-
-### A. Hardened build (static, stripped) for adapters/binaries
-
-```bash
-CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" ./cmd/...
-```
-
-### B. Unit tests + race detector + coverage
-
-```bash
-go test -race -covermode=atomic -coverprofile=coverage.out ./...
-```
-
-### C. Fuzz high-risk parsers (IDs, selectors, config)
-
-```bash
-# Example fuzz target in *_test.go:
-# func FuzzParseSelector(f *testing.F) { ... }
-go test -fuzz=Fuzz -fuzztime=20s ./internal/domain
-```
-
----
-
-# 6) SPIFFE/SPIRE-Specific Security Tests (must-have)
-
-Create Go tests that **prove** the critical auth properties:
-
-1. **Deny by default** (no identity → 401)
-
-```go
-// Make a plain HTTP client to your server. Expect 401/403.
-```
-
-2. **Authorize exact SPIFFE ID** (positive/negative)
-
-```go
-// Client A: spiffe://example.org/client   → 200
-// Client B: spiffe://example.org/other    → 403
-```
-
-3. **Authorize trust domain** (member-of)
-
-```go
-// Member of trust domain example.org → 200
-// Different trust domain → 403
-```
-
-4. **TLS policy** (TLS1.3 enforced)
-
-```go
-// Force TLS 1.2 client → handshake should fail
-```
-
-5. **SVID rotation** (no downtime)
-
-```go
-// Advance time / wait for rotation; repeat request → still 200
-```
-
-6. **Expired SVID rejected**
-
-```go
-// Inject expired leaf in test double; client/server must fail handshake
-```
-
-7. **Workload API error handling**
-
-```go
-// Simulate socket missing/unreachable → clear, wrapped error (no panic)
-```
-
-8. **Selector/registration correctness (dev/inmem)**
-
-```go
-// Ensure AND semantics for selectors; extra selectors ignored
-```
-
-> If you run integration tests against Minikube+SPIRE, keep a target like:
-
-```bash
-make minikube-up
-make test-integration
-```
-
----
-
-# 7) Kubernetes/Container Hardening Checks (if you ship a demo pod)
-
-Validate these in your manifests (or via `kube-score` / `kubescape`, optional):
-
-* `readOnlyRootFilesystem: true`
-* `allowPrivilegeEscalation: false`
-* `securityContext.capabilities.drop: ["ALL"]`
-* `runAsNonRoot: true`, `runAsUser: 65532`, `fsGroup: 65532`
-* Mount the **SPIRE socket read-only**, and only that path
-* Use **distroless** (or minimal) images for runtime
-* **No shell** in production images (initContainer handles chmod if needed)
-* Liveness/readiness probes on HTTPS endpoints (e.g., `/health`)
-
-Example (fragment):
-
-```yaml
-securityContext:
-  runAsNonRoot: true
-  runAsUser: 65532
-  fsGroup: 65532
-containers:
-- name: server
-  securityContext:
-    allowPrivilegeEscalation: false
-    readOnlyRootFilesystem: true
-    capabilities:
-      drop: ["ALL"]
-  volumeMounts:
-    - name: spire-socket
-      mountPath: /spire-socket
-      readOnly: true
-```
-
----
-
-# 8) Makefile Targets (one-liners for your team/CI)
-
-```makefile
-.PHONY: sec deps lint test fuzz all-sec
-
-deps:
-	go mod tidy && go mod verify
-	govulncheck ./...
-
-lint:
-	golangci-lint run ./...
-	gosec ./...
-
-secrets:
-	gitleaks detect --no-git -v
-
-test:
-	go test -race -covermode=atomic ./...
-
-fuzz:
-	go test -fuzz=Fuzz -fuzztime=20s ./internal/...
-
-all-sec: deps lint secrets test
-```
-
----
-
-# 9) GitHub Actions (drop-in CI)
-
-```yaml
-name: security
 on:
   push:
+    branches: [ main, develop ]
   pull_request:
+    branches: [ main, develop ]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  sec:
+  security:
+    name: Security Checks
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v5
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version-file: 'go.mod'
+          cache: true
 
-      - name: Cache Go build
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
+      # Ensure deps are fully resolved before tidy/lint/test
+      - name: Download modules
+        run: go mod download
 
+      # Dependency vulnerability scanning (SARIF)
       - name: govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@latest && govulncheck ./...
+        uses: golang/govulncheck-action@v1
+        with:
+          go-version-file: 'go.mod'
+          vulncheck-version: latest
+          args: ./...
+        continue-on-error: false
 
+      # Module hygiene (optional gate; keep if you want drift to fail PRs)
+      - name: Verify Go modules are tidy
+        run: |
+          go list ./... >/dev/null
+          go mod tidy
+          go mod verify
+          git diff --exit-code -- go.mod go.sum || (echo "::error::go.mod/go.sum changed after tidy" && exit 1)
+
+      # Lint (security + style via your .golangci.yml if present)
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
           version: latest
+          args: --timeout=5m
 
-      - name: gosec
-        run: go install github.com/securego/gosec/v2/cmd/gosec@latest && gosec ./...
+      # Security SAST (SARIF, do not fail the job by default for demo visibility)
+      - name: gosec (SARIF)
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@v2.20.0
+          gosec -fmt=sarif -out=gosec.sarif ./...
+        continue-on-error: true
 
-      - name: gitleaks
-        run: go install github.com/gitleaks/gitleaks/v8@latest && gitleaks detect --no-git -v
+      # Secret scanning (SARIF)
+      - name: gitleaks (SARIF)
+        run: |
+          go install github.com/gitleaks/gitleaks/v8@v8.18.4
+          gitleaks detect --source . --report-format sarif --report-path gitleaks.sarif
+        continue-on-error: true
 
-      - name: unit tests (race + coverage)
+      # Unit tests with race + coverage
+      - name: Test (race + coverage)
         run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
 
-      - name: upload coverage
+      - name: Coverage summary
+        run: |
+          echo "## Test Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          go tool cover -func=coverage.out | tail -1 >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: coverage
-          path: coverage.out
-```
+          name: security-artifacts
+          path: |
+            coverage.out
+            gosec.sarif
+            gitleaks.sarif
+          retention-days: 30
 
----
+      # Publish SARIF to GitHub code scanning
+      - name: Upload gosec SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: gosec.sarif
 
-# 10) Library-Specific Security Gates (design checks)
+      - name: Upload gitleaks SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: gitleaks.sarif
 
-* Server/client MUST use:
+  codeql:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: go
+      - uses: github/codeql-action/analyze@v3
+````
 
-  * `tlsconfig.MTLSServerConfig(...)` / `MTLSClientConfig(...)`
-  * Explicit **authorizers**: `AuthorizeID(...)` or `AuthorizeMemberOf(trustDomain)`
-  * `MinVersion = tls.VersionTLS13`
-* Don’t expose a way for app code to inject identity into context (only adapters call `WithIdentity`).
-* Log **SPIFFE IDs only** (avoid sensitive material like private keys).
-* Never persist private keys in domain; keep keys within adapter scope (signer held by SDK).
+### Optional extras (nice to have)
 
----
+* **Matrix** for multiple Go versions (e.g., LTS + tip) if you care about forward compatibility.
+* **Fail only on new issues** (baseline) using SARIF “baseline” for gosec/gitleaks to reduce initial noise.
+* **golangci-lint config** in repo to standardize rules and enable security linters (gosec integration via `enable-all` + selective disables).
 
-## TL;DR runnable set
-
-```bash
-# 1) Vulns
-govulncheck ./...
-
-# 2) Static analysis (quick)
-golangci-lint run ./...
-gosec ./...
-
-# 3) Secrets
-gitleaks detect --no-git -v
-
-# 4) Tests (race + coverage) + fuzz where applicable
-go test -race -covermode=atomic ./...
-go test -fuzz=Fuzz -fuzztime=20s ./internal/domain
-```
-
-If you wire these into a `make all-sec` and a CI workflow, you’ll have a solid, repeatable **security baseline** tailored for a SPIFFE/SPIRE-based Go mTLS library.
+If you want the demo CI to be **quiet and green by default**, flip `continue-on-error: true` for govulncheck as well, and rely on GitHub’s Security tab to show findings without blocking merges. For production gating, leave `continue-on-error: false` on govulncheck and gosec.
