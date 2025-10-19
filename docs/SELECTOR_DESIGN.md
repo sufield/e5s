@@ -7,7 +7,7 @@
 
 ## Overview
 
-This document explains **WHY** we created custom selector domain entities instead of using SPIRE SDK types. This is a fundamental architectural decision for the hexagonal architecture implementation.
+This document explains **WHY** we created custom selector domain entities instead of using SPIRE SDK types. This is an architectural decision for the hexagonal architecture implementation.
 
 ## Production vs Development
 
@@ -224,7 +224,7 @@ func (r *InMemoryRegistry) FindBySelectors(ctx, selectors) (*IdentityMapper, err
 client.FetchX509SVID(ctx)  // SPIRE handles everything
 ```
 
-### Our Hexagonal Learning Implementation
+### Our Hexagonal Implementation
 
 ```
 ┌────────────────────────────────────────┐
@@ -244,18 +244,16 @@ client.FetchX509SVID(ctx)  // SPIRE handles everything
 
 ## Why This Design?
 
-### 1. Learning
 Shows the complete SPIRE flow in one codebase:
 - Attestation → Selector discovery
 - Matching → Find SPIFFE ID
 - Issuance → Generate SVID
 
-### 2. Hexagonal Architecture
 Clean separation between:
 - **Domain** (selectors, matching logic) - pure business rules
 - **Infrastructure** (SPIRE SDK, in-memory storage) - adapters
 
-### 3. Testable
+### Testable
 ```go
 // Unit test - no SPIRE needed
 mapper := NewIdentityMapper(spiffeID, selectors)
@@ -266,14 +264,14 @@ agent := spire.NewAgent(client, ...)
 identity, err := agent.FetchIdentityDocument(ctx, workload)
 ```
 
-### 4. Domain-Driven Design
+### Domain-Driven Design
 Selector matching is **business logic**, not infrastructure:
 - ✅ AND logic (all required selectors must be present)
 - ✅ Uniqueness guarantees
 - ✅ Validation rules
 - ✅ Invariants enforced
 
-### 5. Portable (Development Only)
+### Portable (Development Only)
 Can swap implementations for development/testing:
 ```go
 // In-memory (development/testing)
@@ -286,7 +284,7 @@ agent, err := spire.NewAgent(ctx, client, agentSpiffeID, parser)
 identity, err := agent.FetchIdentityDocument(ctx, workload)
 ```
 
-**Note**: Production deployments use `SPIREAdapterFactory` which returns `nil` for registry. All selector matching happens in external SPIRE Server.
+Production deployments use `SPIREAdapterFactory` which returns `nil` for registry. All selector matching happens in external SPIRE Server.
 
 ## SDK Responsibility Matrix
 
@@ -300,7 +298,7 @@ identity, err := agent.FetchIdentityDocument(ctx, workload)
 | **IdentityMapper Matching** | **Our Code** | **Business logic: which SPIFFE ID for these selectors?** |
 | **Registration Storage** | SPIRE Server | Persistent storage of mappings |
 
-## Concrete Example: Complete Flow
+## Example: Complete Flow
 
 ```go
 // 1. Bootstrap - seed registry (like SPIRE registration entries)
