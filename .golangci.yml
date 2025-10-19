@@ -13,7 +13,7 @@ linters:
   enable:
     # Security
     - gosec         # Security-focused linter
-    - depguard      # Prevent disallowed imports
+    # - depguard    # Prevent disallowed imports (disabled: requires allow/deny rules)
     - forbidigo     # Forbid printlns/logs in library code
     - bodyclose     # HTTP response body closure
 
@@ -61,15 +61,14 @@ linters-settings:
     # Allow prints in cmd/ and *_test.go files
     # (handled via issues.exclude-rules below)
 
-  depguard:
-    rules:
-      main:
-        list-mode: lax
-        deny:
-          # Example: discourage direct tls config in library code (optional policy)
-          # Uncomment if you want to enforce using adapters for TLS config
-          # - pkg: "crypto/tls"
-          #   desc: "Use internal/adapters/outbound/spire TLS config instead of direct crypto/tls"
+  # depguard configuration removed - re-enable when ready to enforce adapter patterns
+  # depguard:
+  #   rules:
+  #     main:
+  #       list-mode: lax
+  #       deny:
+  #         - pkg: "crypto/tls"
+  #           desc: "Use internal/adapters/outbound/spire TLS config"
 
   gocritic:
     enabled-tags: [diagnostic, style, performance, experimental]
