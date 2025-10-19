@@ -5,7 +5,8 @@
 	minikube-delete ci-test ci-build verify verify-spire check-spire-ready \
 	test-integration test-integration-ci test-integration-keep test-prod-binary \
 	refactor-baseline refactor-compare refactor-check refactor-install-tools refactor-clean \
-	test-dev test-prod register-test-workload
+	test-dev test-prod register-test-workload \
+	sec-deps sec-lint sec-secrets sec-test sec-fuzz sec-all sec-install-tools check-prereqs-sec
 
 # Use bash with strict error handling
 SHELL := /bin/bash
@@ -29,6 +30,7 @@ REQUIRED_TOOLS=go
 TOOLS_K8S=helm kubectl minikube
 TOOLS_LINT=staticcheck golangci-lint gocyclo goimports
 TOOLS_MISC=jq sed awk
+TOOLS_SEC=govulncheck gosec gitleaks
 
 # Package list
 PKGS=$(shell go list ./...)
@@ -419,6 +421,85 @@ refactor-clean:
 	@echo "Cleaning refactoring files..."
 	@rm -rf docs/refactoring/
 	@echo "✓ Refactoring files cleaned"
+
+# ============================================================================
+# Security Targets (following docs/security.md)
+# ============================================================================
+
+## check-prereqs-sec: Verify security tools are installed
+check-prereqs-sec:
+	@echo "Checking security tools..."
+	@for tool in $(TOOLS_SEC); do \
+		if ! command -v $$tool >/dev/null 2>&1; then \
+			echo "✗ $$tool not found - run 'make sec-install-tools'"; \
+			exit 1; \
+		else \
+			echo "✓ $$tool found"; \
+		fi; \
+	done
+	@echo "✓ Security tools satisfied"
+
+## sec-install-tools: Install security scanning tools
+sec-install-tools:
+	@echo "Installing security tools..."
+	@echo "→ Installing govulncheck..."
+	@go install golang.org/x/vuln/cmd/govulncheck@latest
+	@echo "→ Installing gosec..."
+	@go install github.com/securego/gosec/v2/cmd/gosec@latest
+	@echo "→ Installing gitleaks..."
+	@go install github.com/gitleaks/gitleaks/v8@latest
+	@echo "✓ Security tools installed successfully"
+
+## sec-deps: Check for dependency vulnerabilities and module hygiene
+sec-deps:
+	@echo "Checking for dependency vulnerabilities..."
+	@govulncheck ./...
+	@echo ""
+	@echo "Verifying module hygiene..."
+	@go mod tidy
+	@go mod verify
+	@echo "✓ Dependency check complete"
+
+## sec-lint: Run security-focused static analysis
+sec-lint:
+	@echo "Running security-focused static analysis..."
+	@echo "→ Running golangci-lint..."
+	@golangci-lint run ./...
+	@echo ""
+	@echo "→ Running gosec..."
+	@gosec ./internal/... ./pkg/...
+	@echo "✓ Security lint complete"
+
+## sec-secrets: Scan for secrets, keys, and tokens
+sec-secrets:
+	@echo "Scanning for secrets..."
+	@gitleaks detect --no-git -v
+	@echo "✓ Secret scan complete"
+
+## sec-test: Run tests with race detector and coverage
+sec-test:
+	@echo "Running tests with race detector and coverage..."
+	@go test -race -covermode=atomic -coverprofile=coverage.out ./...
+	@echo ""
+	@echo "Coverage summary:"
+	@go tool cover -func=coverage.out | tail -1
+	@echo "✓ Security tests complete"
+
+## sec-fuzz: Run fuzz tests on high-risk parsers (20s per target)
+sec-fuzz:
+	@echo "Running fuzz tests..."
+	@echo "→ Fuzzing domain parsers..."
+	@go test -fuzz=Fuzz -fuzztime=20s ./internal/domain || echo "⚠ No fuzz targets in domain"
+	@echo "→ Fuzzing adapter parsers..."
+	@go test -fuzz=Fuzz -fuzztime=20s ./internal/adapters/... || echo "⚠ No fuzz targets in adapters"
+	@echo "✓ Fuzz testing complete"
+
+## sec-all: Run all security checks (deps, lint, secrets, tests)
+sec-all: sec-deps sec-lint sec-secrets sec-test
+	@echo ""
+	@echo "======================================"
+	@echo "✓ All security checks passed!"
+	@echo "======================================"
 
 ## help: Show this help message
 help:

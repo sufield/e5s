@@ -1,0 +1,128 @@
+# golangci-lint configuration for SPIRE mTLS library
+# Security-focused linter configuration following docs/security.md
+
+run:
+  timeout: 5m
+  tests: true
+  build-tags:
+    - dev
+
+linters:
+  enable:
+    # Security
+    - gosec         # Security-focused linter
+
+    # Core analysis
+    - govet         # Standard Go vet
+    - staticcheck   # Advanced static analysis
+    - errcheck      # Unchecked errors
+
+    # Code quality
+    - gocritic      # Comprehensive checks
+    - revive        # Fast, extensible linter
+    - ineffassign   # Detect ineffectual assignments
+    - unused        # Unused code detection
+
+    # HTTP/Resource leaks
+    - bodyclose     # HTTP response body closure
+
+    # Additional helpful linters
+    - gofmt         # Format checking
+    - goimports     # Import formatting
+    - misspell      # Spelling errors
+    - unconvert     # Unnecessary conversions
+    - unparam       # Unused function parameters
+
+linters-settings:
+  gosec:
+    # Include all security checks
+    includes:
+      - G101  # Look for hard coded credentials
+      - G102  # Bind to all interfaces
+      - G103  # Audit the use of unsafe block
+      - G104  # Audit errors not checked
+      - G106  # Audit the use of ssh.InsecureIgnoreHostKey
+      - G107  # Url provided to HTTP request as taint input
+      - G201  # SQL query construction using format string
+      - G202  # SQL query construction using string concatenation
+      - G203  # Use of unescaped data in HTML templates
+      - G204  # Audit use of command execution
+      - G301  # Poor file permissions used when creating a directory
+      - G302  # Poor file permissions used with chmod
+      - G303  # Creating tempfile using a predictable path
+      - G304  # File path provided as taint input
+      - G305  # File traversal when extracting zip/tar archive
+      - G306  # Poor file permissions used when writing to a new file
+      - G307  # Deferring a method which returns an error
+      - G401  # Detect the usage of DES, RC4, MD5 or SHA1
+      - G402  # Look for bad TLS connection settings
+      - G403  # Ensure minimum RSA key length of 2048 bits
+      - G404  # Insecure random number source (rand instead of crypto/rand)
+      - G501  # Import blocklist: crypto/md5
+      - G502  # Import blocklist: crypto/des
+      - G503  # Import blocklist: crypto/rc4
+      - G504  # Import blocklist: net/http/cgi
+      - G505  # Import blocklist: crypto/sha1
+      - G601  # Implicit memory aliasing of items from a range statement
+
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - style
+      - performance
+      - experimental
+
+    disabled-checks:
+      # Disable checks that conflict with our style or are too noisy
+      - unnamedResult
+      - whyNoLint
+
+  revive:
+    rules:
+      - name: exported
+        disabled: false
+      - name: package-comments
+        disabled: true  # We document in doc.go files
+      - name: var-naming
+        disabled: false
+      - name: error-return
+        disabled: false
+      - name: error-strings
+        disabled: false
+      - name: error-naming
+        disabled: false
+
+  staticcheck:
+    checks: ["all"]
+
+issues:
+  # Exclude test files from some checks
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - gosec      # Allow benign test patterns
+        - errcheck   # Test errors are often intentionally ignored
+
+    # Exclude generated files
+    - path: _mock\.go
+      linters:
+        - all
+
+    # Exclude specific security checks for known safe patterns
+    - linters:
+        - gosec
+      text: "G404"  # Random number sources in tests are OK
+      path: _test\.go
+
+  # Show all issues
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+  # Don't hide new issues in existing code
+  new: false
+
+output:
+  format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
+  sort-results: true
