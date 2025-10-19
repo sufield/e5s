@@ -3,7 +3,7 @@
 	build prod-build dev-build test-prod-build compare-sizes test-inmem test-inmem-html \
 	helm-lint helm-template minikube-up minikube-down minikube-status \
 	minikube-delete ci-test ci-build verify verify-spire check-spire-ready \
-	test-integration test-integration-fast test-integration-ci test-integration-keep test-prod-binary \
+	test-integration test-integration-ci test-integration-keep test-prod-binary \
 	refactor-baseline refactor-compare refactor-check refactor-install-tools refactor-clean \
 	test-dev test-prod register-test-workload
 
@@ -260,7 +260,6 @@ register-test-workload: check-spire-ready
 
 ## test-integration: Run integration tests against live SPIRE
 test-integration: check-spire-ready register-test-workload
-	@echo "Running integration tests against SPIRE in Kubernetes..."
 	@bash scripts/run-integration-tests.sh
 
 ## test-prod-binary: Test production binary against live SPIRE in Minikube
@@ -426,14 +425,10 @@ help:
 	@echo "Available targets:"
 	@sed -n 's/^##//p' ${MAKEFILE_LIST} | column -t -s ':' | sed -e 's/^/ /'
 
-## test-integration-fast: Run integration tests (optimized - uses pre-compiled binary)
-test-integration-fast: check-spire-ready register-test-workload
-	@bash scripts/run-integration-tests-optimized.sh
-
 ## test-integration-ci: Run integration tests (CI variant - static binary + distroless)
 test-integration-ci: check-spire-ready register-test-workload
 	@bash scripts/run-integration-tests-ci.sh
 
-## test-integration-keep: Run optimized tests and keep pod for faster iteration
+## test-integration-keep: Keep test pod for faster iteration
 test-integration-keep: check-spire-ready register-test-workload
-	@KEEP=true bash scripts/run-integration-tests-optimized.sh
+	@KEEP=true bash scripts/run-integration-tests.sh
