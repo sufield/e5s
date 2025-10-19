@@ -235,7 +235,7 @@ kubectl cp /tmp/spire-integration.test spire-system/spire-integration-test:/work
 /work/integration.test -test.v -test.timeout=3m
 ```
 
-**Key features:**
+**Features:**
 - ✅ Auto-detects node architecture (ARM/x86)
 - ✅ Static binary for reliability
 - ✅ Test timeout (3 minutes) prevents hangs
