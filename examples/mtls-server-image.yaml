@@ -37,10 +37,14 @@ spec:
       # Pod-level security context
       securityContext:
         runAsNonRoot: true
-        runAsUser: 65532
-        fsGroup: 65532
+        runAsUser: 65534   # Standard Debian "nobody" user
+        fsGroup: 65534     # Helps with socket access on hostPath
+      # Disable service account token mounting (not needed for this demo)
+      automountServiceAccountToken: false
       volumes:
         - name: spire-socket
+          # If your SPIRE agent uses a different public socket directory, change this to match.
+          # This path matches the default SPIRE Helm chart configuration.
           hostPath:
             path: /tmp/spire-agent/public
             type: Directory
@@ -54,7 +58,7 @@ spec:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             runAsNonRoot: true
-            runAsUser: 65532
+            runAsUser: 65534
             capabilities:
               drop:
                 - ALL
@@ -65,11 +69,14 @@ spec:
             - name: spire-socket
               mountPath: /spire-socket
               readOnly: true
-          # TCP readiness probe - doesn't require client certificates
+          # Readiness probe: TCP check with longer delay to allow server startup
+          # For production demos, consider using exec probe for accurate mTLS verification:
+          #   exec:
+          #     command: ["sh","-c","curl -sk https://localhost:8443/health | grep -q 'ok'"]
           readinessProbe:
             tcpSocket:
               port: 8443
-            initialDelaySeconds: 2
+            initialDelaySeconds: 5   # Increased from 2s to allow server startup
             periodSeconds: 5
           # Resource limits for production
           resources:
@@ -78,8 +85,9 @@ spec:
               cpu: "100m"
             limits:
               memory: "128Mi"
-              cpu: "200m"
+              cpu: "200m"   # Increase to 300m if throttling on small clusters
           # Optional: Environment variables (zero-config auto-detects these)
+          # Can be omitted entirely to rely on autodetection.
           # env:
           #   - name: SPIFFE_ENDPOINT_SOCKET
           #     value: "unix:///spire-socket/api.sock"

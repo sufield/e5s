@@ -8,11 +8,12 @@
 #   2. Deploy SPIRE infrastructure: make minikube-up
 #   3. Register workloads with SPIRE (see examples/README.md)
 #
-# Usage:
+# Usage (quick copy/paste):
 #   kubectl apply -f examples/mtls-server.yaml
-#   kubectl cp bin/mtls-server POD:/tmp/mtls-server
-#   kubectl exec POD -- chmod +x /tmp/mtls-server
-#   kubectl exec -it POD -- /tmp/mtls-server
+#   POD=$(kubectl get pod -l app=mtls-server -o jsonpath='{.items[0].metadata.name}')
+#   kubectl cp bin/mtls-server "$POD":/tmp/mtls-server
+#   kubectl exec "$POD" -- chmod +x /tmp/mtls-server
+#   kubectl exec -it "$POD" -- /tmp/mtls-server
 #
 # See examples/README.md for complete deployment guide
 
@@ -34,10 +35,14 @@ spec:
       # Pod-level security context
       securityContext:
         runAsNonRoot: true
-        runAsUser: 65532
-        fsGroup: 65532
+        runAsUser: 65534   # Standard Debian "nobody" user
+        fsGroup: 65534     # Helps with socket access on hostPath
+      # Disable service account token mounting (not needed for this demo)
+      automountServiceAccountToken: false
       volumes:
         - name: spire-socket
+          # If your SPIRE agent uses a different public socket directory, change this to match.
+          # This path matches the default SPIRE Helm chart configuration.
           hostPath:
             path: /tmp/spire-agent/public
             type: Directory
@@ -50,7 +55,7 @@ spec:
           securityContext:
             allowPrivilegeEscalation: false
             runAsNonRoot: true
-            runAsUser: 65532
+            runAsUser: 65534
             capabilities:
               drop:
                 - ALL
@@ -62,16 +67,20 @@ spec:
               mountPath: /spire-socket
               readOnly: true
           # Optional: Environment variables (zero-config auto-detects these)
+          # Can be omitted entirely to rely on autodetection.
           env:
             - name: SPIFFE_ENDPOINT_SOCKET
               value: "unix:///spire-socket/api.sock"
             - name: SERVER_ADDRESS
               value: ":8443"
-          # TCP readiness probe - useful for checking if server started
+          # Readiness probe: TCP check with longer delay to allow server startup
+          # For more accurate readiness (verifying mTLS is working), use:
+          #   exec:
+          #     command: ["sh","-c","curl -sk https://localhost:8443/health | grep -q 'ok'"]
           readinessProbe:
             tcpSocket:
               port: 8443
-            initialDelaySeconds: 2
+            initialDelaySeconds: 5   # Increased from 2s to allow server startup
             periodSeconds: 5
           # Resource limits
           resources:
@@ -80,7 +89,7 @@ spec:
               cpu: "100m"
             limits:
               memory: "128Mi"
-              cpu: "200m"
+              cpu: "200m"   # Increase to 300m if throttling on small clusters
 ---
 apiVersion: v1
 kind: Service

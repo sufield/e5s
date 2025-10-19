@@ -27,8 +27,10 @@ spec:
       # Pod-level security context
       securityContext:
         runAsNonRoot: true
-        runAsUser: 65532
-        fsGroup: 65532
+        runAsUser: 65534   # Standard Debian "nobody" user
+        fsGroup: 65534     # Helps with socket access on hostPath
+      # Disable service account token mounting (not needed for this demo)
+      automountServiceAccountToken: false
       volumes:
         - name: spire-socket
           hostPath:
@@ -43,7 +45,7 @@ spec:
           securityContext:
             allowPrivilegeEscalation: false
             runAsNonRoot: true
-            runAsUser: 65532
+            runAsUser: 65534
             capabilities:
               drop:
                 - ALL
