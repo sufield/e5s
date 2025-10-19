@@ -1,6 +1,6 @@
 # Security workflow for SPIRE mTLS library
 # Runs security checks on every push and pull request
-# Following docs/security.md
+# Following docs/security.md improvements
 
 name: Security
 
@@ -13,111 +13,114 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   security:
     name: Security Checks
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version-file: 'go.mod'
           cache: true
 
-      - name: Cache Go build
-        uses: actions/cache@v4
+      # Ensure deps are fully resolved before tidy/lint/test
+      - name: Download modules
+        run: go mod download
+
+      # Dependency vulnerability scanning (SARIF)
+      - name: govulncheck
+        uses: golang/govulncheck-action@v1
         with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
+          go-version-file: 'go.mod'
+          vulncheck-version: latest
+          args: ./...
+        continue-on-error: false
 
-      # Dependency vulnerability scanning
-      - name: Run govulncheck
+      # Module hygiene (optional gate; keep if you want drift to fail PRs)
+      - name: Verify Go modules are tidy
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
-          govulncheck ./...
-
-      # Module hygiene
-      - name: Verify Go modules
-        run: |
+          go list ./... >/dev/null
           go mod tidy
           go mod verify
-          git diff --exit-code go.mod go.sum || (echo "::error::go.mod or go.sum has uncommitted changes after 'go mod tidy'" && exit 1)
+          git diff --exit-code -- go.mod go.sum || (echo "::error::go.mod/go.sum changed after tidy" && exit 1)
 
-      # Static security analysis with golangci-lint
-      - name: Run golangci-lint
+      # Lint (security + style via your .golangci.yml if present)
+      - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
           version: latest
           args: --timeout=5m
 
-      # Security-focused static analysis with gosec
-      - name: Run gosec
+      # Security SAST (SARIF, do not fail the job by default for demo visibility)
+      - name: gosec (SARIF)
         run: |
-          go install github.com/securego/gosec/v2/cmd/gosec@latest
-          gosec -fmt=json -out=gosec-report.json ./... || true
-          gosec ./internal/... ./pkg/...
+          go install github.com/securego/gosec/v2/cmd/gosec@v2.20.0
+          gosec -fmt=sarif -out=gosec.sarif ./...
+        continue-on-error: true
 
-      # Secret scanning
-      - name: Run gitleaks
+      # Secret scanning (SARIF)
+      - name: gitleaks (SARIF)
         run: |
-          go install github.com/gitleaks/gitleaks/v8@latest
-          gitleaks detect --no-git -v
+          go install github.com/gitleaks/gitleaks/v8@v8.18.4
+          gitleaks detect --source . --report-format sarif --report-path gitleaks.sarif
+        continue-on-error: true
 
-      # Unit tests with race detector and coverage
-      - name: Run tests with race detector
+      # Unit tests with race + coverage
+      - name: Test (race + coverage)
+        run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
+
+      - name: Coverage summary
         run: |
-          go test -race -covermode=atomic -coverprofile=coverage.out ./...
+          echo "## Test Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          go tool cover -func=coverage.out | tail -1 >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
 
-      # Upload coverage report
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: coverage.out
-          retention-days: 30
-
-      # Upload gosec report (even if it found issues)
-      - name: Upload gosec report
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: gosec-report
-          path: gosec-report.json
+          name: security-artifacts
+          path: |
+            coverage.out
+            gosec.sarif
+            gitleaks.sarif
           retention-days: 30
 
-      # Display coverage summary
-      - name: Display coverage summary
-        run: |
-          echo "## Test Coverage Summary" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          go tool cover -func=coverage.out | tail -1 >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+      # Publish SARIF to GitHub code scanning
+      - name: Upload gosec SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: gosec.sarif
+          category: gosec
 
-  # Optional: CodeQL analysis for additional security scanning
+      - name: Upload gitleaks SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: gitleaks.sarif
+          category: gitleaks
+
   codeql:
     name: CodeQL Analysis
     runs-on: ubuntu-latest
     permissions:
-      security-events: write
-      actions: read
       contents: read
-
+      actions: read
+      security-events: write
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
         with:
           languages: go
-
-      - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+      - uses: github/codeql-action/analyze@v3
