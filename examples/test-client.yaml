@@ -24,6 +24,11 @@ spec:
       labels:
         app: test-client
     spec:
+      # Pod-level security context
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        fsGroup: 65532
       volumes:
         - name: spire-socket
           hostPath:
@@ -33,6 +38,15 @@ spec:
         - name: test-client
           image: golang:1.25
           command: ["sleep", "infinity"]
+          # Container-level security context
+          # NOTE: readOnlyRootFilesystem not set for development flexibility
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 65532
+            capabilities:
+              drop:
+                - ALL
           env:
             - name: SPIFFE_ENDPOINT_SOCKET
               value: "unix:///spire-socket/api.sock"
@@ -40,3 +54,11 @@ spec:
             - name: spire-socket
               mountPath: /spire-socket
               readOnly: true
+          # Resource limits
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"

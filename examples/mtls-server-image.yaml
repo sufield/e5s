@@ -34,8 +34,11 @@ spec:
       labels:
         app: mtls-server
     spec:
+      # Pod-level security context
       securityContext:
         runAsNonRoot: true
+        runAsUser: 65532
+        fsGroup: 65532
       volumes:
         - name: spire-socket
           hostPath:
@@ -46,6 +49,15 @@ spec:
           # TODO: Replace with your container registry
           image: ghcr.io/yourorg/mtls-server:latest
           imagePullPolicy: Always
+          # Container-level security context
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65532
+            capabilities:
+              drop:
+                - ALL
           ports:
             - name: https
               containerPort: 8443
@@ -59,6 +71,14 @@ spec:
               port: 8443
             initialDelaySeconds: 2
             periodSeconds: 5
+          # Resource limits for production
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "100m"
+            limits:
+              memory: "128Mi"
+              cpu: "200m"
           # Optional: Environment variables (zero-config auto-detects these)
           # env:
           #   - name: SPIFFE_ENDPOINT_SOCKET
