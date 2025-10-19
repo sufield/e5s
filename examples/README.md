@@ -17,7 +17,7 @@ func main() {
 
     err := zerotrustserver.Serve(ctx, map[string]http.Handler{
         "/": http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-            id, ok := zerotrustserver.Identity(r.Context())
+            id, ok := zerotrustserver.IdentityFrom(r.Context())
             if !ok {
                 http.Error(w, "unauthorized", http.StatusUnauthorized)
                 return
