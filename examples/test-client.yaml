@@ -3,11 +3,16 @@
 # This Deployment creates a client pod that can obtain SPIFFE identities
 # and make mTLS requests to the mtls-server.
 #
-# Usage:
-#   1. Deploy: kubectl apply -f examples/test-client.yaml
-#   2. Wait: kubectl wait --for=condition=Ready deploy/test-client --timeout=60s
-#   3. Exec: kubectl exec -it $(kubectl get pod -l app=test-client -o jsonpath='{.items[0].metadata.name}') -- bash
-#   4. Inside the pod, create and run the test client (see examples/README.md)
+# Usage (quick copy/paste):
+#   kubectl apply -f examples/test-client.yaml
+#   kubectl wait --for=condition=Available deploy/test-client --timeout=60s
+#   POD=$(kubectl get pod -l app=test-client -o jsonpath='{.items[0].metadata.name}')
+#   kubectl exec -it "$POD" -- bash
+#
+# Inside the pod (optional tools for demos):
+#   apt-get update && apt-get install -y ca-certificates curl git && update-ca-certificates
+#
+# See examples/README.md for complete guide and client code examples
 
 apiVersion: apps/v1
 kind: Deployment
@@ -24,15 +29,19 @@ spec:
       labels:
         app: test-client
     spec:
+      # Disable service account token mounting (not needed for this demo)
+      automountServiceAccountToken: false
       # Pod-level security context
       securityContext:
         runAsNonRoot: true
         runAsUser: 65534   # Standard Debian "nobody" user
         fsGroup: 65534     # Helps with socket access on hostPath
-      # Disable service account token mounting (not needed for this demo)
-      automountServiceAccountToken: false
+        seccompProfile:
+          type: RuntimeDefault   # Additional security with no demo downside
       volumes:
         - name: spire-socket
+          # Matches the SPIRE Helm chart default public socket directory.
+          # Change this if your agent uses a different path.
           hostPath:
             path: /tmp/spire-agent/public
             type: Directory
@@ -57,10 +66,11 @@ spec:
               mountPath: /spire-socket
               readOnly: true
           # Resource limits
+          # CPU bump helps with in-pod 'go run' compilation
           resources:
             requests:
               memory: "128Mi"
               cpu: "100m"
             limits:
               memory: "256Mi"
-              cpu: "200m"
+              cpu: "300m"   # Increased from 200m for faster builds
