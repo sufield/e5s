@@ -1,41 +1,97 @@
 # golangci-lint configuration for SPIRE mTLS library
-# Security-focused linter configuration following docs/security.md
+# Security-focused linter configuration following docs/security2.md
 
 run:
   timeout: 5m
   tests: true
-  build-tags:
-    - dev
+  # Note: Removed build-tags to lint production code as well.
+  # Run a separate job with -tags=dev if needed for dev-specific code.
+  # build-tags:
+  #   - dev
 
 linters:
   enable:
     # Security
     - gosec         # Security-focused linter
+    - depguard      # Prevent disallowed imports
+    - forbidigo     # Forbid printlns/logs in library code
+    - bodyclose     # HTTP response body closure
 
     # Core analysis
     - govet         # Standard Go vet
     - staticcheck   # Advanced static analysis
     - errcheck      # Unchecked errors
+    - nolintlint    # Enforce correct //nolint usage
 
     # Code quality
     - gocritic      # Comprehensive checks
     - revive        # Fast, extensible linter
     - ineffassign   # Detect ineffectual assignments
     - unused        # Unused code detection
-
-    # HTTP/Resource leaks
-    - bodyclose     # HTTP response body closure
-
-    # Additional helpful linters
-    - gofmt         # Format checking
-    - goimports     # Import formatting
-    - misspell      # Spelling errors
     - unconvert     # Unnecessary conversions
     - unparam       # Unused function parameters
 
+    # Style/format
+    - gofmt         # Format checking
+    - goimports     # Import formatting
+    - misspell      # Spelling errors
+
 linters-settings:
+  gofmt:
+    simplify: true
+
+  goimports:
+    # Group your module's imports together
+    local-prefixes: github.com/pocket/hexagon/spire
+
+  misspell:
+    locale: US
+
+  nolintlint:
+    allow-leading-space: false
+    allow-unused: false          # require a reason and proper scoping
+    require-explanation: true
+    require-specific: true
+
+  forbidigo:
+    # Allow printing in demo binaries and tests; block it elsewhere
+    forbid:
+      - '^fmt\.Print(f|ln)?$'
+    exclude-godoc-examples: true
+    # Allow prints in cmd/ and *_test.go files
+    # (handled via issues.exclude-rules below)
+
+  depguard:
+    rules:
+      main:
+        list-mode: lax
+        deny:
+          # Example: discourage direct tls config in library code (optional policy)
+          # Uncomment if you want to enforce using adapters for TLS config
+          # - pkg: "crypto/tls"
+          #   desc: "Use internal/adapters/outbound/spire TLS config instead of direct crypto/tls"
+
+  gocritic:
+    enabled-tags: [diagnostic, style, performance, experimental]
+    disabled-checks:
+      - unnamedResult
+      - whyNoLint
+
+  revive:
+    rules:
+      - name: exported
+      - name: package-comments
+        disabled: true # use doc.go instead
+      - name: var-naming
+      - name: error-return
+      - name: error-strings
+      - name: error-naming
+
+  staticcheck:
+    checks: ["all"]
+
   gosec:
-    # Include all security checks
+    # Use includes only if you want to narrow; otherwise omit to get standard ruleset.
     includes:
       - G101  # Look for hard coded credentials
       - G102  # Bind to all interfaces
@@ -65,54 +121,26 @@ linters-settings:
       - G505  # Import blocklist: crypto/sha1
       - G601  # Implicit memory aliasing of items from a range statement
 
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - style
-      - performance
-      - experimental
-
-    disabled-checks:
-      # Disable checks that conflict with our style or are too noisy
-      - unnamedResult
-      - whyNoLint
-
-  revive:
-    rules:
-      - name: exported
-        disabled: false
-      - name: package-comments
-        disabled: true  # We document in doc.go files
-      - name: var-naming
-        disabled: false
-      - name: error-return
-        disabled: false
-      - name: error-strings
-        disabled: false
-      - name: error-naming
-        disabled: false
-
-  staticcheck:
-    checks: ["all"]
-
 issues:
-  # Exclude test files from some checks
   exclude-rules:
+    # Tests: relax some checks
     - path: _test\.go
       linters:
-        - gosec      # Allow benign test patterns
-        - errcheck   # Test errors are often intentionally ignored
-
-    # Exclude generated files
-    - path: _mock\.go
-      linters:
-        - all
-
-    # Exclude specific security checks for known safe patterns
-    - linters:
         - gosec
-      text: "G404"  # Random number sources in tests are OK
+        - errcheck
+
+    # Allow rand in tests (G404)
+    - linters: [gosec]
+      text: "G404"
       path: _test\.go
+
+    # Exclude generated mocks/clients if not using standard marker
+    - path: _mock\.go
+      linters: [all]
+
+    # Allow fmt.Print* in cmd/ (demo binaries)
+    - path: ^cmd/
+      linters: [forbidigo]
 
   # Show all issues
   max-issues-per-linter: 0
