@@ -93,7 +93,9 @@ func New(ctx context.Context, cfg ports.MTLSConfig) (ports.MTLSServer, error) {
 		// Authorize specific SPIFFE ID (exact match)
 		clientID, err := spiffeid.FromString(cfg.SPIFFE.AllowedPeerID)
 		if err != nil {
-			source.Close()
+			if closeErr := source.Close(); closeErr != nil {
+				return nil, fmt.Errorf("parse allowed peer ID: %w (close error: %v)", err, closeErr)
+			}
 			return nil, fmt.Errorf("parse allowed peer ID: %w", err)
 		}
 		authorizer = tlsconfig.AuthorizeID(clientID)
@@ -101,7 +103,9 @@ func New(ctx context.Context, cfg ports.MTLSConfig) (ports.MTLSServer, error) {
 		// Authorize any ID in trust domain (SDK handles canonicalization)
 		trustDomain, err := spiffeid.TrustDomainFromString(cfg.SPIFFE.AllowedTrustDomain)
 		if err != nil {
-			source.Close()
+			if closeErr := source.Close(); closeErr != nil {
+				return nil, fmt.Errorf("parse allowed trust domain: %w (close error: %v)", err, closeErr)
+			}
 			return nil, fmt.Errorf("parse allowed trust domain: %w", err)
 		}
 		authorizer = tlsconfig.AuthorizeMemberOf(trustDomain)

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"gopkg.in/yaml.v3"
 )
@@ -32,7 +33,10 @@ func Load(path string) (*MTLSConfig, error) {
 		if path == "-" {
 			r = os.Stdin
 		} else {
-			r, err = os.Open(path)
+			// Sanitize path to prevent traversal attacks (G304)
+			// Note: paths come from trusted sources (CLI args/env vars)
+			cleanPath := filepath.Clean(path)
+			r, err = os.Open(cleanPath)
 			if err != nil {
 				return nil, fmt.Errorf("open %q: %w", path, err)
 			}

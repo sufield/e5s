@@ -88,7 +88,9 @@ func main() {
 			continue
 		}
 		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		if err := resp.Body.Close(); err != nil {
+			log.Printf("Warning: error closing response body: %v\n", err)
+		}
 		fmt.Printf("Status: %d\n", resp.StatusCode)
 		fmt.Printf("Body: %s\n", string(body))
 	}
