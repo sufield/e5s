@@ -396,7 +396,7 @@ func (id *IdentityDocument) IsZero() bool {
 func isValidSigner(signer crypto.Signer) bool {
 	// Defer a recovery function to catch any panic from calling Public()
 	defer func() {
-		recover() // Silently catch any panic (indicates invalid signer)
+		_ = recover() // Silently catch any panic (indicates invalid signer)
 	}()
 
 	// Attempt to call Public() - will panic if signer is typed nil

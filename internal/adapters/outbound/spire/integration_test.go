@@ -8,9 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pocket/hexagon/spire/internal/adapters/outbound/spire"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/pocket/hexagon/spire/internal/adapters/outbound/spire"
 )
 
 // getTestConfig returns test configuration from environment or defaults
@@ -32,12 +33,12 @@ func getTestConfig() *spire.Config {
 	}
 }
 
-// TestSPIREClientConnection tests that we can connect to SPIRE Agent
-func TestSPIREClientConnection(t *testing.T) {
+// TestClientConnection tests that we can connect to SPIRE Agent
+func TestClientConnection(t *testing.T) {
 	ctx := context.Background()
 	config := getTestConfig()
 
-	client, err := spire.NewSPIREClient(ctx, *config)
+	client, err := spire.NewClient(ctx, *config)
 	require.NoError(t, err, "Failed to create SPIRE client")
 	defer client.Close()
 
@@ -50,7 +51,7 @@ func TestFetchX509SVID(t *testing.T) {
 	ctx := context.Background()
 	config := getTestConfig()
 
-	client, err := spire.NewSPIREClient(ctx, *config)
+	client, err := spire.NewClient(ctx, *config)
 	require.NoError(t, err, "Failed to create SPIRE client")
 	defer client.Close()
 
@@ -75,7 +76,7 @@ func TestFetchX509Bundle(t *testing.T) {
 	ctx := context.Background()
 	config := getTestConfig()
 
-	client, err := spire.NewSPIREClient(ctx, *config)
+	client, err := spire.NewClient(ctx, *config)
 	require.NoError(t, err, "Failed to create SPIRE client")
 	defer client.Close()
 
@@ -92,13 +93,13 @@ func TestFetchX509Bundle(t *testing.T) {
 }
 
 // TestFetchJWTSVID tests fetching JWT SVID from SPIRE
-// NOTE: Disabled - JWT SVID support not yet implemented in SPIREClient
+// NOTE: Disabled - JWT SVID support not yet implemented in Client
 /*
 func TestFetchJWTSVID(t *testing.T) {
 	ctx := context.Background()
 	config := getTestConfig()
 
-	client, err := spire.NewSPIREClient(ctx, *config)
+	client, err := spire.NewClient(ctx, *config)
 	require.NoError(t, err, "Failed to create SPIRE client")
 	defer client.Close()
 
@@ -113,13 +114,13 @@ func TestFetchJWTSVID(t *testing.T) {
 */
 
 // TestValidateJWTSVID tests JWT token validation
-// NOTE: Disabled - JWT SVID support not yet implemented in SPIREClient
+// NOTE: Disabled - JWT SVID support not yet implemented in Client
 /*
 func TestValidateJWTSVID(t *testing.T) {
 	ctx := context.Background()
 	config := getTestConfig()
 
-	client, err := spire.NewSPIREClient(ctx, *config)
+	client, err := spire.NewClient(ctx, *config)
 	require.NoError(t, err, "Failed to create SPIRE client")
 	defer client.Close()
 
@@ -138,13 +139,13 @@ func TestValidateJWTSVID(t *testing.T) {
 }
 */
 
-// TestSPIREClientReconnect tests client can handle reconnection
-func TestSPIREClientReconnect(t *testing.T) {
+// TestClientReconnect tests client can handle reconnection
+func TestClientReconnect(t *testing.T) {
 	ctx := context.Background()
 	config := getTestConfig()
 
 	// Create first client
-	client1, err := spire.NewSPIREClient(ctx, *config)
+	client1, err := spire.NewClient(ctx, *config)
 	require.NoError(t, err, "Failed to create first SPIRE client")
 
 	// Fetch SVID with first client
@@ -155,7 +156,7 @@ func TestSPIREClientReconnect(t *testing.T) {
 	client1.Close()
 
 	// Create second client (reconnect)
-	client2, err := spire.NewSPIREClient(ctx, *config)
+	client2, err := spire.NewClient(ctx, *config)
 	require.NoError(t, err, "Failed to create second SPIRE client")
 	defer client2.Close()
 
@@ -169,13 +170,13 @@ func TestSPIREClientReconnect(t *testing.T) {
 		"Trust domains should match across reconnects")
 }
 
-// TestSPIREClientReconnectFailure tests that using a closed client fails appropriately
-func TestSPIREClientReconnectFailure(t *testing.T) {
+// TestClientReconnectFailure tests that using a closed client fails appropriately
+func TestClientReconnectFailure(t *testing.T) {
 	ctx := context.Background()
 	config := getTestConfig()
 
 	// Create client
-	client, err := spire.NewSPIREClient(ctx, *config)
+	client, err := spire.NewClient(ctx, *config)
 	require.NoError(t, err, "Failed to create SPIRE client")
 
 	// Fetch SVID successfully
@@ -192,15 +193,15 @@ func TestSPIREClientReconnectFailure(t *testing.T) {
 		"Error should indicate client is closed")
 }
 
-// TestSPIREClientTimeout tests client handles timeouts gracefully
-func TestSPIREClientTimeout(t *testing.T) {
+// TestClientTimeout tests client handles timeouts gracefully
+func TestClientTimeout(t *testing.T) {
 	ctx := context.Background()
 
 	// Create config with very short timeout
 	config := getTestConfig()
 	config.Timeout = 1 * time.Nanosecond // Extremely short timeout
 
-	client, err := spire.NewSPIREClient(ctx, *config)
+	client, err := spire.NewClient(ctx, *config)
 	if err != nil {
 		// Connection may fail with very short timeout - this is expected
 		t.Logf("Client creation failed with short timeout (expected): %v", err)

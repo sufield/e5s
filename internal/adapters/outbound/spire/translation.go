@@ -1,13 +1,13 @@
 package spire
 
 import (
-	"crypto"
 	"crypto/x509"
 	"fmt"
 
-	"github.com/pocket/hexagon/spire/internal/domain"
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	"github.com/spiffe/go-spiffe/v2/svid/x509svid"
+
+	"github.com/pocket/hexagon/spire/internal/domain"
 )
 
 // TranslateX509SVIDToIdentityDocument converts a go-spiffe X509SVID to a domain IdentityDocument.
@@ -48,8 +48,8 @@ func TranslateX509SVIDToIdentityDocument(svid *x509svid.SVID) (*domain.IdentityD
 	}
 
 	// Private key must be present and usable for signing (mTLS requirement)
-	signer, ok := svid.PrivateKey.(crypto.Signer)
-	if !ok || signer == nil {
+	signer := svid.PrivateKey
+	if signer == nil {
 		return nil, fmt.Errorf("%w: missing/invalid private key (must be crypto.Signer)", domain.ErrIdentityDocumentInvalid)
 	}
 

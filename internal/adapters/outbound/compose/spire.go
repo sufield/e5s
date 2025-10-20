@@ -24,7 +24,7 @@ import (
 // The factory implements ports.AdapterFactory for SPIRE deployments.
 type SPIREAdapterFactory struct {
 	config *spire.Config
-	client *spire.SPIREClient
+	client *spire.Client
 
 	mu     sync.RWMutex // Protects client access (Close vs Create* methods)
 	closed bool         // Tracks if factory has been closed
@@ -75,7 +75,7 @@ func NewSPIREAdapterFactory(ctx context.Context, cfg *spire.Config) (*SPIREAdapt
 	}
 
 	// Create SPIRE Workload API client
-	client, err := spire.NewSPIREClient(ctx, copied)
+	client, err := spire.NewClient(ctx, copied)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SPIRE client: %w", err)
 	}
@@ -113,7 +113,7 @@ func (f *SPIREAdapterFactory) CreateIdentityCredentialParser() ports.IdentityCre
 //   - SPIFFE ID extraction and validation from URI SAN
 //
 // The bundle source (f.client) maintains up-to-date trust bundles including
-// federated trust domains. SPIREClient implements x509bundle.Source, verified
+// federated trust domains. Client implements x509bundle.Source, verified
 // at compile-time in the spire package.
 //
 // Returns an SDK-based validator with full security validation for production use.
@@ -121,7 +121,7 @@ func (f *SPIREAdapterFactory) CreateIdentityDocumentValidator() ports.IdentityDo
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
-	// SPIREClient implements x509bundle.Source (compile-time assertion in spire package)
+	// Client implements x509bundle.Source (compile-time assertion in spire package)
 	// No runtime check needed - any breakage is caught at build time
 	return spire.NewSDKIdentityDocumentValidator(f.client)
 }

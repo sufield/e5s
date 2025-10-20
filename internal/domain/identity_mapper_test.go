@@ -5,9 +5,10 @@ package domain_test
 import (
 	"testing"
 
-	"github.com/pocket/hexagon/spire/internal/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/pocket/hexagon/spire/internal/domain"
 )
 
 // TestIdentityMapper_IsZero tests the IsZero method for detecting uninitialized mappers

@@ -11,9 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pocket/hexagon/spire/internal/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/pocket/hexagon/spire/internal/domain"
 )
 
 // TestNewIdentityDocumentFromComponents_Success tests successful creation

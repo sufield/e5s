@@ -9,12 +9,13 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/pocket/hexagon/spire/internal/config"
-	"github.com/pocket/hexagon/spire/internal/ports"
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	"github.com/spiffe/go-spiffe/v2/spiffetls"
 	"github.com/spiffe/go-spiffe/v2/spiffetls/tlsconfig"
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
+
+	"github.com/pocket/hexagon/spire/internal/config"
+	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
 // Sentinel errors for identity operations.
@@ -48,7 +49,7 @@ type spiffeServer struct {
 
 // New creates a new mTLS HTTP server that authenticates clients.
 // Returns a server that serves HTTPS using identity-based authentication.
-func New(ctx context.Context, cfg ports.MTLSConfig) (ports.MTLSServer, error) {
+func New(ctx context.Context, cfg *ports.MTLSConfig) (ports.MTLSServer, error) {
 	// Validate required configuration
 	if cfg.WorkloadAPI.SocketPath == "" {
 		return nil, fmt.Errorf("workload api socket path is required")
@@ -129,7 +130,7 @@ func New(ctx context.Context, cfg ports.MTLSConfig) (ports.MTLSServer, error) {
 	}
 
 	return &spiffeServer{
-		cfg:    cfg,
+		cfg:    *cfg,
 		source: source,
 		srv:    server,
 		mux:    mux,

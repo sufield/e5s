@@ -17,9 +17,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/pocket/hexagon/spire/internal/adapters/outbound/inmemory"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/pocket/hexagon/spire/internal/adapters/outbound/inmemory"
 )
 
 // TestTrustDomainParser_Coverage_ValidInputs tests acceptance of valid trust domains

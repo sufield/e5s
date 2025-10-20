@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/spiffe/go-spiffe/v2/spiffeid"
+
 	"github.com/pocket/hexagon/spire/internal/domain"
 	"github.com/pocket/hexagon/spire/internal/ports"
-	"github.com/spiffe/go-spiffe/v2/spiffeid"
 )
 
 // TrustDomainParser implements the TrustDomainParser port using go-spiffe SDK.

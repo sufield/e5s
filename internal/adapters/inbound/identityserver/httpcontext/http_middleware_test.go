@@ -32,7 +32,7 @@ func TestAuthenticated(t *testing.T) {
 
 	t.Run("authenticated request", func(t *testing.T) {
 		handlerCalled = false
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequest("GET", "/test", http.NoBody)
 		testID := spiffeid.RequireFromString("spiffe://example.org/test")
 		req = WithSPIFFEID(req, testID)
 		rec := httptest.NewRecorder()
@@ -45,7 +45,7 @@ func TestAuthenticated(t *testing.T) {
 
 	t.Run("unauthenticated request", func(t *testing.T) {
 		handlerCalled = false
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequest("GET", "/test", http.NoBody)
 		rec := httptest.NewRecorder()
 
 		middleware.ServeHTTP(rec, req)
@@ -68,7 +68,7 @@ func TestRequireTrustDomainID(t *testing.T) {
 
 	t.Run("matching trust domain", func(t *testing.T) {
 		handlerCalled = false
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequest("GET", "/test", http.NoBody)
 		testID := spiffeid.RequireFromString("spiffe://example.org/service")
 		req = WithSPIFFEID(req, testID)
 		rec := httptest.NewRecorder()
@@ -81,7 +81,7 @@ func TestRequireTrustDomainID(t *testing.T) {
 
 	t.Run("non-matching trust domain", func(t *testing.T) {
 		handlerCalled = false
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequest("GET", "/test", http.NoBody)
 		testID := spiffeid.RequireFromString("spiffe://other.org/service")
 		req = WithSPIFFEID(req, testID)
 		rec := httptest.NewRecorder()
@@ -104,7 +104,7 @@ func TestRequirePathPrefix(t *testing.T) {
 
 	t.Run("matching path prefix", func(t *testing.T) {
 		handlerCalled = false
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequest("GET", "/test", http.NoBody)
 		testID := spiffeid.RequireFromString("spiffe://example.org/service/frontend")
 		req = WithSPIFFEID(req, testID)
 		rec := httptest.NewRecorder()
@@ -117,7 +117,7 @@ func TestRequirePathPrefix(t *testing.T) {
 
 	t.Run("non-matching path prefix", func(t *testing.T) {
 		handlerCalled = false
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequest("GET", "/test", http.NoBody)
 		testID := spiffeid.RequireFromString("spiffe://example.org/workload/backend")
 		req = WithSPIFFEID(req, testID)
 		rec := httptest.NewRecorder()
@@ -137,7 +137,7 @@ func TestLogIdentity(t *testing.T) {
 	middleware := LogIdentity(handler)
 
 	t.Run("logs authenticated request", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequest("GET", "/test", http.NoBody)
 		testID := spiffeid.RequireFromString("spiffe://example.org/service")
 		req = WithSPIFFEID(req, testID)
 		rec := httptest.NewRecorder()
@@ -148,7 +148,7 @@ func TestLogIdentity(t *testing.T) {
 	})
 
 	t.Run("logs unauthenticated request", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequest("GET", "/test", http.NoBody)
 		rec := httptest.NewRecorder()
 
 		// Just verify it doesn't panic

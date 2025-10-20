@@ -31,7 +31,7 @@ func TestGetSPIFFEID(t *testing.T) {
 		{
 			name: "ID present in context",
 			setupReq: func() *http.Request {
-				req := httptest.NewRequest("GET", "/test", nil)
+				req := httptest.NewRequest("GET", "/test", http.NoBody)
 				testID := spiffeid.RequireFromString("spiffe://example.org/test")
 				return WithSPIFFEID(req, testID)
 			},
@@ -41,7 +41,7 @@ func TestGetSPIFFEID(t *testing.T) {
 		{
 			name: "ID not present",
 			setupReq: func() *http.Request {
-				return httptest.NewRequest("GET", "/test", nil)
+				return httptest.NewRequest("GET", "/test", http.NoBody)
 			},
 			wantOK: false,
 			wantID: "",
@@ -63,7 +63,7 @@ func TestGetSPIFFEID(t *testing.T) {
 
 func TestGetSPIFFEIDOrError(t *testing.T) {
 	t.Run("ID present returns ID", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequest("GET", "/test", http.NoBody)
 		testID := spiffeid.RequireFromString("spiffe://example.org/test")
 		req = WithSPIFFEID(req, testID)
 
@@ -73,7 +73,7 @@ func TestGetSPIFFEIDOrError(t *testing.T) {
 	})
 
 	t.Run("ID not present returns error", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequest("GET", "/test", http.NoBody)
 
 		id, err := GetSPIFFEIDOrError(req)
 		assert.ErrorIs(t, err, ErrNoSPIFFEID)
@@ -104,7 +104,7 @@ func TestGetTrustDomain(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest("GET", "/test", nil)
+			req := httptest.NewRequest("GET", "/test", http.NoBody)
 			testID := spiffeid.RequireFromString(tt.id)
 			req = WithSPIFFEID(req, testID)
 
@@ -117,7 +117,7 @@ func TestGetTrustDomain(t *testing.T) {
 	}
 
 	t.Run("no ID in context", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequest("GET", "/test", http.NoBody)
 		td, ok := GetTrustDomain(req)
 		assert.False(t, ok)
 		assert.Equal(t, spiffeid.TrustDomain{}, td)
@@ -153,7 +153,7 @@ func TestGetPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest("GET", "/test", nil)
+			req := httptest.NewRequest("GET", "/test", http.NoBody)
 			testID := spiffeid.RequireFromString(tt.id)
 			req = WithSPIFFEID(req, testID)
 
@@ -166,7 +166,7 @@ func TestGetPath(t *testing.T) {
 	}
 
 	t.Run("no ID in context", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequest("GET", "/test", http.NoBody)
 		path, ok := GetPath(req)
 		assert.False(t, ok)
 		assert.Empty(t, path)
@@ -202,7 +202,7 @@ func TestGetPathSegments(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest("GET", "/test", nil)
+			req := httptest.NewRequest("GET", "/test", http.NoBody)
 			testID := spiffeid.RequireFromString(tt.id)
 			req = WithSPIFFEID(req, testID)
 
@@ -215,7 +215,7 @@ func TestGetPathSegments(t *testing.T) {
 	}
 
 	t.Run("no ID in context", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequest("GET", "/test", http.NoBody)
 		segments, ok := GetPathSegments(req)
 		assert.False(t, ok)
 		assert.Nil(t, segments)
@@ -224,7 +224,7 @@ func TestGetPathSegments(t *testing.T) {
 
 func TestGetIDString(t *testing.T) {
 	t.Run("ID present", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequest("GET", "/test", http.NoBody)
 		testID := spiffeid.RequireFromString("spiffe://example.org/service")
 		req = WithSPIFFEID(req, testID)
 
@@ -233,14 +233,14 @@ func TestGetIDString(t *testing.T) {
 	})
 
 	t.Run("ID not present", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequest("GET", "/test", http.NoBody)
 		result := GetIDString(req)
 		assert.Empty(t, result)
 	})
 }
 
 func TestWithSPIFFEID(t *testing.T) {
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequest("GET", "/test", http.NoBody)
 	testID := spiffeid.RequireFromString("spiffe://example.org/test")
 
 	req = WithSPIFFEID(req, testID)

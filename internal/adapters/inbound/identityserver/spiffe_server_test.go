@@ -8,10 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pocket/hexagon/spire/internal/ports"
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
 func contains(s, substr string) bool {
@@ -26,7 +27,7 @@ func TestNew_MissingSocketPath(t *testing.T) {
 		},
 	}
 
-	server, err := New(ctx, cfg)
+	server, err := New(ctx, &cfg)
 	require.Error(t, err)
 	assert.Nil(t, server)
 	assert.Contains(t, err.Error(), "socket path is required")
@@ -40,7 +41,7 @@ func TestNew_MissingAllowedClientID(t *testing.T) {
 		},
 	}
 
-	server, err := New(ctx, cfg)
+	server, err := New(ctx, &cfg)
 	require.Error(t, err)
 	assert.Nil(t, server)
 	assert.Contains(t, err.Error(), "authorization policy required")
@@ -59,7 +60,7 @@ func TestNew_InvalidClientID(t *testing.T) {
 		},
 	}
 
-	server, err := New(ctx, cfg)
+	server, err := New(ctx, &cfg)
 	if server != nil {
 		defer server.Close()
 	}
@@ -90,7 +91,7 @@ func TestNew_ValidConfig(t *testing.T) {
 		},
 	}
 
-	server, err := New(ctx, cfg)
+	server, err := New(ctx, &cfg)
 
 	// If SPIRE is not running, this will fail - that's expected
 	if err != nil {
@@ -99,7 +100,7 @@ func TestNew_ValidConfig(t *testing.T) {
 	}
 
 	require.NotNil(t, server)
-	defer server.Close()
+	server.Close()
 }
 
 func TestNew_AppliesDefaults(t *testing.T) {
@@ -116,7 +117,7 @@ func TestNew_AppliesDefaults(t *testing.T) {
 		// No HTTP config - should apply defaults
 	}
 
-	server, err := New(ctx, cfg)
+	server, err := New(ctx, &cfg)
 
 	if err != nil {
 		t.Skipf("Skipping test - SPIRE agent not available: %v", err)
@@ -151,7 +152,7 @@ func TestSpiffeServer_Handle(t *testing.T) {
 		},
 	}
 
-	server, err := New(ctx, cfg)
+	server, err := New(ctx, &cfg)
 	if err != nil {
 		t.Skipf("Skipping test - SPIRE agent not available: %v", err)
 		return
@@ -187,7 +188,7 @@ func TestSpiffeServer_Close_Idempotent(t *testing.T) {
 		},
 	}
 
-	server, err := New(ctx, cfg)
+	server, err := New(ctx, &cfg)
 	if err != nil {
 		t.Skipf("Skipping test - SPIRE agent not available: %v", err)
 		return
@@ -202,7 +203,7 @@ func TestSpiffeServer_Close_Idempotent(t *testing.T) {
 }
 
 func TestGetIdentity_Present(t *testing.T) {
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequest("GET", "/test", http.NoBody)
 	testID := spiffeid.RequireFromString("spiffe://example.org/test")
 	ctx := ContextWithIdentity(req.Context(), testID)
 	req = req.WithContext(ctx)
@@ -214,7 +215,7 @@ func TestGetIdentity_Present(t *testing.T) {
 }
 
 func TestGetIdentity_NotPresent(t *testing.T) {
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequest("GET", "/test", http.NoBody)
 
 	id, ok := GetIdentity(req)
 
@@ -223,7 +224,7 @@ func TestGetIdentity_NotPresent(t *testing.T) {
 }
 
 func TestRequireIdentity_Present(t *testing.T) {
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequest("GET", "/test", http.NoBody)
 	testID := spiffeid.RequireFromString("spiffe://example.org/test")
 	ctx := ContextWithIdentity(req.Context(), testID)
 	req = req.WithContext(ctx)
@@ -235,7 +236,7 @@ func TestRequireIdentity_Present(t *testing.T) {
 }
 
 func TestRequireIdentity_NotPresent(t *testing.T) {
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequest("GET", "/test", http.NoBody)
 
 	id, err := RequireIdentity(req)
 
@@ -268,7 +269,7 @@ func TestWrapHandler_NoTLS(t *testing.T) {
 		},
 	}
 
-	server, err := New(ctx, cfg)
+	server, err := New(ctx, &cfg)
 	if err != nil {
 		t.Skipf("Skipping test - SPIRE agent not available: %v", err)
 		return
@@ -286,7 +287,7 @@ func TestWrapHandler_NoTLS(t *testing.T) {
 	wrapped := spiffeServer.wrapHandler(handler)
 
 	// Request without TLS
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequest("GET", "/test", http.NoBody)
 	rec := httptest.NewRecorder()
 
 	wrapped.ServeHTTP(rec, req)

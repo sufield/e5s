@@ -5,8 +5,9 @@ package app_test
 import (
 	"testing"
 
-	"github.com/pocket/hexagon/spire/internal/app"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/pocket/hexagon/spire/internal/app"
 )
 
 // Placeholder test file - tests can be added here

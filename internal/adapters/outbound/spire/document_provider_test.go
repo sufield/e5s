@@ -12,9 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pocket/hexagon/spire/internal/domain"
 	"github.com/spiffe/go-spiffe/v2/bundle/x509bundle"
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
+
+	"github.com/pocket/hexagon/spire/internal/domain"
 )
 
 // mockBundleSource implements x509bundle.Source for testing
@@ -353,8 +354,7 @@ func TestSDKDocumentProvider_ValidateIdentityDocument_EmptyChain(t *testing.T) {
 		return
 	}
 
-	var err error
-	err = provider.ValidateIdentityDocument(ctx, doc, identityCredential)
+	err := provider.ValidateIdentityDocument(ctx, doc, identityCredential)
 	if err == nil {
 		t.Fatal("expected error for empty certificate chain")
 	}

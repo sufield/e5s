@@ -12,6 +12,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/pocket/hexagon/spire/internal/adapters/inbound/cli"
 	"github.com/pocket/hexagon/spire/internal/adapters/outbound/compose"
 	"github.com/pocket/hexagon/spire/internal/adapters/outbound/inmemory"
@@ -19,8 +22,6 @@ import (
 	"github.com/pocket/hexagon/spire/internal/domain"
 	"github.com/pocket/hexagon/spire/internal/dto"
 	"github.com/pocket/hexagon/spire/internal/ports"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // TestCLI_Run_Success tests the full CLI orchestration flow

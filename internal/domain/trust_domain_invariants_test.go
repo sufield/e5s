@@ -12,8 +12,9 @@ package domain_test
 import (
 	"testing"
 
-	"github.com/pocket/hexagon/spire/internal/domain"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/pocket/hexagon/spire/internal/domain"
 )
 
 // TestTrustDomain_Invariant_StringNeverEmpty tests the invariants:
@@ -78,6 +79,7 @@ func TestTrustDomain_Invariant_EqualsNilSafeAndReflexive(t *testing.T) {
 			})
 
 			// Assert invariant: reflexive property
+			//nolint:gocritic // Intentional duplicate for testing Equals reflexivity
 			assert.True(t, tt.td.Equals(tt.td), "Invariant violated: Equals() is not reflexive")
 		})
 	}

@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNewSPIREClient_ValidConfig(t *testing.T) {
+func TestNewClient_ValidConfig(t *testing.T) {
 	ctx := context.Background()
 	config := Config{
 		SocketPath:  "unix:///tmp/test.sock",
@@ -19,7 +19,7 @@ func TestNewSPIREClient_ValidConfig(t *testing.T) {
 	}
 
 	// This will fail to connect to non-existent socket, but validates config parsing
-	client, err := NewSPIREClient(ctx, config)
+	client, err := NewClient(ctx, config)
 
 	// We expect an error because the socket doesn't exist
 	// But we're testing that the config is properly validated and used
@@ -36,7 +36,7 @@ func TestNewSPIREClient_ValidConfig(t *testing.T) {
 	}
 }
 
-func TestNewSPIREClient_DefaultTimeout(t *testing.T) {
+func TestNewClient_DefaultTimeout(t *testing.T) {
 	ctx := context.Background()
 	config := Config{
 		SocketPath:  "unix:///tmp/test.sock",
@@ -44,7 +44,7 @@ func TestNewSPIREClient_DefaultTimeout(t *testing.T) {
 		Timeout:     1 * time.Second, // Use short timeout for test
 	}
 
-	client, err := NewSPIREClient(ctx, config)
+	client, err := NewClient(ctx, config)
 
 	if err != nil {
 		// Expected - socket doesn't exist, X509Source creation will fail
@@ -58,12 +58,12 @@ func TestNewSPIREClient_DefaultTimeout(t *testing.T) {
 	}
 }
 
-func TestSPIREClient_GetMethods(t *testing.T) {
+func TestClient_GetMethods(t *testing.T) {
 	// Create client struct directly (without actual SPIRE connection)
 	td, err := spiffeid.TrustDomainFromString("example.org")
 	require.NoError(t, err)
 
-	client := &SPIREClient{
+	client := &Client{
 		socketPath:  "unix:///tmp/test.sock",
 		trustDomain: td,
 		timeout:     30 * time.Second,
@@ -134,7 +134,7 @@ func TestConfig_Validation(t *testing.T) {
 	}
 }
 
-func TestNewSPIREClient_InvalidTrustDomain(t *testing.T) {
+func TestNewClient_InvalidTrustDomain(t *testing.T) {
 	ctx := context.Background()
 
 	tests := []struct {
@@ -171,7 +171,7 @@ func TestNewSPIREClient_InvalidTrustDomain(t *testing.T) {
 				Timeout:     1 * time.Second, // Short timeout for tests
 			}
 
-			_, err := NewSPIREClient(ctx, config)
+			_, err := NewClient(ctx, config)
 			require.Error(t, err, "Should reject invalid trust domain")
 			// Error could be validation failure OR workload API unavailable
 			// Both are acceptable - we're testing that invalid TDs don't create working clients
@@ -217,11 +217,11 @@ func TestConfig_TimeoutValidation(t *testing.T) {
 	}
 }
 
-func TestSPIREClient_Close(t *testing.T) {
+func TestClient_Close(t *testing.T) {
 	td, err := spiffeid.TrustDomainFromString("example.org")
 	require.NoError(t, err)
 
-	client := &SPIREClient{
+	client := &Client{
 		socketPath:  "unix:///tmp/test.sock",
 		trustDomain: td,
 		timeout:     30 * time.Second,
@@ -236,11 +236,11 @@ func TestSPIREClient_Close(t *testing.T) {
 	})
 }
 
-func TestSPIREClient_CloseIdempotent(t *testing.T) {
+func TestClient_CloseIdempotent(t *testing.T) {
 	td, err := spiffeid.TrustDomainFromString("example.org")
 	require.NoError(t, err)
 
-	client := &SPIREClient{
+	client := &Client{
 		socketPath:  "unix:///tmp/test.sock",
 		trustDomain: td,
 		timeout:     30 * time.Second,

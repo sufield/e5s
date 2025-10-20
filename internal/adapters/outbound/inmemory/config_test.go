@@ -6,10 +6,11 @@ import (
 	"context"
 	"testing"
 
-	"github.com/pocket/hexagon/spire/internal/adapters/outbound/inmemory"
-	"github.com/pocket/hexagon/spire/internal/dto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/pocket/hexagon/spire/internal/adapters/outbound/inmemory"
+	"github.com/pocket/hexagon/spire/internal/dto"
 )
 
 func TestInMemoryConfig_Load(t *testing.T) {

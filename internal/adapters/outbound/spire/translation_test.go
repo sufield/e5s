@@ -9,11 +9,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pocket/hexagon/spire/internal/domain"
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	"github.com/spiffe/go-spiffe/v2/svid/x509svid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/pocket/hexagon/spire/internal/domain"
 )
 
 func TestTranslateTrustDomainToSPIFFEID(t *testing.T) {

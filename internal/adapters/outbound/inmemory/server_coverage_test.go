@@ -16,10 +16,11 @@ import (
 	"context"
 	"testing"
 
-	"github.com/pocket/hexagon/spire/internal/adapters/outbound/inmemory"
-	"github.com/pocket/hexagon/spire/internal/ports"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/pocket/hexagon/spire/internal/adapters/outbound/inmemory"
+	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
 func TestServer_NewInMemoryServer_ErrorPaths(t *testing.T) {

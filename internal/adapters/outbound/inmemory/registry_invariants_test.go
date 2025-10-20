@@ -17,10 +17,11 @@ import (
 	"context"
 	"testing"
 
-	"github.com/pocket/hexagon/spire/internal/adapters/outbound/inmemory"
-	"github.com/pocket/hexagon/spire/internal/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/pocket/hexagon/spire/internal/adapters/outbound/inmemory"
+	"github.com/pocket/hexagon/spire/internal/domain"
 )
 
 // TestRegistry_Invariant_ImmutableAfterSealing tests the invariant:

@@ -5,9 +5,10 @@ import (
 	"crypto/x509"
 	"fmt"
 
-	"github.com/pocket/hexagon/spire/internal/domain"
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
+
+	"github.com/pocket/hexagon/spire/internal/domain"
 )
 
 // FetchX509Bundle returns the X.509 trust bundle for the chosen trust domain.
@@ -27,7 +28,7 @@ import (
 // Returns:
 //   - Defensive copy of CA certificates (slice isolation)
 //   - Error if bundle fetch fails or trust domain cannot be determined
-func (c *SPIREClient) FetchX509Bundle(ctx context.Context) ([]*x509.Certificate, error) {
+func (c *Client) FetchX509Bundle(ctx context.Context) ([]*x509.Certificate, error) {
 	// Apply client timeout only if no deadline exists and timeout is valid
 	if _, hasDeadline := ctx.Deadline(); !hasDeadline && c.timeout > 0 {
 		var cancel context.CancelFunc
@@ -79,10 +80,10 @@ func (c *SPIREClient) FetchX509Bundle(ctx context.Context) ([]*x509.Certificate,
 // Returns:
 //   - Resolved trust domain
 //   - Error if trust domain cannot be determined or configured TD is invalid
-func (c *SPIREClient) resolveTrustDomain(x509Ctx *workloadapi.X509Context) (spiffeid.TrustDomain, error) {
+func (c *Client) resolveTrustDomain(x509Ctx *workloadapi.X509Context) (spiffeid.TrustDomain, error) {
 	// Priority 1: Use configured trust domain if present
 	if c.trustDomain.String() != "" {
-		// Already normalized during construction in NewSPIREClient
+		// Already normalized during construction in NewClient
 		// But validate it's still well-formed (defensive)
 		td, err := spiffeid.TrustDomainFromString(c.trustDomain.String())
 		if err != nil {

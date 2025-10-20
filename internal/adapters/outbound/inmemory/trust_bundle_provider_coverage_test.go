@@ -23,10 +23,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pocket/hexagon/spire/internal/adapters/outbound/inmemory"
-	"github.com/pocket/hexagon/spire/internal/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/pocket/hexagon/spire/internal/adapters/outbound/inmemory"
+	"github.com/pocket/hexagon/spire/internal/domain"
 )
 
 // TestTrustBundleProvider_Coverage_GetBundleNilTrustDomain tests nil trust domain rejection

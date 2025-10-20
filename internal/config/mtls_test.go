@@ -41,7 +41,7 @@ spire:
   timeout: 45s
 `
 
-	err := os.WriteFile(configPath, []byte(configContent), 0644)
+	err := os.WriteFile(configPath, []byte(configContent), 0o644)
 	require.NoError(t, err)
 
 	cfg, err := Load(configPath)
@@ -74,7 +74,7 @@ http:
     bad indentation
 `
 
-	err := os.WriteFile(configPath, []byte(invalidContent), 0644)
+	err := os.WriteFile(configPath, []byte(invalidContent), 0o644)
 	require.NoError(t, err)
 
 	cfg, err := Load(configPath)
@@ -96,7 +96,7 @@ spire:
   trust_domain: example.org
 `
 
-	err := os.WriteFile(configPath, []byte(unknownContent), 0644)
+	err := os.WriteFile(configPath, []byte(unknownContent), 0o644)
 	require.NoError(t, err)
 
 	cfg, err := Load(configPath)
@@ -161,7 +161,7 @@ spire:
   trust_domain: default.org
 `
 
-	err := os.WriteFile(configPath, []byte(configContent), 0644)
+	err := os.WriteFile(configPath, []byte(configContent), 0o644)
 	require.NoError(t, err)
 
 	// Save and set env var
@@ -195,7 +195,7 @@ spire:
   trust_domain: example.org
 `
 
-	err := os.WriteFile(configPath, []byte(configContent), 0644)
+	err := os.WriteFile(configPath, []byte(configContent), 0o644)
 	require.NoError(t, err)
 
 	// Save original env vars
@@ -231,7 +231,7 @@ spire:
   trust_domain: example.org
 `
 
-	err := os.WriteFile(configPath, []byte(configContent), 0644)
+	err := os.WriteFile(configPath, []byte(configContent), 0o644)
 	require.NoError(t, err)
 
 	// Save original env var

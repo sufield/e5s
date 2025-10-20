@@ -15,7 +15,7 @@ func Serve(ctx context.Context, routes map[string]http.Handler) error {
 		return err
 	}
 
-	s, err := identityserver.New(ctx, cfg)
+	s, err := identityserver.New(ctx, &cfg)
 	if err != nil {
 		return err
 	}

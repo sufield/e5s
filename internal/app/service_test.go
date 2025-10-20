@@ -29,13 +29,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pocket/hexagon/spire/internal/app"
-	"github.com/pocket/hexagon/spire/internal/domain"
-	"github.com/pocket/hexagon/spire/internal/dto"
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/pocket/hexagon/spire/internal/app"
+	"github.com/pocket/hexagon/spire/internal/domain"
+	"github.com/pocket/hexagon/spire/internal/dto"
 )
 
 // MockAgent is a mock implementation of ports.Agent for testing

@@ -12,6 +12,7 @@ package httpcontext
 //	go test ./internal/adapters/inbound/httpapi/... -cover
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"testing"
 
@@ -42,7 +43,7 @@ func TestMatchesTrustDomainID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest("GET", "/test", nil)
+			req := httptest.NewRequest("GET", "/test", http.NoBody)
 			testID := spiffeid.RequireFromString(tt.id)
 			req = WithSPIFFEID(req, testID)
 
@@ -52,7 +53,7 @@ func TestMatchesTrustDomainID(t *testing.T) {
 	}
 
 	t.Run("no ID in context", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequest("GET", "/test", http.NoBody)
 		exampleTD := spiffeid.RequireTrustDomainFromString("example.org")
 		result := MatchesTrustDomainID(req, exampleTD)
 		assert.False(t, result)
@@ -88,7 +89,7 @@ func TestHasPathPrefix(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest("GET", "/test", nil)
+			req := httptest.NewRequest("GET", "/test", http.NoBody)
 			testID := spiffeid.RequireFromString(tt.id)
 			req = WithSPIFFEID(req, testID)
 
@@ -98,7 +99,7 @@ func TestHasPathPrefix(t *testing.T) {
 	}
 
 	t.Run("no ID in context", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequest("GET", "/test", http.NoBody)
 		result := HasPathPrefix(req, "/service/")
 		assert.False(t, result)
 	})
@@ -127,7 +128,7 @@ func TestHasPathSuffix(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest("GET", "/test", nil)
+			req := httptest.NewRequest("GET", "/test", http.NoBody)
 			testID := spiffeid.RequireFromString(tt.id)
 			req = WithSPIFFEID(req, testID)
 
@@ -160,7 +161,7 @@ func TestMatchesIDParsed(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest("GET", "/test", nil)
+			req := httptest.NewRequest("GET", "/test", http.NoBody)
 			testID := spiffeid.RequireFromString(tt.id)
 			req = WithSPIFFEID(req, testID)
 

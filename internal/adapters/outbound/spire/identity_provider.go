@@ -4,11 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/pocket/hexagon/spire/internal/domain"
-	"github.com/pocket/hexagon/spire/internal/ports"
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	"github.com/spiffe/go-spiffe/v2/svid/x509svid"
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
+
+	"github.com/pocket/hexagon/spire/internal/domain"
+	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
 // FetchX509SVID fetches an X.509 SVID and converts it to a domain IdentityDocument.
@@ -31,7 +32,7 @@ import (
 //
 // Concurrency: Safe for concurrent use. Both X509Source and Workload API client
 // are safe for concurrent access.
-func (c *SPIREClient) FetchX509SVID(ctx context.Context) (*domain.IdentityDocument, error) {
+func (c *Client) FetchX509SVID(ctx context.Context) (*domain.IdentityDocument, error) {
 	// Guard: ensure client is initialized
 	if c == nil || c.client == nil {
 		return nil, fmt.Errorf("%w: SPIRE client is not initialized", ports.ErrAgentUnavailable)

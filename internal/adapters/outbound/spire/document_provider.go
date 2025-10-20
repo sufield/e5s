@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/pocket/hexagon/spire/internal/domain"
-	"github.com/pocket/hexagon/spire/internal/ports"
 	"github.com/spiffe/go-spiffe/v2/bundle/x509bundle"
 	"github.com/spiffe/go-spiffe/v2/svid/x509svid"
+
+	"github.com/pocket/hexagon/spire/internal/domain"
+	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
 // SDKDocumentProvider implements IdentityDocumentProvider using go-spiffe SDK.
@@ -66,7 +67,7 @@ func WithClock(f func() time.Time) ValidatorOption {
 //   - opts: Optional configuration (clock skew tolerance, custom clock for testing)
 //
 // The bundle source is used to fetch root CA certificates for chain verification.
-// In production, this is typically obtained from SPIREClient's Sources() method.
+// In production, this is typically obtained from Client's Sources() method.
 //
 // Defaults: Clock skew tolerance of 5 minutes, time.Now for clock.
 //

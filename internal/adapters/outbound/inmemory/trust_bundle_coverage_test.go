@@ -19,10 +19,11 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/pocket/hexagon/spire/internal/adapters/outbound/inmemory"
-	"github.com/pocket/hexagon/spire/internal/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/pocket/hexagon/spire/internal/adapters/outbound/inmemory"
+	"github.com/pocket/hexagon/spire/internal/domain"
 )
 
 func TestTrustBundleProvider_GetBundle(t *testing.T) {

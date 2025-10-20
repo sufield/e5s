@@ -3,9 +3,10 @@ package domain_test
 import (
 	"testing"
 
-	"github.com/pocket/hexagon/spire/internal/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/pocket/hexagon/spire/internal/domain"
 )
 
 // TestIdentityCredential_Invariant_TrustDomainNeverNil tests the invariant:
@@ -164,6 +165,7 @@ func TestIdentityCredential_Invariant_EqualsReflexive(t *testing.T) {
 			id := domain.NewIdentityCredentialFromComponents(td, tt.path)
 
 			// Assert invariant: reflexive
+			//nolint:gocritic // Intentional duplicate for testing Equals reflexivity
 			assert.True(t, id.Equals(id), "Invariant violated: Equals() is not reflexive")
 		})
 	}
