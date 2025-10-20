@@ -656,7 +656,7 @@ func TestMTLSAuthentication(t *testing.T) {
 
 ### Core Documentation
 
-- [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) - Current state: Production vs Educational
+- [docs/PRODUCTION_VS_DEVELOPMENT.md](docs/PRODUCTION_VS_DEVELOPMENT.md) - Production vs Development architecture
 - [docs/TEST_ARCHITECTURE.md](docs/TEST_ARCHITECTURE.md) - Testing strategy and best practices
 - [docs/CONTROL_PLANE.md](docs/CONTROL_PLANE.md) - SPIRE deployment and control plane
 - [docs/ARCHITECTURE_REVIEW.md](docs/ARCHITECTURE_REVIEW.md) - Port placement and design decisions
@@ -790,36 +790,36 @@ server.Handle("/admin", http.HandlerFunc(func(w http.ResponseWriter, r *http.Req
 
 This implementation follows Go best practices and production-ready patterns:
 
-1. **✅ Config Structs**: APIs use config structs for maintainability
-2. **✅ Proper Validation**: Required fields validated with clear error messages
-3. **✅ Resource Management**: Proper cleanup with defer, separate Shutdown/Close
-4. **✅ Thread Safety**: Mutex protects shared state, sync.Once for initialization
-5. **✅ Graceful Shutdown**: Separate shutdown context with timeout
-6. **✅ Error Wrapping**: Context preserved with `fmt.Errorf("%w", err)`
-7. **✅ Test Coverage**: Unit tests (validation) + Integration tests (mTLS)
-8. **✅ Documentation**: Inline docs, comprehensive guides, examples
+1. **Config Structs**: APIs use config structs for maintainability
+2. **Proper Validation**: Required fields validated with clear error messages
+3. **Resource Management**: Proper cleanup with defer, separate Shutdown/Close
+4. **Thread Safety**: Mutex protects shared state, sync.Once for initialization
+5. **Graceful Shutdown**: Separate shutdown context with timeout
+6. **Error Wrapping**: Context preserved with `fmt.Errorf("%w", err)`
+7. **Test Coverage**: Unit tests (validation) + Integration tests (mTLS)
+8. **Documentation**: Inline docs, comprehensive guides, examples
 
 ### Security
 
 This project implements defense-in-depth security with multiple layers:
 
 **Build-Time Security (Static Analysis)**:
-- ✅ **gosec**: Go code security scanning (0 issues)
-- ✅ **golangci-lint**: 22+ security-focused linters
-- ✅ **govulncheck**: Dependency vulnerability scanning
-- ✅ **Trivy**: Container image scanning
+- **gosec**: Go code security scanning (0 issues)
+- **golangci-lint**: 22+ security-focused linters
+- **govulncheck**: Dependency vulnerability scanning
+- **Trivy**: Container image scanning
 
 **Deploy-Time Security (Kubernetes)**:
-- ✅ **Pod Security Context**: runAsNonRoot, capabilities dropped, seccomp
-- ✅ **Network Policies**: mTLS-only traffic
-- ✅ **RBAC**: Minimal permissions
-- ✅ **Distroless Images**: Minimal attack surface
+- **Pod Security Context**: runAsNonRoot, capabilities dropped, seccomp
+- **Network Policies**: mTLS-only traffic
+- **RBAC**: Minimal permissions
+- **Distroless Images**: Minimal attack surface
 
 **Runtime Security (Falco)**:
-- ✅ **Syscall Monitoring**: Real-time threat detection with eBPF
-- ✅ **SPIRE Socket Protection**: Detect unauthorized Workload API access
-- ✅ **Container Behavior Analysis**: Shell spawning, file tampering, network anomalies
-- ✅ **Certificate Monitoring**: Detect unauthorized cert modifications
+- **Syscall Monitoring**: Real-time threat detection with eBPF
+- **SPIRE Socket Protection**: Detect unauthorized Workload API access
+- **Container Behavior Analysis**: Shell spawning, file tampering, network anomalies
+- **Certificate Monitoring**: Detect unauthorized cert modifications
 
 **Application Security (mTLS)**:
 1. **mTLS Required**: All connections use mutual TLS
@@ -831,9 +831,9 @@ This project implements defense-in-depth security with multiple layers:
 7. **SPIFFE Verification**: Server identity verified via SPIFFE ID, not DNS hostname
 
 **Security Tools & Documentation**:
-- 📁 [security/](security/) - Security tools and Falco integration
-- 📄 [security/FALCO_GUIDE.md](security/FALCO_GUIDE.md) - Runtime security monitoring guide
-- 📄 [security/README.md](security/README.md) - Complete security overview
+- [security/](security/) - Security tools and Falco integration
+- [security/FALCO_GUIDE.md](security/FALCO_GUIDE.md) - Runtime security monitoring guide
+- [security/README.md](security/README.md) - Complete security overview
 
 **Quick Security Check**:
 ```bash
@@ -852,14 +852,14 @@ sudo journalctl -u falco -f   # View runtime alerts
 The project uses the real `go-spiffe` SDK v2.6.0 for production deployments:
 
 **Public APIs**:
-- ✅ `pkg/zerotrustserver` - Zero-config mTLS server (recommended for most users)
-- ✅ `pkg/zerotrustclient` - Zero-config mTLS client (recommended for most users)
+- pkg/zerotrustserver` - Zero-config mTLS server (recommended for most users)
+- `pkg/zerotrustclient` - Zero-config mTLS client (recommended for most users)
 
 **Production adapters**:
-- ✅ `internal/adapters/inbound/identityserver` - mTLS server using go-spiffe SDK
-- ✅ `internal/adapters/outbound/spire` - SPIRE Workload API client adapters
-- ✅ `internal/adapters/outbound/httpclient` - mTLS HTTP client using go-spiffe SDK
-- ✅ Integration tests - Full mTLS with real SPIRE agent
+- `internal/adapters/inbound/identityserver` - mTLS server using go-spiffe SDK
+- `internal/adapters/outbound/spire` - SPIRE Workload API client adapters
+- `internal/adapters/outbound/httpclient` - mTLS HTTP client using go-spiffe SDK
+- Integration tests - Full mTLS with real SPIRE agent
 
 **Development adapters**:
 - `internal/adapters/outbound/inmemory` - In-memory SPIRE implementation for learning
