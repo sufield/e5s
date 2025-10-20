@@ -245,21 +245,22 @@ func NewIdentityDocumentFromComponents(...) *IdentityDocument
 - **Rationale**: Document without identity credential is meaningless
 
 ```go
-// Invariant: For X.509 documents, cert/privateKey/chain are non-nil
-// Location: NewIdentityDocumentFromComponents 
+// Invariant: For X.509 documents, cert and chain are non-nil
+// Location: NewIdentityDocumentFromComponents
 func NewIdentityDocumentFromComponents(...) *IdentityDocument
 ```
-- **Pre**: If `identityDocumentType == IdentityDocumentTypeX509`, then `cert != nil`, `privateKey != nil`, `chain != nil`
-- **Post**: X.509 document guarantees non-nil crypto material
-- **Rationale**: X.509 documents require certificate and key
+- **Pre**: If `identityDocumentType == IdentityDocumentTypeX509`, then `cert != nil` and `chain != nil`
+- **Post**: X.509 document guarantees non-nil certificate and chain
+- **Rationale**: X.509 documents require certificate; private keys are managed by adapters/DTO layer
+- **Note**: Private keys are NOT stored in domain model - managed by SDK's X509SVID or dto.Identity
 
 ```go
-// Invariant: For JWT documents, cert/privateKey/chain are nil
-// Location: NewIdentityDocumentFromComponents 
+// Invariant: JWT documents (if implemented) would not use X.509 certificates
+// Location: NewIdentityDocumentFromComponents
 func NewIdentityDocumentFromComponents(...) *IdentityDocument
 ```
-- **Pre**: If `identityDocumentType == IdentityDocumentTypeJWT`, then `cert == nil`, `privateKey == nil`, `chain == nil`
-- **Rationale**: JWT documents don't use X.509 certificates
+- **Note**: JWT support is not currently implemented in the domain model
+- **Rationale**: The system currently supports X.509-only for simplicity
 
 ```go
 // Invariant: IsExpired() delegates to IsExpiredAt(time.Now())

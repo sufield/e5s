@@ -97,22 +97,24 @@ fi
 
 success "Found SPIRE Agent: $AGENT_POD"
 
-# Verify socket exists (prefer agent pod check - works on any cluster)
+# Verify socket exists
+# Note: SPIRE agent may be distroless (no shell/test command), so we verify via node instead
 info "Checking Workload API socket availability..."
-if ! kubectl exec -n "$NS" "$AGENT_POD" -- test -S /tmp/spire-agent/public/api.sock >/dev/null 2>&1; then
-    error "Workload API socket not visible inside SPIRE Agent pod"
-    exit 1
-fi
-success "Workload API socket verified via agent pod"
 
-# Optional: Additional node check if running on Minikube
-if command -v minikube >/dev/null 2>&1; then
-    info "Minikube detected - verifying socket on node..."
-    if ! minikube ssh -- "test -S ${SOCKET_DIR}/${SOCKET_FILE} || test -d ${SOCKET_DIR}" >/dev/null 2>&1; then
-        error "Socket/directory missing on Minikube node: ${SOCKET_DIR}/${SOCKET_FILE}"
+# Try agent pod check first (works if agent has shell/test)
+if kubectl exec -n "$NS" "$AGENT_POD" -- test -S /tmp/spire-agent/public/api.sock >/dev/null 2>&1; then
+    success "Workload API socket verified via agent pod"
+elif command -v minikube >/dev/null 2>&1; then
+    # Fallback to node check for Minikube (works with distroless agent)
+    info "Agent pod check failed (likely distroless), checking via Minikube node..."
+    if ! minikube ssh -- "test -S ${SOCKET_DIR}/${SOCKET_FILE}" >/dev/null 2>&1; then
+        error "Socket missing on Minikube node: ${SOCKET_DIR}/${SOCKET_FILE}"
         exit 1
     fi
-    success "Socket verified on Minikube node"
+    success "Workload API socket verified via Minikube node"
+else
+    # For non-Minikube clusters, assume socket is available (hostPath should work)
+    info "Cannot verify socket (distroless agent, not Minikube), assuming hostPath is configured correctly"
 fi
 
 # Compile static test binary (no CGO, for distroless)
@@ -160,8 +162,28 @@ spec:
   initContainers:
     - name: setup
       image: busybox:stable-musl
-      # Wait for binary to be copied, then make it executable
-      command: ["sh", "-c", "while [ ! -f /work/integration.test ]; do sleep 0.2; done; chmod +x /work/integration.test"]
+      # Wait for binary to be copied with file size stability check
+      command:
+        - sh
+        - -c
+        - |
+          # Wait for file to appear
+          while [ ! -f /work/integration.test ]; do sleep 0.2; done
+          # Wait for file size to stabilize (copy complete)
+          PREV_SIZE=0
+          STABLE_COUNT=0
+          while [ \$STABLE_COUNT -lt 3 ]; do
+            CURR_SIZE=\$(stat -c%s /work/integration.test 2>/dev/null || echo 0)
+            if [ "\$CURR_SIZE" = "\$PREV_SIZE" ] && [ "\$CURR_SIZE" -gt 0 ]; then
+              STABLE_COUNT=\$((STABLE_COUNT + 1))
+            else
+              STABLE_COUNT=0
+            fi
+            PREV_SIZE=\$CURR_SIZE
+            sleep 0.3
+          done
+          chmod +x /work/integration.test
+          echo "Binary ready: \$(stat -c%s /work/integration.test) bytes"
       volumeMounts:
         - name: work
           mountPath: /work
@@ -177,7 +199,7 @@ spec:
       command: ["/work/integration.test"]
       args: ["-test.v", "-test.timeout=3m"]
       env:
-        - name: SPIFFE_ENDPOINT_SOCKET
+        - name: SPIRE_AGENT_SOCKET
           value: "unix:///spire-socket/${SOCKET_FILE}"
         - name: SPIRE_TRUST_DOMAIN
           value: "${TRUST_DOMAIN}"
@@ -215,11 +237,42 @@ if ! kubectl wait --for=condition=PodScheduled pod/"$POD_NAME" -n "$NS" --timeou
     exit 1
 fi
 
+# Wait for initContainer to be running (with better logging)
+info "Waiting for initContainer to start..."
+for i in {1..30}; do
+    INIT_STATE=$(kubectl get pod -n "$NS" "$POD_NAME" \
+        -o jsonpath='{.status.initContainerStatuses[?(@.name=="setup")].state}' 2>/dev/null || true)
+
+    if echo "$INIT_STATE" | grep -q "running"; then
+        success "Init container is running"
+        break
+    fi
+
+    if [ $i -eq 30 ]; then
+        error "Init container failed to start after 30s"
+        kubectl describe pod -n "$NS" "$POD_NAME" || true
+        exit 1
+    fi
+    sleep 1
+done
+
 # Copy test binary to initContainer (which is waiting for it)
+# Retry a few times in case kubectl cp timing issue
 info "Copying static test binary to pod..."
-if ! kubectl cp "$TESTBIN" "$NS"/"$POD_NAME":/work/integration.test -c setup 2>/dev/null; then
-    error "Failed to copy test binary to initContainer"
+COPY_SUCCESS=false
+for i in {1..5}; do
+    if kubectl cp "$TESTBIN" "$NS"/"$POD_NAME":/work/integration.test -c setup 2>&1; then
+        COPY_SUCCESS=true
+        break
+    fi
+    info "Copy attempt $i failed, retrying..."
+    sleep 1
+done
+
+if [ "$COPY_SUCCESS" != "true" ]; then
+    error "Failed to copy test binary to initContainer after 5 attempts"
     kubectl describe pod -n "$NS" "$POD_NAME" || true
+    kubectl logs -n "$NS" "$POD_NAME" -c setup 2>/dev/null || true
     exit 1
 fi
 
@@ -230,14 +283,30 @@ echo ""
 info "Running integration tests in distroless container..."
 echo ""
 
-# Stream logs from test container (it runs automatically)
-kubectl logs -n "$NS" "$POD_NAME" -c test -f 2>/dev/null || true
+# Wait for test container to start running
+for i in {1..30}; do
+    TEST_STATE=$(kubectl get pod -n "$NS" "$POD_NAME" \
+        -o jsonpath='{.status.containerStatuses[?(@.name=="test")].state}' 2>/dev/null || true)
+    if echo "$TEST_STATE" | grep -q "running"; then
+        break
+    fi
+    sleep 1
+done
+
+# Stream logs from test container (blocks until container exits)
+kubectl logs -n "$NS" "$POD_NAME" -c test -f 2>&1 || true
+
+# Wait for container to terminate completely
+echo ""
+info "Waiting for test container to terminate..."
+if ! kubectl wait --for=condition=ContainersReady=false pod/"$POD_NAME" -n "$NS" --timeout=180s >/dev/null 2>&1; then
+    info "Wait timed out or pod deleted"
+fi
 
 # Check exit code from terminated container state (with retry to avoid race)
-echo ""
 info "Checking test results..."
 EXIT_CODE=""
-for i in {1..10}; do
+for i in {1..20}; do
     EXIT_CODE="$(kubectl get pod -n "$NS" "$POD_NAME" \
         -o jsonpath='{.status.containerStatuses[?(@.name=="test")].state.terminated.exitCode}' 2>/dev/null || true)"
     [ -n "$EXIT_CODE" ] && break

@@ -245,7 +245,7 @@ trivy image mtls-server:scan
 
 ---
 
-## Quick Reference Table
+## Reference
 
 | Tool | Type | Scans | Finds | When | Command |
 |------|------|-------|-------|------|---------|
@@ -257,7 +257,7 @@ trivy image mtls-server:scan
 
 ---
 
-## Usage in This Project
+## Usage
 
 ### Pre-Deployment Checks
 
@@ -295,7 +295,7 @@ sudo journalctl -u falco-modern-bpf.service -f
 
 ---
 
-## Key Distinctions
+## Distinctions
 
 ### Static Analysis vs Runtime Monitoring
 
@@ -327,7 +327,7 @@ Think of it like home security:
   - Alerts when doors/windows open unexpectedly
   - Detects suspicious activity
 
-**You need both!**
+You need both.
 
 ---
 
@@ -384,7 +384,6 @@ Think of it like home security:
 
 ---
 
-**Last Updated**: 2025-10-19
 **Related Docs**:
 - `security/README.md` - Security overview
 - `security/FALCO_GUIDE.md` - Detailed Falco documentation

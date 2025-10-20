@@ -1,10 +1,8 @@
 # Manual Testing Guide - mTLS Identity Server & Client
 
-This guide walks you through manually testing the mTLS identity server and client functionality with SPIRE.
+This guide walks you through manual testing of the mTLS identity server and client functionality with SPIRE.
 
 ## Prerequisites
-
-Before testing, ensure you have:
 
 - Go 1.25 or later
 - SPIRE server and agent installed
@@ -188,12 +186,12 @@ package main
 import (
     "context"
     "fmt"
+    "io"
     "log"
-    "net/http"
+    "time"
 
     "github.com/pocket/hexagon/spire/internal/adapters/outbound/httpclient"
     "github.com/pocket/hexagon/spire/internal/ports"
-    "github.com/spiffe/go-spiffe/v2/spiffeid"
 )
 
 func main() {
@@ -235,6 +233,8 @@ SPIFFE ID: spiffe://example.org/client
 Trust Domain: example.org
 Path: /client
 ```
+
+**Note**: Private keys are managed by the SDK's X509SVID and are not exposed in the domain model or HTTP responses.
 
 ### Test 4: Graceful Shutdown
 

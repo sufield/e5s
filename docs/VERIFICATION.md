@@ -29,7 +29,7 @@ strings bin/spire-server | grep "SPIREClient"
 
 ## Unit Tests
 
-**Important**: Standard unit tests use in-memory implementations, not live SPIRE.
+Standard unit tests use in-memory implementations, not live SPIRE.
 
 ```bash
 # Run all unit tests (in-memory adapters only)
@@ -78,7 +78,7 @@ go test -tags=integration ./internal/adapters/outbound/spire/... -v
 
 ### Integration Test Architecture
 
-Tests run **inside Kubernetes cluster** with access to SPIRE agent socket:
+Tests run inside Kubernetes cluster with access to SPIRE agent socket:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -111,7 +111,7 @@ Tests run **inside Kubernetes cluster** with access to SPIRE agent socket:
 ```
 
 - Test pod uses `hostPath` volume to access SPIRE agent socket on Minikube node
-- Tests execute **inside the pod** where socket is accessible
+- Tests execute inside the pod where socket is accessible
 - No socket exposure to host machine needed
 
 ### Manual SPIRE Tests

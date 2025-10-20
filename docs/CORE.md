@@ -639,9 +639,10 @@ if !doc.IsValid() {
 }
 
 // Access components
-cert := doc.Cert()
-key := doc.PrivateKey()
-expiration := doc.Expiration()
+cert := doc.Certificate()
+expiration := doc.ExpiresAt()
+// Note: Private keys are managed by adapters (SDK's X509SVID or dto.Identity)
+// The domain IdentityDocument is purely descriptive (certificate + expiration)
 ```
 
 ---

@@ -175,7 +175,6 @@ SPIFFE Verifiable Identity Document - the issued credential.
 doc := domain.NewIdentityDocumentFromComponents(
     identityCredential,
     cert,       // *x509.Certificate
-    privateKey, // crypto.Signer
     chain,      // []*x509.Certificate
 )
 
@@ -183,6 +182,11 @@ doc.IsValid() // Checks time validity
 doc.IsExpired() // Checks expiration
 doc.ExpiresAt() // Returns expiration time
 doc.IdentityCredential() // Returns identity
+doc.Certificate() // Returns the certificate
+
+// Note: Private keys are NOT part of the domain model
+// - In production: Managed by SDK's X509SVID type
+// - In dev/testing: Stored in dto.Identity at the DTO layer
 ```
 
 Uses `crypto/x509.Certificate` from standard library (acceptable as it's not an external SDK).
@@ -190,7 +194,7 @@ Uses `crypto/x509.Certificate` from standard library (acceptable as it's not an 
 **Invariants**:
 
 - IdentityCredential is never nil for valid document
-- For X.509 documents, cert/privateKey/chain are non-nil
+- For X.509 documents, cert and chain are non-nil (private keys managed by adapters/DTO)
 - IsExpired() iff time.Now().After(expiresAt)
 - Immutable after creation
 - See [INVARIANTS.md](INVARIANTS.md) for complete list
@@ -476,10 +480,11 @@ func TranslateX509SVIDToIdentityDocument(svid *x509svid.SVID) (*domain.IdentityD
     }
     leaf := svid.Certificates[0]
 
-    // Validate private key is usable
-    signer, ok := svid.PrivateKey.(crypto.Signer)
-    if !ok || signer == nil {
-        return nil, fmt.Errorf("%w: invalid private key", domain.ErrIdentityDocumentInvalid)
+    // Validate private key is usable (adapter validates SDK's key, but doesn't store in domain)
+    // Note: Private keys remain in the SDK's X509SVID, NOT in domain.IdentityDocument
+    signer := svid.PrivateKey
+    if signer == nil {
+        return nil, fmt.Errorf("%w: missing/invalid private key", domain.ErrIdentityDocumentInvalid)
     }
 
     // Verify private key matches certificate
@@ -497,11 +502,10 @@ func TranslateX509SVIDToIdentityDocument(svid *x509svid.SVID) (*domain.IdentityD
     chain := make([]*x509.Certificate, len(svid.Certificates))
     copy(chain, svid.Certificates)
 
-    // Create domain identity document
+    // Create domain identity document (no private key - managed by adapter)
     return domain.NewIdentityDocumentFromComponents(
         identityCredential,
         leaf,
-        signer,
         chain,
     )
 }

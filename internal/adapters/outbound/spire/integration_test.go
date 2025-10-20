@@ -63,7 +63,7 @@ func TestFetchX509SVID(t *testing.T) {
 	// Verify document properties
 	assert.NotNil(t, doc.IdentityCredential(), "Identity credential should not be nil")
 	assert.NotNil(t, doc.Certificate(), "Certificate should not be nil")
-	assert.NotNil(t, doc.PrivateKey(), "Private key should not be nil")
+	// Note: PrivateKey is managed by the SDK's X509SVID, not the domain IdentityDocument
 	assert.True(t, doc.IsValid(), "Document should be valid")
 	assert.False(t, doc.IsExpired(), "Document should not be expired")
 
