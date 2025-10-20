@@ -13,7 +13,7 @@ import (
 
 // rootHandler returns "Success!" only if the request context carries an identity.
 func rootHandler(w http.ResponseWriter, r *http.Request) {
-	id, ok := zerotrustserver.IdentityFrom(r.Context())
+	id, ok := zerotrustserver.PeerIdentity(r.Context())
 	if !ok {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return

@@ -29,12 +29,12 @@ func WithIdentity(ctx context.Context, id Identity) context.Context {
 	return context.WithValue(ctx, identityKey{}, id)
 }
 
-// IdentityFrom retrieves the Identity from the context.
+// PeerIdentity retrieves the Identity from the context.
 // Returns (identity, true) if present, (zero, false) otherwise.
 //
 // This is the primary way application handlers access authenticated identity.
 // Handlers depend on ports, not on specific adapters.
-func IdentityFrom(ctx context.Context) (Identity, bool) {
+func PeerIdentity(ctx context.Context) (Identity, bool) {
 	id, ok := ctx.Value(identityKey{}).(Identity)
 	return id, ok
 }

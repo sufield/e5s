@@ -25,8 +25,8 @@ type Identity = ports.Identity
 
 // Public accessor for handlers to read the authenticated identity.
 // This keeps WithIdentity internal so users cannot forge identities.
-func IdentityFrom(ctx context.Context) (Identity, bool) {
-    return ports.IdentityFrom(ctx)
+func PeerIdentity(ctx context.Context) (Identity, bool) {
+    return ports.PeerIdentity(ctx)
 }
 ```
 
@@ -35,16 +35,16 @@ func IdentityFrom(ctx context.Context) (Identity, bool) {
 ### Why this fits hexagonal architecture
 
 * **One contract** (`ports.Identity`) = clear boundary between adapters and app code.
-* **Facade re-export** = a clean public API (`zerotrustserver.IdentityFrom(ctx)`) for developers, without exposing `internal/ports` directly.
+* **Facade re-export** = a clean public API (`zerotrustserver.PeerIdentity(ctx)`) for developers, without exposing `internal/ports` directly.
 * **No duplication** = less drift, fewer docs to maintain.
 
 ### What to delete/change
 
-* Remove the separate `Identity()` func in `pkg/zerotrustserver` that duplicates behavior. Replace it with the alias + `IdentityFrom` above.
+* Remove the separate `Identity()` func in `pkg/zerotrustserver` that duplicates behavior. Replace it with the alias + `PeerIdentity` above.
 * Ensure all examples import only `pkg/zerotrustserver` for handler code:
 
   ```go
-  id, ok := zerotrustserver.IdentityFrom(r.Context())
+  id, ok := zerotrustserver.PeerIdentity(r.Context())
   ```
 
 This gives you a single Identity definition, a tidy public API, and keeps your hexagonal boundaries intact.

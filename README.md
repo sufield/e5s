@@ -1,6 +1,6 @@
-# SPIRE mTLS Library
+# Identity Based Authentication Library
 
-A mTLS authentication library using SPIFFE/SPIRE for service-to-service communication, built with hexagonal architecture.
+An identity based authentication library using SPIFFE/SPIRE for service-to-service communication, built with hexagonal architecture.
 
 ## Overview
 
@@ -50,7 +50,7 @@ import (
 
 // rootHandler returns "Success!" only if the request context carries an identity.
 func rootHandler(w http.ResponseWriter, r *http.Request) {
-    id, ok := zerotrustserver.IdentityFrom(r.Context())
+    id, ok := zerotrustserver.PeerIdentity(r.Context())
     if !ok {
         http.Error(w, "unauthorized", http.StatusUnauthorized)
         return
@@ -176,7 +176,7 @@ func main() {
 
     // Register handlers
     server.Handle("/api/hello", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        id, ok := ports.IdentityFrom(r.Context())
+        id, ok := ports.PeerIdentity(r.Context())
         if !ok {
             http.Error(w, "Unauthorized", http.StatusUnauthorized)
             return
@@ -252,7 +252,7 @@ func main() {
 
     // Register handlers
     server.Handle("/api/hello", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        id, ok := ports.IdentityFrom(r.Context())
+        id, ok := ports.PeerIdentity(r.Context())
         if !ok {
             http.Error(w, "Unauthorized", http.StatusUnauthorized)
             return
@@ -489,9 +489,9 @@ type Identity struct {
     Path        string  // e.g., "/client"
 }
 
-// IdentityFrom retrieves the Identity from the request context
+// PeerIdentity retrieves the Identity from the request context
 // Returns (identity, true) if present, (zero, false) otherwise
-func IdentityFrom(ctx context.Context) (Identity, bool)
+func PeerIdentity(ctx context.Context) (Identity, bool)
 
 // WithIdentity stores an Identity in the context (used by adapters)
 func WithIdentity(ctx context.Context, id Identity) context.Context
@@ -610,7 +610,7 @@ func TestMTLSAuthentication(t *testing.T) {
 
     // Register handler
     server.Handle("/test", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        id, ok := ports.IdentityFrom(r.Context())
+        id, ok := ports.PeerIdentity(r.Context())
         if !ok {
             http.Error(w, "Unauthorized", http.StatusUnauthorized)
             return
@@ -771,7 +771,7 @@ The library only authenticates clients via SPIFFE IDs. Authorization decisions a
 
 ```go
 server.Handle("/admin", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-    id, ok := ports.IdentityFrom(r.Context())
+    id, ok := ports.PeerIdentity(r.Context())
     if !ok {
         http.Error(w, "Unauthorized", http.StatusUnauthorized)
         return

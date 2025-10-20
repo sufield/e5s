@@ -108,7 +108,7 @@ Handlers access authenticated identity using port-level abstractions:
 ```go
 func handler(w http.ResponseWriter, r *http.Request) {
     // Use port-level identity accessor (adapter-agnostic)
-    id, ok := ports.IdentityFrom(r.Context())
+    id, ok := ports.PeerIdentity(r.Context())
     if !ok {
         http.Error(w, "No identity", http.StatusInternalServerError)
         return
