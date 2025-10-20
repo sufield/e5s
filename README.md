@@ -83,6 +83,61 @@ func main() {
 - Health endpoint (auto-mounted at `/health`)
 - HTTP timeouts (sensible defaults)
 
+### Zero-Config mTLS Client
+
+The simplest way to create an mTLS client - just specify the server's identity:
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "io"
+    "log"
+
+    "github.com/pocket/hexagon/spire/pkg/zerotrustclient"
+)
+
+func main() {
+    ctx := context.Background()
+
+    // Create zero-config client - only specify the server's SPIFFE ID
+    client, err := zerotrustclient.New(ctx, &zerotrustclient.Config{
+        ServerID: "spiffe://example.org/server",
+    })
+    if err != nil {
+        log.Fatalf("Failed to create client: %v", err)
+    }
+    defer client.Close()
+
+    // Make a GET request (hostname doesn't matter - SPIFFE ID is verified)
+    resp, err := client.Get(ctx, "https://localhost:8443/api/hello")
+    if err != nil {
+        log.Fatalf("Request failed: %v", err)
+    }
+    defer resp.Body.Close()
+
+    body, _ := io.ReadAll(resp.Body)
+    fmt.Printf("Response: %s\n", body)
+}
+```
+
+**What's auto-detected?**
+- SPIRE agent socket (checks `SPIFFE_ENDPOINT_SOCKET` env var and common paths)
+- TLS configuration (enforces TLS 1.3+ with mTLS)
+- HTTP timeouts (sensible defaults: 10s read/write, 120s idle)
+- Certificate rotation (automatic via SPIRE)
+
+**Server verification options:**
+```go
+// Option 1: Exact server ID (recommended for production)
+Config{ServerID: "spiffe://example.org/server"}
+
+// Option 2: Accept any server in trust domain
+Config{ServerTrustDomain: "example.org"}
+```
+
 ### Advanced Configuration
 
 For fine-grained control, use the lower-level adapter API:
@@ -869,6 +924,7 @@ The project uses the real `go-spiffe` SDK v2.6.0 for production deployments:
 
 **Public APIs**:
 - ✅ `pkg/zerotrustserver` - Zero-config mTLS server (recommended for most users)
+- ✅ `pkg/zerotrustclient` - Zero-config mTLS client (recommended for most users)
 
 **Production adapters**:
 - ✅ `internal/adapters/inbound/identityserver` - mTLS server using go-spiffe SDK
