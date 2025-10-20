@@ -689,15 +689,53 @@ This implementation follows Go best practices and production-ready patterns:
 7. **✅ Test Coverage**: Unit tests (validation) + Integration tests (mTLS)
 8. **✅ Documentation**: Inline docs, comprehensive guides, examples
 
-### Security Considerations
+### Security
 
-1. **mTLS Required**: All connections must use mutual TLS
+This project implements defense-in-depth security with multiple layers:
+
+**Build-Time Security (Static Analysis)**:
+- ✅ **gosec**: Go code security scanning (0 issues)
+- ✅ **golangci-lint**: 22+ security-focused linters
+- ✅ **govulncheck**: Dependency vulnerability scanning
+- ✅ **Trivy**: Container image scanning
+
+**Deploy-Time Security (Kubernetes)**:
+- ✅ **Pod Security Context**: runAsNonRoot, capabilities dropped, seccomp
+- ✅ **Network Policies**: mTLS-only traffic
+- ✅ **RBAC**: Minimal permissions
+- ✅ **Distroless Images**: Minimal attack surface
+
+**Runtime Security (Falco)**:
+- ✅ **Syscall Monitoring**: Real-time threat detection with eBPF
+- ✅ **SPIRE Socket Protection**: Detect unauthorized Workload API access
+- ✅ **Container Behavior Analysis**: Shell spawning, file tampering, network anomalies
+- ✅ **Certificate Monitoring**: Detect unauthorized cert modifications
+
+**Application Security (mTLS)**:
+1. **mTLS Required**: All connections use mutual TLS
 2. **Identity-Based**: Authentication via SPIFFE IDs, not passwords
 3. **Certificate Rotation**: Automatic via SPIRE (zero downtime)
 4. **No Authorization**: Library only authenticates - app decides access
 5. **Timeout Configuration**: All operations have configurable timeouts
-6. **TLS 1.3**: Minimum TLS version enforced; cipher suites negotiated per TLS 1.3
+6. **TLS 1.3**: Minimum TLS version enforced
 7. **SPIFFE Verification**: Server identity verified via SPIFFE ID, not DNS hostname
+
+**Security Tools & Documentation**:
+- 📁 [security/](security/) - Security tools and Falco integration
+- 📄 [security/FALCO_GUIDE.md](security/FALCO_GUIDE.md) - Runtime security monitoring guide
+- 📄 [security/README.md](security/README.md) - Complete security overview
+
+**Quick Security Check**:
+```bash
+# Run all security scans
+gosec ./...                    # Go code security (0 issues expected)
+govulncheck ./...              # Dependency vulnerabilities
+golangci-lint run              # Comprehensive linting
+
+# Install and monitor with Falco (requires sudo)
+sudo bash security/install-falco.sh
+sudo journalctl -u falco -f   # View runtime alerts
+```
 
 ## SPIRE Integration
 
