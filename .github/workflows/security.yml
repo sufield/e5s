@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: read
+  security-events: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -37,12 +38,11 @@ jobs:
         run: go mod download
 
       # Dependency vulnerability scanning (SARIF)
-      - name: govulncheck
-        uses: golang/govulncheck-action@v1
-        with:
-          go-version-file: 'go.mod'
-          vulncheck-version: latest
-          args: ./...
+      # Install and run govulncheck directly to avoid action input issues
+      - name: govulncheck (SARIF)
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck -scan package ./...
         continue-on-error: false
 
       # Module hygiene (optional gate; keep if you want drift to fail PRs)
@@ -53,12 +53,12 @@ jobs:
           go mod verify
           git diff --exit-code -- go.mod go.sum || (echo "::error::go.mod/go.sum changed after tidy" && exit 1)
 
-      # Lint (security + style via your .golangci.yml if present)
+      # Lint - compile golangci-lint with runner Go to avoid build mismatch
+      # This ensures the binary is built with the same Go version as the project
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
-          args: --timeout=5m
+        run: |
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+          golangci-lint run --timeout=5m
 
       # Security SAST (SARIF, do not fail the job by default for demo visibility)
       - name: gosec (SARIF)
@@ -85,6 +85,26 @@ jobs:
           go tool cover -func=coverage.out | tail -1 >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
 
+      # Check if SARIF files exist before uploading
+      - name: Check gosec SARIF
+        id: check_gosec
+        run: |
+          if [ -f gosec.sarif ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check gitleaks SARIF
+        id: check_gitleaks
+        run: |
+          if [ -f gitleaks.sarif ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      # Upload artifacts (optional files use wildcard to avoid failures)
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         if: always()
@@ -95,18 +115,19 @@ jobs:
             gosec.sarif
             gitleaks.sarif
           retention-days: 30
+          if-no-files-found: warn
 
-      # Publish SARIF to GitHub code scanning
+      # Publish SARIF to GitHub code scanning (only if files exist)
       - name: Upload gosec SARIF
+        if: steps.check_gosec.outputs.exists == 'true'
         uses: github/codeql-action/upload-sarif@v3
-        if: always()
         with:
           sarif_file: gosec.sarif
           category: gosec
 
       - name: Upload gitleaks SARIF
+        if: steps.check_gitleaks.outputs.exists == 'true'
         uses: github/codeql-action/upload-sarif@v3
-        if: always()
         with:
           sarif_file: gitleaks.sarif
           category: gitleaks
