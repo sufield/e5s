@@ -1,24 +1,25 @@
 # Integration Test Optimization
 
-## Problem That Was Solved
+## Problem
 
-Integration tests need to access the SPIRE Agent socket at `/tmp/spire-agent/public/api.sock`, which lives **inside the Minikube node**, not on the host machine.
+Integration tests need to access the SPIRE Agent socket at `/tmp/spire-agent/public/api.sock`, which lives inside the Minikube node, not on the host machine.
 
-**Solution:** Run tests inside Kubernetes where the socket exists (Option A from architecture review).
+**Solution:** 
+
+Run tests inside Kubernetes where the socket exists (Option A from architecture review).
 
 ## Recent Security & Robustness Improvements
 
-**What was fixed (2025-10-16 - 2025-10-19):**
-- ✅ **Removed unnecessary privileges** - Dropped `hostPID` and `hostNetwork` (not needed for socket access)
-- ✅ **Tolerant label selector** - Works with multiple label patterns (`app.kubernetes.io/name`, `app`, `name`)
-- ✅ **Parameterized configuration** - All settings configurable via environment variables
-- ✅ **Stricter shell safety** - `set -Eeuo pipefail` with trap for guaranteed cleanup
-- ✅ **Explicit permissions** - `chmod +x` after binary copy
-- ✅ **Pod reuse option** - `KEEP=true` for faster iteration (12x faster)
-- ✅ **Resource limits** - CPU/memory constraints on test pods
-- ✅ **Better error handling** - Detailed failure messages and automatic cleanup
-- ✅ **Cross-platform support** - Auto-detects node architecture (ARM/x86)
-- ✅ **Optimized by default** - Pre-compiled binary approach is now the standard
+- **Removed unnecessary privileges** - Dropped `hostPID` and `hostNetwork` (not needed for socket access)
+- **Tolerant label selector** - Works with multiple label patterns (`app.kubernetes.io/name`, `app`, `name`)
+- **Parameterized configuration** - All settings configurable via environment variables
+- **Stricter shell safety** - `set -Eeuo pipefail` with trap for guaranteed cleanup
+- **Explicit permissions** - `chmod +x` after binary copy
+- **Pod reuse option** - `KEEP=true` for faster iteration (12x faster)
+- **Resource limits** - CPU/memory constraints on test pods
+- **Better error handling** - Detailed failure messages and automatic cleanup
+- **Cross-platform support** - Auto-detects node architecture (ARM/x86)
+- **Optimized by default** - Pre-compiled binary approach is now the standard
 
 ## Three Implementations
 
@@ -30,26 +31,26 @@ make test-integration  # Uses scripts/run-integration-tests.sh
 ```
 
 **How it works:**
-1. **Compiles test binary locally** (`go test -c`) - uses local Go cache
+1. Compiles test binary locally (`go test -c`) - uses local Go cache
 2. Creates pod with minimal `debian:bookworm-slim` image (~80MB)
 3. Mounts socket via `hostPath` (read-only)
-4. Copies **only test binary** (~10MB)
+4. Copies only test binary (~10MB)
 5. Runs binary directly in pod
 6. Cleans up automatically
 
 **Security improvements:**
-- ✅ No `hostPID` or `hostNetwork`
-- ✅ Read-only socket mount
-- ✅ Resource limits enforced
-- ✅ Tolerant label selectors (works with any SPIRE deployment)
-- ✅ `runAsNonRoot: true`
-- ✅ `allowPrivilegeEscalation: false`
+- No `hostPID` or `hostNetwork`
+- Read-only socket mount
+- Resource limits enforced
+- Tolerant label selectors (works with any SPIRE deployment)
+- `runAsNonRoot: true`
+- `allowPrivilegeEscalation: false`
 
 **When to use:**
-- ✅ Standard development workflow
-- ✅ Repeated test runs
-- ✅ Local testing
-- ✅ Quick verification
+- Standard development workflow
+- Repeated test runs
+- Local testing
+- Quick verification
 
 **Speed:** ~15 seconds (first run), ~15 seconds (repeat)
 
@@ -63,7 +64,7 @@ make test-integration-ci  # Uses scripts/run-integration-tests-ci.sh
 ```
 
 **How it works:**
-1. **Compiles static test binary** (`CGO_ENABLED=0 go test -c`)
+1. Compiles static test binary (`CGO_ENABLED=0 go test -c`)
 2. Creates pod with `gcr.io/distroless/static-debian12:nonroot` (~25MB)
 3. Mounts socket via `hostPath` (read-only)
 4. Copies static binary (~10MB)
@@ -71,19 +72,19 @@ make test-integration-ci  # Uses scripts/run-integration-tests-ci.sh
 6. Cleans up automatically
 
 **Security hardening:**
-- ✅ Distroless (no shell, no package manager, minimal attack surface)
-- ✅ Static binary (no dependencies)
-- ✅ `runAsNonRoot: true`
-- ✅ `readOnlyRootFilesystem: true`
-- ✅ `allowPrivilegeEscalation: false`
-- ✅ Capabilities dropped (`drop: ["ALL"]`)
-- ✅ Seccomp profile enabled
+- Distroless (no shell, no package manager, minimal attack surface)
+- Static binary (no dependencies)
+- `runAsNonRoot: true`
+- `readOnlyRootFilesystem: true`
+- `allowPrivilegeEscalation: false`
+- Capabilities dropped (`drop: ["ALL"]`)
+- Seccomp profile enabled
 
 **When to use:**
-- ✅ Production CI/CD pipelines
-- ✅ Security-critical environments
-- ✅ Compliance requirements
-- ✅ GitHub Actions, GitLab CI, etc.
+- Production CI/CD pipelines
+- Security-critical environments
+- Compliance requirements
+- GitHub Actions, GitLab CI, etc.
 
 **Speed:** ~20 seconds
 
@@ -103,10 +104,10 @@ make test-integration-keep  # Reuses pod for faster iteration
 4. Manual cleanup: `kubectl delete pod -n spire-system spire-integration-test`
 
 **When to use:**
-- ✅ Rapid local development
-- ✅ Testing multiple times in a row
-- ✅ Debugging test issues
-- ✅ Quick edit-test cycles
+- Rapid local development
+- Testing multiple times in a row
+- Debugging test issues
+- Quick edit-test cycles
 
 **Speed:**
 - First run: ~15 seconds
@@ -202,18 +203,18 @@ integration-test:
 
 ## Architecture Review Context
 
-This is **Option A** from the architecture review:
+This is Option A from the architecture review:
 
-> **Option A — Run the tests inside Kubernetes (recommended)**
+> Option A — Run the tests inside Kubernetes (recommended)
 >
 > Run your integration tests in a pod that mounts the agent socket via `hostPath`.
-> Compile tests to a single binary and run it in the pod for **speed and determinism**.
+> Compile tests to a single binary and run it in the pod for speed and determinism.
 
 **Why Option A was chosen:**
 - ❌ Option B (test Job): Requires building Docker image - too heavyweight
 - ❌ Option C (prod binary): Only tests binary, not `go test` suite
 - ❌ Option D (UDS bridging): Fragile, negates Workload API design
-- ✅ **Option A**: Clean, fast, works with existing test suite
+- ✅ Option A: Clean, fast, works with existing test suite
 
 ## Implementation Details
 
@@ -236,11 +237,11 @@ kubectl cp /tmp/spire-integration.test spire-system/spire-integration-test:/work
 ```
 
 **Features:**
-- ✅ Auto-detects node architecture (ARM/x86)
-- ✅ Static binary for reliability
-- ✅ Test timeout (3 minutes) prevents hangs
-- ✅ Resource limits (500m CPU, 256Mi RAM)
-- ✅ Security context hardening
+- Auto-detects node architecture (ARM/x86)
+- Static binary for reliability
+- Test timeout (3 minutes) prevents hangs
+- Resource limits (500m CPU, 256Mi RAM)
+- Security context hardening
 
 ### CI Script (`run-integration-tests-ci.sh`)
 
@@ -262,11 +263,11 @@ args: ["-test.v", "-test.timeout=3m"]
 ```
 
 **Security features:**
-- ✅ Distroless base (minimal attack surface)
-- ✅ No shell or package manager
-- ✅ `readOnlyRootFilesystem: true`
-- ✅ All capabilities dropped
-- ✅ Seccomp profile enabled
+- Distroless base (minimal attack surface)
+- No shell or package manager
+- `readOnlyRootFilesystem: true`
+- All capabilities dropped
+- Seccomp profile enabled
 
 ## Switching Between Implementations
 

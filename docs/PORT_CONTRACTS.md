@@ -684,7 +684,7 @@ When implementing a new adapter:
 
 ## See Also
 
-- **[PROJECT_STATUS.md](PROJECT_STATUS.md)** - Current project status and architecture overview
+- **[PRODUCTION_VS_DEVELOPMENT.md](PRODUCTION_VS_DEVELOPMENT.md)** - Current project status and architecture overview
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - Hexagonal architecture patterns and principles
 - **`internal/ports/*.go`** - Actual port interface definitions
 

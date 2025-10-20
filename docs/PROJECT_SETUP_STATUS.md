@@ -1,18 +1,14 @@
-## ✅ Completed Setup
-
 ### 1. Makefile Infrastructure
 
-**Status:** ✅ **Production Ready**
-
 **What's Done:**
-- ✅ Shell strictness flags (`-eu -o pipefail`)
-- ✅ Tool dependency management with separate groups (core, k8s, lint, misc)
-- ✅ Automatic prerequisite checks (`check-prereqs-*`)
-- ✅ Fixed echo newlines (replaced with `printf`)
-- ✅ Dedicated minikube-status script
-- ✅ Improved test-prod-build (uses `go list -deps` instead of `nm`)
-- ✅ Automatic SPIRE readiness checks for integration tests
-- ✅ Complete .PHONY target declarations
+- Shell strictness flags (`-eu -o pipefail`)
+- Tool dependency management with separate groups (core, k8s, lint, misc)
+- Automatic prerequisite checks (`check-prereqs-*`)
+- Fixed echo newlines (replaced with `printf`)
+- Dedicated minikube-status script
+- Improved test-prod-build (uses `go list -deps` instead of `nm`)
+- Automatic SPIRE readiness checks for integration tests
+- Complete .PHONY target declarations
 
 **Targets:**
 ```bash
@@ -33,14 +29,12 @@ make check-spire-ready       # Verify SPIRE is ready for tests
 
 ### 2. gopls Configuration
 
-**Status:** ✅ **Correct and Optimized**
-
 **What's Done:**
-- ✅ Removed duplicate build tag definitions (was in both `buildFlags` and `env.GOFLAGS`)
-- ✅ Fixed completion settings location (`completion.usePlaceholders`, not `ui.completion.usePlaceholders`)
-- ✅ Added directory filters for faster analysis (`-vendor`, `-node_modules`, `-.git`)
-- ✅ Created separate dev/prod configuration profiles
-- ✅ Comprehensive editor setup documentation
+- Removed duplicate build tag definitions (was in both `buildFlags` and `env.GOFLAGS`)
+- Fixed completion settings location (`completion.usePlaceholders`, not `ui.completion.usePlaceholders`)
+- Added directory filters for faster analysis (`-vendor`, `-node_modules`, `-.git`)
+- Created separate dev/prod configuration profiles
+- Comprehensive editor setup documentation
 
 **Active Configurations:**
 
@@ -79,17 +73,14 @@ ui:
 
 ### 3. Integration Testing
 
-**Status:** ✅ **Production Ready with Multiple Variants**
-
-**What's Done:**
-- ✅ Integration tests run inside Kubernetes pods with socket access
-- ✅ Automatic workload registration
-- ✅ Automatic SPIRE readiness checks
-- ✅ Four implementations (standard, optimized, CI-hardened, keep)
-- ✅ Full cleanup automation
-- ✅ **Security hardened** (removed unnecessary privileges, added resource limits)
-- ✅ **Parameterized** (all settings via environment variables)
-- ✅ **Tolerant selectors** (works with different SPIRE label schemes)
+- Integration tests run inside Kubernetes pods with socket access
+- Automatic workload registration
+- Automatic SPIRE readiness checks
+- Four implementations (standard, optimized, CI-hardened, keep)
+- Full cleanup automation
+- Security hardened (removed unnecessary privileges, added resource limits)
+- Parameterized (all settings via environment variables)
+- Tolerant selectors (works with different SPIRE label schemes)
 
 **Implementations:**
 
@@ -97,28 +88,28 @@ ui:
 - Full project copy, good for debugging
 - Time: ~30-60 seconds
 
-**Optimized: `make test-integration-fast`** ⭐ **Recommended**
+**Optimized: `make test-integration-fast`** **Recommended**
 - Pre-compiled binary, hardened security
 - Time: ~10-15 seconds
 
-**CI/Distroless: `make test-integration-ci`** 🔒 **Maximum Security**
+**CI/Distroless: `make test-integration-ci`** **Maximum Security**
 - Static binary + distroless image
 - Security hardening: `runAsNonRoot`, `readOnlyRootFilesystem`, capabilities dropped
 - Time: ~10-15 seconds
 
-**Fast Iteration: `make test-integration-keep`** ⚡ **Fastest**
+**Fast Iteration: `make test-integration-keep`** **Fastest**
 - Reuses pod between runs
 - First run: ~10-15 seconds
 - Subsequent: ~2-3 seconds!
 
 **Test Coverage:**
 ```go
-✅ TestSPIREClientConnection       // Connection to SPIRE Agent
-✅ TestFetchX509SVID                // X.509 SVID fetching
-✅ TestFetchX509Bundle              // Trust bundle fetching
-✅ TestSPIREClientReconnect         // Reconnection handling
-✅ TestSPIREClientReconnectFailure  // Error handling
-✅ TestSPIREClientTimeout           // Timeout handling
+TestSPIREClientConnection       // Connection to SPIRE Agent
+TestFetchX509SVID                // X.509 SVID fetching
+TestFetchX509Bundle              // Trust bundle fetching
+TestSPIREClientReconnect         // Reconnection handling
+TestSPIREClientReconnectFailure  // Error handling
+TestSPIREClientTimeout           // Timeout handling
 ```
 
 **Files:**
@@ -133,15 +124,6 @@ ui:
 
 ### 4. Documentation
 
-**Status:** ✅ **Clean and Current**
-
-**What's Done:**
-- ✅ Removed outdated `INTEGRATION_TESTING.md` (304 lines of solved problems)
-- ✅ Updated README.md testing section with current workflow
-- ✅ Created EDITOR_SETUP.md with comprehensive gopls guide
-- ✅ Created INTEGRATION_TEST_OPTIMIZATION.md explaining implementations
-- ✅ TEST_ARCHITECTURE.md already comprehensive and accurate
-
 **Documentation Structure:**
 
 **Core Documentation:**
@@ -149,7 +131,7 @@ ui:
 - `docs/TEST_ARCHITECTURE.md` - Test structure and patterns
 - `docs/EDITOR_SETUP.md` - Editor configuration guide
 - `docs/INTEGRATION_TEST_OPTIMIZATION.md` - Integration test implementations
-- `docs/PROJECT_STATUS.md` - Production vs educational components
+- `docs/PRODUCTION_VS_DEVELOPMENT.md` - Production vs educational components
 - `docs/ARCHITECTURE_REVIEW.md` - Design decisions and port placement
 - `docs/CONTROL_PLANE.md` - SPIRE deployment guide
 
@@ -160,15 +142,12 @@ ui:
 
 ### 5. Test Infrastructure
 
-**Status:** ✅ **Production Ready**
-
-**What's Done:**
-- ✅ Unit tests run without dependencies (fast feedback)
-- ✅ Integration tests with automatic prerequisites
-- ✅ SPIRE infrastructure automated (Minikube + Helm)
-- ✅ Proper test isolation (build tags: `integration`)
-- ✅ Automatic workload registration
-- ✅ Graceful test skipping when SPIRE unavailable
+- Unit tests run without dependencies (fast feedback)
+- Integration tests with automatic prerequisites
+- SPIRE infrastructure automated (Minikube + Helm)
+- Proper test isolation (build tags: `integration`)
+- Automatic workload registration
+- Graceful test skipping when SPIRE unavailable
 
 **Test Workflow:**
 ```bash
@@ -183,11 +162,9 @@ make test-integration-fast         # ~10-15s (optimized)
 
 ---
 
-## ⚠️ Pending / Optional Improvements
+## Pending / Optional Improvements
 
 ### 1. Integration Testing - Option B Implementation
-
-**Status:** ⚠️ **Optional Enhancement**
 
 **What's Pending:**
 - Package test binary into Docker image
@@ -271,33 +248,32 @@ func TestValidateJWTSVID(t *testing.T) { ... }
 3. Uncomment and update JWT integration tests
 4. Document JWT configuration
 
-**Estimated Effort:** 4-6 hours
-
 ---
 
 ### 3. Refactoring Tooling
 
-**Status:** ⚠️ **Incomplete Installation**
+**Status:** ✅ **Complete**
 
-**What's Pending:**
-- `staticcheck` not installed by `refactor-install-tools`
+**All Tools Installed:**
+- ✅ `staticcheck` - Static analysis
+- ✅ `gocyclo` - Cyclomatic complexity
+- ✅ `gocognit` - Cognitive complexity
+- ✅ `goimports` - Import formatting
 
 **Current State:**
 ```makefile
 refactor-install-tools:
-    @go install honnef.co/go/tools/cmd/staticcheck@latest  # ✅ Added
+    @go install honnef.co/go/tools/cmd/staticcheck@latest
     @go install github.com/fzipp/gocyclo/cmd/gocyclo@latest
     @go install github.com/uudashr/gocognit/cmd/gocognit@latest
     @go install golang.org/x/tools/cmd/goimports@latest
-    @go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 ```
-
-**Status:** ✅ Actually done, but good to verify
 
 **Verification:**
 ```bash
 make refactor-install-tools
 staticcheck --version
+gocyclo --version
 ```
 
 ---
@@ -366,8 +342,6 @@ jobs:
       - run: make test-integration-fast
 ```
 
-**Estimated Effort:** 1-2 hours
-
 ---
 
 ### 6. Production Deployment Examples
@@ -419,8 +393,6 @@ func BenchmarkMTLSHandshake(b *testing.B) { ... }
 func BenchmarkCertificateRotation(b *testing.B) { ... }
 func BenchmarkIdentityExtraction(b *testing.B) { ... }
 ```
-
-**Estimated Effort:** 2-3 hours
 
 ---
 
@@ -481,7 +453,7 @@ make test-prod-build         # Verify production build
 
 ---
 
-## 📝 Next Steps
+## Next Steps
 
 ### Immediate (If Needed)
 1. ⚠️ Set up CI/CD pipeline (GitHub Actions recommended)
@@ -499,7 +471,7 @@ make test-prod-build         # Verify production build
 
 ---
 
-## 📚 Related Documentation
+## Related Documentation
 
 - `README.md` - Project overview and API
 - `docs/TEST_ARCHITECTURE.md` - Test structure
@@ -509,7 +481,7 @@ make test-prod-build         # Verify production build
 
 ---
 
-## ✅ Summary
+## Summary
 
 **Production Ready:**
 - Core library: ✅

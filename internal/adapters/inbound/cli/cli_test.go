@@ -313,7 +313,6 @@ func TestCLI_Run_ExpiredIdentityHandling(t *testing.T) {
 	expiredDoc, err := domain.NewIdentityDocumentFromComponents(
 		expiredNamespace,
 		expiredCert,
-		privateKey,
 		nil, // chain
 	)
 	require.NoError(t, err)
@@ -327,6 +326,7 @@ func TestCLI_Run_ExpiredIdentityHandling(t *testing.T) {
 		Name:               "expired",
 		IdentityCredential: expiredNamespace,
 		IdentityDocument:   expiredDoc,
+		PrivateKey:         privateKey,
 	}
 
 	// Attempt message exchange with expired identity should fail

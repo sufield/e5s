@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Workload API implementation has been upgraded from a walking skeleton to **production-ready** status by implementing kernel-level workload attestation using SO_PEERCRED on Linux.
+The Workload API implementation uses kernel-level workload attestation using SO_PEERCRED on Linux.
 
 ## What Changed
 
@@ -92,19 +92,19 @@ The Workload API implementation has been upgraded from a walking skeleton to **p
 
 ### Attack Resistance
 
-✅ **Prevents credential spoofing**: Malicious workload cannot claim different UID
-✅ **Prevents PID reuse attacks**: Credentials captured at connection time
-✅ **Prevents header injection**: No client-provided data trusted for attestation
-✅ **Prevents man-in-the-middle**: Unix socket file permissions control access
+**Prevents credential spoofing**: Malicious workload cannot claim different UID
+**Prevents PID reuse attacks**: Credentials captured at connection time
+**Prevents header injection**: No client-provided data trusted for attestation
+**Prevents man-in-the-middle**: Unix socket file permissions control access
 
 ## Platform Support
 
-### Linux (Production-Ready) ✅
+### Linux (Production-Ready)
 
 - **Mechanism**: SO_PEERCRED
 - **Status**: Fully implemented and tested
 - **Security**: Kernel-verified, cannot be forged
-- **Use in Production**: ✅ Yes
+- **Use in Production**: Yes
 
 ### Other Platforms ⚠️
 
@@ -183,7 +183,7 @@ if err != nil {
 |---------|---------------------|------------------|
 | Protocol | HTTP over Unix socket | gRPC over Unix socket |
 | Attestation | SO_PEERCRED | SO_PEERCRED |
-| Security Level | ✅ Production-grade | ✅ Production-grade |
+| Security Level | Production-grade | Production-grade |
 | Platform Support | Linux only | Cross-platform |
 | Federation | Not implemented | Full support |
 | Watch API | Not implemented | Full support |
@@ -210,4 +210,4 @@ if err != nil {
 
 ## Conclusion
 
-The Workload API is now **production-ready on Linux** with kernel-level security guarantees equivalent to production SPIRE deployments. The implementation prevents credential spoofing while maintaining the hexagonal architecture's flexibility.
+The Workload API is now production-ready on Linux with kernel-level security guarantees equivalent to production SPIRE deployments. The implementation prevents credential spoofing while maintaining the hexagonal architecture's flexibility.

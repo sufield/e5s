@@ -3,7 +3,6 @@
 package inmemory
 
 import (
-	"crypto"
 	"crypto/x509"
 	"fmt"
 	"strings"

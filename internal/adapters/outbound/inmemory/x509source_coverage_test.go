@@ -47,6 +47,7 @@ func TestX509Source_Coverage_DefensiveCopyCABundle(t *testing.T) {
 	identity := &dto.Identity{
 		IdentityCredential: credential,
 		IdentityDocument:   doc,
+		PrivateKey:         leafKey,
 		Name:               "workload",
 	}
 
@@ -87,6 +88,7 @@ func TestX509Source_Coverage_DefensiveCopyInGetBundle(t *testing.T) {
 	identity := &dto.Identity{
 		IdentityCredential: credential,
 		IdentityDocument:   doc,
+		PrivateKey:         leafKey,
 		Name:               "workload",
 	}
 
@@ -140,6 +142,7 @@ func TestX509Source_Coverage_ChainFiltering(t *testing.T) {
 	identity := &dto.Identity{
 		IdentityCredential: credential,
 		IdentityDocument:   doc,
+		PrivateKey:         leafKey,
 		Name:               "workload",
 	}
 
@@ -191,6 +194,7 @@ func TestX509Source_Coverage_EmptyChain(t *testing.T) {
 			identity := &dto.Identity{
 				IdentityCredential: credential,
 				IdentityDocument:   doc,
+				PrivateKey:         leafKey,
 				Name:               "workload",
 			}
 
@@ -229,6 +233,7 @@ func TestX509Source_Coverage_SPIFFEIDCaching(t *testing.T) {
 	identity := &dto.Identity{
 		IdentityCredential: credential,
 		IdentityDocument:   doc,
+		PrivateKey:         leafKey,
 		Name:               "workload",
 	}
 
@@ -323,6 +328,7 @@ func TestX509Source_Coverage_TrustDomainGetter(t *testing.T) {
 	identity := &dto.Identity{
 		IdentityCredential: credential,
 		IdentityDocument:   doc,
+		PrivateKey:         leafKey,
 		Name:               "workload",
 	}
 
@@ -380,7 +386,7 @@ func createTestIdentityDocument(
 ) *domain.IdentityDocument {
 	t.Helper()
 
-	doc, err := domain.NewIdentityDocumentFromComponents(credential, cert, key, chain)
+	doc, err := domain.NewIdentityDocumentFromComponents(credential, cert, chain)
 	require.NoError(t, err)
 
 	return doc

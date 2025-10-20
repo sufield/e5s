@@ -135,13 +135,13 @@ test-coverage-html:
 ## test-inmem: Run tests for inmemory package with coverage
 test-inmem:
 	@echo "Running inmemory package tests with coverage..."
-	@go test -coverprofile=inmem.out ./internal/adapters/outbound/inmemory
+	@go test -tags=dev -coverprofile=inmem.out ./internal/adapters/outbound/inmemory
 	@go tool cover -func=inmem.out
 
 ## test-inmem-html: Generate HTML coverage report for inmemory package
 test-inmem-html:
 	@echo "Generating HTML coverage report for inmemory package..."
-	@go test -coverprofile=inmem.out ./internal/adapters/outbound/inmemory
+	@go test -tags=dev -coverprofile=inmem.out ./internal/adapters/outbound/inmemory
 	@go tool cover -html=inmem.out -o inmem_coverage.html
 	@echo "Coverage report generated: inmem_coverage.html"
 

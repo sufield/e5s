@@ -2,7 +2,7 @@
 
 This document explains the security tools used in the SPIRE mTLS project and when each tool is used in the development and deployment pipeline.
 
-## Tool Categories
+## Categories
 
 ### Static Analysis (Pre-Deployment)
 Tools that scan code and dependencies **before** deployment to find security vulnerabilities.

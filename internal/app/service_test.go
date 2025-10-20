@@ -410,7 +410,6 @@ func createValidIdentity(t *testing.T, spiffeID string, expiresAt time.Time) *dt
 	doc, err := domain.NewIdentityDocumentFromComponents(
 		identityCredential,
 		cert,
-		key,
 		[]*x509.Certificate{cert},
 	)
 	require.NoError(t, err, "Failed to create identity document for test")
@@ -419,6 +418,7 @@ func createValidIdentity(t *testing.T, spiffeID string, expiresAt time.Time) *dt
 		IdentityCredential: identityCredential,
 		Name:               "test-identity",
 		IdentityDocument:   doc,
+		PrivateKey:         key,
 	}
 }
 
