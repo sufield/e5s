@@ -23,6 +23,12 @@ coverage.html
 inmem.out
 inmem_coverage.html
 
+# Security scanning artifacts
+gosec.sarif
+gitleaks.sarif
+codeql-results.sarif
+codeql-db/
+
 # Dev infrastructure secrets (DO NOT COMMIT)
 infra/dev/minikube/values-minikube-secrets.yaml
 infra/dev/minikube/values-minikube-secrets.enc.yaml

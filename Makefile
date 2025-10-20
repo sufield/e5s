@@ -6,7 +6,8 @@
 	test-integration test-integration-ci test-integration-keep test-prod-binary \
 	refactor-baseline refactor-compare refactor-check refactor-install-tools refactor-clean \
 	test-dev test-prod register-test-workload \
-	sec-deps sec-lint sec-secrets sec-test sec-fuzz sec-all sec-install-tools check-prereqs-sec
+	sec-deps sec-lint sec-secrets sec-test sec-fuzz sec-all sec-install-tools check-prereqs-sec \
+	codeql-db codeql-analyze codeql-clean codeql check-prereqs-codeql
 
 # Use bash with strict error handling
 SHELL := /bin/bash
@@ -148,7 +149,8 @@ test-inmem-html:
 clean:
 	@echo "Cleaning up..."
 	@rm -f coverage.out coverage.html inmem.out inmem_coverage.html
-	@rm -rf bin/
+	@rm -f gosec.sarif gitleaks.sarif codeql-results.sarif
+	@rm -rf bin/ codeql-db/
 	@echo "Clean complete"
 
 ## build: Build production binary (alias for prod-build)
@@ -499,6 +501,59 @@ sec-all: sec-deps sec-lint sec-secrets sec-test
 	@echo ""
 	@echo "======================================"
 	@echo "✓ All security checks passed!"
+	@echo "======================================"
+
+# ============================================================================
+# CodeQL Targets (Local Analysis)
+# See docs/codeql-local-setup.md for installation instructions
+# ============================================================================
+
+## check-prereqs-codeql: Verify CodeQL CLI is installed
+check-prereqs-codeql:
+	@echo "Checking CodeQL CLI..."
+	@if ! command -v codeql >/dev/null 2>&1; then \
+		echo "✗ codeql not found in PATH"; \
+		echo "  See docs/codeql-local-setup.md for installation instructions"; \
+		exit 1; \
+	else \
+		echo "✓ codeql found"; \
+		codeql --version; \
+	fi
+
+## codeql-db: Create CodeQL database for Go codebase
+codeql-db: check-prereqs-codeql
+	@echo "Creating CodeQL database for Go..."
+	@codeql database create codeql-db \
+		--language=go \
+		--source-root=. \
+		--overwrite
+	@echo "✓ CodeQL database created at codeql-db/"
+
+## codeql-analyze: Analyze CodeQL database with security queries
+codeql-analyze: codeql-db
+	@echo "Running CodeQL security analysis..."
+	@codeql database analyze codeql-db \
+		codeql/go-queries:codeql-suites/go-code-scanning.qls \
+		--format=sarif-latest \
+		--output=codeql-results.sarif \
+		--sarif-category=go \
+		--threads=0
+	@echo "✓ Results saved to codeql-results.sarif"
+	@echo ""
+	@echo "View results with: code codeql-results.sarif"
+	@echo "Or see docs/codeql-local-setup.md for other viewing options"
+
+## codeql-clean: Remove CodeQL artifacts
+codeql-clean:
+	@echo "Cleaning CodeQL artifacts..."
+	@rm -rf codeql-db codeql-results.sarif
+	@echo "✓ CodeQL artifacts removed"
+
+## codeql: Run full CodeQL analysis workflow (create DB + analyze)
+codeql: codeql-analyze
+	@echo ""
+	@echo "======================================"
+	@echo "✓ CodeQL analysis complete!"
 	@echo "======================================"
 
 ## help: Show this help message

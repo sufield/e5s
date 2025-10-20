@@ -132,16 +132,5 @@ jobs:
           sarif_file: gitleaks.sarif
           category: gitleaks
 
-  codeql:
-    name: CodeQL Analysis
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      actions: read
-      security-events: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: github/codeql-action/init@v3
-        with:
-          languages: go
-      - uses: github/codeql-action/analyze@v3
+  # Note: CodeQL analysis has been moved to local development workflow.
+  # See docs/codeql-local-setup.md for instructions on running CodeQL locally.
