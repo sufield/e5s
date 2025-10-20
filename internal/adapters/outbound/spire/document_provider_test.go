@@ -108,7 +108,7 @@ func TestSDKDocumentProvider_ValidateIdentityDocument_Success(t *testing.T) {
 	// Setup: Create test CA and SVID
 	caCert, caKey := createTestCA(t)
 	spiffeIDStr := "spiffe://example.org/test"
-	svidCert, svidKey := createTestSVID(t, caCert, caKey, spiffeIDStr)
+	svidCert, _ := createTestSVID(t, caCert, caKey, spiffeIDStr)
 
 	// Create bundle source with CA
 	td := spiffeid.RequireTrustDomainFromString("example.org")
@@ -128,7 +128,6 @@ func TestSDKDocumentProvider_ValidateIdentityDocument_Success(t *testing.T) {
 	doc, err := domain.NewIdentityDocumentFromComponents(
 		identityCredential,
 		svidCert,
-		svidKey,
 		[]*x509.Certificate{svidCert, caCert},
 	)
 	if err != nil {
@@ -171,7 +170,6 @@ func TestSDKDocumentProvider_ValidateIdentityDocument_NilExpectedID(t *testing.T
 	// This should fail at construction - constructor now validates
 	doc, docErr := domain.NewIdentityDocumentFromComponents(
 		identityCredential,
-		nil,
 		nil,
 		nil,
 	)
@@ -238,7 +236,6 @@ func TestSDKDocumentProvider_ValidateIdentityDocument_Expired(t *testing.T) {
 	doc, err := domain.NewIdentityDocumentFromComponents(
 		identityCredential,
 		svidCert,
-		svidKey,
 		[]*x509.Certificate{svidCert},
 	)
 	if err != nil {
@@ -270,13 +267,12 @@ func TestSDKDocumentProvider_ValidateIdentityDocument_IdentityMismatch(t *testin
 	// Create test CA and SVID with actualID
 	caCert, caKey := createTestCA(t)
 	spiffeIDStr := "spiffe://example.org/actual"
-	svidCert, svidKey := createTestSVID(t, caCert, caKey, spiffeIDStr)
+	svidCert, _ := createTestSVID(t, caCert, caKey, spiffeIDStr)
 
 	// Create document with actualID (different from expectedID)
 	doc, err := domain.NewIdentityDocumentFromComponents(
 		actualID, // Different from expected
 		svidCert,
-		svidKey,
 		[]*x509.Certificate{svidCert},
 	)
 	if err != nil {
@@ -304,7 +300,7 @@ func TestSDKDocumentProvider_ValidateIdentityDocument_BundleNotFound(t *testing.
 	// Create test CA and SVID
 	caCert, caKey := createTestCA(t)
 	spiffeIDStr := "spiffe://example.org/test"
-	svidCert, svidKey := createTestSVID(t, caCert, caKey, spiffeIDStr)
+	svidCert, _ := createTestSVID(t, caCert, caKey, spiffeIDStr)
 
 	// Create domain document
 	trustDomain := domain.NewTrustDomainFromName("example.org")
@@ -312,7 +308,6 @@ func TestSDKDocumentProvider_ValidateIdentityDocument_BundleNotFound(t *testing.
 	doc, err := domain.NewIdentityDocumentFromComponents(
 		identityCredential,
 		svidCert,
-		svidKey,
 		[]*x509.Certificate{svidCert},
 	)
 	if err != nil {
@@ -342,7 +337,6 @@ func TestSDKDocumentProvider_ValidateIdentityDocument_EmptyChain(t *testing.T) {
 	// Constructor now validates - this should fail
 	doc, docErr := domain.NewIdentityDocumentFromComponents(
 		identityCredential,
-		nil,
 		nil,
 		[]*x509.Certificate{}, // Empty chain
 	)
@@ -383,12 +377,11 @@ func TestSDKDocumentProvider_ValidateIdentityDocument_WrongTrustDomain(t *testin
 
 	// Create minimal chain (will fail bundle lookup for other.org)
 	spiffeIDStr := "spiffe://other.org/test"
-	svidCert, svidKey := createTestSVID(t, caCert, caKey, spiffeIDStr)
+	svidCert, _ := createTestSVID(t, caCert, caKey, spiffeIDStr)
 
 	doc, err := domain.NewIdentityDocumentFromComponents(
 		identityCredential,
 		svidCert,
-		svidKey,
 		[]*x509.Certificate{svidCert},
 	)
 	if err != nil {
@@ -411,7 +404,7 @@ func TestSDKDocumentProvider_ValidateIdentityDocument_WrongSPIFFEID(t *testing.T
 	// Setup: Create CA and SVID
 	caCert, caKey := createTestCA(t)
 	spiffeID1 := "spiffe://example.org/workload1"
-	svidCert1, svidKey1 := createTestSVID(t, caCert, caKey, spiffeID1)
+	svidCert1, _ := createTestSVID(t, caCert, caKey, spiffeID1)
 
 	// Create bundle
 	td := spiffeid.RequireTrustDomainFromString("example.org")
@@ -432,7 +425,6 @@ func TestSDKDocumentProvider_ValidateIdentityDocument_WrongSPIFFEID(t *testing.T
 	doc, err := domain.NewIdentityDocumentFromComponents(
 		actualID,
 		svidCert1,
-		svidKey1,
 		[]*x509.Certificate{svidCert1, caCert},
 	)
 	if err != nil {

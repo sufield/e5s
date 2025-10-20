@@ -1,7 +1,6 @@
 package domain
 
 import (
-	"crypto"
 	"crypto/x509"
 	"fmt"
 	"time"
@@ -12,26 +11,13 @@ import (
 // Components:
 //   - Identity credential: The SPIFFE ID for this workload/agent
 //   - Certificate: X.509 leaf certificate
-//   - Private key: crypto.Signer for mTLS and signing operations
 //   - Chain: Certificate chain (leaf-first)
-//
-// TODO(architecture): Private key (crypto.Signer) should be removed from domain entity
-// per docs/5.md review. Domain should be purely descriptive (identity, cert, chain, times).
-// Adapters should hold the signer or return (doc, signer) tuple. This is a breaking change:
-//  1. Remove privateKey field from IdentityDocument struct
-//  2. Remove PrivateKey() method
-//  3. Update NewIdentityDocumentFromComponents to not accept privateKey parameter
-//  4. Update all adapters to return (doc, signer) separately or use adapter-level key storage
-//  5. Update all uses of doc.PrivateKey() to get key from adapter layer
-//
-// Rationale: Keeps domain free of sensitive/opaque infrastructure concerns, simplifies
-// serialization and testing, and follows clean architecture principles.
 //
 // Design Philosophy:
 //   - Immutable: All fields validated once at construction, never modified
 //   - Defensive: Chain is copied on read/write to prevent aliasing bugs
-//   - Type-safe: Private key is crypto.Signer (required for TLS handshakes)
 //   - Clock skew aware: Provides IsCurrentlyValid(skew) for production time handling
+//   - Key management: Private keys are managed by adapters, not stored in domain model
 //
 // Certificate Validity:
 //   - ExpiresAt() derived from cert.NotAfter (single source of truth, no drift)
@@ -47,7 +33,6 @@ import (
 type IdentityDocument struct {
 	identityCredential *IdentityCredential
 	cert               *x509.Certificate
-	privateKey         crypto.Signer       // Typed for TLS/mTLS usage
 	chain              []*x509.Certificate // Leaf-first (cert), then intermediates
 }
 
@@ -59,7 +44,6 @@ type IdentityDocument struct {
 // Validation:
 //   - identityCredential must be non-nil
 //   - cert must be non-nil (leaf certificate)
-//   - privateKey must be non-nil crypto.Signer
 //   - chain is normalized to be leaf-first (cert, then intermediates)
 //   - Defensive copy of chain to prevent aliasing
 //
@@ -71,7 +55,6 @@ type IdentityDocument struct {
 // Parameters:
 //   - identityCredential: The SPIFFE ID for this identity
 //   - cert: X.509 leaf certificate
-//   - privateKey: crypto.Signer for mTLS and signing
 //   - chain: Certificate chain (may or may not include leaf)
 //
 // Returns:
@@ -81,13 +64,13 @@ type IdentityDocument struct {
 // Examples:
 //
 //	// Chain includes leaf (common from SDK)
-//	doc, err := NewIdentityDocumentFromComponents(id, leaf, key, []*x509.Certificate{leaf, ca})
+//	doc, err := NewIdentityDocumentFromComponents(id, leaf, []*x509.Certificate{leaf, ca})
 //
 //	// Chain doesn't include leaf (will be added)
-//	doc, err := NewIdentityDocumentFromComponents(id, leaf, key, []*x509.Certificate{ca})
+//	doc, err := NewIdentityDocumentFromComponents(id, leaf, []*x509.Certificate{ca})
 //
 //	// No intermediates (leaf-only chain)
-//	doc, err := NewIdentityDocumentFromComponents(id, leaf, key, nil)
+//	doc, err := NewIdentityDocumentFromComponents(id, leaf, nil)
 //
 // Concurrency: Safe for concurrent use (pure function, no shared state).
 //
@@ -96,7 +79,6 @@ type IdentityDocument struct {
 func NewIdentityDocumentFromComponents(
 	identityCredential *IdentityCredential,
 	cert *x509.Certificate,
-	privateKey crypto.Signer,
 	chain []*x509.Certificate,
 ) (*IdentityDocument, error) {
 	// Step 1: Validate required components
@@ -105,11 +87,6 @@ func NewIdentityDocumentFromComponents(
 	}
 	if cert == nil {
 		return nil, fmt.Errorf("%w: certificate cannot be nil", ErrIdentityDocumentInvalid)
-	}
-	// Check both interface and underlying value for nil (handles typed nil)
-	// Use reflection to safely detect typed nil without dereferencing
-	if privateKey == nil || !isValidSigner(privateKey) {
-		return nil, fmt.Errorf("%w: private key cannot be nil", ErrIdentityDocumentInvalid)
 	}
 
 	// Step 2: Normalize chain to be leaf-first
@@ -132,7 +109,6 @@ func NewIdentityDocumentFromComponents(
 	return &IdentityDocument{
 		identityCredential: identityCredential,
 		cert:               cert,
-		privateKey:         privateKey,
 		chain:              normalizedChain,
 	}, nil
 }
@@ -159,19 +135,6 @@ func (id *IdentityDocument) IdentityCredential() *IdentityCredential {
 //	fmt.Println(cert.Subject.CommonName)
 func (id *IdentityDocument) Certificate() *x509.Certificate {
 	return id.cert
-}
-
-// PrivateKey returns the private key as a crypto.Signer.
-//
-// This type is required for TLS handshakes and signing operations.
-// Common implementations: *rsa.PrivateKey, *ecdsa.PrivateKey, ed25519.PrivateKey.
-//
-// Example:
-//
-//	signer := id.PrivateKey()
-//	signature, err := signer.Sign(rand.Reader, digest, crypto.SHA256)
-func (id *IdentityDocument) PrivateKey() crypto.Signer {
-	return id.privateKey
 }
 
 // Chain returns a defensive copy of the certificate chain (leaf-first).
@@ -209,7 +172,7 @@ func (id *IdentityDocument) Chain() []*x509.Certificate {
 //	leaf, intermediates := id.LeafAndChain()
 //	tlsConfig.Certificates = []tls.Certificate{{
 //	    Certificate: append([][]byte{leaf.Raw}, intermediateDERs...),
-//	    PrivateKey:  id.PrivateKey(),
+//	    PrivateKey:  privateKey,  // Managed by adapter
 //	}}
 func (id *IdentityDocument) LeafAndChain() (*x509.Certificate, []*x509.Certificate) {
 	if len(id.chain) <= 1 {
@@ -384,22 +347,4 @@ func (id *IdentityDocument) IsCurrentlyValid(skew time.Duration) bool {
 //	}
 func (id *IdentityDocument) IsZero() bool {
 	return id == nil || id.identityCredential == nil || id.cert == nil
-}
-
-// isValidSigner checks if a crypto.Signer is non-nil and usable.
-//
-// This handles Go's typed nil issue where an interface containing a nil
-// pointer (e.g., (*ecdsa.PrivateKey)(nil)) is non-nil as an interface.
-//
-// We use a panic-recovery approach to safely test if Public() can be called.
-// This is defensive against malformed Signer implementations.
-func isValidSigner(signer crypto.Signer) bool {
-	// Defer a recovery function to catch any panic from calling Public()
-	defer func() {
-		_ = recover() // Silently catch any panic (indicates invalid signer)
-	}()
-
-	// Attempt to call Public() - will panic if signer is typed nil
-	pub := signer.Public()
-	return pub != nil
 }

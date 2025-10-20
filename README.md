@@ -6,7 +6,7 @@ An identity based authentication library using SPIFFE/SPIRE for service-to-servi
 
 This is a mTLS library using `go-spiffe` SDK v2.6.0 for identity-based authentication. It also includes an in-memory SPIRE implementation for development and testing purposes.
 
-### mTLS Library
+### Features
 
 The library provides:
 - **Zero-Config API**: One-call setup with automatic socket and trust domain detection
@@ -527,7 +527,6 @@ type IdentityCredential struct {
 type IdentityDocument struct {
     identityCredential *IdentityCredential
     certificate        *x509.Certificate
-    privateKey         crypto.PrivateKey // ⚠️ Planned for removal (see TODO in source)
     certificateChain   []*x509.Certificate
     expiresAt          time.Time
 }
@@ -535,7 +534,7 @@ type IdentityDocument struct {
 
 **Why X.509-only?** Focus on simplicity and the primary use case (mTLS). JWT can be added via adapters if needed without changing the domain model.
 
-> **Note**: The `privateKey` field is planned for removal to keep the domain entity purely descriptive. Private keys will be managed by adapters. See TODO in `identity_document.go` for migration plan.
+**Private Key Management**: Private keys are managed separately by adapters (e.g., in `x509svid.SVID` or `dto.Identity`), not in the domain entity. This keeps the domain model purely descriptive and separates sensitive key material from identity metadata.
 
 ### Selector
 

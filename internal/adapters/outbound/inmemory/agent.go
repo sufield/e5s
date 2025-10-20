@@ -79,7 +79,13 @@ func (a *InMemoryAgent) initializeAgentIdentity(ctx context.Context) error {
 		return fmt.Errorf("inmemory: missing CA materials for agent identity")
 	}
 
-	agentDoc, err := a.certificateProvider.CreateX509IdentityDocument(
+	// Use internal helper to get both document and private key
+	provider, ok := a.certificateProvider.(*InMemoryIdentityDocumentProvider)
+	if !ok {
+		return fmt.Errorf("inmemory: certificate provider must be InMemoryIdentityDocumentProvider")
+	}
+
+	agentDoc, privateKey, err := provider.createX509IdentityDocumentWithKey(
 		ctx, a.identityCredential, a.server.GetCA(), a.server.caKey)
 	if err != nil {
 		return fmt.Errorf("inmemory: failed to create agent identity document: %w", err)
@@ -89,6 +95,7 @@ func (a *InMemoryAgent) initializeAgentIdentity(ctx context.Context) error {
 		IdentityCredential: a.identityCredential,
 		Name:               "agent",
 		IdentityDocument:   agentDoc,
+		PrivateKey:         privateKey,
 	}
 
 	return nil

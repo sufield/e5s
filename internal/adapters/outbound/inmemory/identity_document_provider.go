@@ -24,40 +24,41 @@ func NewInMemoryIdentityDocumentProvider() ports.IdentityDocumentProvider {
 	return &InMemoryIdentityDocumentProvider{}
 }
 
-// CreateX509IdentityDocument creates a deterministic X.509 SVID (fake, dev-only)
-func (p *InMemoryIdentityDocumentProvider) CreateX509IdentityDocument(
+// createX509IdentityDocumentWithKey is an internal helper that returns both the document and private key.
+// This is used by InMemoryServer/Agent to create dto.Identity with the private key.
+func (p *InMemoryIdentityDocumentProvider) createX509IdentityDocumentWithKey(
 	ctx context.Context,
 	identityCredential *domain.IdentityCredential,
 	caCert interface{},
 	caKey interface{},
-) (*domain.IdentityDocument, error) {
+) (*domain.IdentityDocument, *rsa.PrivateKey, error) {
 	if identityCredential == nil {
-		return nil, fmt.Errorf("inmemory: %w: identity credential cannot be nil", domain.ErrIdentityDocumentInvalid)
+		return nil, nil, fmt.Errorf("inmemory: %w: identity credential cannot be nil", domain.ErrIdentityDocumentInvalid)
 	}
 
 	caCertX509, ok := caCert.(*x509.Certificate)
 	if !ok {
-		return nil, fmt.Errorf("inmemory: %w: CA certificate must be *x509.Certificate", domain.ErrIdentityDocumentInvalid)
+		return nil, nil, fmt.Errorf("inmemory: %w: CA certificate must be *x509.Certificate", domain.ErrIdentityDocumentInvalid)
 	}
 	caKeyRSA, ok := caKey.(*rsa.PrivateKey)
 	if !ok {
-		return nil, fmt.Errorf("inmemory: %w: CA key must be *rsa.PrivateKey", domain.ErrIdentityDocumentInvalid)
+		return nil, nil, fmt.Errorf("inmemory: %w: CA key must be *rsa.PrivateKey", domain.ErrIdentityDocumentInvalid)
 	}
 	// Optional sanity (dev-only)
 	if !caCertX509.IsCA {
-		return nil, fmt.Errorf("inmemory: %w: provided CA cert is not a CA", domain.ErrIdentityDocumentInvalid)
+		return nil, nil, fmt.Errorf("inmemory: %w: provided CA cert is not a CA", domain.ErrIdentityDocumentInvalid)
 	}
 
 	// Deterministic-but-valid RSA key using a fixed PRNG
 	prng := &deterministicReader{state: 54321}
 	privateKey, err := rsa.GenerateKey(prng, 2048)
 	if err != nil {
-		return nil, fmt.Errorf("inmemory: %w: generate key: %w", domain.ErrIdentityDocumentInvalid, err)
+		return nil, nil, fmt.Errorf("inmemory: %w: generate key: %w", domain.ErrIdentityDocumentInvalid, err)
 	}
 
 	identityURI, err := url.Parse(identityCredential.String())
 	if err != nil {
-		return nil, fmt.Errorf("inmemory: %w: invalid SPIFFE ID: %w", domain.ErrIdentityDocumentInvalid, err)
+		return nil, nil, fmt.Errorf("inmemory: %w: invalid SPIFFE ID: %w", domain.ErrIdentityDocumentInvalid, err)
 	}
 
 	// 24h lifetime as intended
@@ -78,19 +79,38 @@ func (p *InMemoryIdentityDocumentProvider) CreateX509IdentityDocument(
 
 	certDER, err := x509.CreateCertificate(prng, tmpl, caCertX509, &privateKey.PublicKey, caKeyRSA)
 	if err != nil {
-		return nil, fmt.Errorf("inmemory: %w: create certificate: %w", domain.ErrIdentityDocumentInvalid, err)
+		return nil, nil, fmt.Errorf("inmemory: %w: create certificate: %w", domain.ErrIdentityDocumentInvalid, err)
 	}
 	cert, err := x509.ParseCertificate(certDER)
 	if err != nil {
-		return nil, fmt.Errorf("inmemory: %w: parse certificate: %w", domain.ErrIdentityDocumentInvalid, err)
+		return nil, nil, fmt.Errorf("inmemory: %w: parse certificate: %w", domain.ErrIdentityDocumentInvalid, err)
 	}
 
-	return domain.NewIdentityDocumentFromComponents(
+	doc, err := domain.NewIdentityDocumentFromComponents(
 		identityCredential,
 		cert,
-		privateKey,
 		[]*x509.Certificate{cert, caCertX509},
 	)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return doc, privateKey, nil
+}
+
+// CreateX509IdentityDocument creates a deterministic X.509 SVID (fake, dev-only).
+//
+// Note: This method generates a private key internally but discards it.
+// The domain model no longer stores private keys. Callers that need the private key
+// should use InMemoryServer or InMemoryAgent which manage keys in dto.Identity.
+func (p *InMemoryIdentityDocumentProvider) CreateX509IdentityDocument(
+	ctx context.Context,
+	identityCredential *domain.IdentityCredential,
+	caCert interface{},
+	caKey interface{},
+) (*domain.IdentityDocument, error) {
+	doc, _, err := p.createX509IdentityDocumentWithKey(ctx, identityCredential, caCert, caKey)
+	return doc, err
 }
 
 // ValidateIdentityDocument performs minimal validation (fake, dev-only)

@@ -97,17 +97,16 @@ func (s *InMemoryX509Source) GetX509SVID() (*x509svid.SVID, error) {
 		}
 	}
 
-	// Get private key and verify it implements crypto.Signer
-	privateKey := doc.PrivateKey()
-	signer, ok := privateKey.(crypto.Signer)
-	if !ok {
-		return nil, fmt.Errorf("inmemory: private key does not implement crypto.Signer")
+	// Get private key from DTO (keys are managed outside the domain model)
+	privateKey := s.identity.PrivateKey
+	if privateKey == nil {
+		return nil, fmt.Errorf("inmemory: missing private key in identity DTO")
 	}
 
 	return &x509svid.SVID{
 		ID:           spiffeID,
 		Certificates: certificates,
-		PrivateKey:   signer,
+		PrivateKey:   privateKey,
 	}, nil
 }
 

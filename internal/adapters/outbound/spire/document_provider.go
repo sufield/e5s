@@ -95,17 +95,16 @@ func NewSDKIdentityDocumentValidator(bundleSource x509bundle.Source, opts ...Val
 // Validation steps:
 //  1. Nil checks (document, expected ID)
 //  2. Leaf certificate extraction and validation
-//  3. Private key presence check (prevents "works in validate, fails at TLS" scenarios)
-//  4. Clock skew tolerant time checks (NotBefore/NotAfter)
-//  5. Identity credential matching (with nil guard)
-//  6. Full chain assembly (leaf + intermediates)
-//  7. Bundle source validation (fail fast if misconfigured)
-//  8. SDK chain-of-trust verification using x509svid.Verify:
+//  3. Clock skew tolerant time checks (NotBefore/NotAfter)
+//  4. Identity credential matching (with nil guard)
+//  5. Full chain assembly (leaf + intermediates)
+//  6. Bundle source validation (fail fast if misconfigured)
+//  7. SDK chain-of-trust verification using x509svid.Verify:
 //     - Validates certificate chain against trust bundle
 //     - Verifies signatures
 //     - Checks SPIFFE ID in certificate URI SAN
 //     - Validates expiration at x509 level
-//  9. Strict SPIFFE ID comparison (verified vs expected)
+//  8. Strict SPIFFE ID comparison (verified vs expected)
 //
 // Parameters:
 //   - ctx: Context for bundle fetching (timeout, cancellation)
@@ -143,14 +142,7 @@ func (p *SDKDocumentProvider) ValidateIdentityDocument(
 		return fmt.Errorf("%w: missing leaf certificate", domain.ErrIdentityDocumentInvalid)
 	}
 
-	// Step 3: Private key presence check (recommended for mTLS usage)
-	// Even though verification doesn't need the private key, our domain document
-	// is meant for mTLS. Failing early prevents "works in validate, fails at TLS" surprises.
-	if doc.PrivateKey() == nil {
-		return fmt.Errorf("%w: missing private key", domain.ErrIdentityDocumentInvalid)
-	}
-
-	// Step 4: Time validation with clock skew tolerance
+	// Step 3: Time validation with clock skew tolerance
 	// These checks provide clearer errors than SDK's generic validation failures
 	now := p.clock()
 	skew := p.clockSkew
@@ -173,7 +165,7 @@ func (p *SDKDocumentProvider) ValidateIdentityDocument(
 			skew)
 	}
 
-	// Step 5: Identity credential match (fast fail before expensive crypto)
+	// Step 4: Identity credential match (fast fail before expensive crypto)
 	// Guard: Ensure document has identity credential before calling Equals()
 	if doc.IdentityCredential() == nil {
 		return fmt.Errorf("%w: document has no identity credential", domain.ErrIdentityDocumentInvalid)
@@ -185,7 +177,7 @@ func (p *SDKDocumentProvider) ValidateIdentityDocument(
 			doc.IdentityCredential())
 	}
 
-	// Step 6: Assemble full chain (leaf + intermediates)
+	// Step 5: Assemble full chain (leaf + intermediates)
 	// IMPORTANT: SDK expects [leaf, intermediate1, intermediate2, ...]
 	// Our IdentityDocument stores leaf separately from Chain() (intermediates)
 	intermediates := doc.Chain()
@@ -199,12 +191,12 @@ func (p *SDKDocumentProvider) ValidateIdentityDocument(
 		}
 	}
 
-	// Step 7: Validate bundle source before SDK call (fail fast if misconfigured)
+	// Step 6: Validate bundle source before SDK call (fail fast if misconfigured)
 	if p.bundleSource == nil {
 		return fmt.Errorf("%w: bundle source is nil", domain.ErrCertificateChainInvalid)
 	}
 
-	// Step 8: SDK chain-of-trust verification
+	// Step 7: SDK chain-of-trust verification
 	// x509svid.Verify performs:
 	// - Full x509 path validation against bundle source
 	// - Signature verification against trust domain CAs
@@ -218,7 +210,7 @@ func (p *SDKDocumentProvider) ValidateIdentityDocument(
 		return fmt.Errorf("%w: chain verification failed: %w", domain.ErrCertificateChainInvalid, err)
 	}
 
-	// Step 9: Strict SPIFFE ID comparison (verified vs expected)
+	// Step 8: Strict SPIFFE ID comparison (verified vs expected)
 	// Use String() comparison as SDK normalizes SPIFFE IDs
 	if verifiedID.String() != expectedID.String() {
 		return fmt.Errorf("%w: verified SPIFFE ID %s does not match expected %s",

@@ -231,7 +231,8 @@ func TestTranslateX509SVIDToIdentityDocument(t *testing.T) {
 	assert.NotNil(t, doc)
 	assert.Equal(t, "spiffe://example.org/workload", doc.IdentityCredential().String())
 	assert.NotNil(t, doc.Certificate())
-	assert.NotNil(t, doc.PrivateKey())
+	// Note: PrivateKey is no longer stored in domain.IdentityDocument
+	// Private keys are managed separately by adapters (in X509SVID or dto.Identity)
 	assert.True(t, doc.IsValid())
 	assert.False(t, doc.IsExpired())
 }

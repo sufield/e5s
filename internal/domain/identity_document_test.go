@@ -17,6 +17,9 @@ import (
 	"github.com/pocket/hexagon/spire/internal/domain"
 )
 
+// Note: generateTestPrivateKey() is kept for certificate generation helpers,
+// even though private keys are no longer stored in domain.IdentityDocument
+
 // TestNewIdentityDocumentFromComponents_Success tests successful creation
 // of an identity document with all X.509 components
 func TestNewIdentityDocumentFromComponents_Success(t *testing.T) {
@@ -28,14 +31,12 @@ func TestNewIdentityDocumentFromComponents_Success(t *testing.T) {
 
 	// Create X.509 components
 	cert := generateTestCertificate(t, "example.org", "/workload")
-	privateKey := generateTestPrivateKey(t)
 	chain := []*x509.Certificate{cert}
 
 	// Act
 	doc, err := domain.NewIdentityDocumentFromComponents(
 		credential,
 		cert,
-		privateKey,
 		chain,
 	)
 
@@ -50,7 +51,6 @@ func TestNewIdentityDocumentFromComponents_Success(t *testing.T) {
 
 	// Test X.509 components are non-nil
 	assert.NotNil(t, doc.Certificate(), "Certificate should be non-nil for X.509 document")
-	assert.NotNil(t, doc.PrivateKey(), "PrivateKey should be non-nil for X.509 document")
 	assert.NotNil(t, doc.Chain(), "Chain should be non-nil for X.509 document")
 	assert.NotEmpty(t, doc.Chain(), "Chain should not be empty for X.509 document")
 
@@ -75,14 +75,12 @@ func TestNewIdentityDocumentFromComponents_ValidationErrors(t *testing.T) {
 	td := domain.NewTrustDomainFromName("example.org")
 	credential := domain.NewIdentityCredentialFromComponents(td, "/workload")
 	cert := generateTestCertificate(t, "example.org", "/workload")
-	privateKey := generateTestPrivateKey(t)
 	chain := []*x509.Certificate{cert}
 
 	tests := []struct {
 		name       string
 		credential *domain.IdentityCredential
 		cert       *x509.Certificate
-		privateKey *ecdsa.PrivateKey
 		chain      []*x509.Certificate
 		wantErr    bool
 		errMsg     string
@@ -91,7 +89,6 @@ func TestNewIdentityDocumentFromComponents_ValidationErrors(t *testing.T) {
 			name:       "nil identity credential",
 			credential: nil,
 			cert:       cert,
-			privateKey: privateKey,
 			chain:      chain,
 			wantErr:    true,
 			errMsg:     "identity credential cannot be nil",
@@ -100,19 +97,9 @@ func TestNewIdentityDocumentFromComponents_ValidationErrors(t *testing.T) {
 			name:       "nil certificate",
 			credential: credential,
 			cert:       nil,
-			privateKey: privateKey,
 			chain:      chain,
 			wantErr:    true,
 			errMsg:     "certificate cannot be nil",
-		},
-		{
-			name:       "nil private key",
-			credential: credential,
-			cert:       cert,
-			privateKey: nil,
-			chain:      chain,
-			wantErr:    true,
-			errMsg:     "private key cannot be nil",
 		},
 	}
 
@@ -124,7 +111,6 @@ func TestNewIdentityDocumentFromComponents_ValidationErrors(t *testing.T) {
 			doc, err := domain.NewIdentityDocumentFromComponents(
 				tt.credential,
 				tt.cert,
-				tt.privateKey,
 				tt.chain,
 			)
 
@@ -178,13 +164,11 @@ func TestIdentityDocument_ExpirationBehavior(t *testing.T) {
 
 			// Create certificate with specific expiration
 			cert := generateTestCertificateWithTimes(t, "example.org", "/workload", tt.notBefore, tt.notAfter)
-			privateKey := generateTestPrivateKey(t)
 
 			// Act
 			doc, err := domain.NewIdentityDocumentFromComponents(
 				credential,
 				cert,
-				privateKey,
 				nil,
 			)
 

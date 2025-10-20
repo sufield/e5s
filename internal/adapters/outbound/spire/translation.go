@@ -12,6 +12,10 @@ import (
 
 // TranslateX509SVIDToIdentityDocument converts a go-spiffe X509SVID to a domain IdentityDocument.
 //
+// Note: The domain IdentityDocument no longer stores private keys. Private keys are managed
+// separately by adapters (typically in the X509SVID or dto.Identity). This function validates
+// the SVID's private key but does not include it in the returned document.
+//
 // Security hardening (production-grade):
 //   - Validates SVID ID is non-zero (defensive)
 //   - Validates leaf certificate and all chain entries are non-nil
@@ -48,6 +52,7 @@ func TranslateX509SVIDToIdentityDocument(svid *x509svid.SVID) (*domain.IdentityD
 	}
 
 	// Private key must be present and usable for signing (mTLS requirement)
+	// Even though we don't store it in the domain model, we validate it's present and valid
 	signer := svid.PrivateKey
 	if signer == nil {
 		return nil, fmt.Errorf("%w: missing/invalid private key (must be crypto.Signer)", domain.ErrIdentityDocumentInvalid)
@@ -71,12 +76,11 @@ func TranslateX509SVIDToIdentityDocument(svid *x509svid.SVID) (*domain.IdentityD
 	chain := make([]*x509.Certificate, len(svid.Certificates))
 	copy(chain, svid.Certificates)
 
-	// Create identity document from SVID components
+	// Create identity document from SVID components (no private key - managed by adapter)
 	return domain.NewIdentityDocumentFromComponents(
 		identityCredential,
-		leaf,   // Leaf certificate
-		signer, // crypto.Signer for mTLS
-		chain,  // Full chain (leaf + intermediates)
+		leaf,  // Leaf certificate
+		chain, // Full chain (leaf + intermediates)
 	)
 }
 
