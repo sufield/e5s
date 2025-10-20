@@ -208,6 +208,113 @@ The client automatically handles:
 - TLS 1.3+ enforcement
 - Thread-safe concurrent requests
 
+### Production Configuration (YAML + Environment Variables)
+
+For production deployments, use configuration files with environment variable overrides:
+
+**config.yaml**:
+```yaml
+spire:
+  socket_path: unix:///tmp/spire-agent/public/api.sock
+  trust_domain: example.org
+
+http:
+  address: :8443
+  read_header_timeout: 10s
+  read_timeout: 30s
+  write_timeout: 30s
+  idle_timeout: 120s
+  authentication:
+    peer_verification: trust-domain  # Options: any, trust-domain, specific-id, one-of
+    trust_domain: example.org        # Required when peer_verification=trust-domain
+    # allowed_ids:                   # Required when peer_verification=specific-id or one-of
+    #   - spiffe://example.org/client
+```
+
+**Application code**:
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+    "net/http"
+
+    "github.com/pocket/hexagon/spire/internal/config"
+    "github.com/pocket/hexagon/spire/internal/adapters/inbound/identityserver"
+    "github.com/pocket/hexagon/spire/internal/adapters/outbound/httpclient"
+    "github.com/pocket/hexagon/spire/internal/ports"
+)
+
+func main() {
+    ctx := context.Background()
+
+    // Load configuration from file with env variable overrides
+    // Supports: config.Load("config.yaml"), config.Load("-") for stdin, config.Load("") for env-only
+    cfg, err := config.Load("config.yaml")
+    if err != nil {
+        log.Fatalf("Failed to load config: %v", err)
+    }
+
+    // Create server from config
+    serverCfg := cfg.ToServerConfig()
+    server, err := identityserver.New(ctx, serverCfg)
+    if err != nil {
+        log.Fatalf("Failed to create server: %v", err)
+    }
+    defer server.Close()
+
+    // Register handlers
+    server.Handle("/api/hello", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        id, ok := ports.IdentityFrom(r.Context())
+        if !ok {
+            http.Error(w, "Unauthorized", http.StatusUnauthorized)
+            return
+        }
+        fmt.Fprintf(w, "Hello, %s!\n", id.SPIFFEID)
+    }))
+
+    log.Printf("Server listening on %s", cfg.HTTP.Address)
+
+    // Start server (blocks until shutdown)
+    if err := server.Start(ctx); err != nil {
+        log.Fatalf("Server error: %v", err)
+    }
+}
+```
+
+**Environment variable overrides**:
+```bash
+# Override SPIRE socket path
+export SPIRE_AGENT_SOCKET=unix:///var/run/spire/sockets/agent.sock
+
+# Override SPIRE trust domain
+export SPIRE_TRUST_DOMAIN=production.example.org
+
+# Override HTTP address
+export HTTP_ADDRESS=:9443
+
+# Override authentication settings
+export AUTH_PEER_VERIFICATION=specific-id
+export ALLOWED_ID=spiffe://production.example.org/client
+
+# Override timeouts
+export HTTP_READ_TIMEOUT=60s
+export HTTP_WRITE_TIMEOUT=60s
+
+# Run with overrides
+go run main.go
+```
+
+**Benefits**:
+- **Separation of Concerns**: Config externalized from code
+- **Environment-Specific**: Different configs for dev/staging/prod
+- **Secret Management**: Override sensitive values via env vars or secrets manager
+- **Validation**: Config is validated on load with clear error messages
+- **Defaults**: Sensible defaults applied automatically
+- **YAML Strictness**: Unknown keys rejected to catch typos
+
 ### Configuration Options
 
 ```go
