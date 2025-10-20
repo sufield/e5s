@@ -1,23 +1,23 @@
 # SPIRE mTLS Library
 
-An mTLS authentication library using SPIFFE/SPIRE for service-to-service communication, built with hexagonal architecture.
+A mTLS authentication library using SPIFFE/SPIRE for service-to-service communication, built with hexagonal architecture.
 
 ## Overview
 
-This is an mTLS library using the real `go-spiffe` SDK v2.6.0 for identity-based authentication. It also includes an **in-memory SPIRE implementation** for development and testing purposes.
+This is a mTLS library using `go-spiffe` SDK v2.6.0 for identity-based authentication. It also includes an in-memory SPIRE implementation for development and testing purposes.
 
 ### mTLS Library
 
 The library provides:
-- ✅ **Zero-Config API**: One-call setup with automatic socket and trust domain detection
-- ✅ **Automatic Certificate Management**: Zero-downtime certificate rotation via SPIRE
-- ✅ **mTLS Authentication**: Both client and server authenticate each other
-- ✅ **Identity Extraction**: SPIFFE ID available to application handlers
-- ✅ **Standard HTTP**: Compatible with Go's standard `http` package
-- ✅ **Authentication Only**: No authorization logic - app decides access
-- ✅ **Production Ready**: Comprehensive tests (unit + integration)
-- ✅ **Simple API**: Structured configuration with sensible defaults
-- ✅ **Thread-Safe**: Proper shutdown and resource management
+- **Zero-Config API**: One-call setup with automatic socket and trust domain detection
+- **Automatic Certificate Management**: Zero-downtime certificate rotation via SPIRE
+- **mTLS Authentication**: Both client and server authenticate each other
+- **Identity Extraction**: SPIFFE ID available to application handlers
+- **Standard HTTP**: Compatible with Go's standard `http` package
+- **Authentication Only**: No authorization logic - app decides access
+- **Production Ready**: Comprehensive tests (unit + integration)
+- **Simple API**: Structured configuration with sensible defaults
+- **Thread-Safe**: Proper shutdown and resource management
 
 ### Inmemory Implementation
 
@@ -30,7 +30,7 @@ An in-memory SPIRE implementation demonstrates:
 
 ## Quick Start
 
-### Zero-Config mTLS Server (Recommended)
+### Zero-Config mTLS Server
 
 The simplest way to create an mTLS server - everything is auto-detected:
 
@@ -48,22 +48,30 @@ import (
     "github.com/pocket/hexagon/spire/pkg/zerotrustserver"
 )
 
+// rootHandler returns "Success!" only if the request context carries an identity.
+func rootHandler(w http.ResponseWriter, r *http.Request) {
+    id, ok := zerotrustserver.IdentityFrom(r.Context())
+    if !ok {
+        http.Error(w, "unauthorized", http.StatusUnauthorized)
+        return
+    }
+
+    fmt.Fprintf(w, "Success! Authenticated as: %s\n", id.SPIFFEID)
+}
+
 func main() {
+    // Cancel on SIGINT/SIGTERM for graceful shutdown.
     ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
     defer stop()
 
-    err := zerotrustserver.Serve(ctx, map[string]http.Handler{
-        "/": http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-            id, ok := zerotrustserver.IdentityFrom(r.Context())
-            if !ok {
-                http.Error(w, "unauthorized", http.StatusUnauthorized)
-                return
-            }
-            fmt.Fprintf(w, "Success! Authenticated as: %s\n", id.SPIFFEID)
-        }),
-    })
-    if err != nil {
-        log.Fatal(err)
+    routes := map[string]http.Handler{
+        "/": http.HandlerFunc(rootHandler),
+    }
+
+    if err := zerotrustserver.Serve(ctx, routes); err != nil {
+        stop() // Ensure cleanup before exit
+        //nolint:gocritic // exitAfterDefer: stop() called explicitly before Fatal
+        log.Fatalf("server error: %v", err)
     }
 }
 ```
@@ -132,58 +140,57 @@ func main() {
 
 ### mTLS Client
 
-> **Note**: The `httpclient` adapter is planned but not yet implemented. The example below shows raw SDK usage.
+Create an mTLS HTTP client using the `httpclient` adapter:
 
 ```go
 package main
 
 import (
     "context"
-    "crypto/tls"
     "fmt"
     "io"
     "log"
     "net/http"
     "time"
 
-    "github.com/spiffe/go-spiffe/v2/spiffeid"
-    "github.com/spiffe/go-spiffe/v2/spiffetls/tlsconfig"
-    "github.com/spiffe/go-spiffe/v2/workloadapi"
+    "github.com/pocket/hexagon/spire/internal/adapters/outbound/httpclient"
+    "github.com/pocket/hexagon/spire/internal/ports"
 )
 
 func main() {
     ctx := context.Background()
 
-    // Create X.509 source for automatic SVID rotation
-    x509Source, err := workloadapi.NewX509Source(
-        ctx,
-        workloadapi.WithClientOptions(workloadapi.WithAddr("unix:///tmp/spire-agent/public/api.sock")),
-    )
-    if err != nil {
-        log.Fatalf("Failed to create X.509 source: %v", err)
-    }
-    defer x509Source.Close()
-
-    // Authorize specific server SPIFFE ID
-    serverID, err := spiffeid.FromString("spiffe://example.org/server")
-    if err != nil {
-        log.Fatalf("Failed to parse server SPIFFE ID: %v", err)
-    }
-
-    // Create mTLS HTTP client
-    tlsConfig := tlsconfig.MTLSClientConfig(x509Source, x509Source, tlsconfig.AuthorizeID(serverID))
-    tlsConfig.MinVersion = tls.VersionTLS13 // Enforce TLS 1.3
-    httpClient := &http.Client{
-        Transport: &http.Transport{
-            TLSClientConfig: tlsConfig,
+    // Configure the mTLS client
+    cfg := &ports.MTLSConfig{
+        WorkloadAPI: ports.WorkloadAPIConfig{
+            SocketPath: "unix:///tmp/spire-agent/public/api.sock",
         },
-        Timeout: 10 * time.Second,
+        SPIFFE: ports.SPIFFEConfig{
+            AllowedPeerID: "spiffe://example.org/server", // Or use AllowedTrustDomain
+        },
+        HTTP: ports.HTTPConfig{
+            ReadTimeout:  10 * time.Second,
+            WriteTimeout: 10 * time.Second,
+            IdleTimeout:  120 * time.Second,
+        },
     }
+
+    // Create the mTLS client
+    client, err := httpclient.New(ctx, cfg)
+    if err != nil {
+        log.Fatalf("Failed to create client: %v", err)
+    }
+    defer client.Close()
 
     // Make request
     // Note: SPIFFE authentication verifies the server's SPIFFE ID (via AuthorizeID),
     // not the DNS hostname. Using "localhost" here is fine.
-    resp, err := httpClient.Get("https://localhost:8443/api/hello")
+    req, err := http.NewRequest("GET", "https://localhost:8443/api/hello", http.NoBody)
+    if err != nil {
+        log.Fatalf("Failed to create request: %v", err)
+    }
+
+    resp, err := client.Do(ctx, req)
     if err != nil {
         log.Fatalf("Request failed: %v", err)
     }
@@ -193,6 +200,13 @@ func main() {
     fmt.Printf("Response: %s\n", body)
 }
 ```
+
+The client automatically handles:
+- X.509 SVID fetching from SPIRE Workload API
+- Certificate rotation with zero downtime
+- Server identity verification using SPIFFE IDs
+- TLS 1.3+ enforcement
+- Thread-safe concurrent requests
 
 ### Configuration Options
 
@@ -275,6 +289,7 @@ internal/
     │   └── cli/            # CLI demonstration
     └── outbound/
         ├── spire/          # Production SPIRE adapters (go-spiffe SDK)
+        ├── httpclient/     # Production mTLS client (go-spiffe SDK)
         ├── inmemory/       # In-memory SPIRE implementation (dev/learning)
         └── compose/        # Dependency injection factory
 
@@ -516,25 +531,29 @@ func TestMTLSAuthentication(t *testing.T) {
         server.Start(ctx)
     }()
 
-    // Create client (using raw SDK until httpclient adapter is implemented)
-    x509Source, err := workloadapi.NewX509Source(ctx, workloadapi.WithClientOptions(workloadapi.WithAddr("unix:///tmp/spire-agent/public/api.sock")))
-    require.NoError(t, err)
-    defer x509Source.Close()
-
-    trustDomain, err := spiffeid.TrustDomainFromString("example.org")
-    require.NoError(t, err)
-
-    tlsConfig := tlsconfig.MTLSClientConfig(x509Source, x509Source, tlsconfig.AuthorizeMemberOf(trustDomain))
-    tlsConfig.MinVersion = tls.VersionTLS13 // Enforce TLS 1.3
-    httpClient := &http.Client{
-        Transport: &http.Transport{
-            TLSClientConfig: tlsConfig,
+    // Create mTLS client using httpclient adapter
+    clientCfg := &ports.MTLSConfig{
+        WorkloadAPI: ports.WorkloadAPIConfig{
+            SocketPath: "unix:///tmp/spire-agent/public/api.sock",
         },
-        Timeout: 10 * time.Second,
+        SPIFFE: ports.SPIFFEConfig{
+            AllowedTrustDomain: "example.org",
+        },
+        HTTP: ports.HTTPConfig{
+            ReadTimeout:  10 * time.Second,
+            WriteTimeout: 10 * time.Second,
+        },
     }
 
+    client, err := httpclient.New(ctx, clientCfg)
+    require.NoError(t, err)
+    defer client.Close()
+
     // Make request
-    resp, err := httpClient.Get("https://localhost:8443/test")
+    req, err := http.NewRequest("GET", "https://localhost:8443/test", http.NoBody)
+    require.NoError(t, err)
+
+    resp, err := client.Do(ctx, req)
     require.NoError(t, err)
     defer resp.Body.Close()
 
@@ -747,8 +766,8 @@ The project uses the real `go-spiffe` SDK v2.6.0 for production deployments:
 **Production adapters**:
 - ✅ `internal/adapters/inbound/identityserver` - mTLS server using go-spiffe SDK
 - ✅ `internal/adapters/outbound/spire` - SPIRE Workload API client adapters
+- ✅ `internal/adapters/outbound/httpclient` - mTLS HTTP client using go-spiffe SDK
 - ✅ Integration tests - Full mTLS with real SPIRE agent
-- ⏳ `internal/adapters/outbound/httpclient` - mTLS HTTP client (planned)
 
 **Development adapters**:
 - `internal/adapters/outbound/inmemory` - In-memory SPIRE implementation for learning
