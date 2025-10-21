@@ -355,84 +355,170 @@ type HTTPConfig struct {
 
 ## Architecture
 
-### Directory Structure
+### Hexagonal Architecture Overview
 
-```
-pkg/
-└── zerotrustserver/     # Zero-config mTLS server API (public)
-    ├── server.go        # Serve() - one-call server
-    ├── defaults.go      # Auto-detection logic
-    ├── identity.go      # Identity helper
-    └── doc.go           # Package documentation
-
-internal/
-├── domain/              # Domain entities (TrustDomain, IdentityCredential, etc.)
-├── ports/               # Port interfaces (contracts between layers)
-│   ├── inbound.go       # IdentityProvider, CLI interfaces
-│   ├── outbound.go      # Agent, parsers, validators, factories
-│   ├── identityserver.go # MTLSServer, MTLSClient, MTLSConfig
-│   └── types.go         # Shared types (Identity, ProcessIdentity, etc.)
-├── app/                 # Application services (business logic)
-├── config/              # Configuration (YAML + env fallback)
-├── controlplane/        # Control plane for SPIRE deployment
-└── adapters/            # Infrastructure implementations
-    ├── inbound/
-    │   ├── identityserver/ # Production mTLS server (go-spiffe SDK)
-    │   └── cli/            # CLI demonstration
-    └── outbound/
-        ├── spire/          # Production SPIRE adapters (go-spiffe SDK)
-        ├── httpclient/     # Production mTLS client (go-spiffe SDK)
-        ├── inmemory/       # In-memory SPIRE implementation (dev/learning)
-        └── compose/        # Dependency injection factory
-
-cmd/
-├── main.go              # CLI demonstration tool (uses in-memory)
-├── main_prod.go         # Production entrypoint (uses real SPIRE)
-└── cp-minikube/         # Control plane for Minikube deployment
-
-examples/
-├── zeroconfig-example/  # Zero-config server example (recommended)
-│   ├── main.go          # Server code
-│   └── Dockerfile       # Container image for production/demo
-├── test-client.go       # Infrastructure testing tool (verifies SPIRE setup and mTLS)
-├── mtls-server.yaml     # Development deployment (kubectl cp approach)
-├── mtls-server-image.yaml  # Production deployment (container image approach)
-├── test-client.yaml     # Test client deployment manifest
-└── README.md            # Kubernetes deployment guide
-```
-
-### Hexagonal Architecture
+This project follows **Hexagonal Architecture** (Ports & Adapters pattern):
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    Inbound Adapters                      │
-│  ┌────────────────┐              ┌─────────────────┐    │
-│  │IdentityServer  │              │ CLI Demo        │    │
-│  │ (mTLS HTTP)    │              │ Adapter         │    │
-│  └────────┬───────┘              └────────┬────────┘    │
-│           │                               │             │
-│           └───────────────┬───────────────┘             │
-│                           │                             │
-│  ┌────────────────────────▼─────────────────────────┐   │
-│  │              Ports (Interfaces)                   │   │
-│  │  • MTLSServer     • MTLSClient                   │   │
-│  │  • Agent          • IdentityProvider             │   │
-│  │  • Parsers        • Validators                   │   │
-│  └────────────────────────┬─────────────────────────┘   │
-│                           │                             │
-│  ┌────────────────────────▼─────────────────────────┐   │
-│  │              Domain Entities                      │   │
-│  │  • TrustDomain  • IdentityCredential              │   │
-│  │  • IdentityDocument  • Selector                  │   │
-│  └───────────────────────────────────────────────────┘   │
-│                           │                             │
-│  ┌────────────────────────▼─────────────────────────┐   │
-│  │            Outbound Adapters                      │   │
-│  │  • SPIREAgent     • HTTPClient                   │   │
-│  │  • InMemoryAgent  • InMemoryServer (dev)         │   │
-│  └───────────────────────────────────────────────────┘   │
+│             🔵 INBOUND ADAPTERS (Drivers)                │
+│           How external actors interact with us           │
+├─────────────────────────────────────────────────────────┤
+│  • identityserver/  → HTTP server exposing mTLS API     │
+│  • cli/             → Command-line interface            │
+│  • zerotrustserver/ → Zero-config API wrapper (pkg/)    │
+└─────────────────────┬───────────────────────────────────┘
+                      │
+                 ┌────▼────┐
+                 │  PORTS  │  ← Interfaces/Contracts
+                 └────┬────┘
+                      │
+┌─────────────────────▼───────────────────────────────────┐
+│              🟢 DOMAIN (Core Business Logic)             │
+│                  Pure Go, No Dependencies                │
+├─────────────────────────────────────────────────────────┤
+│  • domain/          → Entities (TrustDomain, SVID, etc.)│
+│  • app/             → Business logic & orchestration    │
+└─────────────────────┬───────────────────────────────────┘
+                      │
+                 ┌────▼────┐
+                 │  PORTS  │  ← Interfaces/Contracts
+                 └────┬────┘
+                      │
+┌─────────────────────▼───────────────────────────────────┐
+│             🟠 OUTBOUND ADAPTERS (Driven)                │
+│         How we interact with external systems            │
+├─────────────────────────────────────────────────────────┤
+│  • spire/       → SPIRE Workload API (go-spiffe SDK)    │
+│  • httpclient/  → mTLS HTTP client                      │
+│  • helm/        → Kubernetes/Helm deployment (dev)      │
+│  • inmemory/    → In-memory impl for testing (dev)      │
+│  • compose/     → Dependency injection                  │
 └─────────────────────────────────────────────────────────┘
 ```
+
+**Key Principle**: Domain never depends on adapters. Adapters depend on ports.
+
+### Directory Structure Mapped to Hexagonal Layers
+
+```
+📦 Public API Layer
+pkg/
+└── zerotrustserver/     # 🔵 INBOUND: Zero-config mTLS server API
+    ├── server.go        #    Serve() - one-call server setup
+    ├── defaults.go      #    Auto-detection (socket, trust domain)
+    ├── identity.go      #    Identity extraction helper
+    └── doc.go           #    Package documentation
+
+📦 Core Application Layer
+internal/
+├── 🟢 DOMAIN LAYER (Pure Business Logic)
+│   ├── domain/          # Entities: TrustDomain, IdentityCredential, SVID, Selector
+│   └── app/             # Business logic & orchestration
+│
+├── ⚪ PORTS LAYER (Contracts/Interfaces)
+│   └── ports/           # All interfaces that adapters must implement
+│       ├── inbound.go   #   Inbound ports (IdentityProvider, CLI)
+│       ├── outbound.go  #   Outbound ports (Agent, Parsers, Validators)
+│       ├── identityserver.go # MTLSServer, MTLSClient interfaces
+│       └── types.go     #   Shared types (Identity, ProcessIdentity)
+│
+├── 🔵 INBOUND ADAPTERS (How external actors interact)
+│   └── adapters/inbound/
+│       ├── identityserver/ # Production mTLS HTTP server (go-spiffe SDK)
+│       └── cli/            # CLI demonstration adapter
+│
+├── 🟠 OUTBOUND ADAPTERS (How we interact with external systems)
+│   └── adapters/outbound/
+│       ├── spire/       # Real SPIRE Workload API (production)
+│       ├── httpclient/  # mTLS HTTP client (production)
+│       ├── helm/        # Kubernetes/Helm deployment (dev-only)
+│       ├── inmemory/    # In-memory SPIRE (dev/testing)
+│       └── compose/     # Dependency injection factory
+│
+└── config/              # Configuration loading (YAML + env vars)
+
+📦 Entry Points
+cmd/
+├── main.go              # 🔵 INBOUND: CLI demo (dev-only, uses inmemory)
+├── main_prod.go         # Production entrypoint (uses real SPIRE)
+└── cp-minikube/         # 🔵 INBOUND: Minikube control plane CLI (dev-only)
+
+📦 Examples & Deployment
+examples/
+├── zeroconfig-example/  # Complete working example (recommended)
+│   ├── main.go          # Server using pkg/zerotrustserver
+│   └── Dockerfile       # Production container image
+├── test-client.go       # Infrastructure testing tool
+├── mtls-server.yaml     # Kubernetes deployment manifests
+└── README.md            # Deployment guide
+```
+
+**Legend:**
+- 🔵 **Inbound Adapters**: External → Application (HTTP server, CLI)
+- 🟢 **Domain**: Pure business logic (no external dependencies)
+- ⚪ **Ports**: Interfaces between layers
+- 🟠 **Outbound Adapters**: Application → External (SPIRE, Helm, HTTP client)
+
+### Layer Dependencies (Dependency Rule)
+
+```
+┌─────────────────────────────────────────┐
+│         Dependencies Flow Inward         │
+│         (Outer layers depend on inner)   │
+└─────────────────────────────────────────┘
+
+Adapters ────depends on────> Ports ────depends on────> Domain
+
+✅ Allowed:  Adapter imports Port
+✅ Allowed:  Port imports Domain
+❌ Forbidden: Domain imports Port
+❌ Forbidden: Domain imports Adapter
+❌ Forbidden: Port imports Adapter
+```
+
+**Real examples from this codebase:**
+
+```go
+// ✅ GOOD: Adapter depends on Port
+package identityserver
+import "github.com/pocket/hexagon/spire/internal/ports"
+
+// ✅ GOOD: Port depends on Domain
+package ports
+import "github.com/pocket/hexagon/spire/internal/domain"
+
+// ❌ BAD: Domain depending on Port (NEVER)
+package domain
+import "github.com/pocket/hexagon/spire/internal/ports"  // ← FORBIDDEN
+
+// ❌ BAD: Domain depending on Adapter (NEVER)
+package domain
+import "github.com/pocket/hexagon/spire/internal/adapters/outbound/spire"  // ← FORBIDDEN
+```
+
+### Swappable Implementations (Why Hexagonal?)
+
+The hexagonal architecture enables **swapping implementations** without changing domain code:
+
+```go
+// Production: Use real SPIRE
+factory := compose.NewSPIREAdapterFactory(ctx, &spire.Config{
+    SocketPath: "/tmp/spire-agent/public/api.sock",
+})
+
+// Development: Use in-memory (no SPIRE needed)
+factory := compose.NewInMemoryAdapterFactory()
+
+// Same domain code works with both!
+application := app.Bootstrap(ctx, configLoader, factory)
+```
+
+**Benefits:**
+- ✅ Test domain logic without infrastructure
+- ✅ Develop locally without external dependencies
+- ✅ Easy to add new adapters (e.g., Vault, AWS Secrets Manager)
+- ✅ Domain remains pure and testable
 
 ## Interfaces
 
