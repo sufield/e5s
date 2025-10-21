@@ -462,7 +462,7 @@ sec-install-tools:
 	@echo "→ Installing gosec..."
 	@go install github.com/securego/gosec/v2/cmd/gosec@latest
 	@echo "→ Installing gitleaks..."
-	@go install github.com/gitleaks/gitleaks/v8@latest
+	@go install github.com/zricethezav/gitleaks/v8@latest
 	@echo "✓ Security tools installed successfully"
 
 ## sec-deps: Check for dependency vulnerabilities and module hygiene
