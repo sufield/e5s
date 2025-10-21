@@ -116,91 +116,15 @@ Tests run inside Kubernetes cluster with access to SPIRE agent socket:
 
 ### Manual SPIRE Tests
 
-Test SPIRE client connection:
+Test SPIRE connectivity interactively:
 
 ```bash
-cat > /tmp/test_spire_connection.go <<'EOF'
-//go:build integration
-package main
-
-import (
-	"context"
-	"fmt"
-	"log"
-	"time"
-
-	"github.com/pocket/hexagon/spire/internal/adapters/outbound/spire"
-)
-
-func main() {
-	ctx := context.Background()
-
-	config := &spire.Config{
-		SocketPath:  "unix:///tmp/spire-agent/public/api.sock",
-		TrustDomain: "example.org",
-		Timeout:     30 * time.Second,
-	}
-
-	client, err := spire.NewSPIREClient(ctx, *config)
-	if err != nil {
-		log.Fatalf("Failed to create SPIRE client: %v", err)
-	}
-	defer client.Close()
-
-	fmt.Println("✅ Successfully connected to SPIRE Agent")
-	fmt.Printf("Trust Domain: %s\n", client.GetTrustDomain())
-}
-EOF
-
-# Run in test pod
-go run -tags=integration /tmp/test_spire_connection.go
+# Start SPIRE and run dev CLI
+make minikube-up
+go run -tags=dev ./cmd
 ```
 
-Test X.509 SVID fetching:
-
-```bash
-cat > /tmp/test_fetch_svid.go <<'EOF'
-//go:build integration
-package main
-
-import (
-	"context"
-	"fmt"
-	"log"
-	"time"
-
-	"github.com/pocket/hexagon/spire/internal/adapters/outbound/spire"
-)
-
-func main() {
-	ctx := context.Background()
-
-	config := &spire.Config{
-		SocketPath:  "unix:///tmp/spire-agent/public/api.sock",
-		TrustDomain: "example.org",
-		Timeout:     30 * time.Second,
-	}
-
-	client, err := spire.NewSPIREClient(ctx, *config)
-	if err != nil {
-		log.Fatalf("Failed to create SPIRE client: %v", err)
-	}
-	defer client.Close()
-
-	doc, err := client.FetchX509SVID(ctx)
-	if err != nil {
-		log.Fatalf("Failed to fetch X.509 SVID: %v", err)
-	}
-
-	fmt.Println("✅ Successfully fetched X.509 SVID")
-	fmt.Printf("Identity: %s\n", doc.IdentityCredential().String())
-	fmt.Printf("Expires: %s\n", doc.ExpiresAt().Format(time.RFC3339))
-	fmt.Printf("Valid: %v\n", doc.IsValid())
-}
-EOF
-
-go run -tags=integration /tmp/test_fetch_svid.go
-```
+This connects to the SPIRE agent and fetches identities automatically.
 
 ## Troubleshooting
 
