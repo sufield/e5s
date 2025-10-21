@@ -6,6 +6,7 @@
 	test-integration test-integration-ci test-integration-keep test-prod-binary \
 	refactor-baseline refactor-compare refactor-check refactor-install-tools refactor-clean \
 	test-dev test-prod register-test-workload \
+	spire-server-shell-enable spire-server-shell-disable spire-server-shell-status \
 	sec-deps sec-lint sec-secrets sec-test sec-fuzz sec-all sec-install-tools check-prereqs-sec \
 	codeql-db codeql-analyze codeql-clean codeql check-prereqs-codeql
 
@@ -258,9 +259,21 @@ check-spire-ready: check-prereqs-k8s
 	@echo "  ✓ SPIRE pods are running"
 	@echo "✓ SPIRE infrastructure is ready"
 
+## spire-server-shell-enable: Enable shell access in SPIRE server (for CLI registration)
+spire-server-shell-enable: check-spire-ready
+	@bash scripts/spire-server-enable-shell.sh enable
+
+## spire-server-shell-disable: Disable shell (switch to distroless for production)
+spire-server-shell-disable: check-spire-ready
+	@bash scripts/spire-server-enable-shell.sh disable
+
+## spire-server-shell-status: Check current SPIRE server image type
+spire-server-shell-status: check-spire-ready
+	@bash scripts/spire-server-enable-shell.sh status
+
 ## register-test-workload: Register test workload in SPIRE (required before test-integration)
 register-test-workload: check-spire-ready
-	@bash scripts/register-test-workload.sh
+	@bash scripts/setup-spire-registrations.sh
 
 ## test-integration: Run integration tests against live SPIRE
 test-integration: check-spire-ready register-test-workload

@@ -234,7 +234,7 @@ Trust Domain: example.org
 Path: /client
 ```
 
-**Note**: Private keys are managed by the SDK's X509SVID and are not exposed in the domain model or HTTP responses.
+Private keys are managed by the SDK's X509SVID and are not exposed in the domain model or HTTP responses.
 
 ### Test 4: Graceful Shutdown
 

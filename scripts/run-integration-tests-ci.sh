@@ -97,6 +97,44 @@ fi
 
 success "Found SPIRE Agent: $AGENT_POD"
 
+# Setup SPIRE registration entries (if not already done)
+info "Setting up SPIRE workload registration entries..."
+if [ -f "./scripts/setup-spire-registrations.sh" ]; then
+    # Run registration setup and capture exit code
+    SETUP_OUTPUT=$(NS="$NS" TRUST_DOMAIN="$TRUST_DOMAIN" bash ./scripts/setup-spire-registrations.sh 2>&1) || SETUP_EXIT=$?
+    SETUP_EXIT=${SETUP_EXIT:-0}
+
+    # Show key output
+    echo "$SETUP_OUTPUT" | grep -E "(✅|❌|Entry ID|SPIFFE ID|Quick fix)" || true
+
+    if [ "$SETUP_EXIT" -eq 0 ]; then
+        success "Registration entries verified/created"
+    else
+        echo ""
+        error "Registration setup failed - this will likely cause test failures"
+        echo ""
+        info "Common issue: SPIRE server using distroless image"
+        info "Quick fix (development only):"
+        echo ""
+        echo "  # Switch to non-distroless SPIRE server image"
+        echo "  kubectl set image statefulset/spire-server -n $NS \\"
+        echo "    spire-server=ghcr.io/spiffe/spire-server:1.9.0"
+        echo ""
+        echo "  # Wait for rollout"
+        echo "  kubectl rollout status statefulset/spire-server -n $NS"
+        echo ""
+        echo "  # Re-run this script"
+        echo "  $0"
+        echo ""
+        info "Continuing anyway - tests will fail if registrations don't exist"
+        sleep 5
+    fi
+else
+    info "Registration setup script not found, assuming entries exist"
+    info "If tests fail with 'context deadline exceeded', create workload entries manually"
+fi
+echo ""
+
 # Verify socket exists
 # Note: SPIRE agent may be distroless (no shell/test command), so we verify via node instead
 info "Checking Workload API socket availability..."
@@ -160,6 +198,39 @@ spec:
     - name: work
       emptyDir: {}
   initContainers:
+    # First init container: Wait for SPIRE Workload API socket to be available
+    - name: wait-for-socket
+      image: busybox:stable-musl
+      command:
+        - sh
+        - -c
+        - |
+          echo "Waiting for SPIRE Workload API socket..."
+          WAIT_TIME=0
+          MAX_WAIT=120
+          until [ -S /spire-socket/${SOCKET_FILE} ]; do
+            if [ \$WAIT_TIME -ge \$MAX_WAIT ]; then
+              echo "ERROR: Socket not found after \${MAX_WAIT}s"
+              exit 1
+            fi
+            echo "Socket not found yet (waited \${WAIT_TIME}s), retrying in 2s..."
+            sleep 2
+            WAIT_TIME=\$((WAIT_TIME + 2))
+          done
+          echo "✅ Socket found: /spire-socket/${SOCKET_FILE}"
+          # Give agent a moment to fully initialize
+          echo "Waiting 5s for agent initialization..."
+          sleep 5
+          echo "✅ Ready for workload attestation"
+      volumeMounts:
+        - name: spire-socket
+          mountPath: /spire-socket
+          readOnly: true
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+    # Second init container: Wait for test binary and prepare it
     - name: setup
       image: busybox:stable-musl
       # Wait for binary to be copied with file size stability check
@@ -167,6 +238,7 @@ spec:
         - sh
         - -c
         - |
+          echo "Waiting for test binary..."
           # Wait for file to appear
           while [ ! -f /work/integration.test ]; do sleep 0.2; done
           # Wait for file size to stabilize (copy complete)
@@ -183,7 +255,7 @@ spec:
             sleep 0.3
           done
           chmod +x /work/integration.test
-          echo "Binary ready: \$(stat -c%s /work/integration.test) bytes"
+          echo "✅ Binary ready: \$(stat -c%s /work/integration.test) bytes"
       volumeMounts:
         - name: work
           mountPath: /work
@@ -237,19 +309,47 @@ if ! kubectl wait --for=condition=PodScheduled pod/"$POD_NAME" -n "$NS" --timeou
     exit 1
 fi
 
-# Wait for initContainer to be running (with better logging)
-info "Waiting for initContainer to start..."
+# Wait for socket-wait initContainer to complete
+info "Waiting for socket availability check to complete..."
+for i in {1..120}; do
+    SOCKET_INIT_STATE=$(kubectl get pod -n "$NS" "$POD_NAME" \
+        -o jsonpath='{.status.initContainerStatuses[?(@.name=="wait-for-socket")].state}' 2>/dev/null || true)
+
+    if echo "$SOCKET_INIT_STATE" | grep -q "terminated"; then
+        EXIT_CODE=$(kubectl get pod -n "$NS" "$POD_NAME" \
+            -o jsonpath='{.status.initContainerStatuses[?(@.name=="wait-for-socket")].state.terminated.exitCode}' 2>/dev/null || echo "")
+        if [ "$EXIT_CODE" = "0" ]; then
+            success "Socket is available and ready"
+            break
+        else
+            error "Socket wait failed (exit code: $EXIT_CODE)"
+            kubectl logs -n "$NS" "$POD_NAME" -c wait-for-socket || true
+            exit 1
+        fi
+    fi
+
+    if [ $i -eq 120 ]; then
+        error "Socket wait timed out after 120s"
+        kubectl describe pod -n "$NS" "$POD_NAME" || true
+        kubectl logs -n "$NS" "$POD_NAME" -c wait-for-socket 2>/dev/null || true
+        exit 1
+    fi
+    sleep 1
+done
+
+# Wait for setup initContainer to be running
+info "Waiting for setup initContainer to start..."
 for i in {1..30}; do
     INIT_STATE=$(kubectl get pod -n "$NS" "$POD_NAME" \
         -o jsonpath='{.status.initContainerStatuses[?(@.name=="setup")].state}' 2>/dev/null || true)
 
     if echo "$INIT_STATE" | grep -q "running"; then
-        success "Init container is running"
+        success "Setup init container is running"
         break
     fi
 
     if [ $i -eq 30 ]; then
-        error "Init container failed to start after 30s"
+        error "Setup init container failed to start after 30s"
         kubectl describe pod -n "$NS" "$POD_NAME" || true
         exit 1
     fi
