@@ -253,7 +253,7 @@ All tests pass with the RegistrationEntry entity and RegistrationRepository:
 $ go build ./...
 Build successful
 
-$ IDP_MODE=inmem go run ./cmd/console
+$ make minikube-up
 ✓ Success! Application runs with pure domain RegistrationEntry entity
 ```
 

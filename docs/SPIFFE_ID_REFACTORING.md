@@ -464,7 +464,7 @@ $ go build ./...
 ### Runtime Verification
 
 ```bash
-$ IDP_MODE=inmem go run ./cmd/console
+$ make minikube-up
 === In-Memory SPIRE System with Hexagonal Architecture ===
 
 Configuration:

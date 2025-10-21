@@ -101,15 +101,8 @@ Response: Success! Authenticated as: spiffe://example.org/client
 ### Step 1: Start Minikube and Deploy SPIRE
 
 ```bash
-# Start Minikube
-minikube start
-
-# Deploy SPIRE using the dev bootstrap
-cd /path/to/spire
-IDP_MODE=inmem go run ./cmd/console
-
-# In the console, run:
-bootstrap-minikube-infra
+# Start Minikube and deploy SPIRE
+make minikube-up
 ```
 
 ### Step 2: Deploy Test Workloads

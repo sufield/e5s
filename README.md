@@ -720,9 +720,10 @@ go run ./examples/test-client.go
 
 ```bash
 # Run full demonstration using in-memory SPIRE
-IDP_MODE=inmem go run ./cmd
+go run -tags=dev ./cmd
 
 # This uses the in-memory implementation for learning purposes
+# No external SPIRE infrastructure required - all components run in-process
 ```
 
 ## Design Decisions
