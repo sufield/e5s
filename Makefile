@@ -220,7 +220,8 @@ test-prod-build:
 	fi
 	@echo "  ✓ Dev tests excluded from production"
 	@echo "→ Verifying dev tests run with dev tags..."
-	@if ! go test -tags=dev -list . ./internal/domain 2>&1 | grep -q "TestSelector\|TestIdentityMapper"; then \
+	@TEST_OUTPUT=$$(go test -tags=dev -list . ./internal/domain 2>&1); \
+	if ! echo "$$TEST_OUTPUT" | grep -q "TestSelector\|TestIdentityMapper"; then \
 		echo "✗ ERROR: Dev tests not found with -tags=dev!"; \
 		exit 1; \
 	fi
