@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/pocket/hexagon/spire/internal/controlplane/adapters/helm"
+	"github.com/pocket/hexagon/spire/internal/adapters/outbound/helm"
 )
 
 // BootstrapMinikubeInfra sets up the Minikube dev infrastructure
