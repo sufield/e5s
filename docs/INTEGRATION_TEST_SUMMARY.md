@@ -1,135 +1,70 @@
-# Integration Test Fix - Quick Summary
+# SPIRE Integration Tests - Quick Reference
 
-## Problem
-Integration tests failed with `context deadline exceeded` when calling `workloadapi.NewX509Source()`.
+## Running Tests
 
-## Root Cause
-Missing workload registration entries in SPIRE server - agent couldn't issue SVIDs to test workloads.
-
-## Solution (3 Parts)
-
-### 1. Registration Setup Script ✨ NEW
-**File**: `scripts/setup-spire-registrations.sh`
-
-Automatically creates SPIRE registration entries for test workloads.
-
-**Usage**:
 ```bash
-./scripts/setup-spire-registrations.sh
-```
-
-**Creates**:
-- `spiffe://example.org/integration-test`
-- `spiffe://example.org/test-client`
-- `spiffe://example.org/test-server`
-
-### 2. Updated CI Script ✨ IMPROVED
-**File**: `scripts/run-integration-tests-ci.sh`
-
-**Changes**:
-- ✅ Automatically calls registration script before running tests
-- ✅ Added socket-wait init container (waits for SPIRE agent to be ready)
-- ✅ Enhanced monitoring of init container completion
-
-### 3. Socket-Wait Init Container ✨ NEW
-Added to test pod YAML (lines 179-210):
-
-```yaml
-initContainers:
-  # 1. Wait for SPIRE socket (up to 120s)
-  - name: wait-for-socket
-    # Verifies socket exists + agent initialized
-
-  # 2. Wait for test binary
-  - name: setup
-    # Prepares test binary
-```
-
-## Quick Start
-
-### First Time Setup
-
-#### If SPIRE Server is Distroless (Common Issue)
-```bash
-# 1. Enable shell access in SPIRE server
-make spire-server-shell-enable
-
-# 2. Create registration entries
-make register-test-workload
-
-# 3. Run integration tests
+# Simple - runs everything automatically
 make test-integration-ci
-
-# 4. Optional: Switch back to distroless
-make spire-server-shell-disable
 ```
 
-#### If SPIRE Server Has Shell Access
+This command:
+1. Auto-creates SPIRE registration entries (if needed)
+2. Waits for SPIRE agent socket to be ready
+3. Runs integration tests in Kubernetes
+
+## First Time Setup (Distroless Server)
+
+If SPIRE server uses a distroless image, you need shell access to create registrations:
+
 ```bash
-# Create registration entries
-./scripts/setup-spire-registrations.sh
-
-# Run integration tests
-./scripts/run-integration-tests-ci.sh
+# Enable shell, create registrations, run tests
+make spire-server-shell-enable
+make register-test-workload
+make test-integration-ci
 ```
-
-### Subsequent Runs
-```bash
-# CI script now auto-creates registrations if needed
-./scripts/run-integration-tests-ci.sh
-```
-
-## Before vs After
-
-### Before ❌
-```
-Test pod starts → NewX509Source() → No registration → Timeout (30s)
-```
-
-### After ✅
-```
-CI creates registrations → Init waits for socket → NewX509Source() → Gets SVID → Tests pass (<1s)
-```
-
-## Expected Test Output
-
-**Success**:
-```
-✅ Registration entries verified/created
-✅ Socket is available and ready
-✅ Integration tests passed!
-```
-
-**Failure (no registration)**:
-```
-=== FAIL: TestClientConnection (30.00s)
-    Error: create X509 source: context deadline exceeded
-```
-
-**Fix**: Run `./scripts/setup-spire-registrations.sh`
 
 ## Troubleshooting
 
-| Issue | Solution |
-|-------|----------|
-| Tests still timeout | Verify registration: `kubectl exec <server-pod> -- spire-server entry list` |
-| Socket wait fails | Check agent logs: `kubectl logs -l app=spire-agent` |
-| Can't create entries (distroless) | Run `make spire-server-shell-enable` then `make register-test-workload` |
-| "executable file not found" | Server is distroless - see [Distroless Workaround](SPIRE_DISTROLESS_WORKAROUND.md) |
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `context deadline exceeded` | Missing registration entries | `make register-test-workload` |
+| `executable file not found` | Distroless server | `make spire-server-shell-enable` |
+| Socket wait timeout | SPIRE agent not running | `kubectl logs -l app=spire-agent -n spire-system` |
 
-## Key Files
+## How It Works
 
-| File | Purpose |
-|------|---------|
-| `scripts/spire-server-enable-shell.sh` | Switch SPIRE server image (distroless ↔ non-distroless) |
-| `scripts/setup-spire-registrations.sh` | Create/verify SPIRE registrations |
-| `scripts/run-integration-tests-ci.sh` | Run integration tests (auto-registration) |
-| `docs/SPIRE_DISTROLESS_WORKAROUND.md` | Fix distroless server issues |
-| `docs/INTEGRATION_TEST_IMPROVEMENTS.md` | Full documentation |
-| `docs/SPIRE_INTEGRATION_TEST_FIX.md` | Detailed troubleshooting guide |
+**Registration entries** map workload selectors to SPIFFE IDs:
 
-## Related Documentation
+```bash
+# Entry created by setup-spire-registrations.sh
+SPIFFE ID: spiffe://example.org/integration-test
+Parent ID: spiffe://example.org/spire/agent/k8s_psat/... (auto-detected)
+Selectors:
+  - k8s:ns:spire-system
+  - k8s:sa:default
+  - k8s:pod-label:app:spire-integration-test
+```
 
-- [Integration Test Improvements (Full Docs)](INTEGRATION_TEST_IMPROVEMENTS.md)
-- [SPIRE Integration Test Fix Guide](SPIRE_INTEGRATION_TEST_FIX.md)
-- [SPIRE Integration Test Issue (SO Format)](SPIRE_INTEGRATION_TEST_ISSUE.md)
+**Critical:** Parent ID must match the actual attested agent's SPIFFE ID. The setup script auto-detects this.
+
+## Key Scripts
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/run-integration-tests-ci.sh` | Run tests (calls registration script automatically) |
+| `scripts/setup-spire-registrations.sh` | Create/verify registration entries |
+| `scripts/spire-server-enable-shell.sh` | Toggle distroless ↔ non-distroless image |
+
+## Makefile Targets
+
+```bash
+make test-integration-ci           # Run integration tests (recommended)
+make register-test-workload        # Create registration entries only
+make spire-server-shell-enable     # Enable shell access (for distroless)
+make spire-server-shell-disable    # Switch back to distroless
+make spire-server-shell-status     # Check current image type
+```
+
+## Related Docs
+
+- [Distroless Workaround](SPIRE_DISTROLESS_WORKAROUND.md) - Detailed distroless troubleshooting
