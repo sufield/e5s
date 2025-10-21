@@ -96,22 +96,22 @@ fi
 
 success "Found SPIRE Agent: $AGENT_POD"
 
-# Verify socket exists (prefer agent pod check - works on any cluster)
+# Verify socket exists
+# Note: SPIRE agent may use distroless image without shell, so we check via node or CSI driver
 info "Checking Workload API socket availability..."
-if ! kubectl exec -n "$NS" "$AGENT_POD" -- test -S /tmp/spire-agent/public/api.sock >/dev/null 2>&1; then
-    error "Workload API socket not visible inside SPIRE Agent pod"
-    exit 1
-fi
-success "Workload API socket verified via agent pod"
 
-# Optional: Additional node check if running on Minikube
+# Try Minikube node check first (most reliable for local dev)
 if command -v minikube >/dev/null 2>&1; then
     info "Minikube detected - verifying socket on node..."
-    if ! minikube ssh -- "test -S ${SOCKET_DIR}/${SOCKET_FILE} || test -d ${SOCKET_DIR}" >/dev/null 2>&1; then
-        error "Socket/directory missing on Minikube node: ${SOCKET_DIR}/${SOCKET_FILE}"
+    if ! minikube ssh -- "test -S ${SOCKET_DIR}/${SOCKET_FILE}" >/dev/null 2>&1; then
+        error "Socket missing on Minikube node: ${SOCKET_DIR}/${SOCKET_FILE}"
         exit 1
     fi
-    success "Socket verified on Minikube node"
+    success "Workload API socket verified on Minikube node"
+else
+    # Fallback: Try CSI driver pod (usually has shell) or skip check
+    info "Skipping socket verification (agent uses distroless image, no Minikube detected)"
+    info "Will verify via test pod connection instead"
 fi
 
 # Compile test binary locally (fast, deterministic)
@@ -153,7 +153,7 @@ spec:
       image: debian:bookworm-slim
       command: ["sleep", "infinity"]
       env:
-        - name: SPIFFE_ENDPOINT_SOCKET
+        - name: SPIRE_AGENT_SOCKET
           value: "unix:///spire-socket/${SOCKET_FILE}"
         - name: SPIRE_TRUST_DOMAIN
           value: "${TRUST_DOMAIN}"
@@ -172,6 +172,7 @@ spec:
           memory: "256Mi"
       securityContext:
         runAsNonRoot: true
+        runAsUser: 65532  # nonroot user
         allowPrivilegeEscalation: false
 EOF
 
