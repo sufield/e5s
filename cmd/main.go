@@ -11,10 +11,18 @@ import (
 	"github.com/pocket/hexagon/spire/internal/adapters/outbound/compose"
 	"github.com/pocket/hexagon/spire/internal/adapters/outbound/inmemory"
 	"github.com/pocket/hexagon/spire/internal/app"
+	"github.com/pocket/hexagon/spire/internal/debug"
 )
 
 func main() {
 	ctx := context.Background()
+
+	// Initialize debug configuration from environment variables
+	debug.Init()
+	debug.InitLogger()
+
+	// Start debug server if enabled (only in debug builds)
+	debug.Start()
 
 	fmt.Println("=== In-Memory SPIRE System Demo ===")
 	fmt.Println()
