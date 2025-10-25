@@ -1,6 +1,6 @@
 # Iterations Summary
 
-This document summarizes the implementation phases for the SPIRE adapter library.
+This document summarizes the implementation phases for the SPIRE library.
 
 ## Iteration 1: mTLS HTTP Server
 

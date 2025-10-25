@@ -1,16 +1,16 @@
 # Debug Mode
 
-Debug mode is a first-class operational mode that allows the system to help you debug itself by exposing internal state and enabling mutation of runtime behavior for testing purposes.
+Debug operational mode allows the system to debug itself by exposing internal state and enabling mutation of runtime behavior for testing purposes.
 
 ## ⚠️ WARNING
 
-**Debug mode exposes internal state and allows mutation of runtime behavior. NEVER use in production.**
+**NEVER use debug mode in production.**
 
-Debug features are compiled out of production builds using build tags, ensuring they cannot accidentally ship to production. Always verify debug code is absent in production binaries (see "Verifying Debug Mode is Disabled" section).
+Debug features are compiled out of production builds using build tags, to prevent shipping to production. Always verify debug code is absent in production binaries (see "Verifying Debug Mode is Disabled" section).
 
 ## Prerequisites
 
-- Go 1.23+ (uses modern build tags)
+- Go 1.25+ (uses modern build tags)
 - Familiarity with environment variables and HTTP tools like `curl`
 - For Windows users: Use `set` instead of `export` for environment variables (e.g., `set SPIRE_DEBUG=true`)
 - Access to localhost (127.0.0.1) for the debug server
@@ -80,7 +80,7 @@ Access the debug interface at `http://127.0.0.1:6060/_debug/`
 
 ### 2. Fault Injection
 
-Simulate failures to test error handling. **All faults are one-shot** (automatically consumed after use) to ensure predictable, isolated test behavior and prevent accidental long-term system corruption. Faults do not persist across restarts.
+Simulate failures to test error handling. All faults are one-shot (automatically consumed after use) to ensure predictable, isolated test behavior and prevent accidental long-term system corruption. Faults do not persist across restarts.
 
 **Available Faults:**
 
@@ -120,7 +120,7 @@ curl -X POST http://localhost:6060/_debug/faults \
 curl -X POST http://localhost:6060/_debug/faults/reset
 ```
 
-**Note:** Faults are consumed after one use (one-shot behavior) to prevent accidental long-term effects.
+Faults are consumed after one use (one-shot behavior) to prevent accidental long-term effects.
 
 ### 3. Debug Logging
 
@@ -132,7 +132,7 @@ When `SPIRE_DEBUG=true`, detailed structured logs are printed to stdout for trac
 [DEBUG] Authentication successful
 ```
 
-**Note:** Debug logs may contain sensitive information like SPIFFE IDs. In shared environments, consider rotating logs or disabling debug mode when not actively troubleshooting.
+Debug logs may contain sensitive information like SPIFFE IDs. In shared environments, consider rotating logs or disabling debug mode when not actively troubleshooting.
 
 ### 4. Stress Mode
 

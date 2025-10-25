@@ -5,134 +5,105 @@ This guide walks you through manual testing of the mTLS identity server and clie
 ## Prerequisites
 
 - Go 1.25 or later
-- SPIRE server and agent installed
-- `kubectl` (for Minikube testing)
-- `minikube` (optional, for local Kubernetes testing)
+- `kubectl` and `minikube` (for Kubernetes testing)
+- Docker (for building images)
+
+This project uses SPIRE deployed via Kubernetes/Minikube, not standalone SPIRE binaries. The automated setup deploys SPIRE server and agents using Helm charts.
 
 ## Table of Contents
 
-1. [Quick Start (Local SPIRE)](#quick-start-local-spire)
-2. [Minikube Testing](#minikube-testing)
-3. [Testing the Identity Server](#testing-the-identity-server)
-4. [Testing the Identity Client](#testing-the-identity-client)
-5. [Testing Error Cases](#testing-error-cases)
-6. [Manual Testing with curl/openssl](#manual-testing-with-curlopenssl)
+1. [Quick Start (Minikube)](#quick-start-minikube)
+2. [Testing the Identity Server](#testing-the-identity-server)
+3. [Testing the Identity Client](#testing-the-identity-client)
+4. [Testing Error Cases](#testing-error-cases)
+5. [Manual Testing with curl/openssl](#manual-testing-with-curlopenssl)
 
 ---
 
-## Quick Start (Local SPIRE)
+## Quick Start (Minikube)
 
-### Step 1: Start SPIRE Server and Agent
+This project's SPIRE infrastructure is deployed via Kubernetes. Follow these steps to set up a complete testing environment.
 
-```bash
-# Start SPIRE server (in terminal 1)
-spire-server run -config /path/to/server.conf
-
-# Start SPIRE agent (in terminal 2)
-spire-agent run -config /path/to/agent.conf
-```
-
-### Step 2: Create Registration Entries
+### Step 1: Deploy SPIRE Infrastructure
 
 ```bash
-# Register the server workload
-spire-server entry create \
-  -spiffeID spiffe://example.org/server \
-  -parentID spiffe://example.org/agent \
-  -selector unix:uid:$(id -u)
-
-# Register the client workload
-spire-server entry create \
-  -spiffeID spiffe://example.org/client \
-  -parentID spiffe://example.org/agent \
-  -selector unix:uid:$(id -u)
+# Start Minikube and deploy SPIRE (server + agents)
+make minikube-up
 ```
 
-### Step 3: Run the Example Server
+This command:
+- Starts Minikube cluster
+- Deploys SPIRE server via Helm chart
+- Deploys SPIRE agents on each node
+- Configures the trust domain as `example.org`
+
+### Step 2: Verify SPIRE Deployment
 
 ```bash
-cd examples/zeroconfig-example
+# Check SPIRE components are running
+kubectl get pods -n spire-system
 
-# Set environment variables
-export SPIRE_AGENT_SOCKET="unix:///tmp/spire-agent/public/api.sock"
-export ALLOWED_CLIENT_ID="spiffe://example.org/client"
-export SERVER_ADDRESS=":8443"
-
-# Run the server
-go run main.go
+# Expected output:
+# NAME                            READY   STATUS    RESTARTS   AGE
+# spire-server-0                  2/2     Running   0          2m
+# spire-agent-xxxxx               1/1     Running   0          2m
 ```
 
-You should see:
+### Step 3: Deploy Example Workloads
+
+```bash
+# Deploy mTLS server example
+kubectl apply -f examples/mtls-server.yaml
+
+# Verify pod is running
+kubectl get pod -l app=mtls-server
+
+# Build and copy the binary to the pod
+go build -o bin/mtls-server ./examples/zeroconfig-example
+POD=$(kubectl get pod -l app=mtls-server -o jsonpath='{.items[0].metadata.name}')
+kubectl cp bin/mtls-server "$POD":/tmp/mtls-server
+kubectl exec "$POD" -- chmod +x /tmp/mtls-server
+```
+
+### Step 4: Run the Example Server
+
+```bash
+# Execute the server in the pod
+kubectl exec -it "$POD" -- /tmp/mtls-server
+```
+
+Expected output:
 ```
 Creating mTLS server with configuration:
-  Socket: unix:///tmp/spire-agent/public/api.sock
+  Socket: unix:///spire-socket/api.sock
   Address: :8443
-  Allowed client: spiffe://example.org/client
+  Allowed client: spiffe://example.org/workload/client
 ✓ Server created successfully
 Listening on :8443 with mTLS authentication
 ```
 
-### Step 4: Test with Example Client
+### Step 5: Test with Example Client
 
 In a new terminal:
 
 ```bash
-cd examples/zeroconfig-example
+# Deploy client workload
+kubectl apply -f examples/mtls-client.yaml
 
-# Set environment variables
-export SPIRE_AGENT_SOCKET="unix:///tmp/spire-agent/public/api.sock"
-export SERVER_URL="https://localhost:8443"
-export EXPECTED_SERVER_ID="spiffe://example.org/server"
+# Build and copy client binary
+go build -o bin/mtls-client ./examples/zeroconfig-example
+CLIENT_POD=$(kubectl get pod -l app=mtls-client -o jsonpath='{.items[0].metadata.name}')
+kubectl cp bin/mtls-client "$CLIENT_POD":/tmp/mtls-client
+kubectl exec "$CLIENT_POD" -- chmod +x /tmp/mtls-client
 
 # Run the client
-go run main.go
+kubectl exec -it "$CLIENT_POD" -- /tmp/mtls-client
 ```
 
 Expected output:
 ```
 ✓ Connection successful
-Response: Success! Authenticated as: spiffe://example.org/client
-```
-
----
-
-## Minikube Testing
-
-### Step 1: Start Minikube and Deploy SPIRE
-
-```bash
-# Start Minikube and deploy SPIRE
-make minikube-up
-```
-
-### Step 2: Deploy Test Workloads
-
-```bash
-# Build and deploy the server
-kubectl apply -f infra/dev/minikube/test-server.yaml
-
-# Build and deploy the client
-kubectl apply -f infra/dev/minikube/test-client.yaml
-```
-
-### Step 3: Verify Deployment
-
-```bash
-# Check server logs
-kubectl logs -n spire-system deployment/test-server -f
-
-# Check client logs
-kubectl logs -n spire-system deployment/test-client -f
-```
-
-### Step 4: Test Connectivity
-
-```bash
-# Port-forward to access server
-kubectl port-forward -n spire-system svc/test-server 8443:8443
-
-# In another terminal, test with curl (requires client cert)
-# See "Manual Testing with curl/openssl" section below
+Response: Success! Authenticated as: spiffe://example.org/workload/client
 ```
 
 ---
@@ -143,11 +114,19 @@ kubectl port-forward -n spire-system svc/test-server 8443:8443
 
 **Goal**: Verify server starts and connects to SPIRE agent
 
+This test runs inside a Kubernetes pod with access to the SPIRE agent socket.
+
 ```bash
-cd examples/zeroconfig-example
-export SPIRE_AGENT_SOCKET="unix:///tmp/spire-agent/public/api.sock"
-export ALLOWED_CLIENT_ID="spiffe://example.org/client"
-go run main.go
+# Ensure SPIRE infrastructure is running
+make minikube-up
+
+# Deploy and run the server (see Quick Start section)
+kubectl apply -f examples/mtls-server.yaml
+POD=$(kubectl get pod -l app=mtls-server -o jsonpath='{.items[0].metadata.name}')
+go build -o bin/mtls-server ./examples/zeroconfig-example
+kubectl cp bin/mtls-server "$POD":/tmp/mtls-server
+kubectl exec "$POD" -- chmod +x /tmp/mtls-server
+kubectl exec -it "$POD" -- /tmp/mtls-server
 ```
 
 **Expected**:
@@ -251,12 +230,16 @@ pkill -TERM -f zeroconfig-example
 
 ### Test 1: Basic Client Connection
 
+This test runs inside a Kubernetes pod with access to the SPIRE agent socket.
+
 ```bash
-cd examples/zeroconfig-example
-export SPIRE_AGENT_SOCKET="unix:///tmp/spire-agent/public/api.sock"
-export SERVER_URL="https://localhost:8443"
-export EXPECTED_SERVER_ID="spiffe://example.org/server"
-go run main.go
+# Deploy client (see Quick Start section)
+kubectl apply -f examples/mtls-client.yaml
+CLIENT_POD=$(kubectl get pod -l app=mtls-client -o jsonpath='{.items[0].metadata.name}')
+go build -o bin/mtls-client ./examples/zeroconfig-example
+kubectl cp bin/mtls-client "$CLIENT_POD":/tmp/mtls-client
+kubectl exec "$CLIENT_POD" -- chmod +x /tmp/mtls-client
+kubectl exec -it "$CLIENT_POD" -- /tmp/mtls-client
 ```
 
 **Expected**:
@@ -300,12 +283,15 @@ cfg.HTTP.Timeout = 1 * time.Millisecond
 **Goal**: Verify graceful error when SPIRE agent is unavailable
 
 ```bash
-# Stop SPIRE agent
-pkill spire-agent
+# Scale down SPIRE agents
+kubectl scale daemonset spire-agent -n spire-system --replicas=0
 
-# Try to start server
-cd examples/zeroconfig-example
-go run main.go
+# Try to start server (will fail to connect to agent socket)
+POD=$(kubectl get pod -l app=mtls-server -o jsonpath='{.items[0].metadata.name}')
+kubectl exec -it "$POD" -- /tmp/mtls-server
+
+# Restore agents
+kubectl scale daemonset spire-agent -n spire-system --replicas=1
 ```
 
 **Expected error**:
@@ -317,9 +303,14 @@ Failed to create server: create X509Source: connection error: ...
 
 **Goal**: Verify validation of SPIFFE ID format
 
+Modify the server deployment to use an invalid SPIFFE ID:
+
 ```bash
-export ALLOWED_CLIENT_ID="not-a-valid-spiffe-id"
-go run main.go
+# Edit the deployment and add invalid environment variable
+kubectl set env deployment/mtls-server -n default ALLOWED_CLIENT_ID="not-a-valid-spiffe-id"
+
+# Check pod logs for error
+kubectl logs -l app=mtls-server --tail=50
 ```
 
 **Expected error**:
@@ -331,21 +322,17 @@ Failed to create server: parse allowed peer ID: scheme is missing or invalid
 
 **Goal**: Verify server rejects clients with wrong SPIFFE ID
 
-1. Register a different client:
-```bash
-spire-server entry create \
-  -spiffeID spiffe://example.org/unauthorized \
-  -parentID spiffe://example.org/agent \
-  -selector unix:uid:$(id -u)
-```
+Registration entries are managed automatically by the Kubernetes setup. To test unauthorized access, you would need to:
 
-2. Update client to use unauthorized ID (modify registration entry)
-
-3. Try to connect
+1. Create a pod with a different workload selector
+2. Register it with a different SPIFFE ID
+3. Attempt connection from that pod
 
 **Expected**:
 - ❌ Connection rejected by server
 - Server logs: "unexpected peer ID"
+
+For detailed workload registration, see `examples/README.md`.
 
 ### Error Case 4: No TLS Connection
 
@@ -365,58 +352,58 @@ resp, err := http.Get("http://localhost:8443/")
 
 ### Extract Certificates from SPIRE
 
-SPIRE provides certificates via the Workload API. To test with curl, you need to extract them:
+SPIRE provides certificates via the Workload API. To test with curl, you need to extract them from a pod:
 
 ```bash
-# Get the X.509 SVID and key
-spire-agent api fetch x509 -socketPath /tmp/spire-agent/public/api.sock -write /tmp/certs/
+# Exec into a workload pod with SPIRE access
+POD=$(kubectl get pod -l app=mtls-server -o jsonpath='{.items[0].metadata.name}')
 
-# This creates:
-# /tmp/certs/svid.0.pem        (certificate)
-# /tmp/certs/svid.0.key        (private key)
-# /tmp/certs/bundle.0.pem      (trust bundle)
+# Install spire-agent CLI in the pod (if not already present)
+kubectl exec -it "$POD" -- sh -c "
+  # Fetch certificates using the workload API socket
+  # Note: This requires spire-agent CLI tools in the pod
+  # For this example, certificates are managed by the go-spiffe SDK
+"
+
+# Alternative: Use go-spiffe SDK's debug endpoint if enabled
+# Or extract from application logs in debug mode
 ```
 
-### Test with curl
+**Note**: In production usage, certificates are managed automatically by the go-spiffe SDK and don't need manual extraction. This section is primarily for debugging TLS handshake issues.
+
+### Test with curl (from within cluster)
+
+Testing mTLS endpoints requires valid SPIFFE certificates, which are easiest to use from within the cluster:
 
 ```bash
-# Test health endpoint (may not require client cert depending on config)
-curl -k https://localhost:8443/health
+# Port-forward the server to access from outside
+kubectl port-forward svc/mtls-server 8443:8443 &
 
-# Test authenticated endpoint
-curl -k \
-  --cert /tmp/certs/svid.0.pem \
-  --key /tmp/certs/svid.0.key \
-  --cacert /tmp/certs/bundle.0.pem \
-  https://localhost:8443/
+# Test from client pod (which has valid certificates via SPIRE)
+CLIENT_POD=$(kubectl get pod -l app=mtls-client -o jsonpath='{.items[0].metadata.name}')
 
-# Test API endpoints
-curl -k \
-  --cert /tmp/certs/svid.0.pem \
-  --key /tmp/certs/svid.0.key \
-  https://localhost:8443/api/hello
+kubectl exec -it "$CLIENT_POD" -- sh -c '
+  # Test health endpoint
+  curl -k https://mtls-server:8443/health
 
-curl -k \
-  --cert /tmp/certs/svid.0.pem \
-  --key /tmp/certs/svid.0.key \
-  https://localhost:8443/api/identity
+  # Authenticated endpoints require certificates managed by application
+  # Use the built binary instead of curl for proper mTLS
+'
 ```
 
-### Test with openssl s_client
+### Test with openssl s_client (TLS handshake inspection)
 
 ```bash
-# Connect and see TLS handshake details
-openssl s_client \
-  -connect localhost:8443 \
-  -cert /tmp/certs/svid.0.pem \
-  -key /tmp/certs/svid.0.key \
-  -CAfile /tmp/certs/bundle.0.pem
+# Port-forward the service
+kubectl port-forward svc/mtls-server 8443:8443
 
-# Once connected, type:
-GET / HTTP/1.1
-Host: localhost:8443
+# In another terminal, inspect TLS handshake
+# Note: This will fail at mTLS verification without valid client cert
+openssl s_client -connect localhost:8443 -showcerts
 
-# Press Enter twice to send request
+# To see full mTLS with valid certs, exec into a pod with SPIRE access
+kubectl exec -it "$CLIENT_POD" -- openssl s_client \
+  -connect mtls-server:8443 -showcerts
 ```
 
 ---
@@ -467,27 +454,30 @@ Use this checklist to verify full functionality:
 
 **Fix**:
 ```bash
-# Check if server is running
-ps aux | grep zeroconfig-example
+# Check if pod is running
+kubectl get pod -l app=mtls-server
 
-# Check what's listening on port 8443
-lsof -i :8443
+# Check pod logs
+kubectl logs -l app=mtls-server --tail=50
+
+# Check what's listening inside the pod
+kubectl exec -it <pod-name> -- netstat -tlnp | grep 8443
 ```
 
 ### Issue: "create X509Source: connection error"
 
-**Cause**: SPIRE agent not running or wrong socket path
+**Cause**: SPIRE agent not running or socket not mounted
 
 **Fix**:
 ```bash
 # Check SPIRE agent status
-ps aux | grep spire-agent
+kubectl get pods -n spire-system -l app=spire-agent
 
-# Verify socket exists
-ls -l /tmp/spire-agent/public/api.sock
+# Verify socket is mounted in pod
+kubectl exec -it <pod-name> -- ls -l /spire-socket/api.sock
 
-# Check socket path in configuration
-echo $SPIRE_AGENT_SOCKET
+# Check volume mount in deployment
+kubectl describe pod <pod-name> | grep -A 5 "Mounts:"
 ```
 
 ### Issue: "unexpected peer ID"
@@ -496,11 +486,12 @@ echo $SPIRE_AGENT_SOCKET
 
 **Fix**:
 ```bash
-# List registration entries
-spire-server entry show
+# List registration entries using kubectl exec into spire-server pod
+kubectl exec -n spire-system spire-server-0 -c spire-server -- \
+  /opt/spire/bin/spire-server entry show
 
-# Verify client's SPIFFE ID matches ALLOWED_CLIENT_ID
-# Update registration or environment variable
+# Check workload registration in examples/README.md
+# Verify SPIFFE IDs match between server config and registration
 ```
 
 ### Issue: "certificate signed by unknown authority"
@@ -509,8 +500,11 @@ spire-server entry show
 
 **Fix**:
 ```bash
-# Verify both use same SPIRE server
-# Check trust domain matches in SPIFFE IDs
+# Verify both pods connect to same SPIRE infrastructure
+kubectl exec -n spire-system spire-server-0 -c spire-server -- \
+  /opt/spire/bin/spire-server bundle show
+
+# Check trust domain in SPIFFE IDs (should be example.org)
 ```
 
 ### Issue: Server panics on startup
@@ -519,11 +513,13 @@ spire-server entry show
 
 **Fix**:
 ```bash
-# Check all required environment variables are set
-env | grep SPIRE
-env | grep ALLOWED
+# Check pod logs for detailed error
+kubectl logs -l app=mtls-server --tail=100
 
-# Verify SPIFFE ID format
+# Check environment variables in pod
+kubectl exec -it <pod-name> -- env | grep -E "(SPIRE|ALLOWED|SERVER)"
+
+# Verify SPIFFE ID format in deployment YAML
 # Format: spiffe://trust-domain/path
 ```
 
