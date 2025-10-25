@@ -3,6 +3,8 @@ package debug
 import (
 	"fmt"
 	"sync"
+
+	"github.com/pocket/hexagon/spire/internal/assert"
 )
 
 // FaultProfile defines faults that can be injected for testing.
@@ -29,6 +31,10 @@ type FaultProfile struct {
 	// RejectNextWorkloadLookup makes next workload lookup fail (one-shot)
 	RejectNextWorkloadLookup bool
 }
+
+// expectedFaultFieldCount is the number of fault fields in FaultProfile.
+// Update this constant when adding or removing fault fields.
+const expectedFaultFieldCount = 6
 
 // Faults is the global fault profile
 var Faults = &FaultProfile{}
@@ -70,14 +76,18 @@ func (f *FaultProfile) ShouldCorruptSPIFFEID() bool {
 }
 
 // SetDelayNextIssue sets delay for next identity issuance.
-// Returns an error if seconds is negative.
+//
+// Precondition: seconds >= 0
 func (f *FaultProfile) SetDelayNextIssue(seconds int) error {
+	// Precondition: validate caller input
 	if seconds < 0 {
 		return fmt.Errorf("delay must be non-negative, got %d", seconds)
 	}
+
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.DelayNextIssueSeconds = seconds
+
 	return nil
 }
 
@@ -159,10 +169,13 @@ func (f *FaultProfile) Reset() {
 // Snapshot returns the current state of all faults as a map.
 // This is useful for debugging, logging, or exposing via HTTP endpoints.
 // The snapshot is a point-in-time view and won't reflect subsequent changes.
+//
+// Invariant: All fault fields are included without omissions (read is atomic under RLock)
 func (f *FaultProfile) Snapshot() map[string]any {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
-	return map[string]any{
+
+	snapshot := map[string]any{
 		"drop_next_handshake":         f.DropNextHandshake,
 		"corrupt_next_spiffe_id":      f.CorruptNextSPIFFEID,
 		"delay_next_issue_seconds":    f.DelayNextIssueSeconds,
@@ -170,4 +183,10 @@ func (f *FaultProfile) Snapshot() map[string]any {
 		"force_expired_cert":          f.ForceExpiredCert,
 		"reject_next_workload_lookup": f.RejectNextWorkloadLookup,
 	}
+
+	// Invariant: Snapshot completeness - catches programmer error if fields are added but snapshot is not updated
+	assert.Invariant(len(snapshot) == expectedFaultFieldCount,
+		fmt.Sprintf("snapshot must contain all %d fault fields (actual: %d)", expectedFaultFieldCount, len(snapshot)))
+
+	return snapshot
 }

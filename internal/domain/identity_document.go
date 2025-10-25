@@ -4,6 +4,8 @@ import (
 	"crypto/x509"
 	"fmt"
 	"time"
+
+	"github.com/pocket/hexagon/spire/internal/assert"
 )
 
 // IdentityDocument represents an immutable X.509-based verifiable identity document (SVID).
@@ -106,11 +108,18 @@ func NewIdentityDocumentFromComponents(
 		copy(normalizedChain, chain)
 	}
 
-	return &IdentityDocument{
+	doc := &IdentityDocument{
 		identityCredential: identityCredential,
 		cert:               cert,
 		chain:              normalizedChain,
-	}, nil
+	}
+
+	// Invariant: Verify chain normalization logic (leaf-first invariant)
+	// This catches bugs in the normalization logic above, not caller errors
+	assert.Invariant(len(doc.chain) >= 1 && doc.chain[0] == cert,
+		"chain must be non-empty with leaf certificate at position 0 (normalization bug)")
+
+	return doc, nil
 }
 
 // IdentityCredential returns the SPIFFE ID for this identity.

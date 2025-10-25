@@ -66,6 +66,7 @@ func NewTrustDomainFromName(name string) *TrustDomain {
 		// Keep domain self-protecting even if an adapter misuses it.
 		panic(fmt.Errorf("%w: trust domain name cannot be empty", ErrInvalidTrustDomain))
 	}
+
 	return &TrustDomain{name: strings.ToLower(name)}
 }
 

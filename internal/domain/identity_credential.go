@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/pocket/hexagon/spire/internal/assert"
 )
 
 // IdentityCredential is an immutable value object representing a unique,
@@ -84,11 +86,19 @@ func NewIdentityCredentialFromComponents(trustDomain *TrustDomain, path string) 
 	// SPIFFE scheme is hardcoded as this service is SPIFFE-specific
 	uri := "spiffe://" + trustDomain.String() + norm
 
-	return &IdentityCredential{
+	ic := &IdentityCredential{
 		trustDomain: trustDomain,
 		path:        norm,
 		uri:         uri,
 	}
+
+	// Invariants: Verify normalization and URI construction logic
+	assert.Invariant(ic.path != "",
+		"normalizePath must return non-empty path (should default to '/' for empty input)")
+	assert.Invariant(ic.uri != "" && strings.HasPrefix(ic.uri, "spiffe://") && strings.HasSuffix(ic.uri, ic.path),
+		"URI construction must produce valid SPIFFE URI with correct path suffix")
+
+	return ic
 }
 
 // normalizePath normalizes a path component for SPIFFE ID construction.
