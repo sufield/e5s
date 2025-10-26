@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"unicode"
 
 	"github.com/pocket/hexagon/spire/internal/assert"
 )
@@ -46,30 +47,38 @@ type IdentityCredential struct {
 // by IdentityCredentialParser adapters after SDK validation. For user-facing
 // code, prefer using the parser adapter which validates first and returns errors.
 //
+// Path Requirements (STRICT - panics if violated):
+//   - Must be pre-normalized (no consecutive slashes, no trailing slashes)
+//   - Must be whitespace-free (no leading, trailing, or internal whitespace including Unicode)
+//   - Must not contain traversal segments: "." or ".." (SPIFFE spec forbids path traversal)
+//   - Empty or "/" is acceptable (becomes root identity)
+//   - Missing leading slash is acceptable (convenience: adds automatically)
+//
 // This constructor is typically called by IdentityCredentialParser adapters
-// after SDK validation. It performs final normalization and immutable construction.
+// after SDK validation (spiffeid.FromString, spiffeid.FromSegments). The SDK
+// ensures all paths are normalized and valid per SPIFFE spec. This function
+// performs final validation to catch programming errors in test/domain code.
 //
 // Validation:
 //   - trustDomain must be non-nil (panics if nil to catch programming errors early)
-//   - path is normalized: leading slash, collapsed //, root → "/"
-//   - path must not contain '.' or '..' segments (panics if present)
-//   - URI precomputed from normalized components
+//   - path is validated and minimally normalized (see normalizePath)
+//   - path must not contain whitespace, //, trailing /, or traversal segments (panics if invalid)
+//   - URI precomputed from validated components
 //
 // Path Normalization:
 //   - Empty string → "/"
-//   - "workload" → "/workload" (adds leading slash)
-//   - "//foo//bar" → "/foo/bar" (collapses multiple slashes)
-//   - Whitespace trimmed
+//   - "workload" → "/workload" (convenience: adds leading slash)
+//   - Already normalized paths pass through validation unchanged
 //
 // Examples:
 //
 //	NewIdentityCredentialFromComponents(td, "/workload")     → spiffe://example.org/workload
 //	NewIdentityCredentialFromComponents(td, "")              → spiffe://example.org/
-//	NewIdentityCredentialFromComponents(td, "//foo//bar")    → spiffe://example.org/foo/bar
+//	NewIdentityCredentialFromComponents(td, "workload")      → spiffe://example.org/workload (adds /)
 //
 // Panics:
 //   - If trustDomain is nil (programming error, not runtime input validation)
-//   - If path contains '.' or '..' segments (normalizePath panics)
+//   - If path contains whitespace, //, trailing /, or traversal segments (normalizePath panics)
 //
 // Concurrency: Safe for concurrent use (pure function, no shared state).
 func NewIdentityCredentialFromComponents(trustDomain *TrustDomain, path string) *IdentityCredential {
@@ -101,77 +110,105 @@ func NewIdentityCredentialFromComponents(trustDomain *TrustDomain, path string) 
 	return ic
 }
 
-// normalizePath normalizes a path component for SPIFFE ID construction.
+// normalizePath validates and normalizes a path component for SPIFFE ID construction.
 //
-// ⚠️  WARNING: This function PANICS on invalid input (dot/dotdot segments).
-// It is intended for internal use by constructors after adapter validation.
+// ⚠️  WARNING: This function PANICS on invalid input. It is designed to catch
+// programmer errors early. For user input, validation should happen in adapters
+// using go-spiffe SDK before calling domain constructors.
 //
-// Normalization Rules:
-//  1. Trim leading/trailing whitespace
-//  2. Empty or "/" → "/" (root identity)
-//  3. Ensure leading slash (e.g., "foo" → "/foo")
-//  4. Collapse multiple slashes (e.g., "//foo//bar" → "/foo/bar")
-//  5. Remove trailing slashes (e.g., "/foo/bar/" → "/foo/bar")
-//  6. Reject dot (`.`) and dotdot (`..`) segments (panics if present)
+// Design Philosophy:
+//   - Strict validation: Rejects invalid SPIFFE paths (whitespace, traversal segments)
+//   - Minimal normalization: Only adds leading slash and handles root case
+//   - Trust SDK: Relies on go-spiffe SDK for comprehensive validation in production
+//   - Fail fast: Panics on programmer errors to prevent silent data corruption
 //
-// SPIFFE IDs follow RFC 3986 URI syntax. Dot (`.`) and dotdot (`..`) segments
-// are disallowed here to prevent path traversal normalization ambiguity and
-// ensure canonical representation for equality checks.
+// Validation Rules (PANICS if violated):
+//  1. No leading/trailing whitespace (SPIFFE spec violations)
+//  2. No internal whitespace (spaces, tabs, newlines, Unicode spaces, etc.)
+//  3. No traversal segments: "." or ".." (SPIFFE spec forbids path traversal)
+//  4. No consecutive slashes (e.g., "//") (indicates non-normalized input)
+//  5. No trailing slashes except root "/" (indicates non-normalized input)
 //
-// This prevents duplicate identities like "/foo" and "//foo" from being
-// treated differently.
+// Normalization Rules (non-panicking):
+//  1. Empty or "/" → "/" (root identity)
+//  2. Missing leading slash → add it (convenience: "foo" → "/foo")
+//
+// SPIFFE Spec Compliance:
+//   - Paths must not contain spaces or special characters (per RFC 3986 unreserved/pct-encoded)
+//   - Paths must not have . or .. segments (prevents traversal ambiguity)
+//   - Paths should be in canonical form (no // or trailing /)
+//
+// This strict validation ensures:
+//   - Callers don't accidentally pass user input without SDK validation
+//   - Test code uses valid SPIFFE paths
+//   - Silent corruption (e.g., "path " becoming "path") is impossible
 //
 // Examples:
 //
 //	normalizePath("")             → "/"
-//	normalizePath("  /  ")        → "/"
 //	normalizePath("/")            → "/"
-//	normalizePath("workload")     → "/workload"
+//	normalizePath("workload")     → "/workload"  (convenience: adds leading /)
 //	normalizePath("/workload")    → "/workload"
-//	normalizePath("//foo//bar")   → "/foo/bar"
-//	normalizePath("///foo///")    → "/foo"
-//	normalizePath("/foo/bar/")    → "/foo/bar"
-//	normalizePath("/db:rw/user")  → "/db:rw/user" (colons allowed)
+//	normalizePath("/db:rw/user")  → "/db:rw/user" (colons allowed per RFC 3986)
 //
-// Panics:
-//   - If path contains `.` or `..` segments (path traversal)
+// Panics (programmer errors):
 //
-// Note: Query parameters (`?`) and fragments (`#`) are not handled here as
-// they're invalid in SPIFFE IDs. Adapters using go-spiffe SDK reject such
-// inputs during parsing.
+//	normalizePath("  /  ")        → PANIC (leading whitespace at position 0)
+//	normalizePath("/path ")       → PANIC (trailing whitespace at position 5)
+//	normalizePath(" /path")       → PANIC (leading whitespace at position 0)
+//	normalizePath("/path with spaces") → PANIC (internal whitespace at position 5)
+//	normalizePath("//foo")        → PANIC (consecutive slashes)
+//	normalizePath("/foo/")        → PANIC (trailing slash)
+//	normalizePath("/.")           → PANIC (invalid traversal segment ".")
+//	normalizePath("/../foo")      → PANIC (invalid traversal segment "..")
 //
-// Note: Colons (`:`) are allowed in path segments per RFC 3986 and SPIFFE spec.
+// Note: go-spiffe SDK (spiffeid.FromString, spiffeid.FromSegments) performs
+// comprehensive validation in production. This function catches programming
+// errors when paths are constructed directly in tests or domain logic.
+//
+// Spec reference: SPIFFE ID Standard v1.0
+// https://github.com/spiffe/spiffe/blob/main/standards/SPIFFE-ID.md#22-path
 func normalizePath(p string) string {
-	// Step 1: Trim whitespace
-	p = strings.TrimSpace(p)
-
-	// Step 2: Root identity (empty or single slash)
+	// Step 1: Handle root identity (empty or single slash)
 	if p == "" || p == "/" {
 		return "/"
 	}
 
-	// Step 3: Ensure leading slash
+	// Step 2: Validate no whitespace (leading, trailing, or internal)
+	// Use IndexFunc for efficiency (short-circuits on first match) and consistent style
+	if idx := strings.IndexFunc(p, unicode.IsSpace); idx >= 0 {
+		// Determine position type for clear error message
+		var posType string
+		if idx == 0 {
+			posType = "leading"
+		} else if idx == len(p)-1 {
+			posType = "trailing"
+		} else {
+			posType = "internal"
+		}
+		panic(fmt.Errorf("%w: path has %s whitespace at position %d: %q", ErrInvalidIdentityCredential, posType, idx, p))
+	}
+
+	// Step 4: Add leading slash if missing (convenience for test code)
 	if !strings.HasPrefix(p, "/") {
 		p = "/" + p
 	}
 
-	// Step 4: Collapse repeated slashes
-	// Loop instead of regex for simplicity and no regex dependency
-	for strings.Contains(p, "//") {
-		p = strings.ReplaceAll(p, "//", "/")
+	// Step 5: Validate no consecutive slashes (should be pre-normalized)
+	if strings.Contains(p, "//") {
+		panic(fmt.Errorf("%w: path has consecutive slashes (should be normalized): %q", ErrInvalidIdentityCredential, p))
 	}
 
-	// Step 5: Remove trailing slashes (but preserve root "/")
-	p = strings.TrimRight(p, "/")
-	if p == "" {
-		return "/"
+	// Step 6: Validate no trailing slash (should be pre-normalized, except root)
+	if len(p) > 1 && strings.HasSuffix(p, "/") {
+		panic(fmt.Errorf("%w: path has trailing slash (should be normalized): %q", ErrInvalidIdentityCredential, p))
 	}
 
-	// Step 6: Validate no dot or dotdot segments (SPIFFE forbids traversal)
+	// Step 7: Validate no dot or dotdot segments (SPIFFE spec forbids traversal)
 	segments := strings.Split(p, "/")
 	for _, seg := range segments {
 		if seg == "." || seg == ".." {
-			panic(fmt.Errorf("%w: path cannot contain '.' or '..' segments", ErrInvalidIdentityCredential))
+			panic(fmt.Errorf("%w: path contains invalid traversal segment (%q): %q", ErrInvalidIdentityCredential, seg, p))
 		}
 	}
 

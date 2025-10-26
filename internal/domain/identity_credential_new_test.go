@@ -145,38 +145,8 @@ func TestIdentityCredential_PathNormalization(t *testing.T) {
 			expectedURI:  "spiffe://example.org/",
 		},
 		{
-			name:         "whitespace-only becomes root",
-			inputPath:    "   ",
-			expectedPath: "/",
-			expectedURI:  "spiffe://example.org/",
-		},
-		{
 			name:         "path without leading slash gets one",
 			inputPath:    "workload",
-			expectedPath: "/workload",
-			expectedURI:  "spiffe://example.org/workload",
-		},
-		{
-			name:         "double slashes collapsed",
-			inputPath:    "//foo//bar",
-			expectedPath: "/foo/bar",
-			expectedURI:  "spiffe://example.org/foo/bar",
-		},
-		{
-			name:         "triple slashes collapsed",
-			inputPath:    "///foo///bar",
-			expectedPath: "/foo/bar",
-			expectedURI:  "spiffe://example.org/foo/bar",
-		},
-		{
-			name:         "mixed slashes collapsed",
-			inputPath:    "/foo////bar//baz",
-			expectedPath: "/foo/bar/baz",
-			expectedURI:  "spiffe://example.org/foo/bar/baz",
-		},
-		{
-			name:         "whitespace around path trimmed",
-			inputPath:    "  /workload  ",
 			expectedPath: "/workload",
 			expectedURI:  "spiffe://example.org/workload",
 		},
@@ -198,12 +168,6 @@ func TestIdentityCredential_PathNormalization(t *testing.T) {
 			expectedPath: "/service:v1.2.3:prod",
 			expectedURI:  "spiffe://example.org/service:v1.2.3:prod",
 		},
-		{
-			name:         "trailing slashes removed",
-			inputPath:    "/foo/bar/",
-			expectedPath: "/foo/bar",
-			expectedURI:  "spiffe://example.org/foo/bar",
-		},
 	}
 
 	for _, tt := range tests {
@@ -223,26 +187,63 @@ func TestIdentityCredential_PathNormalization(t *testing.T) {
 	}
 }
 
-// TestIdentityCredential_PathNormalization_Equality tests that normalization ensures equality
-func TestIdentityCredential_PathNormalization_Equality(t *testing.T) {
+// TestIdentityCredential_PathValidation_Strict tests that strict validation rejects invalid paths
+func TestIdentityCredential_PathValidation_Strict(t *testing.T) {
 	t.Parallel()
 
-	// Arrange
 	td := domain.NewTrustDomainFromName("example.org")
 
-	// Create multiple instances with different representations of the same path
-	id1 := domain.NewIdentityCredentialFromComponents(td, "/foo/bar")
-	id2 := domain.NewIdentityCredentialFromComponents(td, "//foo//bar")
-	id3 := domain.NewIdentityCredentialFromComponents(td, "///foo///bar///")
+	// Test that invalid paths panic (strict validation)
+	invalidPaths := []struct {
+		path   string
+		reason string
+	}{
+		{"//foo//bar", "consecutive slashes"},
+		{"/foo/bar/", "trailing slash"},
+		{"/foo bar", "internal whitespace (space)"},
+		{"/foo\tbar", "internal whitespace (tab)"},
+		{"/foo\nbar", "internal whitespace (newline)"},
+		{"/foo\rbar", "internal whitespace (carriage return)"},
+		{"/foo\fbar", "internal whitespace (form feed)"},
+		{"/foo\u00A0bar", "internal whitespace (non-breaking space U+00A0)"},
+		{"/foo\u2003bar", "internal whitespace (em space U+2003)"},
+		{" /foo", "leading whitespace (space)"},
+		{"\t/foo", "leading whitespace (tab)"},
+		{"/foo ", "trailing whitespace (space)"},
+		{"/foo\n", "trailing whitespace (newline)"},
+		{"/./foo", "dot segment"},
+		{"/../foo", "dotdot segment"},
+	}
 
-	// Assert: All should be equal after normalization
-	assert.True(t, id1.Equals(id2), "Paths with different slash counts should be equal after normalization")
-	assert.True(t, id2.Equals(id3), "Paths with different slash counts should be equal after normalization")
-	assert.True(t, id1.Equals(id3), "Paths with different slash counts should be equal after normalization")
+	for _, tc := range invalidPaths {
+		tc := tc // capture range variable
+		t.Run(tc.reason, func(t *testing.T) {
+			t.Parallel()
+			assert.Panics(t, func() {
+				domain.NewIdentityCredentialFromComponents(td, tc.path)
+			}, "Should panic for path with %s: %q", tc.reason, tc.path)
+		})
+	}
 
-	// All should have the same canonical form
-	assert.Equal(t, id1.String(), id2.String())
-	assert.Equal(t, id2.String(), id3.String())
+	// Test that valid paths work
+	validPaths := []struct {
+		path     string
+		expected string
+	}{
+		{"/foo/bar", "/foo/bar"},
+		{"foo/bar", "/foo/bar"}, // Convenience: adds leading slash
+		{"/", "/"},
+		{"", "/"},
+	}
+
+	for _, tc := range validPaths {
+		tc := tc
+		t.Run(tc.path, func(t *testing.T) {
+			t.Parallel()
+			id := domain.NewIdentityCredentialFromComponents(td, tc.path)
+			assert.Equal(t, tc.expected, id.Path())
+		})
+	}
 }
 
 // TestIdentityCredential_MarshalJSON tests JSON marshaling

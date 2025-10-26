@@ -474,11 +474,6 @@ func TestExtractNameFromCredential(t *testing.T) {
 			expected: "v1",
 		},
 		{
-			name:     "trailing slash",
-			path:     "/workload/",
-			expected: "workload",
-		},
-		{
 			name:     "empty path (root ID)",
 			path:     "",
 			expected: "example.org",
