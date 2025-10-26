@@ -1,24 +1,8 @@
-# Production-Ready Workload API Implementation
+# Workload API Implementation
 
 ## Overview
 
 The Workload API implementation uses kernel-level workload attestation using SO_PEERCRED on Linux.
-
-## What Changed
-
-### Before: Header-Based Attestation (Walking Skeleton)
-
-```
-┌──────────┐                    ┌──────────┐
-│ Workload │ ── Headers → │  Server  │
-│ (Client) │    (Forgeable)     │          │
-└──────────┘                    └──────────┘
-```
-
-- Workload sent credentials in HTTP headers
-- Server trusted client-provided data
-- **Security**: Credentials could be forged
-- **Use Case**: Development/demonstration only
 
 ### After: SO_PEERCRED (Production-Ready)
 
@@ -40,7 +24,7 @@ The Workload API implementation uses kernel-level workload attestation using SO_
 - **Security**: Credentials CANNOT be forged
 - **Use Case**: Production deployments
 
-## Technical Implementation
+## Implementation
 
 ### New Files
 
@@ -106,7 +90,7 @@ The Workload API implementation uses kernel-level workload attestation using SO_
 - **Security**: Kernel-verified, cannot be forged
 - **Use in Production**: Yes
 
-### Other Platforms ⚠️
+### Other Platforms
 
 | Platform | Mechanism | Status | Implementation Effort |
 |----------|-----------|--------|----------------------|
@@ -143,19 +127,8 @@ httpReq.Header.Set("X-Spire-Caller-UID", "9999") // Ignored!
    - Use Docker/containers to test different UIDs
    - Verify unregistered UIDs are properly rejected
 
-## Migration Guide
+### Client Code Changes
 
-### For Existing Code
-
-If you have code using the old header-based client:
-
-**Before**:
-```go
-client := workloadapi.NewClient(socketPath)
-// Client sent attestation headers automatically
-```
-
-**After**:
 ```go
 client, err := workloadapi.NewClient(socketPath, nil)
 if err != nil {
