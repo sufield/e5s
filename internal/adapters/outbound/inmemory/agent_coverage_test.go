@@ -14,6 +14,8 @@ package inmemory_test
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -38,8 +40,8 @@ func TestAgent_FetchIdentityDocument_NoSelectorsRegistered(t *testing.T) {
 	registry := inmemory.NewInMemoryRegistry()
 	registry.Seal()
 
-	// Create attestor WITHOUT registering any UIDs
-	workloadAttestor := attestor.NewUnixWorkloadAttestor()
+	// Create attestor with trust domain
+	workloadAttestor := attestor.NewUnixPeerCredAttestor("example.org")
 	parser := inmemory.NewInMemoryIdentityCredentialParser()
 
 	agent, err := inmemory.NewInMemoryAgent(
@@ -53,13 +55,13 @@ func TestAgent_FetchIdentityDocument_NoSelectorsRegistered(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	// Act - Try to fetch with unregistered UID
-	workload := domain.NewWorkload(1, 99999, 99999, "/unknown")
+	// Act - Try to fetch with current process (will get selectors but no mapper matches)
+	workload := domain.NewWorkload(os.Getpid(), os.Getuid(), os.Getgid(), "/testapp")
 	_, err = agent.FetchIdentityDocument(ctx, workload)
 
-	// Assert - Should fail because UID not registered in attestor
+	// Assert - Should fail because no mapper matches the selectors
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "attestation")
+	assert.Contains(t, err.Error(), "no identity mapper found")
 }
 func TestAgent_FetchIdentityDocument_NoMatchingMapper(t *testing.T) {
 	t.Parallel()
@@ -75,9 +77,8 @@ func TestAgent_FetchIdentityDocument_NoMatchingMapper(t *testing.T) {
 	registry := inmemory.NewInMemoryRegistry()
 	registry.Seal() // Seal with no mappers
 
-	// Create attestor and register a UID
-	workloadAttestor := attestor.NewUnixWorkloadAttestor()
-	workloadAttestor.RegisterUID(1000, "unix:user:testuser")
+	// Create attestor with trust domain
+	workloadAttestor := attestor.NewUnixPeerCredAttestor("example.org")
 
 	parser := inmemory.NewInMemoryIdentityCredentialParser()
 
@@ -92,8 +93,8 @@ func TestAgent_FetchIdentityDocument_NoMatchingMapper(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	// Act - Fetch with UID that has selectors but no matching mapper in registry
-	workload := domain.NewWorkload(1, 1000, 1000, "/testapp")
+	// Act - Fetch with current process (has selectors but no matching mapper in registry)
+	workload := domain.NewWorkload(os.Getpid(), os.Getuid(), os.Getgid(), "/testapp")
 	_, err = agent.FetchIdentityDocument(ctx, workload)
 
 	// Assert - Should fail with "no mapper found" error
@@ -113,7 +114,7 @@ func TestAgent_GetIdentity(t *testing.T) {
 	registry := inmemory.NewInMemoryRegistry()
 	registry.Seal()
 
-	workloadAttestor := attestor.NewUnixWorkloadAttestor()
+	workloadAttestor := attestor.NewUnixPeerCredAttestor("example.org")
 	parser := inmemory.NewInMemoryIdentityCredentialParser()
 
 	agent, err := inmemory.NewInMemoryAgent(
@@ -149,7 +150,7 @@ func TestAgent_NewInMemoryAgent_ErrorPaths(t *testing.T) {
 	registry := inmemory.NewInMemoryRegistry()
 	registry.Seal()
 
-	workloadAttestor := attestor.NewUnixWorkloadAttestor()
+	workloadAttestor := attestor.NewUnixPeerCredAttestor("example.org")
 	parser := inmemory.NewInMemoryIdentityCredentialParser()
 
 	tests := []struct {
@@ -187,7 +188,7 @@ func TestAgent_NewInMemoryAgent_ErrorPaths(t *testing.T) {
 		})
 	}
 }
-func TestAgent_FetchIdentityDocument_InvalidSelector(t *testing.T) {
+func TestAgent_FetchIdentityDocument_NoMatchingMapperForSelectors(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -200,9 +201,9 @@ func TestAgent_FetchIdentityDocument_InvalidSelector(t *testing.T) {
 	registry := inmemory.NewInMemoryRegistry()
 	registry.Seal()
 
-	// Create attestor that returns invalid selector format
-	workloadAttestor := attestor.NewUnixWorkloadAttestor()
-	workloadAttestor.RegisterUID(2000, "invalid-selector-no-colon")
+	// Create attestor with trust domain
+	// Note: UnixPeerCredAttestor generates valid selectors from real process data
+	workloadAttestor := attestor.NewUnixPeerCredAttestor("example.org")
 
 	parser := inmemory.NewInMemoryIdentityCredentialParser()
 
@@ -217,13 +218,13 @@ func TestAgent_FetchIdentityDocument_InvalidSelector(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	// Act - Try to fetch with UID that has invalid selector
-	workload := domain.NewWorkload(1, 2000, 2000, "/testapp")
+	// Act - Try to fetch with current process (has valid selectors but no matching mapper)
+	workload := domain.NewWorkload(os.Getpid(), os.Getuid(), os.Getgid(), "/testapp")
 	_, err = agent.FetchIdentityDocument(ctx, workload)
 
-	// Assert - Should fail with selector parse error
+	// Assert - Should fail because no mapper matches the selectors
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid selector")
+	assert.Contains(t, err.Error(), "no identity mapper found")
 }
 func TestAgent_FetchIdentityDocument_FullErrorFlow(t *testing.T) {
 	t.Parallel()
@@ -237,10 +238,13 @@ func TestAgent_FetchIdentityDocument_FullErrorFlow(t *testing.T) {
 
 	registry := inmemory.NewInMemoryRegistry()
 
-	// Register a mapper
+	// Register a mapper that matches the current process's UID
 	td := domain.NewTrustDomainFromName("example.org")
 	credential := domain.NewIdentityCredentialFromComponents(td, "/workload")
-	selector, err := domain.ParseSelectorFromString("unix:uid:1000")
+	// Use current process UID for selector
+	currentUID := os.Getuid()
+	selectorStr := fmt.Sprintf("unix:uid:%d", currentUID)
+	selector, err := domain.ParseSelectorFromString(selectorStr)
 	require.NoError(t, err)
 
 	selectorSet := domain.NewSelectorSet()
@@ -251,8 +255,7 @@ func TestAgent_FetchIdentityDocument_FullErrorFlow(t *testing.T) {
 	require.NoError(t, err)
 	registry.Seal()
 
-	workloadAttestor := attestor.NewUnixWorkloadAttestor()
-	workloadAttestor.RegisterUID(1000, "unix:uid:1000")
+	workloadAttestor := attestor.NewUnixPeerCredAttestor("example.org")
 
 	parser := inmemory.NewInMemoryIdentityCredentialParser()
 
@@ -267,8 +270,8 @@ func TestAgent_FetchIdentityDocument_FullErrorFlow(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	// Act - This should work end-to-end
-	workload := domain.NewWorkload(1, 1000, 1000, "/testapp")
+	// Act - This should work end-to-end (using current process)
+	workload := domain.NewWorkload(os.Getpid(), os.Getuid(), os.Getgid(), "/testapp")
 	identity, err := agent.FetchIdentityDocument(ctx, workload)
 
 	// Assert - Should succeed
@@ -293,10 +296,12 @@ func TestAgent_ExtractName_RootPath(t *testing.T) {
 
 	registry := inmemory.NewInMemoryRegistry()
 
-	// Register a mapper with root path "/"
+	// Register a mapper with root path "/" that matches current process UID
 	td := domain.NewTrustDomainFromName("example.org")
 	credential := domain.NewIdentityCredentialFromComponents(td, "/")
-	selector, err := domain.ParseSelectorFromString("unix:uid:2000")
+	currentUID := os.Getuid()
+	selectorStr := fmt.Sprintf("unix:uid:%d", currentUID)
+	selector, err := domain.ParseSelectorFromString(selectorStr)
 	require.NoError(t, err)
 
 	selectorSet := domain.NewSelectorSet()
@@ -307,8 +312,7 @@ func TestAgent_ExtractName_RootPath(t *testing.T) {
 	require.NoError(t, err)
 	registry.Seal()
 
-	workloadAttestor := attestor.NewUnixWorkloadAttestor()
-	workloadAttestor.RegisterUID(2000, "unix:uid:2000")
+	workloadAttestor := attestor.NewUnixPeerCredAttestor("example.org")
 
 	parser := inmemory.NewInMemoryIdentityCredentialParser()
 
@@ -323,8 +327,8 @@ func TestAgent_ExtractName_RootPath(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	// Act - Fetch with root path identity
-	workload := domain.NewWorkload(1, 2000, 2000, "/testapp")
+	// Act - Fetch with root path identity (using current process)
+	workload := domain.NewWorkload(os.Getpid(), os.Getuid(), os.Getgid(), "/testapp")
 	identity, err := agent.FetchIdentityDocument(ctx, workload)
 
 	// Assert - Should succeed and return identity document with root path

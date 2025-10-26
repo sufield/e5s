@@ -127,15 +127,11 @@ func (f *InMemoryAdapterFactory) CreateServer(ctx context.Context, trustDomain s
 	return inmemory.NewInMemoryServer(ctx, trustDomain, trustDomainParser, docProvider)
 }
 
-func (f *InMemoryAdapterFactory) CreateAttestor(workloads []dto.WorkloadEntry) *attestor.UnixWorkloadAttestor {
-	a := attestor.NewUnixWorkloadAttestor()
-
-	// Register UIDs from workload configurations
-	for _, workload := range workloads {
-		a.RegisterUID(workload.UID, workload.Selector)
-	}
-
-	return a
+// CreateAttestor creates a Unix peer credential attestor for development/testing.
+// The new UnixPeerCredAttestor reads attestation data directly from /proc,
+// so it doesn't need pre-registration like the old UnixWorkloadAttestor.
+func (f *InMemoryAdapterFactory) CreateAttestor(trustDomain string) ports.WorkloadAttestor {
+	return attestor.NewUnixPeerCredAttestor(trustDomain)
 }
 
 // CreateAgent creates an in-memory agent for development/testing.
@@ -144,7 +140,7 @@ func (f *InMemoryAdapterFactory) CreateAgent(
 	spiffeID string,
 	server *inmemory.InMemoryServer,
 	registry *inmemory.InMemoryRegistry,
-	attestor *attestor.UnixWorkloadAttestor,
+	attestor ports.WorkloadAttestor,
 	parser ports.IdentityCredentialParser,
 	docProvider ports.IdentityDocumentProvider,
 ) (ports.Agent, error) {

@@ -60,8 +60,10 @@ func Bootstrap(ctx context.Context, configLoader ports.ConfigLoader, factory *co
 		return nil, fmt.Errorf("create registry: %w", err)
 	}
 
-	// Step 5: Create attestor (configured with workload UIDs)
-	attestor := factory.CreateAttestor(cfg.Workloads)
+	// Step 5: Create attestor (configured with trust domain)
+	// UnixPeerCredAttestor reads attestation data directly from /proc,
+	// so it only needs the trust domain for selector formatting
+	attestor := factory.CreateAttestor(cfg.TrustDomain)
 
 	// Step 6: Create agent
 	agent, err := factory.CreateAgent(ctx, cfg.AgentSpiffeID, server, registry, attestor, idParser, docProvider)

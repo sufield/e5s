@@ -38,3 +38,27 @@ func PeerIdentity(ctx context.Context) (Identity, bool) {
 	id, ok := ctx.Value(identityKey{}).(Identity)
 	return id, ok
 }
+
+// IdentityService provides workload identity attestation.
+//
+// This port abstracts away the attestation mechanism (unix, k8s, aws, azure, etc.)
+// Implementations can use:
+//   - SPIRE with unix workload attestor (dev/VM/bare metal)
+//   - SPIRE with k8s workload attestor (production Kubernetes)
+//   - SPIRE with aws workload attestor (production AWS)
+//   - SPIRE with azure workload attestor (production Azure)
+//   - Custom attestation mechanisms
+//
+// The application code should never know or care HOW attestation happened,
+// only WHAT identity was attested.
+type IdentityService interface {
+	// Current returns the identity of the current process/workload.
+	//
+	// This works regardless of the underlying attestation method:
+	//   - In dev: SPIRE Agent with unix attestor
+	//   - In prod k8s: SPIRE Agent with k8s attestor
+	//   - In prod AWS: SPIRE Agent with aws/docker attestor
+	//
+	// Returns error if attestation fails or identity cannot be determined.
+	Current(ctx context.Context) (Identity, error)
+}
