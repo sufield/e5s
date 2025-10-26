@@ -2,16 +2,8 @@
 
 This guide helps diagnose and fix common issues with the SPIRE mTLS server and client.
 
-## Scope
-
-This guide focuses on **wrapper-level concerns** - issues with how your application integrates with the go-spiffe SDK and SPIRE infrastructure. For low-level TLS handshake debugging (cipher suites, protocol versions, packet inspection), refer to:
-- [go-spiffe SDK documentation](https://pkg.go.dev/github.com/spiffe/go-spiffe/v2)
-- [SPIRE troubleshooting](https://spiffe.io/docs/latest/spire/troubleshooting/)
-- Go's TLS debugging tools (e.g., `GODEBUG=tls13=1`)
-
 ## Prerequisites
 
-Before troubleshooting, ensure you have:
 - Access to `kubectl` for the cluster
 - Ability to view pod logs
 - Understanding of SPIRE architecture (server, agent, workload API)

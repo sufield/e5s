@@ -8,7 +8,7 @@ This guide covers getting started with the mTLS identity server and client using
 - `kubectl` and `minikube` (for Kubernetes testing)
 - Docker (for building images)
 
-This project uses SPIRE deployed via Kubernetes/Minikube, not standalone SPIRE binaries. The automated setup deploys SPIRE server and agents using Helm charts.
+SPIRE is deployed via Kubernetes/Minikube, not as standalone SPIRE binaries. The automated setup deploys SPIRE server and agents using Helm charts.
 
 ## What You'll Build
 
@@ -17,7 +17,7 @@ This project uses SPIRE deployed via Kubernetes/Minikube, not standalone SPIRE b
 
 ## Related Documentation
 
-- [Testing Guide](TESTING_GUIDE.md) - Detailed test scenarios and verification procedures
+- [Testing Guide](TESTING_GUIDE.md) - Test scenarios and verification procedures
 - [Troubleshooting Guide](TROUBLESHOOTING.md) - Diagnosing and fixing common issues
 - [Example Code](../examples/) - Reference implementations
 
@@ -25,7 +25,7 @@ This project uses SPIRE deployed via Kubernetes/Minikube, not standalone SPIRE b
 
 ## Quick Start (Minikube)
 
-This project's SPIRE infrastructure is deployed via Kubernetes.
+SPIRE infrastructure is deployed via Kubernetes.
 
 ### Step 1: Deploy SPIRE Infrastructure
 
@@ -141,8 +141,8 @@ Body: {"status":"ok"}
 Now that you have the server and client running:
 
 1. **Explore the code**: Review the example implementations in `examples/`
-2. **Run tests**: See the [Testing Guide](TESTING_GUIDE.md) for comprehensive test scenarios
-3. **Troubleshoot issues**: Check the [Troubleshooting Guide](TROUBLESHOOTING.md) if you encounter problems
+2. **Run tests**: See the [Testing Guide](TESTING_GUIDE.md) for running tests
+3. **Troubleshoot issues**: Check the [Troubleshooting Guide](TROUBLESHOOTING.md) if you have problems
 4. **Build your application**: Use these examples as a foundation for your own mTLS services
 
 ## Understanding SPIFFE Identities
@@ -152,7 +152,7 @@ In the example above:
 - **Client SPIFFE ID**: `spiffe://example.org/client`
 - **Trust Domain**: `example.org`
 
-These identities are automatically provisioned by SPIRE based on Kubernetes workload selectors. No manual certificate management required!
+These identities are automatically provisioned by SPIRE based on Kubernetes workload selectors. Manual certificate management is not required.
 
 ## Common Commands
 
