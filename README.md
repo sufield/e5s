@@ -952,6 +952,28 @@ The project uses the real `go-spiffe` SDK v2.6.0 for production deployments:
 - `internal/adapters/outbound/inmemory` - In-memory SPIRE implementation for learning
 - Used by `cmd/main.go` for CLI demonstrations
 
+## Documentation
+
+Comprehensive documentation is organized by audience and purpose:
+
+- **[docs/guide/](docs/guide/)** - User guides and tutorials
+  - [QUICKSTART.md](docs/guide/QUICKSTART.md) - Get started quickly
+  - [TROUBLESHOOTING.md](docs/guide/TROUBLESHOOTING.md) - Common issues
+  - [BUILD_MODES.md](docs/guide/BUILD_MODES.md) - Dev vs prod builds
+
+- **[docs/architecture/](docs/architecture/)** - Design and technical reference
+  - [ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) - System design
+  - [PORT_CONTRACTS.md](docs/architecture/PORT_CONTRACTS.md) - API contracts
+  - [DOMAIN.md](docs/architecture/DOMAIN.md) - Domain model
+
+- **[docs/engineering/](docs/engineering/)** - Testing and verification
+  - [TESTING.md](docs/engineering/TESTING.md) - Testing strategy
+  - [VERIFICATION.md](docs/engineering/VERIFICATION.md) - Quality assurance
+
+- **[docs/roadmap/](docs/roadmap/)** - Future direction and plans
+
+See [docs/README.md](docs/README.md) for the complete documentation index.
+
 ## References
 
 - [SPIFFE Specification](https://github.com/spiffe/spiffe)
