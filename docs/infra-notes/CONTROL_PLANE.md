@@ -1,12 +1,12 @@
 # Control Plane: Registration as Seeded Data
 
-**Build Tag**: `//go:build dev` - This entire document describes **development-only** implementation.
+**Build Tag**: `//go:build dev` - This document describes **development-only** implementation.
 
-In **production mode** with external SPIRE, the control plane (registry, attestation, matching) is managed entirely by SPIRE Server infrastructure.
+In **production mode** with external SPIRE, the control plane (registry, attestation, matching) is managed by SPIRE Server infrastructure.
 
 ## Overview
 
-In this hexagonal, in-memory SPIRE implementation, registration is NOT a runtime operation. There is no "Register workload" API or mutation endpoint. Instead:
+Registration is NOT a runtime operation. There is no "Register workload" API or mutation endpoint. Instead:
 
 - **Registration = Seeded data** loaded at startup from configuration
 - **Runtime path = Attest → Match → Issue** (read-only operations)
@@ -698,3 +698,5 @@ These are **data plane** (runtime) components:
 3. **All code is dev-only** - excluded from production via `//go:build dev`
 4. **Bootstrap orchestrates** - factory encapsulates component internals
 5. **Runtime is pure reads** - Attest → Match (FindBySelectors) → Issue → Return
+
+[Needs to be revised]

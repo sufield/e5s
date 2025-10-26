@@ -1,6 +1,6 @@
 # Production vs Development Architecture
 
-This document clarifies the architectural differences between production and development deployments.
+This document covers the architectural differences between production and development deployments.
 
 ## Summary
 
@@ -192,7 +192,7 @@ Development mode uses in-memory implementations for everything:
 6. InMemoryAgent → Workload: Returns Identity with SVID
 ```
 
-**Key Point**: All steps happen **in-process**. No external SPIRE needed.
+All steps happen **in-process**. No external SPIRE needed.
 
 ### Development Configuration
 
