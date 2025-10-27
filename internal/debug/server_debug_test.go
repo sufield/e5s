@@ -25,9 +25,9 @@ func TestServer_handleIndex(t *testing.T) {
 		t.Errorf("Expected status 200, got %d", w.Code)
 	}
 
-	// Verify Content-Type
-	if ct := w.Header().Get("Content-Type"); ct != "text/html" {
-		t.Errorf("Expected Content-Type text/html, got %s", ct)
+	// Verify Content-Type includes charset
+	if ct := w.Header().Get("Content-Type"); ct != "text/html; charset=utf-8" {
+		t.Errorf("Expected Content-Type text/html; charset=utf-8, got %s", ct)
 	}
 
 	body := w.Body.String()
@@ -71,9 +71,9 @@ func TestServer_handleState(t *testing.T) {
 		t.Errorf("Expected status 200, got %d", w.Code)
 	}
 
-	// Verify Content-Type
-	if ct := w.Header().Get("Content-Type"); ct != "application/json" {
-		t.Errorf("Expected Content-Type application/json, got %s", ct)
+	// Verify Content-Type includes charset
+	if ct := w.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		t.Errorf("Expected application/json Content-Type, got %s", ct)
 	}
 
 	var state map[string]any
@@ -553,6 +553,11 @@ func TestServer_handleIdentity_WithIntrospector(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+
+	// Verify Content-Type includes charset
+	if ct := w.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		t.Errorf("Expected application/json Content-Type, got %s", ct)
 	}
 
 	var snapshot Snapshot

@@ -22,8 +22,11 @@ import (
 //   - /_debug/faults - Fault injection (for testing failure modes)
 //   - /_debug/config - Debug server configuration
 //
-// WARNING: This function should NEVER be called in production builds.
-// The build tag ensures it's compiled out of production binaries.
+// Security:
+//   - Debug server binds to localhost only (configured via debug.Active.DebugServerAddr)
+//   - NEVER expose debug endpoints to external networks
+//   - This function should NEVER be called in production builds
+//   - Build tag ensures it's compiled out of production binaries
 //
 // Example usage:
 //

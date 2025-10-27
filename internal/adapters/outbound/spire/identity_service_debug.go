@@ -26,40 +26,49 @@ var _ debug.Introspector = (*IdentityServiceSPIRE)(nil)
 //   - Fetches current X.509 SVID from SPIRE Agent
 //   - Calculates certificate expiration time (not the raw cert)
 //   - Returns only public identity information (SPIFFE IDs, expiration times)
-//   - Does NOT include private keys, raw certificates, or sensitive data
+//   - MUST NOT include private keys, raw certificates, or sensitive data
+//   - Errors are surfaced as synthetic AuthDecision entries with Decision: "ERROR"
 //
 // Concurrency: Safe for concurrent use (delegates to thread-safe Client).
 func (s *IdentityServiceSPIRE) SnapshotData(ctx context.Context) debug.Snapshot {
+	// TODO: Consider making Mode configurable via debug.Active.Mode
+	// instead of hardcoding "debug", to support staging builds.
 	snapshot := debug.Snapshot{
-		Mode:            "debug",        // Indicates this is a debug build
-		Adapter:         "spire",        // Using real SPIRE (not inmemory)
+		Mode:            "debug", // Hardcoded; consider injecting from config
+		Adapter:         "spire", // Using real SPIRE (not inmemory)
 		Certs:           []debug.CertView{},
-		RecentDecisions: []debug.AuthDecision{}, // SPIRE identity service doesn't track auth decisions
+		RecentDecisions: []debug.AuthDecision{},
 	}
 
 	// Attempt to fetch current identity document
 	doc, err := s.client.FetchX509SVID(ctx)
 	if err != nil {
-		// If we can't fetch the SVID, return partial snapshot with error info
-		// Don't panic - debug endpoints should be resilient
-		snapshot.TrustDomain = "error: " + err.Error()
+		// Don't overload TrustDomain with error messages.
+		// Instead, surface error as synthetic AuthDecision with Decision: "ERROR"
+		// This keeps the schema stable and allows clients to parse errors properly.
+		snapshot.RecentDecisions = append(snapshot.RecentDecisions, debug.AuthDecision{
+			CallerSPIFFEID: "",
+			Resource:       "spire.FetchX509SVID",
+			Decision:       "ERROR",
+			Reason:         err.Error(),
+		})
 		return snapshot
 	}
 
-	// Extract trust domain if we got a valid document
+	// Extract trust domain and certificate info if we got a valid document
 	if doc != nil {
 		cred := doc.IdentityCredential()
 		if cred != nil {
 			snapshot.TrustDomain = cred.TrustDomainString()
 
-			// Add certificate view with expiration info
 			// Calculate time until expiration (negative if already expired)
 			expiresIn := time.Until(doc.ExpiresAt()).Seconds()
 
 			snapshot.Certs = append(snapshot.Certs, debug.CertView{
 				SpiffeID:         cred.SPIFFEID(),
 				ExpiresInSeconds: int64(expiresIn),
-				RotationPending:  false, // SPIRE handles rotation transparently
+				// TODO: Plumb real rotation status if available from SPIRE
+				RotationPending: false, // SPIRE handles rotation transparently
 			})
 		}
 	}

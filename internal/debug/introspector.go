@@ -13,7 +13,7 @@ import "context"
 type Introspector interface {
 	// SnapshotData returns a sanitized view of current identity state.
 	//
-	// This should NEVER include secrets (private keys, tokens, passwords).
+	// MUST NOT include secrets (private keys, tokens, passwords).
 	// Only return information safe for debugging:
 	//   - Current SPIFFE IDs
 	//   - Certificate expiration times

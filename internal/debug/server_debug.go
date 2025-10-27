@@ -6,6 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
+)
+
+const (
+	maxRequestBodyBytes = 10 * 1024 // 10KB max for fault injection requests
 )
 
 // Server is the debug HTTP server
@@ -47,10 +52,11 @@ func Start(introspector Introspector) {
 		logger.Debugf("⚠️  DEBUG SERVER RUNNING ON %s", srv.addr)
 		logger.Debug("⚠️  WARNING: Debug mode is enabled. DO NOT USE IN PRODUCTION!")
 
-		// Use http.Server for better control
+		// Use http.Server for better control and basic hardening
 		httpServer := &http.Server{
-			Addr:    srv.addr,
-			Handler: srv.mux,
+			Addr:              srv.addr,
+			Handler:           srv.mux,
+			ReadHeaderTimeout: 2 * time.Second, // Prevent Slowloris attacks
 		}
 
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -75,7 +81,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	html := `<!DOCTYPE html>
+	const html = `<!DOCTYPE html>
 <html>
 <head><title>SPIRE Debug</title></head>
 <body>
@@ -91,8 +97,8 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 </ul>
 </body>
 </html>`
-	w.Header().Set("Content-Type", "text/html")
-	w.Write([]byte(html))
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write([]byte(html))
 }
 
 // handleState serves the current debug state.
@@ -104,8 +110,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		"faults":        Faults.Snapshot(),
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(state)
+	writeJSON(w, state)
 }
 
 // handleFaults handles GET and POST requests for fault injection.
@@ -116,14 +121,13 @@ func (s *Server) handleFaults(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		s.setFaults(w, r)
 	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		methodNotAllowed(w)
 	}
 }
 
 // getFaults returns the current fault configuration.
 func (s *Server) getFaults(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(Faults.Snapshot())
+	writeJSON(w, Faults.Snapshot())
 }
 
 // setFaults applies fault injection configuration from JSON request.
@@ -131,7 +135,7 @@ func (s *Server) setFaults(w http.ResponseWriter, r *http.Request) {
 	logger := GetLogger()
 
 	// Limit request body size to prevent DoS
-	r.Body = http.MaxBytesReader(w, r.Body, 1024*10) // 10KB max
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
 
 	var req FaultRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -182,15 +186,14 @@ func (s *Server) setFaults(w http.ResponseWriter, r *http.Request) {
 // handleFaultsReset resets all fault injections.
 func (s *Server) handleFaultsReset(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		methodNotAllowed(w)
 		return
 	}
 
 	Faults.Reset()
 	GetLogger().Debug("All faults reset")
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "reset"})
+	writeJSON(w, map[string]string{"status": "reset"})
 }
 
 // handleConfig returns the current debug configuration.
@@ -203,8 +206,7 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		"debug_server_addr":  Active.DebugServerAddr,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(config)
+	writeJSON(w, config)
 }
 
 // handleIdentity returns a snapshot of the current identity state.
@@ -216,7 +218,16 @@ func (s *Server) handleIdentity(w http.ResponseWriter, r *http.Request) {
 	}
 
 	snapshot := s.introspector.SnapshotData(r.Context())
+	writeJSON(w, snapshot)
+}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(snapshot)
+// writeJSON writes a JSON response with proper content type.
+func writeJSON(w http.ResponseWriter, v any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	_ = json.NewEncoder(w).Encode(v)
+}
+
+// methodNotAllowed writes a 405 Method Not Allowed response.
+func methodNotAllowed(w http.ResponseWriter) {
+	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 }

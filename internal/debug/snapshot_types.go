@@ -1,14 +1,14 @@
 package debug
 
 // Snapshot is what we expose over /_debug/identity.
-// Do NOT put secrets here (e.g., private keys, tokens).
+// MUST NOT put secrets here (e.g., private keys, tokens).
 //
 // This type is safe to compile in all builds (no build tags) because
 // it's just a struct definition. The endpoints that use it are only
 // available in debug builds.
 type Snapshot struct {
 	Mode            string         `json:"mode"`            // "debug", "staging", or "production"
-	TrustDomain     string         `json:"trustDomain"`     // e.g., "example.org"
+	TrustDomain     string         `json:"trustDomain"`     // e.g., "spiffe://example.org"
 	Adapter         string         `json:"adapter"`         // "inmemory" or "spire"
 	Certs           []CertView     `json:"certs"`           // Current certificates
 	RecentDecisions []AuthDecision `json:"recentDecisions"` // Recent auth decisions
