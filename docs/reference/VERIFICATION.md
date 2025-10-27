@@ -1,3 +1,8 @@
+---
+type: reference
+audience: intermediate
+---
+
 # SPIRE Adapter Verification Guide
 
 This guide covers verification of the SPIRE production adapter implementation.
@@ -161,7 +166,7 @@ make minikube-down
 
 ## Troubleshooting
 
-If you encounter issues during verification or testing, see [`docs/guide/TROUBLESHOOTING.md`](../guide/TROUBLESHOOTING.md) for detailed diagnostics and solutions, including:
+If you encounter issues during verification or testing, see [`docs/how-to-guides/TROUBLESHOOTING.md`](../how-to-guides/TROUBLESHOOTING.md) for detailed diagnostics and solutions, including:
 
 - Connection refused errors
 - SPIRE socket access issues

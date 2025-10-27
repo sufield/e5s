@@ -1,3 +1,8 @@
+---
+type: reference
+audience: intermediate
+---
+
 # End-to-End Tests Documentation
 
 The End-to-End (E2E) test suite validates the complete SPIRE workload identity flow across multiple services.

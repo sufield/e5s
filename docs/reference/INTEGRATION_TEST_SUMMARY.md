@@ -1,3 +1,8 @@
+---
+type: reference
+audience: intermediate
+---
+
 # SPIRE Integration Tests - Quick Reference
 
 ## Running Tests

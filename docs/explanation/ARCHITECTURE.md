@@ -1,3 +1,8 @@
+---
+type: explanation
+audience: advanced
+---
+
 # Architecture
 
 This document describes the hexagonal architecture implementation of the SPIRE Workload API, including layer boundaries, data flows, and design decisions.
@@ -445,7 +450,7 @@ func (a *Agent) GetIdentity(ctx context.Context) (*domain.IdentityDocument, erro
 
 ## Port Contracts
 
-All ports have complete error contracts documented in `docs/architecture/PORT_CONTRACTS.md` and `internal/ports/`.
+All ports have complete error contracts documented in `../reference/PORT_CONTRACTS.md` and `internal/ports/`.
 
 **Example Contract**:
 

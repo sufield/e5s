@@ -1,3 +1,8 @@
+---
+type: how-to
+audience: intermediate
+---
+
 # Workload API Implementation
 
 ## Overview

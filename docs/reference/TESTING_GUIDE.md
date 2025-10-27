@@ -1,3 +1,8 @@
+---
+type: reference
+audience: intermediate
+---
+
 # Testing Guide - SPIRE mTLS
 
 This guide includes scenarios and verification procedures for QA and validation of the SPIRE mTLS server and client functionality.

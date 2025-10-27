@@ -1,3 +1,8 @@
+---
+type: reference
+audience: intermediate
+---
+
 # Testing Strategy
 
 This document explains the different testing layers and what each one verifies.
@@ -195,7 +200,7 @@ PBT_MAX_COUNT=100000 go test -v -run Properties ./...
 - Provides minimal counterexamples through automatic shrinking
 - Documents invariants as executable tests
 
-**See also**: [`docs/engineering/pbt.md`](pbt.md) for complete PBT guide and methodology.
+**See also**: [`docs/reference/pbt.md`](pbt.md) for complete PBT guide and methodology.
 
 ---
 
@@ -293,7 +298,7 @@ Integration tests confirm connectivity to real SPIRE infrastructure and certific
 
 ## Troubleshooting
 
-See [`docs/guide/TROUBLESHOOTING.md`](../guide/TROUBLESHOOTING.md) for detailed troubleshooting, including:
+See [`docs/how-to-guides/TROUBLESHOOTING.md`](../how-to-guides/TROUBLESHOOTING.md) for detailed troubleshooting, including:
 
 - Connection refused errors
 - SPIRE socket access issues

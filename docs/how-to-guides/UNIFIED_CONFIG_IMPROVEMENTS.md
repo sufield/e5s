@@ -1,3 +1,8 @@
+---
+type: how-to
+audience: intermediate
+---
+
 # Unified Configuration Improvements
 
 **Type**: Architecture Decision Record (ADR)

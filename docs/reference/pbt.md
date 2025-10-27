@@ -1,3 +1,8 @@
+---
+type: reference
+audience: intermediate
+---
+
 # Property-Based Testing Guide
 
 **Audience**: Contributors implementing and maintaining tests

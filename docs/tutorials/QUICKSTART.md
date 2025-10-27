@@ -1,3 +1,8 @@
+---
+type: tutorial
+audience: beginner
+---
+
 # Quick Start Guide - mTLS with SPIRE
 
 This guide covers getting started with the mTLS identity server and client using SPIRE.

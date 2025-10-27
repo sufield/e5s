@@ -1,3 +1,8 @@
+---
+type: reference
+audience: intermediate
+---
+
 # Integration Test Optimization
 
 ## Problem

@@ -1,3 +1,8 @@
+---
+type: how-to
+audience: intermediate
+---
+
 # CodeQL Local Setup and Analysis Guide
 
 This guide provides step-by-step instructions for installing and running CodeQL CLI locally on Ubuntu 24.04 LTS for analyzing the SPIRE mTLS codebase.

@@ -1,3 +1,8 @@
+---
+type: reference
+audience: intermediate
+---
+
 # Port Contracts
 
 This document defines the contract for all ports in the system. These contracts must be honored by all implementations (SPIRE SDK, mocks).

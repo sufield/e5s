@@ -1,3 +1,8 @@
+---
+type: explanation
+audience: advanced
+---
+
 # Design by Contract in SPIRE Identity Library
 
 This document describes how Design by Contract principles are applied throughout the SPIRE library to ensure correctness, security, and maintainability.

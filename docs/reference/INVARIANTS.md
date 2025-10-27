@@ -1,3 +1,8 @@
+---
+type: reference
+audience: intermediate
+---
+
 # Code Invariants
 
 ## Overview
@@ -193,7 +198,7 @@ func normalizePath(path string) string
 - **Verified**: ✅ TestNormalizePath_Properties/no_traversal_segments (10,000 cases)
 - **Rationale**: SPIFFE spec forbids path traversal (security)
 
-**Testing Approach**: These properties complement fuzz testing by verifying mathematical invariants rather than just crash safety. See `docs/engineering/pbt.md` for property-based testing methodology.
+**Testing Approach**: These properties complement fuzz testing by verifying mathematical invariants rather than just crash safety. See `pbt.md` for property-based testing methodology.
 
 ---
 
@@ -383,7 +388,7 @@ func splitCleanDedup(s string, sep string) []string
 - **Verified**: ✅ TestSplitCleanDedup_Properties/order_preservation (10,000 cases)
 - **Rationale**: Deterministic output order for reproducible behavior
 
-**Testing Approach**: These properties verify set semantics, cleaning behavior, and determinism. See `docs/engineering/pbt.md` for methodology.
+**Testing Approach**: These properties verify set semantics, cleaning behavior, and determinism. See `pbt.md` for methodology.
 
 ---
 
@@ -421,7 +426,7 @@ func parseDurationInto(envVar string, target *time.Duration) error
 - **Verified**: ✅ TestParseDurationInto_Properties/non_negative_for_positive_durations (10,000 cases)
 - **Rationale**: Ensures configuration values have expected sign
 
-**Testing Approach**: These properties verify parse/format consistency and determinism. See `docs/engineering/pbt.md` for methodology.
+**Testing Approach**: These properties verify parse/format consistency and determinism. See `pbt.md` for methodology.
 
 ---
 

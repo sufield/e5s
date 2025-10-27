@@ -1,3 +1,8 @@
+---
+type: explanation
+audience: intermediate
+---
+
 ### 1. Makefile Infrastructure
 
 **What's Done:**
@@ -52,7 +57,7 @@ ui:
 **Files:**
 - `gopls.yaml` - Default configuration (analyzes all code)
 - `.vscode/settings.json` - VSCode configuration
-- `docs/guide/EDITOR_SETUP.md` - Complete editor configuration guide
+- `../tutorials/EDITOR_SETUP.md` - Complete editor configuration guide
 
 ---
 

@@ -1,3 +1,8 @@
+---
+type: reference
+audience: intermediate
+---
+
 # Test Architecture
 
 ## Overview

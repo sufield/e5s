@@ -1,3 +1,8 @@
+---
+type: explanation
+audience: advanced
+---
+
 # Architecture Review
 
 This document analyzed two architectural concerns during initial design:

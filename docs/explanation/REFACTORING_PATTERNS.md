@@ -1,3 +1,8 @@
+---
+type: explanation
+audience: intermediate
+---
+
 # Refactoring Patterns
 
 This document captures successful patterns and best practices discovered during the codebase refactoring effort (Weeks 1-3).

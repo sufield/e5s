@@ -1,3 +1,8 @@
+---
+type: reference
+audience: intermediate
+---
+
 # Domain Model
 
 The domain directory contains the domain model for the SPIRE identity system.

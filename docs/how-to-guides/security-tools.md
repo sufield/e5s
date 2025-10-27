@@ -1,3 +1,8 @@
+---
+type: how-to
+audience: intermediate
+---
+
 # Security Tools Overview
 
 This document explains the security tools used in the SPIRE mTLS project and when each tool is used in the development and deployment pipeline.

@@ -1,3 +1,8 @@
+---
+type: how-to
+audience: intermediate
+---
+
 # Troubleshooting Guide - SPIRE mTLS
 
 This guide helps diagnose and fix common issues with the SPIRE mTLS server and client.

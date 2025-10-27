@@ -1,3 +1,8 @@
+---
+type: how-to
+audience: intermediate
+---
+
 # SPIRE Distroless Server - Workaround
 
 ## Problem

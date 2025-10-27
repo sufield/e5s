@@ -1,3 +1,8 @@
+---
+type: explanation
+audience: intermediate
+---
+
 # Debug Mode
 
 Debug operational mode allows the system to debug itself by exposing internal state and enabling mutation of runtime behavior for testing purposes.

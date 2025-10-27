@@ -1,3 +1,8 @@
+---
+type: tutorial
+audience: beginner
+---
+
 # Editor Setup - gopls Configuration
 
 ## Overview
