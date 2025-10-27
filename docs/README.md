@@ -35,7 +35,6 @@ Practical solutions for specific tasks and problems you'll encounter in real-wor
 
 **Workarounds & Fixes**:
 - **[SPIRE Distroless Workaround](how-to-guides/SPIRE_DISTROLESS_WORKAROUND.md)** - Fix distroless image issues
-- **[Unified Config Improvements](how-to-guides/UNIFIED_CONFIG_IMPROVEMENTS.md)** - Simplify configuration
 
 **When to use**: You know **what** you want to do and need **how** to do it.
 
@@ -79,6 +78,7 @@ Background, rationale, and deep dives into design decisions and architectural ch
 
 **Evolution & Decisions**:
 - **[SPIFFE ID Refactoring](explanation/SPIFFE_ID_REFACTORING.md)** - Why we refactored identity handling
+- **[Unified Config Improvements](explanation/UNIFIED_CONFIG_IMPROVEMENTS.md)** - Why config was unified
 - **[Iterations Summary](explanation/ITERATIONS_SUMMARY.md)** - Project evolution history
 
 **Features & Patterns**:

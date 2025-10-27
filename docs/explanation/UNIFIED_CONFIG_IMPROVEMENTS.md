@@ -1,5 +1,5 @@
 ---
-type: how-to
+type: explanation
 audience: intermediate
 ---
 
