@@ -4,7 +4,7 @@ An identity based authentication library using SPIFFE/SPIRE for service-to-servi
 
 ## Overview
 
-This is a mTLS library using `go-spiffe` SDK v2.6.0 for identity-based authentication. It includes an in-memory SPIRE implementation for development and testing purposes.
+This is a mTLS library using `go-spiffe` SDK v2.6.0 for identity-based authentication.
 
 ### Features
 
@@ -17,15 +17,6 @@ This is a mTLS library using `go-spiffe` SDK v2.6.0 for identity-based authentic
 - **Production Ready**: Comprehensive tests (unit + integration + property-based + fuzz)
 - **Simple API**: Structured configuration with sensible defaults
 - **Thread-Safe**: Proper shutdown and resource management
-
-### Inmemory Implementation
-
-An in-memory SPIRE implementation demonstrates:
-- SPIRE Workload API concepts
-- Agent server and workload attestation flow
-- Used for development and testing
-
-**Hexagonal Architecture**: Clear separation between domain, ports, and adapters allows both implementations to coexist.
 
 ## Getting Started
 
@@ -329,8 +320,8 @@ This project applies **Hexagonal Architecture** (Ports & Adapters pattern):
 │           How external actors interact with us           │
 ├─────────────────────────────────────────────────────────┤
 │  • identityserver/  → HTTP server exposing mTLS API     │
-│  • cli/             → Command-line interface            │
 │  • zerotrustserver/ → Zero-config API wrapper (pkg/)    │
+│  • zerotrustclient/ → Zero-config client API (pkg/)     │
 └─────────────────────┬───────────────────────────────────┘
                       │
                  ┌────▼────┐
@@ -356,7 +347,6 @@ This project applies **Hexagonal Architecture** (Ports & Adapters pattern):
 │  • spire/       → SPIRE Workload API (go-spiffe SDK)    │
 │  • httpclient/  → mTLS HTTP client                      │
 │  • helm/        → Kubernetes/Helm deployment (dev)      │
-│  • inmemory/    → In-memory impl for testing (dev)      │
 │  • compose/     → Dependency injection                  │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -478,9 +468,9 @@ See [docs/README.md](docs/README.md) for the complete documentation index.
 ### 1. Hexagonal Architecture
 
 Consists of domain, port interfaces, swappable adapters:
-- Production implementation uses real `go-spiffe` SDK
-- In-memory implementation for development/testing
+- Production implementation uses `go-spiffe` SDK for SPIRE Workload API
 - No domain coupling to infrastructure
+- Domain logic tested in isolation without SPIRE dependencies
 
 ### 2. Config Structs for Grouped Parameters
 
@@ -523,13 +513,11 @@ Production deployments use `go-spiffe` SDK v2.6.0:
 - `pkg/zerotrustserver` - Zero-config mTLS server (recommended)
 - `pkg/zerotrustclient` - Zero-config mTLS client (recommended)
 
-**Production adapters**:
+**Adapters**:
 - `internal/adapters/inbound/identityserver` - mTLS server
 - `internal/adapters/outbound/spire` - SPIRE Workload API client
 - `internal/adapters/outbound/httpclient` - mTLS HTTP client
-
-**Development adapters**:
-- `internal/adapters/outbound/inmemory` - In-memory SPIRE for the ability to run the application in headless and tailess mode.
+- `internal/adapters/outbound/helm` - Kubernetes/Helm deployment (dev tooling)
 
 ## References
 
