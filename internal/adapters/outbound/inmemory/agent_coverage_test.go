@@ -1,6 +1,6 @@
 //go:build dev
 
-package inmemory_test
+package inmemory
 
 // Agent Coverage Tests
 //
@@ -21,7 +21,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/pocket/hexagon/spire/internal/adapters/outbound/inmemory"
 	"github.com/pocket/hexagon/spire/internal/adapters/outbound/inmemory/attestor"
 	"github.com/pocket/hexagon/spire/internal/domain"
 )
@@ -30,21 +29,21 @@ func TestAgent_FetchIdentityDocument_NoSelectorsRegistered(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	tdParser := inmemory.NewInMemoryTrustDomainParser()
-	docProvider := inmemory.NewInMemoryIdentityDocumentProvider()
+	tdParser := NewInMemoryTrustDomainParser()
+	docProvider := NewInMemoryIdentityDocumentProvider()
 
 	// Create server and registry
-	server, err := inmemory.NewInMemoryServer(ctx, "example.org", tdParser, docProvider)
+	server, err := NewInMemoryServer(ctx, "example.org", tdParser, docProvider)
 	require.NoError(t, err)
 
-	registry := inmemory.NewInMemoryRegistry()
-	registry.Seal()
+	registry := NewInMemoryRegistry()
+	registry.seal()
 
 	// Create attestor with trust domain
 	workloadAttestor := attestor.NewUnixPeerCredAttestor("example.org")
-	parser := inmemory.NewInMemoryIdentityCredentialParser()
+	parser := NewInMemoryIdentityCredentialParser()
 
-	agent, err := inmemory.NewInMemoryAgent(
+	agent, err := NewInMemoryAgent(
 		ctx,
 		"spiffe://example.org/agent",
 		server,
@@ -67,22 +66,22 @@ func TestAgent_FetchIdentityDocument_NoMatchingMapper(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	tdParser := inmemory.NewInMemoryTrustDomainParser()
-	docProvider := inmemory.NewInMemoryIdentityDocumentProvider()
+	tdParser := NewInMemoryTrustDomainParser()
+	docProvider := NewInMemoryIdentityDocumentProvider()
 
 	// Create server and empty registry (no mappers)
-	server, err := inmemory.NewInMemoryServer(ctx, "example.org", tdParser, docProvider)
+	server, err := NewInMemoryServer(ctx, "example.org", tdParser, docProvider)
 	require.NoError(t, err)
 
-	registry := inmemory.NewInMemoryRegistry()
-	registry.Seal() // Seal with no mappers
+	registry := NewInMemoryRegistry()
+	registry.seal() // Seal with no mappers
 
 	// Create attestor with trust domain
 	workloadAttestor := attestor.NewUnixPeerCredAttestor("example.org")
 
-	parser := inmemory.NewInMemoryIdentityCredentialParser()
+	parser := NewInMemoryIdentityCredentialParser()
 
-	agent, err := inmemory.NewInMemoryAgent(
+	agent, err := NewInMemoryAgent(
 		ctx,
 		"spiffe://example.org/agent",
 		server,
@@ -105,19 +104,19 @@ func TestAgent_GetIdentity(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	tdParser := inmemory.NewInMemoryTrustDomainParser()
-	docProvider := inmemory.NewInMemoryIdentityDocumentProvider()
+	tdParser := NewInMemoryTrustDomainParser()
+	docProvider := NewInMemoryIdentityDocumentProvider()
 
-	server, err := inmemory.NewInMemoryServer(ctx, "example.org", tdParser, docProvider)
+	server, err := NewInMemoryServer(ctx, "example.org", tdParser, docProvider)
 	require.NoError(t, err)
 
-	registry := inmemory.NewInMemoryRegistry()
-	registry.Seal()
+	registry := NewInMemoryRegistry()
+	registry.seal()
 
 	workloadAttestor := attestor.NewUnixPeerCredAttestor("example.org")
-	parser := inmemory.NewInMemoryIdentityCredentialParser()
+	parser := NewInMemoryIdentityCredentialParser()
 
-	agent, err := inmemory.NewInMemoryAgent(
+	agent, err := NewInMemoryAgent(
 		ctx,
 		"spiffe://example.org/agent",
 		server,
@@ -141,17 +140,17 @@ func TestAgent_NewInMemoryAgent_ErrorPaths(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	tdParser := inmemory.NewInMemoryTrustDomainParser()
-	docProvider := inmemory.NewInMemoryIdentityDocumentProvider()
+	tdParser := NewInMemoryTrustDomainParser()
+	docProvider := NewInMemoryIdentityDocumentProvider()
 
-	server, err := inmemory.NewInMemoryServer(ctx, "example.org", tdParser, docProvider)
+	server, err := NewInMemoryServer(ctx, "example.org", tdParser, docProvider)
 	require.NoError(t, err)
 
-	registry := inmemory.NewInMemoryRegistry()
-	registry.Seal()
+	registry := NewInMemoryRegistry()
+	registry.seal()
 
 	workloadAttestor := attestor.NewUnixPeerCredAttestor("example.org")
-	parser := inmemory.NewInMemoryIdentityCredentialParser()
+	parser := NewInMemoryIdentityCredentialParser()
 
 	tests := []struct {
 		name        string
@@ -167,7 +166,7 @@ func TestAgent_NewInMemoryAgent_ErrorPaths(t *testing.T) {
 			t.Parallel()
 
 			// Act
-			agent, err := inmemory.NewInMemoryAgent(
+			agent, err := NewInMemoryAgent(
 				ctx,
 				tt.identityURI,
 				server,
@@ -192,22 +191,22 @@ func TestAgent_FetchIdentityDocument_NoMatchingMapperForSelectors(t *testing.T) 
 	t.Parallel()
 
 	ctx := context.Background()
-	tdParser := inmemory.NewInMemoryTrustDomainParser()
-	docProvider := inmemory.NewInMemoryIdentityDocumentProvider()
+	tdParser := NewInMemoryTrustDomainParser()
+	docProvider := NewInMemoryIdentityDocumentProvider()
 
-	server, err := inmemory.NewInMemoryServer(ctx, "example.org", tdParser, docProvider)
+	server, err := NewInMemoryServer(ctx, "example.org", tdParser, docProvider)
 	require.NoError(t, err)
 
-	registry := inmemory.NewInMemoryRegistry()
-	registry.Seal()
+	registry := NewInMemoryRegistry()
+	registry.seal()
 
 	// Create attestor with trust domain
 	// Note: UnixPeerCredAttestor generates valid selectors from real process data
 	workloadAttestor := attestor.NewUnixPeerCredAttestor("example.org")
 
-	parser := inmemory.NewInMemoryIdentityCredentialParser()
+	parser := NewInMemoryIdentityCredentialParser()
 
-	agent, err := inmemory.NewInMemoryAgent(
+	agent, err := NewInMemoryAgent(
 		ctx,
 		"spiffe://example.org/agent",
 		server,
@@ -230,13 +229,13 @@ func TestAgent_FetchIdentityDocument_FullErrorFlow(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	tdParser := inmemory.NewInMemoryTrustDomainParser()
-	docProvider := inmemory.NewInMemoryIdentityDocumentProvider()
+	tdParser := NewInMemoryTrustDomainParser()
+	docProvider := NewInMemoryIdentityDocumentProvider()
 
-	server, err := inmemory.NewInMemoryServer(ctx, "example.org", tdParser, docProvider)
+	server, err := NewInMemoryServer(ctx, "example.org", tdParser, docProvider)
 	require.NoError(t, err)
 
-	registry := inmemory.NewInMemoryRegistry()
+	registry := NewInMemoryRegistry()
 
 	// Register a mapper that matches the current process's UID
 	td := domain.NewTrustDomainFromName("example.org")
@@ -251,15 +250,15 @@ func TestAgent_FetchIdentityDocument_FullErrorFlow(t *testing.T) {
 	selectorSet.Add(selector)
 	mapper, err := domain.NewIdentityMapper(credential, selectorSet)
 	require.NoError(t, err)
-	err = registry.Seed(ctx, mapper)
+	err = registry.seed(ctx, mapper)
 	require.NoError(t, err)
-	registry.Seal()
+	registry.seal()
 
 	workloadAttestor := attestor.NewUnixPeerCredAttestor("example.org")
 
-	parser := inmemory.NewInMemoryIdentityCredentialParser()
+	parser := NewInMemoryIdentityCredentialParser()
 
-	agent, err := inmemory.NewInMemoryAgent(
+	agent, err := NewInMemoryAgent(
 		ctx,
 		"spiffe://example.org/agent",
 		server,
@@ -288,13 +287,13 @@ func TestAgent_ExtractName_RootPath(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	tdParser := inmemory.NewInMemoryTrustDomainParser()
-	docProvider := inmemory.NewInMemoryIdentityDocumentProvider()
+	tdParser := NewInMemoryTrustDomainParser()
+	docProvider := NewInMemoryIdentityDocumentProvider()
 
-	server, err := inmemory.NewInMemoryServer(ctx, "example.org", tdParser, docProvider)
+	server, err := NewInMemoryServer(ctx, "example.org", tdParser, docProvider)
 	require.NoError(t, err)
 
-	registry := inmemory.NewInMemoryRegistry()
+	registry := NewInMemoryRegistry()
 
 	// Register a mapper with root path "/" that matches current process UID
 	td := domain.NewTrustDomainFromName("example.org")
@@ -308,15 +307,15 @@ func TestAgent_ExtractName_RootPath(t *testing.T) {
 	selectorSet.Add(selector)
 	mapper, err := domain.NewIdentityMapper(credential, selectorSet)
 	require.NoError(t, err)
-	err = registry.Seed(ctx, mapper)
+	err = registry.seed(ctx, mapper)
 	require.NoError(t, err)
-	registry.Seal()
+	registry.seal()
 
 	workloadAttestor := attestor.NewUnixPeerCredAttestor("example.org")
 
-	parser := inmemory.NewInMemoryIdentityCredentialParser()
+	parser := NewInMemoryIdentityCredentialParser()
 
-	agent, err := inmemory.NewInMemoryAgent(
+	agent, err := NewInMemoryAgent(
 		ctx,
 		"spiffe://example.org/agent",
 		server,

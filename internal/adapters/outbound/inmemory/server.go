@@ -1,5 +1,28 @@
 //go:build dev
 
+// SECURITY NOTE:
+// =============================================================================
+// The CA in this file is for local development and testing ONLY.
+//
+// This CA is intentionally UNSAFE and PREDICTABLE:
+//   - Keys and certificates are deterministic (same every run)
+//   - NotBefore/NotAfter are fixed (year 2099)
+//   - Serial numbers are predictable
+//   - No cryptographic randomness
+//   - No real security guarantees
+//
+// This design is for:
+//   ✓ Reproducible tests (same certificates every run)
+//   ✓ Fast local development (no key generation overhead)
+//   ✓ Walking skeleton / demo mode
+//
+// NEVER use this CA, these keys, or these certificates in ANY production system.
+// Production environments MUST use real SPIRE agents with proper attestation.
+//
+// This file cannot compile without the 'dev' build tag, which prevents
+// accidental inclusion in production builds.
+// =============================================================================
+
 package inmemory
 
 import (
@@ -8,6 +31,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"math/big"
 	"time"
@@ -16,13 +40,15 @@ import (
 	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
-// Deterministic constants for fake - dev only
+// Deterministic constants for fake CA - dev only
+// WARNING: These are intentionally predictable and UNSAFE for production
 var (
-	fakeTime   = time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC)
-	fakeSerial = big.NewInt(1)
+	fakeTime   = time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC) // Fixed timestamp for reproducibility
+	fakeSerial = big.NewInt(1)                                // Predictable serial number
 )
 
 // InMemoryServer is a deterministic fake SPIRE server (dev-only)
+// WARNING: Uses intentionally weak/predictable CA for testing. DO NOT USE IN PRODUCTION.
 type InMemoryServer struct {
 	trustDomain         *domain.TrustDomain
 	caCert              *x509.Certificate
@@ -30,8 +56,19 @@ type InMemoryServer struct {
 	certificateProvider ports.IdentityDocumentProvider
 }
 
-// NewInMemoryServer creates a new in-memory SPIRE server
+// NewInMemoryServer creates a new in-memory SPIRE server with a deterministic CA.
+//
+// WARNING: This CA is intentionally weak and predictable for reproducible tests.
+// DO NOT USE IN PRODUCTION BUILDS.
+//
+// The function enforces a build guard to prevent usage outside dev builds.
 func NewInMemoryServer(ctx context.Context, trustDomainStr string, trustDomainParser ports.TrustDomainParser, certProvider ports.IdentityDocumentProvider) (*InMemoryServer, error) {
+	// Defense-in-depth: Ensure this code only runs in dev builds
+	// This should never fail (file has //go:build dev tag) but we check anyway
+	if !devBuildGuard() {
+		return nil, errors.New("inmemory: server cannot be used outside dev builds")
+	}
+
 	if trustDomainParser == nil || certProvider == nil {
 		return nil, fmt.Errorf("inmemory: trustDomainParser and certProvider are required")
 	}
@@ -42,7 +79,7 @@ func NewInMemoryServer(ctx context.Context, trustDomainStr string, trustDomainPa
 		return nil, fmt.Errorf("invalid trust domain: %w", err)
 	}
 
-	// Generate CA certificate
+	// Generate deterministic CA certificate (UNSAFE - for dev/test only)
 	caCert, caKey, err := generateCA(trustDomainStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate CA: %w", err)
@@ -54,6 +91,13 @@ func NewInMemoryServer(ctx context.Context, trustDomainStr string, trustDomainPa
 		caKey:               caKey,
 		certificateProvider: certProvider,
 	}, nil
+}
+
+// devBuildGuard returns true in dev builds.
+// This file cannot compile without the 'dev' build tag, so this always returns true.
+// The guard exists as defense-in-depth and to make the intent explicit in code.
+func devBuildGuard() bool {
+	return true
 }
 
 // IssueIdentity issues an X.509 identity document for an identity credential

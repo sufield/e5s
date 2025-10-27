@@ -1,8 +1,9 @@
 //go:build dev
 
-package inmemory_test
+package inmemory
 
 // InMemory Registry Coverage Tests
+// These are white-box tests that access package-private methods (seed, seal).
 //
 // These tests verify edge cases and defensive improvements for the InMemory registry.
 // Tests cover nil-safety, SeedMany convenience, and deterministic ordering.
@@ -19,7 +20,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/pocket/hexagon/spire/internal/adapters/outbound/inmemory"
 	"github.com/pocket/hexagon/spire/internal/domain"
 )
 
@@ -28,10 +28,10 @@ func TestRegistry_Coverage_SeedRejectsNilMapper(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	registry := inmemory.NewInMemoryRegistry()
+	registry := NewInMemoryRegistry()
 
-	// Act - Try to seed nil mapper
-	err := registry.Seed(ctx, nil)
+	// Act - Try to seed nil mapper (using package-private method)
+	err := registry.seed(ctx, nil)
 
 	// Assert
 	assert.Error(t, err)
@@ -43,14 +43,14 @@ func TestRegistry_Coverage_SeedRejectsMapperWithNilCredential(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	registry := inmemory.NewInMemoryRegistry()
+	registry := NewInMemoryRegistry()
 
 	// Arrange - Create mapper with nil credential (bypass normal constructor)
 	// We can't actually create this through domain constructors, so we test the guard exists
 	// This test documents the defensive check rather than exercising it
 
-	// Act - Try to seed nil mapper (similar defensive check)
-	err := registry.Seed(ctx, nil)
+	// Act - Try to seed nil mapper (similar defensive check, using package-private method)
+	err := registry.seed(ctx, nil)
 
 	// Assert - Defensive check caught the nil
 	assert.Error(t, err)
@@ -62,7 +62,7 @@ func TestRegistry_Coverage_SeedMany(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	registry := inmemory.NewInMemoryRegistry()
+	registry := NewInMemoryRegistry()
 
 	// Arrange - Create multiple mappers
 	td := domain.NewTrustDomainFromName("example.org")
@@ -79,11 +79,11 @@ func TestRegistry_Coverage_SeedMany(t *testing.T) {
 	}
 
 	// Act - Seed many at once
-	err := registry.SeedMany(ctx, mappers)
+	err := registry.seedMany(ctx, mappers)
 
 	// Assert
 	require.NoError(t, err)
-	registry.Seal()
+	registry.seal()
 
 	allMappers, err := registry.ListAll(ctx)
 	require.NoError(t, err)
@@ -95,7 +95,7 @@ func TestRegistry_Coverage_SeedManyRejectsDuplicate(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	registry := inmemory.NewInMemoryRegistry()
+	registry := NewInMemoryRegistry()
 
 	// Arrange - Create mappers with one duplicate
 	td := domain.NewTrustDomainFromName("example.org")
@@ -115,7 +115,7 @@ func TestRegistry_Coverage_SeedManyRejectsDuplicate(t *testing.T) {
 	mappers := []*domain.IdentityMapper{mapper1, mapper2}
 
 	// Act - SeedMany should fail on duplicate
-	err = registry.SeedMany(ctx, mappers)
+	err = registry.seedMany(ctx, mappers)
 
 	// Assert - Should fail on duplicate
 	assert.Error(t, err)
@@ -127,7 +127,7 @@ func TestRegistry_Coverage_ListAllDeterministicOrder(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	registry := inmemory.NewInMemoryRegistry()
+	registry := NewInMemoryRegistry()
 
 	// Arrange - Seed in non-alphabetical order
 	td := domain.NewTrustDomainFromName("example.org")
@@ -140,10 +140,10 @@ func TestRegistry_Coverage_ListAllDeterministicOrder(t *testing.T) {
 		selectors.Add(sel)
 		mapper, err := domain.NewIdentityMapper(credential, selectors)
 		require.NoError(t, err)
-		_ = registry.Seed(ctx, mapper)
+		_ = registry.seed(ctx, mapper)
 	}
 
-	registry.Seal()
+	registry.seal()
 
 	// Act - Call ListAll multiple times
 	results1, err := registry.ListAll(ctx)
@@ -170,7 +170,7 @@ func TestRegistry_Coverage_FindBySelectorsDeterministicOrder(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	registry := inmemory.NewInMemoryRegistry()
+	registry := NewInMemoryRegistry()
 
 	// Arrange - Seed multiple mappers with same selectors (would match)
 	// Insert in non-alphabetical order to verify determinism
@@ -185,10 +185,10 @@ func TestRegistry_Coverage_FindBySelectorsDeterministicOrder(t *testing.T) {
 		credential := domain.NewIdentityCredentialFromComponents(td, path)
 		mapper, err := domain.NewIdentityMapper(credential, sharedSelectors)
 		require.NoError(t, err)
-		_ = registry.Seed(ctx, mapper)
+		_ = registry.seed(ctx, mapper)
 	}
 
-	registry.Seal()
+	registry.seal()
 
 	// Act - Call FindBySelectors multiple times
 	querySelectors := domain.NewSelectorSet()

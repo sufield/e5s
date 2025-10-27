@@ -4,6 +4,7 @@ package localpeer
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -59,6 +60,24 @@ func TestWithCred_and_FromCtx(t *testing.T) {
 	}
 }
 
+func TestWithCred_NilContext(t *testing.T) {
+	t.Parallel()
+
+	cred := Cred{PID: 1234, UID: 1000, GID: 1000}
+
+	// WithCred should handle nil context by creating a new one
+	ctx := WithCred(nil, cred)
+
+	got, err := FromCtx(ctx)
+	if err != nil {
+		t.Fatalf("FromCtx() error = %v", err)
+	}
+
+	if got.PID != cred.PID || got.UID != cred.UID || got.GID != cred.GID {
+		t.Errorf("FromCtx() = %+v, want %+v", got, cred)
+	}
+}
+
 func TestFromCtx_WrongType(t *testing.T) {
 	t.Parallel()
 
@@ -85,6 +104,11 @@ func TestFromCtx_NoCred(t *testing.T) {
 		t.Error("FromCtx() expected error when no cred in context")
 	}
 
+	// Verify the error wraps ErrNoCred (errors.Is support)
+	if !errors.Is(err, ErrNoCred) {
+		t.Errorf("FromCtx() error should wrap ErrNoCred, got: %v", err)
+	}
+
 	if !strings.Contains(err.Error(), "no local peer cred") {
 		t.Errorf("unexpected error message: %v", err)
 	}
@@ -96,7 +120,8 @@ func TestGetExecutablePath_CurrentProcess(t *testing.T) {
 	// Get our own PID
 	pid := int32(os.Getpid())
 
-	exe, err := GetExecutablePath(pid)
+	ctx := context.Background()
+	exe, err := GetExecutablePath(ctx, pid)
 	if err != nil {
 		t.Fatalf("GetExecutablePath() error = %v", err)
 	}
@@ -111,26 +136,35 @@ func TestGetExecutablePath_CurrentProcess(t *testing.T) {
 	if exe == "" {
 		t.Error("GetExecutablePath() returned empty string")
 	}
+
+	// Should NOT be a full path (should be base name only)
+	if strings.HasPrefix(exe, "/") {
+		t.Errorf("GetExecutablePath() = %q, expected base name not full path", exe)
+	}
 }
 
 func TestGetExecutablePath_InvalidPID(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name string
-		pid  int32
+		name      string
+		pid       int32
+		errSubstr string
 	}{
 		{
-			name: "non-existent PID",
-			pid:  999999,
+			name:      "non-existent PID",
+			pid:       999999,
+			errSubstr: "no such file",
 		},
 		{
-			name: "zero PID",
-			pid:  0,
+			name:      "zero PID",
+			pid:       0,
+			errSubstr: "invalid PID",
 		},
 		{
-			name: "negative PID",
-			pid:  -1,
+			name:      "negative PID",
+			pid:       -1,
+			errSubstr: "invalid PID",
 		},
 	}
 
@@ -138,7 +172,8 @@ func TestGetExecutablePath_InvalidPID(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			exe, err := GetExecutablePath(tt.pid)
+			ctx := context.Background()
+			exe, err := GetExecutablePath(ctx, tt.pid)
 			if err == nil {
 				t.Errorf("GetExecutablePath(%d) expected error, got nil", tt.pid)
 			}
@@ -146,6 +181,11 @@ func TestGetExecutablePath_InvalidPID(t *testing.T) {
 			// Should return empty string on error (not "unknown")
 			if exe != "" {
 				t.Errorf("GetExecutablePath(%d) = %q, want empty string on error", tt.pid, exe)
+			}
+
+			// Check for expected error substring
+			if !strings.Contains(err.Error(), tt.errSubstr) {
+				t.Errorf("GetExecutablePath(%d) error = %q, want to contain %q", tt.pid, err.Error(), tt.errSubstr)
 			}
 		})
 	}
@@ -233,6 +273,12 @@ func TestFormatSyntheticSPIFFEID(t *testing.T) {
 			if !strings.HasPrefix(spiffeID, "spiffe://") {
 				t.Errorf("FormatSyntheticSPIFFEID() = %q, want to start with 'spiffe://'", spiffeID)
 			}
+
+			// Check that slashes in executable are escaped (should not have unescaped / after uid)
+			parts := strings.Split(spiffeID, "/")
+			if len(parts) > 5 {
+				t.Errorf("FormatSyntheticSPIFFEID() = %q has unescaped slashes, got %d parts: %v", spiffeID, len(parts), parts)
+			}
 		})
 	}
 }
@@ -266,6 +312,12 @@ func TestFormatSyntheticSPIFFEID_Structure(t *testing.T) {
 	if parts[0] != "spiffe:" {
 		t.Errorf("part[0] = %q, want 'spiffe:'", parts[0])
 	}
+
+	// Check that parts[1] is empty (double slash after scheme)
+	if parts[1] != "" {
+		t.Errorf("part[1] = %q, want empty string (part between // in spiffe://)", parts[1])
+	}
+
 	if parts[2] != "dev.local" {
 		t.Errorf("part[2] = %q, want 'dev.local'", parts[2])
 	}
@@ -275,4 +327,63 @@ func TestFormatSyntheticSPIFFEID_Structure(t *testing.T) {
 	if parts[4] == "" {
 		t.Error("part[4] (executable name) is empty")
 	}
+}
+
+// BenchmarkGetPeerCred benchmarks the GetPeerCred function
+// Note: This benchmark tests the error path (nil connection) since we can't
+// easily create a real Unix socket connection in a benchmark
+func BenchmarkGetPeerCred(b *testing.B) {
+	ctx := context.Background()
+
+	b.Run("nil_connection_error_path", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_, _ = GetPeerCred(ctx, nil)
+		}
+	})
+}
+
+// BenchmarkGetExecutablePath benchmarks the GetExecutablePath function
+func BenchmarkGetExecutablePath(b *testing.B) {
+	ctx := context.Background()
+	pid := int32(os.Getpid())
+
+	b.Run("current_process", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_, _ = GetExecutablePath(ctx, pid)
+		}
+	})
+
+	b.Run("invalid_pid", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_, _ = GetExecutablePath(ctx, -1)
+		}
+	})
+}
+
+// BenchmarkFormatSyntheticSPIFFEID benchmarks the FormatSyntheticSPIFFEID function
+func BenchmarkFormatSyntheticSPIFFEID(b *testing.B) {
+	cred := Cred{
+		PID: int32(os.Getpid()),
+		UID: 1000,
+		GID: 1000,
+	}
+	trustDomain := "dev.local"
+
+	b.Run("valid_cred", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_, _ = FormatSyntheticSPIFFEID(cred, trustDomain)
+		}
+	})
+
+	b.Run("invalid_pid_fallback", func(b *testing.B) {
+		invalidCred := Cred{PID: 999999, UID: 1000, GID: 1000}
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_, _ = FormatSyntheticSPIFFEID(invalidCred, trustDomain)
+		}
+	})
 }

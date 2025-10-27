@@ -25,10 +25,12 @@ func NewInMemoryAdapterFactory() *InMemoryAdapterFactory {
 	return &InMemoryAdapterFactory{}
 }
 
-func (f *InMemoryAdapterFactory) CreateRegistry(ctx context.Context, workloads []dto.WorkloadEntry, parser ports.IdentityCredentialParser) (*inmemory.InMemoryRegistry, error) {
-	registry := inmemory.NewInMemoryRegistry()
-
-	// Seed registry with workload configurations
+// CreateRegistry creates and initializes an in-memory registry (dev-only).
+// The registry is seeded with workload mappings and sealed before returning.
+// Returns the read-only port interface - callers cannot mutate the registry after creation.
+func (f *InMemoryAdapterFactory) CreateRegistry(ctx context.Context, workloads []dto.WorkloadEntry, parser ports.IdentityCredentialParser) (ports.IdentityMapperRegistry, error) {
+	// Build all mappers from workload configurations
+	mappers := make([]*domain.IdentityMapper, 0, len(workloads))
 	for _, workload := range workloads {
 		identityCredential, err := parser.ParseFromString(ctx, workload.SpiffeID)
 		if err != nil {
@@ -48,14 +50,17 @@ func (f *InMemoryAdapterFactory) CreateRegistry(ctx context.Context, workloads [
 			return nil, err
 		}
 
-		if err := registry.Seed(ctx, mapper); err != nil {
-			return nil, err
-		}
+		mappers = append(mappers, mapper)
 	}
 
-	// Seal registry to make it immutable
-	registry.Seal()
+	// Create registry with all mappers - it will be sealed automatically
+	// No external code (including this factory) can mutate the registry after this call
+	registry, err := inmemory.NewSeededRegistry(ctx, mappers)
+	if err != nil {
+		return nil, err
+	}
 
+	// Return as interface - callers only see FindBySelectors() and ListAll()
 	return registry, nil
 }
 
@@ -135,11 +140,12 @@ func (f *InMemoryAdapterFactory) CreateAttestor(trustDomain string) ports.Worklo
 }
 
 // CreateAgent creates an in-memory agent for development/testing.
+// Registry parameter is the read-only interface - agent cannot mutate the registry.
 func (f *InMemoryAdapterFactory) CreateAgent(
 	ctx context.Context,
 	spiffeID string,
 	server *inmemory.InMemoryServer,
-	registry *inmemory.InMemoryRegistry,
+	registry ports.IdentityMapperRegistry,
 	attestor ports.WorkloadAttestor,
 	parser ports.IdentityCredentialParser,
 	docProvider ports.IdentityDocumentProvider,

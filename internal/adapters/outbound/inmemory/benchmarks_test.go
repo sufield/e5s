@@ -1,12 +1,11 @@
 //go:build dev
 
-package inmemory_test
+package inmemory
 
 import (
 	"context"
 	"testing"
 
-	"github.com/pocket/hexagon/spire/internal/adapters/outbound/inmemory"
 	"github.com/pocket/hexagon/spire/internal/domain"
 )
 
@@ -14,10 +13,10 @@ import (
 // Identity document issuance should complete in <10ms for reasonable load
 func BenchmarkIssueIdentity(b *testing.B) {
 	ctx := context.Background()
-	tdParser := inmemory.NewInMemoryTrustDomainParser()
-	docProvider := inmemory.NewInMemoryIdentityDocumentProvider()
+	tdParser := NewInMemoryTrustDomainParser()
+	docProvider := NewInMemoryIdentityDocumentProvider()
 
-	server, err := inmemory.NewInMemoryServer(ctx, "example.org", tdParser, docProvider)
+	server, err := NewInMemoryServer(ctx, "example.org", tdParser, docProvider)
 	if err != nil {
 		b.Fatalf("Failed to create server: %v", err)
 	}
@@ -98,7 +97,7 @@ func BenchmarkRegistryFindBySelectors(b *testing.B) {
 
 	for _, bm := range benchmarks {
 		b.Run(bm.name, func(b *testing.B) {
-			registry := inmemory.NewInMemoryRegistry()
+			registry := NewInMemoryRegistry()
 			td := domain.NewTrustDomainFromName("example.org")
 
 			// Seed registry with N mappers
@@ -110,9 +109,9 @@ func BenchmarkRegistryFindBySelectors(b *testing.B) {
 					selectors.Add(sel)
 				}
 				mapper, _ := domain.NewIdentityMapper(credential, selectors)
-				_ = registry.Seed(ctx, mapper)
+				_ = registry.seed(ctx, mapper)
 			}
-			registry.Seal()
+			registry.seal()
 
 			// Search for last mapper's selectors (worst case)
 			searchSelectors := domain.NewSelectorSet()

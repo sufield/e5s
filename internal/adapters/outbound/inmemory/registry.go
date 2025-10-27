@@ -23,6 +23,7 @@ type InMemoryRegistry struct {
 
 // NewInMemoryRegistry creates a new unsealed in-memory registry
 // Registry must be sealed after seeding to become immutable
+// NOTE: This is package-private. External code should use NewSeededRegistry.
 func NewInMemoryRegistry() *InMemoryRegistry {
 	return &InMemoryRegistry{
 		mappers: make(map[string]*domain.IdentityMapper),
@@ -30,10 +31,22 @@ func NewInMemoryRegistry() *InMemoryRegistry {
 	}
 }
 
-// Seed adds an identity mapper to the registry (INTERNAL - used only during bootstrap)
+// NewSeededRegistry creates a registry, seeds it with provided mappers, and seals it.
+// This is the public constructor for external packages (like compose factory).
+// The registry is immutable after creation - no external code can mutate it.
+func NewSeededRegistry(ctx context.Context, mappers []*domain.IdentityMapper) (*InMemoryRegistry, error) {
+	reg := NewInMemoryRegistry()
+	if err := reg.seedMany(ctx, mappers); err != nil {
+		return nil, err
+	}
+	reg.seal()
+	return reg, nil
+}
+
+// seed adds an identity mapper to the registry (package-private - used only during factory/bootstrap)
 // This is NOT part of the IdentityMapperRegistry interface - it's only for composition root seeding
-// Do not call this method from application services - it's infrastructure/configuration only
-func (r *InMemoryRegistry) Seed(ctx context.Context, mapper *domain.IdentityMapper) error {
+// Only code in the inmemory package can call this - external code cannot mutate the registry
+func (r *InMemoryRegistry) seed(ctx context.Context, mapper *domain.IdentityMapper) error {
 	if r.sealed {
 		return fmt.Errorf("inmemory: %w", domain.ErrRegistrySealed)
 	}
@@ -52,20 +65,21 @@ func (r *InMemoryRegistry) Seed(ctx context.Context, mapper *domain.IdentityMapp
 	return nil
 }
 
-// SeedMany adds multiple identity mappers to the registry (INTERNAL - convenience for bootstrap)
+// seedMany adds multiple identity mappers to the registry (package-private - convenience for factory)
 // This is a convenience method for bulk seeding during composition root setup
-func (r *InMemoryRegistry) SeedMany(ctx context.Context, mappers []*domain.IdentityMapper) error {
+func (r *InMemoryRegistry) seedMany(ctx context.Context, mappers []*domain.IdentityMapper) error {
 	for _, mapper := range mappers {
-		if err := r.Seed(ctx, mapper); err != nil {
+		if err := r.seed(ctx, mapper); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// Seal marks the registry as immutable after bootstrap
+// seal marks the registry as immutable after bootstrap (package-private)
 // Once sealed, no further seeding is allowed
-func (r *InMemoryRegistry) Seal() {
+// Only the factory can seal - external code cannot unseal or re-seal
+func (r *InMemoryRegistry) seal() {
 	r.sealed = true
 }
 

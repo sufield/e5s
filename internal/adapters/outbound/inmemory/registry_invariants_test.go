@@ -1,6 +1,6 @@
 //go:build dev
 
-package inmemory_test
+package inmemory
 
 // InMemory Registry Invariant Tests
 //
@@ -20,7 +20,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/pocket/hexagon/spire/internal/adapters/outbound/inmemory"
 	"github.com/pocket/hexagon/spire/internal/domain"
 )
 
@@ -30,7 +29,7 @@ func TestRegistry_Invariant_ImmutableAfterSealing(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	registry := inmemory.NewInMemoryRegistry()
+	registry := NewInMemoryRegistry()
 
 	// Arrange - Seed and seal
 	td := domain.NewTrustDomainFromName("example.org")
@@ -42,18 +41,18 @@ func TestRegistry_Invariant_ImmutableAfterSealing(t *testing.T) {
 	mapper, err := domain.NewIdentityMapper(credential, selectors)
 	require.NoError(t, err)
 
-	err = registry.Seed(ctx, mapper)
+	err = registry.seed(ctx, mapper)
 	require.NoError(t, err)
 
 	// Act - Seal the registry
-	registry.Seal()
+	registry.seal()
 
 	// Try to seed after sealing
 	credential2 := domain.NewIdentityCredentialFromComponents(td, "/service")
 	mapper2, err := domain.NewIdentityMapper(credential2, selectors)
 	require.NoError(t, err)
 
-	err = registry.Seed(ctx, mapper2)
+	err = registry.seed(ctx, mapper2)
 
 	// Assert invariant: Seed fails after sealing
 	assert.Error(t, err, "Invariant violated: Seed should fail after sealing")
@@ -72,7 +71,7 @@ func TestRegistry_Invariant_SeedRejectsDuplicates(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	registry := inmemory.NewInMemoryRegistry()
+	registry := NewInMemoryRegistry()
 
 	// Arrange - Create two mappers with same credential
 	td := domain.NewTrustDomainFromName("example.org")
@@ -93,11 +92,11 @@ func TestRegistry_Invariant_SeedRejectsDuplicates(t *testing.T) {
 	require.NoError(t, err)
 
 	// Act - Seed first mapper
-	err = registry.Seed(ctx, mapper1)
+	err = registry.seed(ctx, mapper1)
 	require.NoError(t, err)
 
 	// Try to seed duplicate credential
-	err = registry.Seed(ctx, mapper2)
+	err = registry.seed(ctx, mapper2)
 
 	// Assert invariant: duplicate rejected
 	assert.Error(t, err, "Invariant violated: should reject duplicate credential")
@@ -116,7 +115,7 @@ func TestRegistry_Invariant_FindBySelectorsReadOnly(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	registry := inmemory.NewInMemoryRegistry()
+	registry := NewInMemoryRegistry()
 
 	// Arrange - Seed registry
 	td := domain.NewTrustDomainFromName("example.org")
@@ -128,10 +127,10 @@ func TestRegistry_Invariant_FindBySelectorsReadOnly(t *testing.T) {
 	mapper, err := domain.NewIdentityMapper(credential, selectors)
 	require.NoError(t, err)
 
-	err = registry.Seed(ctx, mapper)
+	err = registry.seed(ctx, mapper)
 	require.NoError(t, err)
 
-	registry.Seal()
+	registry.seal()
 
 	// Get initial state
 	mappersBefore, err := registry.ListAll(ctx)
@@ -156,7 +155,7 @@ func TestRegistry_Invariant_FindBySelectorsValidatesInput(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	registry := inmemory.NewInMemoryRegistry()
+	registry := NewInMemoryRegistry()
 
 	tests := []struct {
 		name      string
@@ -208,7 +207,7 @@ func TestRegistry_Invariant_FindBySelectorsANDLogic(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	registry := inmemory.NewInMemoryRegistry()
+	registry := NewInMemoryRegistry()
 
 	// Arrange - Create mapper requiring 2 selectors
 	td := domain.NewTrustDomainFromName("example.org")
@@ -223,9 +222,9 @@ func TestRegistry_Invariant_FindBySelectorsANDLogic(t *testing.T) {
 	mapper, err := domain.NewIdentityMapper(credential, mapperSelectors)
 	require.NoError(t, err)
 
-	err = registry.Seed(ctx, mapper)
+	err = registry.seed(ctx, mapper)
 	require.NoError(t, err)
-	registry.Seal()
+	registry.seal()
 
 	tests := []struct {
 		name        string
@@ -291,22 +290,22 @@ func TestRegistry_Invariant_ListAllNeverReturnsNilSlice(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		setupRegistry func() *inmemory.InMemoryRegistry
+		setupRegistry func() *InMemoryRegistry
 		wantError     bool
 		expectNonNil  bool
 	}{
 		{
 			name: "registry with mappers - returns non-nil slice",
-			setupRegistry: func() *inmemory.InMemoryRegistry {
-				reg := inmemory.NewInMemoryRegistry()
+			setupRegistry: func() *InMemoryRegistry {
+				reg := NewInMemoryRegistry()
 				td := domain.NewTrustDomainFromName("example.org")
 				credential := domain.NewIdentityCredentialFromComponents(td, "/workload")
 				selectors := domain.NewSelectorSet()
 				sel, _ := domain.ParseSelectorFromString("unix:uid:1000")
 				selectors.Add(sel)
 				mapper, _ := domain.NewIdentityMapper(credential, selectors)
-				_ = reg.Seed(ctx, mapper)
-				reg.Seal()
+				_ = reg.seed(ctx, mapper)
+				reg.seal()
 				return reg
 			},
 			wantError:    false,
@@ -314,9 +313,9 @@ func TestRegistry_Invariant_ListAllNeverReturnsNilSlice(t *testing.T) {
 		},
 		{
 			name: "empty registry - returns error",
-			setupRegistry: func() *inmemory.InMemoryRegistry {
-				reg := inmemory.NewInMemoryRegistry()
-				reg.Seal()
+			setupRegistry: func() *InMemoryRegistry {
+				reg := NewInMemoryRegistry()
+				reg.seal()
 				return reg
 			},
 			wantError:    true,
@@ -356,7 +355,7 @@ func TestRegistry_Invariant_SealIsOneWay(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	registry := inmemory.NewInMemoryRegistry()
+	registry := NewInMemoryRegistry()
 
 	// Arrange - Seed before sealing
 	td := domain.NewTrustDomainFromName("example.org")
@@ -369,29 +368,29 @@ func TestRegistry_Invariant_SealIsOneWay(t *testing.T) {
 	require.NoError(t, err)
 
 	// Act - Seed before seal (should work)
-	err = registry.Seed(ctx, mapper1)
+	err = registry.seed(ctx, mapper1)
 	assert.NoError(t, err, "Seeding before seal should work")
 
 	// Seal the registry
-	registry.Seal()
+	registry.seal()
 
 	// Try to seed after sealing (should fail)
 	namespace2 := domain.NewIdentityCredentialFromComponents(td, "/workload2")
 	mapper2, err := domain.NewIdentityMapper(namespace2, selectors)
 	require.NoError(t, err)
 
-	err = registry.Seed(ctx, mapper2)
+	err = registry.seed(ctx, mapper2)
 	assert.Error(t, err, "Invariant violated: Seed should fail after seal")
 
 	// Seal again (should be idempotent)
-	registry.Seal()
+	registry.seal()
 
 	// Try to seed after second seal (should still fail)
 	namespace3 := domain.NewIdentityCredentialFromComponents(td, "/workload3")
 	mapper3, err := domain.NewIdentityMapper(namespace3, selectors)
 	require.NoError(t, err)
 
-	err = registry.Seed(ctx, mapper3)
+	err = registry.seed(ctx, mapper3)
 	assert.Error(t, err, "Invariant violated: Seal is permanent, cannot be reversed")
 
 	// Verify only first mapper exists
@@ -406,7 +405,7 @@ func TestRegistry_Invariant_ListAllWorksAfterSealing(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	registry := inmemory.NewInMemoryRegistry()
+	registry := NewInMemoryRegistry()
 
 	// Arrange - Seed multiple mappers
 	td := domain.NewTrustDomainFromName("example.org")
@@ -416,11 +415,11 @@ func TestRegistry_Invariant_ListAllWorksAfterSealing(t *testing.T) {
 		sel, _ := domain.ParseSelectorFromString("unix:uid:100" + string(rune('0'+i)))
 		selectors.Add(sel)
 		mapper, _ := domain.NewIdentityMapper(credential, selectors)
-		_ = registry.Seed(ctx, mapper)
+		_ = registry.seed(ctx, mapper)
 	}
 
 	// Seal the registry
-	registry.Seal()
+	registry.seal()
 
 	// Act - ListAll should still work (read-only)
 	mappers, err := registry.ListAll(ctx)

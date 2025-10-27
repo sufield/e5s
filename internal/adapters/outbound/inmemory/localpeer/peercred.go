@@ -4,8 +4,10 @@ package localpeer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,16 +16,26 @@ import (
 
 // Cred represents Unix domain socket peer credentials obtained via SO_PEERCRED
 type Cred struct {
-	PID int32  `json:"pid"`
-	UID uint32 `json:"uid"`
-	GID uint32 `json:"gid"`
+	PID int32  `json:"pid,omitempty"`
+	UID uint32 `json:"uid,omitempty"`
+	GID uint32 `json:"gid,omitempty"`
 }
 
+// ctxKeyType is the type for context keys to avoid collisions
+type ctxKeyType string
+
 // ctxKey is the context key for storing peer credentials
-const ctxKey = "localpeer.Cred"
+const ctxKey ctxKeyType = "localpeer.Cred"
+
+// ErrNoCred is returned when no peer credential is found in context
+var ErrNoCred = errors.New("no local peer cred")
 
 // WithCred stores peer credentials in the context
+// If ctx is nil, returns a new background context with the credentials
 func WithCred(ctx context.Context, c Cred) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	return context.WithValue(ctx, ctxKey, c)
 }
 
@@ -31,7 +43,7 @@ func WithCred(ctx context.Context, c Cred) context.Context {
 func FromCtx(ctx context.Context) (Cred, error) {
 	v := ctx.Value(ctxKey)
 	if v == nil {
-		return Cred{}, fmt.Errorf("no local peer cred in context")
+		return Cred{}, fmt.Errorf("no local peer cred in context: %w", ErrNoCred)
 	}
 	c, ok := v.(Cred)
 	if !ok {
@@ -42,7 +54,15 @@ func FromCtx(ctx context.Context) (Cred, error) {
 
 // GetPeerCred extracts SO_PEERCRED from a Unix domain socket connection
 // This provides kernel-backed attestation of the peer process
-func GetPeerCred(conn *net.UnixConn) (Cred, error) {
+// Respects context cancellation - returns immediately if context is cancelled
+func GetPeerCred(ctx context.Context, conn *net.UnixConn) (Cred, error) {
+	// Check for cancellation before starting
+	select {
+	case <-ctx.Done():
+		return Cred{}, fmt.Errorf("context cancelled before getting peer cred: %w", ctx.Err())
+	default:
+	}
+
 	// Validate connection is not nil
 	if conn == nil {
 		return Cred{}, fmt.Errorf("nil connection")
@@ -77,6 +97,11 @@ func GetPeerCred(conn *net.UnixConn) (Cred, error) {
 		return Cred{}, fmt.Errorf("invalid PID from SO_PEERCRED: %d", cred.Pid)
 	}
 
+	// Sanity check UID (max value for 16-bit UID compatibility)
+	if cred.Uid > 65535 {
+		return Cred{}, fmt.Errorf("UID %d exceeds maximum 65535", cred.Uid)
+	}
+
 	return Cred{
 		PID: cred.Pid,
 		UID: cred.Uid,
@@ -87,7 +112,8 @@ func GetPeerCred(conn *net.UnixConn) (Cred, error) {
 // GetExecutablePath reads /proc/{pid}/exe to determine the peer's executable path
 // Returns the base name of the executable (e.g., "client-demo")
 // Returns empty string and error on failure
-func GetExecutablePath(pid int32) (string, error) {
+// Context parameter reserved for future I/O timeout support
+func GetExecutablePath(ctx context.Context, pid int32) (string, error) {
 	// Validate PID early
 	if pid <= 0 {
 		return "", fmt.Errorf("invalid PID %d", pid)
@@ -100,6 +126,11 @@ func GetExecutablePath(pid int32) (string, error) {
 	if err != nil {
 		// PID might have exited, or we don't have permissions
 		return "", fmt.Errorf("failed to read %s: %w", procPath, err)
+	}
+
+	// Validate we got an absolute path (security check)
+	if !strings.HasPrefix(exe, "/") {
+		return "", fmt.Errorf("non-absolute path %q returned from %s", exe, procPath)
 	}
 
 	// Return just the base name (e.g., "/usr/bin/client" -> "client")
@@ -115,15 +146,15 @@ func FormatSyntheticSPIFFEID(cred Cred, trustDomain string) (string, error) {
 		return "", fmt.Errorf("empty trust domain")
 	}
 
-	exe, err := GetExecutablePath(cred.PID)
+	exe, err := GetExecutablePath(context.Background(), cred.PID)
 	if err != nil {
 		// Fall back to unknown if we can't determine executable
 		exe = "unknown"
 	}
 
-	// Escape slashes in executable name to avoid invalid SPIFFE IDs
-	// Replace "/" with "-" to create valid URI path component
-	exeSafe := strings.ReplaceAll(exe, "/", "-")
+	// Use url.PathEscape to properly handle all special characters in URI paths
+	// This handles slashes, spaces, and other characters that need escaping
+	exeSafe := url.PathEscape(exe)
 
 	// Create synthetic SPIFFE ID
 	// Example: spiffe://dev.local/uid-1000/client-demo
