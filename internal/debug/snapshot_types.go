@@ -1,11 +1,17 @@
 package debug
 
 // Snapshot is what we expose over /_debug/identity.
-// MUST NOT put secrets here (e.g., private keys, tokens).
 //
-// This type is safe to compile in all builds (no build tags) because
-// it's just a struct definition. The endpoints that use it are only
-// available in debug builds.
+// ABSOLUTE RULE: This struct (and any nested structs like CertView/AuthDecision)
+// MUST NEVER contain:
+//   - private keys
+//   - raw cert material / full PEM / JWTs / bearer tokens
+//   - socket paths or network endpoints that are not already public-facing
+//
+// This file is intentionally built in ALL builds (no //go:build tag) so other
+// packages can reference these types. The /_debug/identity endpoint that returns
+// this data only exists in debug builds, but treating this struct as "safe for
+// prod" is a design goal. Adding sensitive material here is a security bug.
 type Snapshot struct {
 	Mode            string         `json:"mode"`            // "debug", "staging", or "production"
 	TrustDomain     string         `json:"trustDomain"`     // e.g., "spiffe://example.org"

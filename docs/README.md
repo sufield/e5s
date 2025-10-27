@@ -1,10 +1,10 @@
 # Documentation
 
-This documentation follows the [Diátaxis framework](https://diataxis.fr/) for clarity and ease of navigation.
+This documentation uses the [Diátaxis framework](https://diataxis.fr/) for clarity and ease of navigation.
 
-## 📚 Documentation Types
+## Documentation Types
 
-### 🎓 [Tutorials](tutorials/) - **Learning-Oriented**
+### [Tutorials](tutorials/) - **Learning-Oriented**
 
 *Start here if you're new to the project.*
 
@@ -19,7 +19,7 @@ Step-by-step introductions that teach you how to use the system through hands-on
 
 ---
 
-### 🔧 [How-To Guides](how-to-guides/) - **Task-Oriented**
+### [How-To Guides](how-to-guides/) - **Task-Oriented**
 
 *Come here when you have a specific goal to achieve.*
 
@@ -40,7 +40,7 @@ Practical solutions for specific tasks and problems you'll encounter in real-wor
 
 ---
 
-### 📖 [Reference](reference/) - **Information-Oriented**
+### [Reference](reference/) - **Information-Oriented**
 
 *Look here when you need precise technical details.*
 
@@ -65,7 +65,7 @@ Authoritative specifications, APIs, contracts, and technical descriptions.
 
 ---
 
-### 💡 [Explanation](explanation/) - **Understanding-Oriented**
+### [Explanation](explanation/) - **Understanding-Oriented**
 
 *Read these to understand the "why" behind the design.*
 
@@ -92,7 +92,7 @@ Background, rationale, and deep dives into design decisions and architectural ch
 
 ---
 
-## 🗺️ Quick Navigation
+## Quick Navigation
 
 ### I'm a **new user**
 → Start with **[Tutorials](tutorials/)** to learn the basics
@@ -108,7 +108,7 @@ Background, rationale, and deep dives into design decisions and architectural ch
 
 ---
 
-## 📊 Diátaxis Framework
+## Diátaxis Framework
 
 This documentation structure follows the Diátaxis framework, which organizes documentation by **user needs**:
 
@@ -127,15 +127,15 @@ Learn more about Diátaxis at [diataxis.fr](https://diataxis.fr/)
 
 ---
 
-## 🔗 External Resources
+## External Resources
 
-- **[Main README](../README.md)** - Project overview and API reference
+- **[Main README](../README.md)** - High-level project overview and goals
 - **[Examples](tutorials/examples/)** - Hands-on code examples
-- **[Contributing](#)** - How to contribute (if you have a CONTRIBUTING.md)
+- **[Contributing](../CONTRIBUTING.md)** - How to contribute (coding standards, docs process)
 
 ---
 
-## 📝 Documentation Metadata
+## Documentation Metadata
 
 Each document includes a header indicating its type:
 
@@ -150,7 +150,7 @@ This helps you quickly identify if a document matches your needs.
 
 ---
 
-## 🤝 Contributing to Documentation
+## Contributing to Documentation
 
 When adding new documentation:
 
@@ -159,6 +159,8 @@ When adding new documentation:
 3. **Add metadata**: Include the document type header
 4. **Update this index**: Add a link to the relevant section above
 5. **Check links**: Ensure all cross-references work
+
+> Note: keep link text and actual filenames in sync (`SECURITY_TOOLS.md` vs `security-tools.md`) because some environments use case-sensitive filesystems.
 
 ### Decision Matrix: Where Does a New Doc Go?
 
@@ -183,7 +185,7 @@ When adding new documentation:
 
 ---
 
-## ❓ Still Can't Find What You Need?
+## Still Can't Find What You Need?
 
 - Check the **[main README](../README.md)** for an overview
 - Browse **[examples/](tutorials/examples/)** for code samples

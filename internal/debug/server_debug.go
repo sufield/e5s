@@ -3,8 +3,10 @@
 package debug
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"time"
 )
@@ -18,6 +20,7 @@ type Server struct {
 	addr         string
 	mux          *http.ServeMux
 	introspector Introspector
+	httpServer   *http.Server
 }
 
 // FaultRequest represents a fault injection request
@@ -35,9 +38,25 @@ type FaultRequest struct {
 //
 // The introspector parameter provides access to sanitized identity state.
 // It can be nil, in which case the /_debug/identity endpoint will not be available.
-func Start(introspector Introspector) {
+//
+// Returns the Server instance for graceful shutdown, or nil if the server was not started.
+func Start(introspector Introspector) *Server {
 	if !Active.LocalDebugServer {
-		return
+		return nil
+	}
+
+	// Enforce loopback-only binding for security
+	if Active.DebugServerAddr == "" {
+		GetLogger().Debugf("REFUSING to start debug server: empty bind address")
+		return nil
+	}
+	if !isLoopback(Active.DebugServerAddr) {
+		// Clarify that non-loopback includes public IPs AND non-loopback hostnames.
+		GetLogger().Debugf(
+			"REFUSING to start debug server on non-loopback addr/host: %q (must be 127.0.0.0/8, ::1, or localhost)",
+			Active.DebugServerAddr,
+		)
+		return nil
 	}
 
 	srv := &Server{
@@ -47,22 +66,35 @@ func Start(introspector Introspector) {
 	}
 	srv.registerHandlers()
 
+	// Bind to the address before starting goroutine
+	// This gives us the actual port when using :0 (ephemeral port)
+	ln, err := net.Listen("tcp", srv.addr)
+	if err != nil {
+		GetLogger().Debugf("Failed to bind debug server: %v", err)
+		return nil
+	}
+
+	// Create http.Server before starting goroutine so it can be shut down
+	srv.httpServer = &http.Server{
+		Addr:              ln.Addr().String(), // Use actual bound address
+		Handler:           srv.mux,
+		ReadHeaderTimeout: 2 * time.Second,  // Prevent Slowloris attacks
+		IdleTimeout:       30 * time.Second, // Cap idle connection lifetime
+		MaxHeaderBytes:    8 << 10,          // 8KB header limit
+	}
+
 	go func() {
 		logger := GetLogger()
-		logger.Debugf("⚠️  DEBUG SERVER RUNNING ON %s", srv.addr)
+		// Safe to log: loopback-only address already validated by isLoopback().
+		logger.Debugf("⚠️  DEBUG SERVER RUNNING ON %s", ln.Addr().String())
 		logger.Debug("⚠️  WARNING: Debug mode is enabled. DO NOT USE IN PRODUCTION!")
 
-		// Use http.Server for better control and basic hardening
-		httpServer := &http.Server{
-			Addr:              srv.addr,
-			Handler:           srv.mux,
-			ReadHeaderTimeout: 2 * time.Second, // Prevent Slowloris attacks
-		}
-
-		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := srv.httpServer.Serve(ln); err != nil && err != http.ErrServerClosed {
 			logger.Debugf("Debug server error: %v", err)
 		}
 	}()
+
+	return srv
 }
 
 func (s *Server) registerHandlers() {
@@ -101,24 +133,41 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(html))
 }
 
-// handleState serves the current debug state.
+// handleState exposes high-level debug runtime toggles and current fault state.
+// This endpoint intentionally does NOT include secrets or identity material.
+// Safe to serve in both "debug" and "staging" modes. Still loopback-only.
 func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+
 	state := map[string]any{
 		"debug_enabled": Active.Enabled,
+		"mode":          Active.Mode, // "debug", "staging", or "production"
 		"stress_mode":   Active.Stress,
 		"single_thread": Active.SingleThreaded,
 		"faults":        Faults.Snapshot(),
 	}
 
+	// NOTE: All debug JSON MUST be written via writeJSON / writeJSONStatus.
+	// These helpers set Cache-Control: no-store and Content-Type correctly.
+	// Do not inline json.NewEncoder(...).Encode(...) here.
 	writeJSON(w, state)
 }
 
 // handleFaults handles GET and POST requests for fault injection.
+// POST is only allowed in "debug" mode, not "staging" or "production".
 func (s *Server) handleFaults(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		s.getFaults(w, r)
 	case http.MethodPost:
+		// Only allow mutation if we're explicitly in "debug" mode, not "staging".
+		if Active.Mode != "debug" {
+			http.Error(w, "Fault injection disabled in this mode", http.StatusForbidden)
+			return
+		}
 		s.setFaults(w, r)
 	default:
 		methodNotAllowed(w)
@@ -184,9 +233,16 @@ func (s *Server) setFaults(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleFaultsReset resets all fault injections.
+// Only allowed in "debug" mode, not "staging" or "production".
 func (s *Server) handleFaultsReset(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		methodNotAllowed(w)
+		return
+	}
+
+	// Only allow mutation if we're explicitly in "debug" mode, not "staging".
+	if Active.Mode != "debug" {
+		http.Error(w, "Fault injection disabled in this mode", http.StatusForbidden)
 		return
 	}
 
@@ -198,8 +254,14 @@ func (s *Server) handleFaultsReset(w http.ResponseWriter, r *http.Request) {
 
 // handleConfig returns the current debug configuration.
 func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+
 	config := map[string]any{
 		"enabled":            Active.Enabled,
+		"mode":               Active.Mode,
 		"stress":             Active.Stress,
 		"single_threaded":    Active.SingleThreaded,
 		"local_debug_server": Active.LocalDebugServer,
@@ -211,23 +273,113 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 
 // handleIdentity returns a snapshot of the current identity state.
 // This endpoint is only available if an introspector was provided to Start().
+// Returns 503 Service Unavailable if identity state has errors.
 func (s *Server) handleIdentity(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+
 	if s.introspector == nil {
 		http.Error(w, "Identity introspection not available (no introspector provided)", http.StatusNotImplemented)
 		return
 	}
 
 	snapshot := s.introspector.SnapshotData(r.Context())
-	writeJSON(w, snapshot)
+
+	// Return 503 if any errors in identity state
+	status := http.StatusOK
+	for _, d := range snapshot.RecentDecisions {
+		if d.Decision == "ERROR" {
+			status = http.StatusServiceUnavailable
+			break
+		}
+	}
+
+	// NOTE: All debug JSON MUST be written via writeJSON / writeJSONStatus.
+	// These helpers enforce the no-store header. See writeJSONStatus docs/tests.
+	writeJSONStatus(w, status, snapshot)
 }
 
-// writeJSON writes a JSON response with proper content type.
-func writeJSON(w http.ResponseWriter, v any) {
+// writeJSONStatus writes a JSON response with the given status code.
+// Security contract:
+//   • Sets "Cache-Control: no-store" on ALL debug JSON responses to prevent
+//     intermediaries, CLIs, or proxies from caching or logging operational state
+//     (trust domains, SPIFFE IDs, fault toggles, etc.).
+//   • Sets Content-Type to application/json; charset=utf-8.
+//   • All debug endpoints MUST use this helper (or writeJSON) to avoid drift.
+// Any change to these headers MUST update TestServer_handleIdentity_NoStoreHeader.
+func writeJSONStatus(w http.ResponseWriter, status int, v any) {
+	// Prevent caching of potentially sensitive debug state
+	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
 }
 
+// writeJSON writes a JSON response with 200 OK status and proper content type.
+func writeJSON(w http.ResponseWriter, v any) {
+	writeJSONStatus(w, http.StatusOK, v)
+}
+
 // methodNotAllowed writes a 405 Method Not Allowed response.
+// This intentionally does NOT use writeJSONStatus because it returns no sensitive
+// runtime state (just a static error message). All endpoints that return operational
+// data (state, identity, faults, etc.) MUST use writeJSON/writeJSONStatus.
 func methodNotAllowed(w http.ResponseWriter) {
 	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+}
+
+// Stop shuts down the debug server gracefully.
+// Returns nil if the server was not started or is already stopped.
+// The context controls the shutdown timeout.
+// This method is idempotent - safe to call multiple times.
+func (s *Server) Stop(ctx context.Context) error {
+	if s == nil || s.httpServer == nil {
+		return nil
+	}
+
+	GetLogger().Debug("Shutting down debug server")
+	err := s.httpServer.Shutdown(ctx)
+
+	// Make subsequent Stop() calls a no-op
+	s.httpServer = nil
+
+	return err
+}
+
+// isLoopback returns true if addr is a loopback-only listen address.
+// Allowed forms:
+//   - "127.x.y.z:port" (any 127.0.0.0/8 IPv4)
+//   - "[::1]:port"     (IPv6 loopback)
+//   - "localhost:port" (literal hostname only)
+//
+// Security contract:
+//   • addr MUST include a port. Bare hosts like "127.0.0.1" are rejected
+//     (SplitHostPort fails) and MUST remain rejected. This prevents someone
+//     from "helpfully" accepting broader forms like "0.0.0.0" without port.
+//   • Arbitrary hostnames are NOT allowed. Only literal "localhost" is
+//     allowed. "api.example.com:6060" MUST be rejected even if it currently
+//     resolves to 127.0.0.1 at runtime.
+//   • Returning true here is what allows Start() to proceed and later log the
+//     bound address. That log line is considered safe *only because* of this
+//     check. Weakening this function without updating that log is a data leak.
+//
+// Any change to this logic MUST update tests that cover Start()/isLoopback.
+func isLoopback(addr string) bool {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil || host == "" {
+		return false
+	}
+
+	// Allow literal "localhost" to reduce footguns in dev configs.
+	if host == "localhost" {
+		return true
+	}
+
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	return ip.IsLoopback()
 }

@@ -38,6 +38,10 @@ import (
 //
 // Concurrency: Starts debug server in a background goroutine.
 func BootstrapWithDebug(ctx context.Context, configLoader ports.ConfigLoader, factory ports.AdapterFactory) (*Application, error) {
+	// Initialize debug config from env before doing anything that depends on debug.Active.
+	// This must happen before debug.Start() to ensure Mode, LocalDebugServer, and DebugServerAddr are set.
+	debug.Init()
+
 	// First, do normal bootstrap
 	app, err := Bootstrap(ctx, configLoader, factory)
 	if err != nil {
@@ -50,12 +54,16 @@ func BootstrapWithDebug(ctx context.Context, configLoader ports.ConfigLoader, fa
 	// Start debug server with identity introspection
 	// The debug server runs in a background goroutine
 	// Note: identitySvc must implement debug.Introspector (verified by compile-time assertion in identity_service_debug.go)
+	var debugServer *debug.Server
 	if introspector, ok := identitySvc.(debug.Introspector); ok {
-		debug.Start(introspector)
+		debugServer = debug.Start(introspector)
 	} else {
 		// This should never happen in debug builds where IdentityServiceSPIRE implements Introspector
-		debug.Start(nil) // Start without introspection
+		debugServer = debug.Start(nil) // Start without introspection
 	}
+
+	// Track debug server for graceful shutdown
+	app.SetDebugServer(debugServer)
 
 	return app, nil
 }

@@ -31,11 +31,10 @@ var _ debug.Introspector = (*IdentityServiceSPIRE)(nil)
 //
 // Concurrency: Safe for concurrent use (delegates to thread-safe Client).
 func (s *IdentityServiceSPIRE) SnapshotData(ctx context.Context) debug.Snapshot {
-	// TODO: Consider making Mode configurable via debug.Active.Mode
-	// instead of hardcoding "debug", to support staging builds.
+	// debug.Active is initialized once at startup (debug.Init()) and then treated as read-only.
 	snapshot := debug.Snapshot{
-		Mode:            "debug", // Hardcoded; consider injecting from config
-		Adapter:         "spire", // Using real SPIRE (not inmemory)
+		Mode:            debug.Active.Mode, // Configured via SPIRE_DEBUG_MODE env var
+		Adapter:         "spire",           // Using real SPIRE (not inmemory)
 		Certs:           []debug.CertView{},
 		RecentDecisions: []debug.AuthDecision{},
 	}
@@ -61,12 +60,12 @@ func (s *IdentityServiceSPIRE) SnapshotData(ctx context.Context) debug.Snapshot 
 		if cred != nil {
 			snapshot.TrustDomain = cred.TrustDomainString()
 
-			// Calculate time until expiration (negative if already expired)
-			expiresIn := time.Until(doc.ExpiresAt()).Seconds()
+			// Time until expiration in whole seconds (negative if already expired).
+			expiresInSeconds := int64(time.Until(doc.ExpiresAt()).Seconds())
 
 			snapshot.Certs = append(snapshot.Certs, debug.CertView{
 				SpiffeID:         cred.SPIFFEID(),
-				ExpiresInSeconds: int64(expiresIn),
+				ExpiresInSeconds: expiresInSeconds,
 				// TODO: Plumb real rotation status if available from SPIRE
 				RotationPending: false, // SPIRE handles rotation transparently
 			})

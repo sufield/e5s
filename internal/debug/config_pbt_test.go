@@ -264,3 +264,65 @@ func TestGetEnvOrDefault_Properties(t *testing.T) {
 		}
 	})
 }
+
+// TestInit_ModeNormalization tests that unknown mode strings are normalized to "debug"
+func TestInit_ModeNormalization(t *testing.T) {
+	tests := []struct {
+		name         string
+		envMode      string
+		expectedMode string
+	}{
+		{"valid debug", "debug", "debug"},
+		{"valid staging", "staging", "staging"},
+		{"valid production", "production", "production"},
+		{"invalid typo", "prodution", "debug"},
+		{"invalid garbage", "wat", "debug"},
+		{"empty string", "", "debug"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Save old env to restore after subtest
+			oldDebug := os.Getenv("SPIRE_DEBUG")
+			oldServer := os.Getenv("SPIRE_DEBUG_SERVER")
+			oldMode := os.Getenv("SPIRE_DEBUG_MODE")
+
+			// Restore after subtest
+			defer func() {
+				if oldDebug == "" {
+					os.Unsetenv("SPIRE_DEBUG")
+				} else {
+					os.Setenv("SPIRE_DEBUG", oldDebug)
+				}
+
+				if oldServer == "" {
+					os.Unsetenv("SPIRE_DEBUG_SERVER")
+				} else {
+					os.Setenv("SPIRE_DEBUG_SERVER", oldServer)
+				}
+
+				if oldMode == "" {
+					os.Unsetenv("SPIRE_DEBUG_MODE")
+				} else {
+					os.Setenv("SPIRE_DEBUG_MODE", oldMode)
+				}
+			}()
+
+			// Apply this subtest's env
+			if tt.envMode == "" {
+				os.Unsetenv("SPIRE_DEBUG_MODE")
+			} else {
+				os.Setenv("SPIRE_DEBUG_MODE", tt.envMode)
+			}
+
+			os.Unsetenv("SPIRE_DEBUG")
+			os.Unsetenv("SPIRE_DEBUG_SERVER")
+
+			Init()
+
+			if Active.Mode != tt.expectedMode {
+				t.Errorf("expected mode %q, got %q", tt.expectedMode, Active.Mode)
+			}
+		})
+	}
+}
