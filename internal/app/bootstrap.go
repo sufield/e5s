@@ -1,5 +1,3 @@
-//go:build !dev
-
 package app
 
 import (
@@ -11,12 +9,12 @@ import (
 	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
-// Bootstrap wires production components:
+// Bootstrap wires application components:
 // - Loads config
 // - Validates inputs
 // - Applies a default timeout if the caller didn't set one
 // - Builds an agent via SPIRE (Workload API)
-// - Returns minimal Application for production workloads
+// - Returns minimal Application for workloads
 func Bootstrap(ctx context.Context, configLoader ports.ConfigLoader, factory *compose.SPIREAdapterFactory) (*Application, error) {
 	if configLoader == nil {
 		return nil, fmt.Errorf("config loader is nil")
@@ -51,6 +49,6 @@ func Bootstrap(ctx context.Context, configLoader ports.ConfigLoader, factory *co
 	}
 
 	// Step 4: Wire application with constructor validation
-	// Production workloads only need Agent to fetch their own identity
+	// Workloads only need Agent to fetch their own identity
 	return New(cfg, agent)
 }

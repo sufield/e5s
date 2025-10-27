@@ -22,20 +22,11 @@ import (
 // Stability: These sentinels define the contract between domain and ports.
 // All adapters must return these exact errors for consistent error handling.
 
-// Registry errors
-var (
-	// ErrNoMatchingMapper indicates no identity mapper matches the given selectors.
-	// Used by: IdentityMapperRegistry.FindBySelectors, AttestationService.MatchWorkloadToMapper
-	ErrNoMatchingMapper = errors.New("no matching mapper")
-
-	// ErrRegistrySealed indicates registry is sealed and cannot accept new entries.
-	// Used by: InMemoryRegistry.Seed (internal)
-	ErrRegistrySealed = errors.New("registry sealed")
-
-	// ErrRegistryEmpty indicates registry has no entries.
-	// Used by: IdentityMapperRegistry.ListAll
-	ErrRegistryEmpty = errors.New("registry empty")
-)
+// REMOVED: Registry errors - inmemory registry deleted per simplification.md
+// The following errors are no longer needed:
+//   - ErrNoMatchingMapper (IdentityMapperRegistry deleted)
+//   - ErrRegistrySealed (InMemoryRegistry deleted)
+//   - ErrRegistryEmpty (IdentityMapperRegistry deleted)
 
 // Parser and validation errors
 var (
@@ -47,19 +38,10 @@ var (
 	// Used by: TrustDomainParser.FromString
 	ErrInvalidTrustDomain = errors.New("invalid trust domain")
 
-	// ErrInvalidSelectors indicates selectors are nil or empty.
-	// Used by: IdentityMapperRegistry.FindBySelectors, AttestationService.MatchWorkloadToMapper
-	ErrInvalidSelectors = errors.New("invalid selectors")
-
-	// ErrSelectorInvalid indicates selector format is invalid.
-	// Used by: domain.ParseSelectorFromString, domain.NewSelector
-	//
-	// This consolidates fine-grained selector errors (empty key/value, invalid format).
-	// Call sites add specific context via wrapping:
-	//   fmt.Errorf("%w: key is empty", ErrSelectorInvalid)
-	//   fmt.Errorf("%w: value is empty", ErrSelectorInvalid)
-	//   fmt.Errorf("%w: missing colon separator", ErrSelectorInvalid)
-	ErrSelectorInvalid = errors.New("invalid selector")
+	// REMOVED: Selector errors - selector types deleted per simplification.md
+	// The following errors are no longer needed:
+	//   - ErrInvalidSelectors (selector matching deleted)
+	//   - ErrSelectorInvalid (selector types deleted)
 )
 
 // Identity document errors
@@ -85,20 +67,13 @@ var (
 	ErrTrustBundleNotFound = errors.New("trust bundle not found")
 )
 
-// Attestation errors
-var (
-	// ErrWorkloadAttestationFailed indicates workload attestation failed.
-	// Used by: WorkloadAttestor.Attest
-	ErrWorkloadAttestationFailed = errors.New("workload attestation failed")
-
-	// ErrNoAttestationData indicates no attestation data available.
-	// Used by: WorkloadAttestor.Attest, IdentityProvider.FetchX509SVID
-	ErrNoAttestationData = errors.New("no attestation data")
-
-	// ErrInvalidProcessIdentity indicates process identity is invalid or incomplete.
-	// Used by: WorkloadAttestor.Attest
-	ErrInvalidProcessIdentity = errors.New("invalid process identity")
-)
+// REMOVED: Attestation errors - inmemory attestation deleted per simplification.md
+// The following errors are no longer needed:
+//   - ErrWorkloadAttestationFailed (WorkloadAttestor deleted)
+//   - ErrNoAttestationData (inmemory attestation deleted)
+//   - ErrInvalidProcessIdentity (inmemory attestation deleted)
+//
+// Production SPIRE integration handles attestation via Workload API.
 
 // REMOVED: Infrastructure errors moved to internal/ports/errors.go
 //
@@ -117,9 +92,7 @@ var (
 
 // Entity validation errors
 var (
-	// ErrIdentityMapperInvalid indicates identity mapper validation failed.
-	// Used by: domain.NewIdentityMapper
-	ErrIdentityMapperInvalid = errors.New("identity mapper invalid")
+	// REMOVED: ErrIdentityMapperInvalid - IdentityMapper type deleted per simplification.md
 
 	// ErrWorkloadInvalid indicates workload validation failed.
 	// Used by: domain workload validation
@@ -174,24 +147,26 @@ func IsIdentityDocumentError(err error) bool {
 // Compile-time guards to ensure sentinel errors implement error interface.
 // This prevents accidental redefinition and makes intent explicit in code review.
 var (
-	_ error = ErrNoMatchingMapper
-	_ error = ErrRegistrySealed
-	_ error = ErrRegistryEmpty
+	// Parser and validation errors
 	_ error = ErrInvalidIdentityCredential
 	_ error = ErrInvalidTrustDomain
-	_ error = ErrInvalidSelectors
-	_ error = ErrSelectorInvalid
+
+	// Identity document errors
 	_ error = ErrIdentityDocumentExpired
 	_ error = ErrIdentityDocumentInvalid
 	_ error = ErrIdentityDocumentMismatch
 	_ error = ErrCertificateChainInvalid
 	_ error = ErrTrustBundleNotFound
-	_ error = ErrWorkloadAttestationFailed
-	_ error = ErrNoAttestationData
-	_ error = ErrInvalidProcessIdentity
-	// Removed: ErrServerUnavailable, ErrAgentUnavailable, ErrCANotInitialized
-	// (moved to ports.Err* - see ports/errors.go)
-	_ error = ErrIdentityMapperInvalid
+
+	// Entity validation errors
 	_ error = ErrWorkloadInvalid
+
+	// Operation errors
 	_ error = ErrNotSupported
+
+	// REMOVED: Registry errors (inmemory deleted)
+	// REMOVED: Selector errors (selector types deleted)
+	// REMOVED: Attestation errors (inmemory attestation deleted)
+	// REMOVED: ErrIdentityMapperInvalid (IdentityMapper deleted)
+	// REMOVED: Infrastructure errors (moved to ports.Err*)
 )

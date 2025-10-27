@@ -1,5 +1,3 @@
-//go:build !dev
-
 package app
 
 import (
@@ -9,15 +7,14 @@ import (
 	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
-// Application wires production dependencies.
-// In production there is no local registry or demo service;
-// workloads fetch identities via the SPIRE Workload API through the Agent.
+// Application wires application dependencies.
+// Workloads fetch identities via the SPIRE Workload API through the Agent.
 type Application struct {
 	cfg   *dto.Config
 	agent ports.Agent
 }
 
-// New constructs a production Application and validates required deps.
+// New constructs an Application and validates required deps.
 func New(cfg *dto.Config, agent ports.Agent) (*Application, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("config is nil")

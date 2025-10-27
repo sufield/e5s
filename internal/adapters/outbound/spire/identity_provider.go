@@ -26,8 +26,7 @@ import (
 //  3. Else → pick lexicographically smallest ID from all SVIDs (fallback)
 //
 // Error handling:
-//   - Returns ports.ErrAgentUnavailable for nil/uninitialized client
-//   - Returns domain.ErrNoAttestationData when Workload API returns no SVIDs
+//   - Returns ports.ErrAgentUnavailable for nil/uninitialized client or no SVIDs
 //   - Wraps all SDK errors with %w for errors.Is/As compatibility
 //
 // Concurrency: Safe for concurrent use. Both X509Source and Workload API client
@@ -68,7 +67,7 @@ func (c *Client) FetchX509SVID(ctx context.Context) (*domain.IdentityDocument, e
 		return nil, fmt.Errorf("fetch X.509 context: %w", err)
 	}
 	if x509Ctx == nil || len(x509Ctx.SVIDs) == 0 {
-		return nil, fmt.Errorf("%w: no SVIDs returned by Workload API", domain.ErrNoAttestationData)
+		return nil, fmt.Errorf("%w: no SVIDs returned by Workload API", ports.ErrAgentUnavailable)
 	}
 
 	svid := selectSVID(x509Ctx, c.trustDomain)

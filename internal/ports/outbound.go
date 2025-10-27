@@ -4,12 +4,18 @@ import (
 	"context"
 
 	"github.com/pocket/hexagon/spire/internal/domain"
+	"github.com/pocket/hexagon/spire/internal/dto"
 )
 
 type Agent interface {
 	GetIdentity(ctx context.Context) (*domain.IdentityDocument, error)
 	FetchIdentityDocument(ctx context.Context, workload *domain.Workload) (*domain.IdentityDocument, error)
 	Close() error
+}
+
+// ConfigLoader loads runtime configuration.
+type ConfigLoader interface {
+	Load(ctx context.Context) (*dto.Config, error)
 }
 
 type TrustDomainParser interface {

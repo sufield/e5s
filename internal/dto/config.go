@@ -1,10 +1,7 @@
-//go:build dev
-
 package dto
 
-// Config is runtime configuration (dev-only).
+// Config is runtime configuration.
+// Workload registration happens in SPIRE Server.
 type Config struct {
-	TrustDomain   string          `json:"trustDomain" yaml:"trustDomain"`
-	AgentSpiffeID string          `json:"agentSpiffeId" yaml:"agentSpiffeId"`
-	Workloads     []WorkloadEntry `json:"workloads,omitempty" yaml:"workloads,omitempty"`
+	AgentSpiffeID string `json:"agentSpiffeId" yaml:"agentSpiffeId"`
 }

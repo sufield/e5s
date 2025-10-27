@@ -1,18 +1,15 @@
-//go:build dev
-
 package config
 
 import "time"
 
-// Development-only defaults (convenient but explicit).
+// Default configuration values (safe, conservative).
 //
-// SECURITY WARNING: These defaults are NOT safe for production:
-//   - Binds to all interfaces (":8443")
-//   - Uses example trust domain
+// Security properties:
+//   - Binds to loopback only ("127.0.0.1:8443") by default
+//   - No SPIRE defaults - must be explicitly configured
+//   - No auth defaults - must be explicitly configured
 const (
-	DefaultSPIRESocket       = "unix:///tmp/spire-agent/public/api.sock"
-	DefaultTrustDomain       = "example.org"
-	DefaultHTTPAddress       = ":8443" // binds all interfaces in dev
+	DefaultHTTPAddress       = "127.0.0.1:8443" // force loopback unless explicitly changed
 	DefaultHTTPTimeout       = 30 * time.Second
 	DefaultReadHeaderTimeout = 10 * time.Second
 	DefaultReadTimeout       = 30 * time.Second
@@ -21,22 +18,19 @@ const (
 	DefaultSPIRETimeout      = 30 * time.Second
 )
 
-// ApplyDefaults sets safe infrastructure defaults only (dev mode).
+// ApplyDefaults sets safe infrastructure defaults only.
 //
 // Breaking changes from previous version:
 //   - No fallback from HTTP.Port to Address (set Address explicitly)
 //   - Does NOT copy SPIRE.TrustDomain into HTTP.Auth.TrustDomain
 //   - Does NOT default PeerVerification to "any"
 //
-// Authentication fields are left as-is; validation will fail if required fields are missing.
+// Configuration policy:
+//   - SPIRE socket path and trust domain must be explicitly configured
+//   - Authentication fields must be explicitly configured
+//   - Validation will fail if required fields are missing
 func ApplyDefaults(cfg *MTLSConfig) {
-	// SPIRE defaults
-	if cfg.SPIRE.SocketPath == "" {
-		cfg.SPIRE.SocketPath = DefaultSPIRESocket
-	}
-	if cfg.SPIRE.TrustDomain == "" {
-		cfg.SPIRE.TrustDomain = DefaultTrustDomain
-	}
+	// SPIRE: no socket path or trust domain defaults (must be explicit)
 	if cfg.SPIRE.Timeout == 0 {
 		cfg.SPIRE.Timeout = DefaultSPIRETimeout
 	}
