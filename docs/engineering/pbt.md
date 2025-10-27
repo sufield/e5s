@@ -1,11 +1,11 @@
-# Property-Based Testing (PBT) Guide
+# Property-Based Testing Guide
 
 **Audience**: Contributors implementing and maintaining tests
 **Last Updated**: 2025-10-26
 
 ## Overview
 
-This guide provides concrete suggestions and steps for adding property-based testing (PBT) to the SPIRE wrapper library. Property-based testing complements our existing fuzz tests and unit tests by checking algebraic properties and relationships between functions.
+This guide provides suggestions for adding property-based testing to the SPIRE wrapper library. Property-based testing complements our existing fuzz tests and unit tests by checking algebraic properties and relationships between functions.
 
 **Current Testing Stack**:
 - **Unit Tests**: Example-based tests for specific inputs/outputs
@@ -824,11 +824,3 @@ Track these metrics to measure PBT effectiveness:
 - [SPIFFE spec requirements](https://github.com/spiffe/spiffe/blob/main/standards/SPIFFE-ID.md)
 - Internal: [INVARIANTS.md](../architecture/INVARIANTS.md) - System guarantees
 - Internal: [TESTING.md](TESTING.md) - Overall testing strategy
-
-## Next Steps
-
-1. Create `internal/domain/identity_credential_pbt_test.go` with normalizePath properties
-2. Run tests: `go test -v -run TestNormalizePath_Properties ./internal/domain`
-3. Add splitCleanDedup properties to `internal/config/mtls_env_pbt_test.go`
-4. Document any new invariants discovered in INVARIANTS.md
-5. Update TESTING.md to mention PBT as part of testing strategy

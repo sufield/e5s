@@ -128,6 +128,73 @@ func (i *IdentityCredential) IsInTrustDomain(td *TrustDomain) bool
 - **Post**: Result matches `i.trustDomain.Equals(td)`
 - **Rationale**: Trust domain membership is exact match only
 
+#### normalizePath() Algebraic Properties
+
+**File**: `internal/domain/identity_credential.go` (private function)
+**Verified By**: Property-based tests in `identity_credential_pbt_test.go`
+
+The following mathematical properties of `normalizePath()` have been verified through property-based testing (10,000 test cases per property):
+
+```go
+// Property 1: Idempotency - normalize(normalize(p)) == normalize(p)
+// Location: normalizePath
+func normalizePath(path string) string
+```
+- **Property**: For all valid paths `p`, `normalizePath(normalizePath(p)) == normalizePath(p)`
+- **Verified**: ✅ TestNormalizePath_Properties/idempotency (10,000 cases)
+- **Rationale**: Normalized output is already in canonical form
+
+```go
+// Property 2: Canonical Form - consistent structure
+// Location: normalizePath
+func normalizePath(path string) string
+```
+- **Property**: For all valid paths `p`, `normalizePath(p)` has:
+  - Starts with "/" (leading slash)
+  - No trailing slash (except root "/")
+- **Verified**: ✅ TestNormalizePath_Properties/canonical_form (10,000 cases)
+- **Rationale**: SPIFFE spec requires consistent path format
+
+```go
+// Property 3: Length Bound - minimal transformation
+// Location: normalizePath
+func normalizePath(path string) string
+```
+- **Property**: For all valid paths `p`:
+  - If `p` starts with "/": `len(normalizePath(p)) == len(p)`
+  - Otherwise: `len(normalizePath(p)) == len(p) + 1`
+- **Verified**: ✅ TestNormalizePath_Properties/exact_length (10,000 cases)
+- **Rationale**: Only adds leading slash when needed, no expansion
+
+```go
+// Property 4: No Consecutive Slashes
+// Location: normalizePath
+func normalizePath(path string) string
+```
+- **Property**: For all valid paths `p`, `normalizePath(p)` contains no "//"
+- **Verified**: ✅ TestNormalizePath_Properties/no_consecutive_slashes (10,000 cases)
+- **Rationale**: Normalized paths have single slashes between segments
+
+```go
+// Property 5: No Whitespace
+// Location: normalizePath
+func normalizePath(path string) string
+```
+- **Property**: For all valid paths `p`, `normalizePath(p)` contains no whitespace
+- **Verified**: ✅ TestNormalizePath_Properties/no_whitespace (10,000 cases)
+- **Rationale**: RFC 3986 compliance - URIs forbid whitespace
+
+```go
+// Property 6: No Traversal Segments
+// Location: normalizePath
+func normalizePath(path string) string
+```
+- **Property**: For all valid paths `p`, `normalizePath(p)` has no "." or ".." segments
+- **Verified**: ✅ TestNormalizePath_Properties/no_traversal_segments (10,000 cases)
+- **Rationale**: SPIFFE spec forbids path traversal (security)
+
+**Testing Approach**: These properties complement fuzz testing by verifying mathematical invariants rather than just crash safety. See `docs/engineering/pbt.md` for property-based testing methodology.
+
 ---
 
 ### 3. `domain.Selector`
@@ -375,9 +442,105 @@ func (s *IdentityService) ExchangeMessage(ctx context.Context, from dto.Identity
 
 ---
 
+## Configuration Layer Invariants
+
+### 7. `config.splitCleanDedup()`
+
+**File**: `internal/config/mtls_env.go` (private function)
+**Verified By**: Property-based tests in `mtls_env_pbt_test.go`
+
+The following set-theoretic properties of `splitCleanDedup()` have been verified through property-based testing (10,000 test cases per property):
+
+```go
+// Property 1: No Duplicates - set semantics
+// Location: splitCleanDedup
+func splitCleanDedup(s string, sep string) []string
+```
+- **Property**: For all inputs `s`, result contains no duplicate elements
+- **Verified**: ✅ TestSplitCleanDedup_Properties/no_duplicates (10,000 cases)
+- **Rationale**: Core correctness property - function must deduplicate
+
+```go
+// Property 2: Idempotency - stable output
+// Location: splitCleanDedup
+func splitCleanDedup(s string, sep string) []string
+```
+- **Property**: For all inputs `s`, `splitCleanDedup(join(splitCleanDedup(s))) == splitCleanDedup(s)`
+- **Verified**: ✅ TestSplitCleanDedup_Properties/idempotency (10,000 cases)
+- **Rationale**: Processing twice produces same result (canonical form)
+
+```go
+// Property 3: Subset Preservation - no invented elements
+// Location: splitCleanDedup
+func splitCleanDedup(s string, sep string) []string
+```
+- **Property**: For all inputs `s`, every element in result was in original (after cleaning)
+- **Verified**: ✅ TestSplitCleanDedup_Properties/subset_preservation (10,000 cases)
+- **Rationale**: Function only removes/deduplicates, never adds elements
+
+```go
+// Property 4: No Invalid Elements - cleaning guarantees
+// Location: splitCleanDedup
+func splitCleanDedup(s string, sep string) []string
+```
+- **Property**: For all inputs `s`, result contains no empty or whitespace-only strings
+- **Verified**: ✅ TestSplitCleanDedup_Properties/no_invalid_elements (10,000 cases)
+- **Rationale**: All elements are properly trimmed and non-empty
+
+```go
+// Property 5: Order Preservation - first occurrence wins
+// Location: splitCleanDedup
+func splitCleanDedup(s string, sep string) []string
+```
+- **Property**: For all inputs `s`, result preserves order of first occurrences
+- **Verified**: ✅ TestSplitCleanDedup_Properties/order_preservation (10,000 cases)
+- **Rationale**: Deterministic output order for reproducible behavior
+
+**Testing Approach**: These properties verify set semantics, cleaning behavior, and determinism. See `docs/engineering/pbt.md` for methodology.
+
+---
+
+### 8. `config.parseDurationInto()`
+
+**File**: `internal/config/mtls_env.go` (private function)
+**Verified By**: Property-based tests in `mtls_env_pbt_test.go`
+
+The following properties of duration parsing have been verified through property-based testing (10,000 test cases per property):
+
+```go
+// Property 1: Roundtrip - parse/format consistency
+// Location: parseDurationInto
+func parseDurationInto(envVar string, target *time.Duration) error
+```
+- **Property**: For valid durations `d`, `parse(format(d)) == d` (equivalent representation)
+- **Verified**: ✅ TestParseDurationInto_Properties/roundtrip (10,000 cases)
+- **Rationale**: Parse and format should be inverses
+
+```go
+// Property 2: Parse Equivalence - determinism
+// Location: parseDurationInto
+func parseDurationInto(envVar string, target *time.Duration) error
+```
+- **Property**: For all inputs, calling twice produces same result
+- **Verified**: ✅ TestParseDurationInto_Properties/parse_equivalence (10,000 cases)
+- **Rationale**: Parsing is deterministic, no hidden state
+
+```go
+// Property 3: Non-Negative for Positive - sign preservation
+// Location: parseDurationInto
+func parseDurationInto(envVar string, target *time.Duration) error
+```
+- **Property**: Parsing positive duration strings produces non-negative durations
+- **Verified**: ✅ TestParseDurationInto_Properties/non_negative_for_positive_durations (10,000 cases)
+- **Rationale**: Ensures configuration values have expected sign
+
+**Testing Approach**: These properties verify parse/format consistency and determinism. See `docs/engineering/pbt.md` for methodology.
+
+---
+
 ## Adapter Layer Invariants
 
-### 8. `inmemory.InMemoryRegistry`
+### 9. `inmemory.InMemoryRegistry`
 
 **File**: `internal/adapters/outbound/inmemory/registry.go`
 
@@ -788,10 +951,13 @@ func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload *dom
 5. **Lifecycle Invariants Matter**: Registry sealing, document immutability, expiration monotonicity
 
 **Current Status:**
-- ✅ 13 major invariant categories documented across domain/app/adapter layers
-- ✅ 50+ specific invariants identified with pre/post conditions
+- ✅ 15 major invariant categories documented across domain/config/app/adapter layers
+- ✅ 60+ specific invariants identified with pre/post conditions
 - ✅ Test coverage validates core invariants (51+ test cases)
-- ⏳ Property-based testing (future enhancement)
+- ✅ Property-based testing implemented (14 properties verified with 10,000 cases each)
+  - normalizePath: 6 algebraic properties
+  - splitCleanDedup: 5 set-theoretic properties
+  - parseDurationInto: 3 consistency properties
 - ⏳ Runtime monitoring of invariant violations (future enhancement)
 
 ---
@@ -801,6 +967,6 @@ func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload *dom
 - [Go Best Practices: Effective Go](https://go.dev/doc/effective_go) - Constructor validation patterns
 - [Hexagonal Architecture](https://alistair.cockburn.us/hexagonal-architecture/) - Port invariants
 - [SPIFFE Specification](https://github.com/spiffe/spiffe/blob/main/standards/SPIFFE.md) - Trust domain and SPIFFE ID invariants
-- [TESTING.md](TESTING.md) - Test strategies for validating invariants
-- [CONTROL_PLANE.md](CONTROL_PLANE.md) - Registry sealing and control plane invariants
+- Internal: [TESTING.md](../engineering/TESTING.md) - Test strategies for validating invariants
+- Internal: [pbt.md](../engineering/pbt.md) - Property-based testing methodology for verifying algebraic invariants
 

@@ -8,7 +8,10 @@ This document explains the different testing layers and what each one verifies.
 # Unit tests (fast, in-memory, no SPIRE needed)
 make test              # or: go test ./...
 
-# Full verification (includes coverage, race detection)
+# Property-based tests (verify algebraic properties, 10K cases each)
+go test -run Properties ./...
+
+# Full verification (includes coverage, race detection, PBT)
 make verify
 
 # Integration tests (requires live SPIRE in Minikube)
@@ -114,7 +117,90 @@ ok  	github.com/pocket/hexagon/spire/internal/adapters/outbound/spire	0.033s
 
 ---
 
-### 3. Comprehensive Verification
+### 3. Property-Based Tests (PBT)
+
+**Command**: `go test -v -run Properties ./...`
+
+**What it tests**:
+- ✅ **Algebraic properties** of domain functions
+- ✅ Mathematical invariants (idempotency, commutativity, etc.)
+- ✅ Set-theoretic properties (uniqueness, ordering)
+- ✅ Parse/format consistency
+- ✅ Automated testing with thousands of generated inputs
+
+**Requirements**:
+- None - runs as part of unit tests
+- Uses Go's built-in `testing/quick` package
+- Configurable via `PBT_MAX_COUNT` env var (default: 10,000 cases)
+
+**Test files**:
+- `internal/domain/identity_credential_pbt_test.go` - Path normalization properties
+- `internal/config/mtls_env_pbt_test.go` - Configuration parsing properties
+- `internal/debug/config_pbt_test.go` - Debug config properties
+
+**Properties tested**:
+
+#### normalizePath() - 6 Properties
+- **Idempotency**: `normalize(normalize(p)) == normalize(p)`
+- **Canonical Form**: Starts with "/", no trailing slash (except root)
+- **Length Bound**: Only adds leading slash when needed
+- **No Consecutive Slashes**: Result contains no "//"
+- **No Whitespace**: Result contains no whitespace
+- **No Traversal**: Result has no "." or ".." segments
+
+#### splitCleanDedup() - 5 Properties
+- **No Duplicates**: Result contains unique elements only
+- **Idempotency**: Processing twice produces same result
+- **Subset Preservation**: No elements added, only removed
+- **No Invalid Elements**: No empty or whitespace-only strings
+- **Order Preservation**: First occurrence order maintained
+
+#### parseDurationInto() - 3 Properties
+- **Roundtrip**: `parse(format(d))` produces equivalent duration
+- **Parse Equivalence**: Deterministic parsing (same input → same output)
+- **Non-Negative**: Positive duration strings → non-negative results
+
+**Example output**:
+```bash
+$ go test -v -run TestNormalizePath_Properties ./internal/domain
+
+=== RUN   TestNormalizePath_Properties
+=== RUN   TestNormalizePath_Properties/idempotency
+--- PASS: TestNormalizePath_Properties/idempotency (0.05s)
+=== RUN   TestNormalizePath_Properties/canonical_form
+--- PASS: TestNormalizePath_Properties/canonical_form (0.04s)
+=== RUN   TestNormalizePath_Properties/exact_length
+--- PASS: TestNormalizePath_Properties/exact_length (0.04s)
+=== RUN   TestNormalizePath_Properties/no_consecutive_slashes
+--- PASS: TestNormalizePath_Properties/no_consecutive_slashes (0.04s)
+=== RUN   TestNormalizePath_Properties/no_whitespace
+--- PASS: TestNormalizePath_Properties/no_whitespace (0.05s)
+=== RUN   TestNormalizePath_Properties/no_traversal_segments
+--- PASS: TestNormalizePath_Properties/no_traversal_segments (0.05s)
+PASS
+ok      github.com/pocket/hexagon/spire/internal/domain    0.287s
+```
+
+**Adjusting test count**:
+```bash
+# Fast local runs (100 cases per property)
+PBT_MAX_COUNT=100 go test -v -run Properties ./...
+
+# High confidence (100,000 cases per property)
+PBT_MAX_COUNT=100000 go test -v -run Properties ./...
+```
+
+**Why PBT?**
+- Complements fuzz testing by verifying mathematical properties vs crash safety
+- Finds edge cases through structured generation (not just random mutation)
+- Provides minimal counterexamples through automatic shrinking
+- Documents invariants as executable tests
+
+**See also**: [`docs/engineering/pbt.md`](pbt.md) for complete PBT guide and methodology.
+
+---
+
+### 4. Comprehensive Verification
 
 **Command**: `make verify`
 
@@ -137,6 +223,7 @@ ok  	github.com/pocket/hexagon/spire/internal/adapters/outbound/spire	0.033s
 | Test Type | Command | SPIRE Required? | Tests What | Speed | Coverage |
 |-----------|---------|-----------------|------------|-------|----------|
 | **Unit** | `go test ./...` | No | In-memory adapters | Fast (~2s) | 45.8% |
+| **Property-Based** | `go test -run Properties ./...` | No | Algebraic properties | Fast (~0.3s) | Domain invariants |
 | **Integration** | `make test-integration` | Yes | SPIRE adapters | Medium (~0.5s) | SPIRE adapters |
 | **Verification** | `make verify` | No | Everything + quality | Slow (~30s) | Full |
 
@@ -149,11 +236,12 @@ ok  	github.com/pocket/hexagon/spire/internal/adapters/outbound/spire	0.033s
 # Quick feedback loop
 go test ./internal/domain/...           # Test specific package
 go test -run TestSpecificTest ./...     # Test specific function
+go test -run Properties ./...           # Run property-based tests
 ```
 
 ### Before Committing
 ```bash
-make verify                              # Full verification
+make verify                              # Full verification (includes PBT)
 ```
 
 ### Before Deploying
@@ -246,8 +334,17 @@ func TestExample(t *testing.T) {
 ## Summary
 
 - **`go test ./...`** = Fast unit tests with in-memory adapters (NO live SPIRE)
+- **`go test -run Properties ./...`** = Property-based tests verifying algebraic invariants (10K cases each)
 - **`make test-integration`** = Integration tests with live SPIRE (YES live SPIRE)
-- **`make verify`** = Comprehensive verification (builds, tests, quality checks)
+- **`make verify`** = Comprehensive verification (builds, tests, quality checks, PBT)
 
-Run `make verify` before committing.
-Run `make test-integration` before deploying.
+**Best Practices:**
+- Run `make verify` before committing (includes unit + PBT + quality checks)
+- Run `make test-integration` before deploying (tests against real SPIRE)
+- Run PBT tests when modifying domain logic or configuration parsing
+
+**Test Coverage:**
+- Unit tests: Example-based verification
+- Property-based tests: Mathematical invariants (14 properties, 140,000 total test cases)
+- Integration tests: Real SPIRE connectivity
+- Fuzz tests: Crash safety and edge cases
