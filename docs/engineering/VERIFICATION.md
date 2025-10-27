@@ -1,42 +1,41 @@
 # SPIRE Adapter Verification Guide
 
-This guide provides commands to verify the SPIRE production adapter implementation.
+This guide covers verification of the SPIRE production adapter implementation.
 
 ## Build Verification
 
-Verify both dev and production builds compile:
+Verify the production build compiles:
 
 ```bash
 # Production build
-make prod-build
-# Expected: bin/spire-server (~13MB)
+make build
+# Expected: Binary builds successfully
 
-# Dev build
-make dev-build
-# Expected: bin/cp-minikube (~3MB)
+# Verify SPIRE adapter included in binary
+go list -deps ./cmd/... | grep "github.com/spiffe/go-spiffe"
+# Expected: Lists go-spiffe dependencies
 
-# Verify build separation
-strings bin/spire-server | grep -c "BootstrapMinikubeInfra"
-# Expected: 0 (no dev code)
-
-strings bin/cp-minikube | grep -c "BootstrapMinikubeInfra"
-# Expected: >0 (dev code present)
-
-# Verify SPIRE adapter included
-strings bin/spire-server | grep "SPIREClient"
-# Expected: *spire.SPIREClient
+# Check that build excludes test files
+go list -f '{{.TestGoFiles}}' ./...
+# Expected: Test files not included in build
 ```
 
 ## Unit Tests
 
-Standard unit tests use in-memory implementations, not live SPIRE.
+Standard unit tests verify domain logic, configuration parsing, and other components without requiring SPIRE infrastructure.
 
 ```bash
-# Run all unit tests (in-memory adapters only)
+# Run all unit tests
 go test ./...
 
 # Run with coverage
 go test -cover ./...
+
+# Run property-based tests (verify algebraic invariants)
+go test -run Properties ./...
+
+# Run with race detection
+go test -race ./...
 ```
 
 ## Static Analysis
@@ -65,8 +64,8 @@ make minikube-up
 # 2. Run integration tests
 make test-integration
 
-# Or run directly
-go test -tags=integration ./internal/adapters/outbound/spire/... -v
+# Or run directly (inside test pod with SPIRE socket access)
+go test ./internal/adapters/outbound/spire/... -v
 ```
 
 **Test Coverage**:
@@ -114,72 +113,70 @@ Tests run inside Kubernetes cluster with access to SPIRE agent socket:
 - Tests execute inside the pod where socket is accessible
 - No socket exposure to host machine needed
 
-### Manual SPIRE Tests
+### Manual SPIRE Verification
 
-Test SPIRE connectivity interactively:
-
-```bash
-# Start SPIRE and run dev CLI
-make minikube-up
-go run -tags=dev ./cmd
-```
-
-This connects to the SPIRE agent and fetches identities automatically.
-
-## Troubleshooting
-
-### Connection Refused
+Verify SPIRE is running and accessible:
 
 ```bash
-# Check SPIRE Agent is running
-kubectl get pods -n spire-system | grep spire-agent
+# Check SPIRE pods are running
+kubectl get pods -n spire-system
 
-# Check socket exists in pod
-kubectl exec -n spire-system spire-agent-xxx -- ls -la /tmp/spire-agent/public/api.sock
-```
+# Check SPIRE agent socket exists
+kubectl exec -n spire-system deploy/spire-agent -- ls -la /run/spire/sockets/agent.sock
 
-### No X.509 SVIDs Available
-
-Workload must be registered with SPIRE Server:
-
-```bash
-# Register workload
-spire-server entry create \
-  -parentID spiffe://example.org/agent \
-  -spiffeID spiffe://example.org/workload/test \
-  -selector unix:uid:1000
-
-# Verify entry created
-spire-server entry show
-```
-
-### Permission Denied
-
-- Ensure process UID matches registered selectors
-- Check SPIRE Agent attestation configuration
-- Verify workload entry selectors
-
-## Dependency Verification
-
-```bash
-# Check go-spiffe dependency installed
-go list -m github.com/spiffe/go-spiffe/v2
-
-# Verify it's used in binary
-go version -m bin/spire-server | grep spiffe
+# View SPIRE server entries
+kubectl exec -n spire-system deploy/spire-server -- \
+  /opt/spire/bin/spire-server entry show
 ```
 
 ## Summary
 
 ### Automated Verification (No SPIRE Required)
 ```bash
-make prod-build && make dev-build  # Build verification
+make build                          # Build verification
 go test ./...                       # Unit tests
-strings bin/spire-server | grep SPIREClient  # Binary inspection
+go test -run Properties ./...      # Property-based tests
+go test -race ./...                # Race detection
+make verify                         # Full verification suite
 ```
 
 ### Integration Tests (Requires SPIRE)
 ```bash
-make minikube-up        # Start SPIRE
-make test-integration   # Run integration tests
+make minikube-up                   # Start SPIRE infrastructure
+make test-integration              # Run integration tests against live SPIRE
+```
+
+### Complete Verification Workflow
+```bash
+# 1. Local verification (fast, no dependencies)
+make verify
+
+# 2. Integration verification (requires Minikube)
+make minikube-up
+make test-integration
+
+# 3. Cleanup
+make minikube-down
+```
+
+## Troubleshooting
+
+If you encounter issues during verification or testing, see [`docs/guide/TROUBLESHOOTING.md`](../guide/TROUBLESHOOTING.md) for detailed diagnostics and solutions, including:
+
+- Connection refused errors
+- SPIRE socket access issues
+- Registration and permission problems
+- Integration testing specific issues
+
+For build or dependency issues, run:
+```bash
+# Check dependencies are installed
+go list -m github.com/spiffe/go-spiffe/v2
+
+# Verify Go version
+go version  # Should be 1.21 or higher
+
+# Clean and rebuild
+go clean -cache
+make build
 ```

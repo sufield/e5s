@@ -197,106 +197,7 @@ func normalizePath(path string) string
 
 ---
 
-### 3. `domain.Selector`
-
-**File**: `internal/domain/selector.go`
-
-#### Invariants:
-
-```go
-// Invariant: type, key, and value are validated on construction
-// Location: NewSelector
-func NewSelector(selectorType SelectorType, key, value string) (*Selector, error)
-```
-- **Pre**: `selectorType != ""`, `key != ""`, `value != ""` (validated, returns error otherwise)
-- **Pre**: `selectorType` must not contain colon (`:`) - reserved separator
-- **Pre**: `key` must not contain colon (`:`) - reserved separator
-- **Post**: If `err == nil`, then:
-  - `s.selectorType != ""` and contains no colons
-  - `s.key != ""` and contains no colons
-  - `s.value != ""` (value MAY contain colons for multi-part values)
-- **Rationale**: Selector format "type:key:value" requires strict parsing; colons in type/key break parsing
-
-```go
-// Invariant: formatted matches "type:key:value" pattern
-// Location: NewSelector
-func NewSelector(selectorType SelectorType, key, value string) (*Selector, error)
-```
-- **Post**: `s.formatted == fmt.Sprintf("%s:%s:%s", type, key, value)`
-- **Rationale**: Cached string must match components
-
-```go
-// Invariant: ParseSelectorFromString requires at least 3 parts (type:key:value)
-// Location: ParseSelectorFromString
-func ParseSelectorFromString(s string) (*Selector, error)
-```
-- **Pre**: Input format is "type:key:value[:more...]"
-- **Post**: If `err == nil`, selector has non-empty `selectorType`, `key`, `value`
-- **Post**: Values with colons are preserved (e.g., "unix:uid:1000:extra" → value="1000:extra")
-- **Post**: Parser splits on first two colons only; everything after the second colon becomes the value (joined with colons)
-- **Rationale**: Selector format is strictly defined; values may contain multi-part data with embedded colons
-
-```go
-// Invariant: Equals() is reflexive, symmetric, transitive
-// Location: Equals
-func (s *Selector) Equals(other *Selector) bool
-```
-- **Post**: `s.Equals(s) == true` (reflexive)
-- **Post**: `s.Equals(t) == t.Equals(s)` (symmetric)
-- **Post**: `s.Equals(t) && t.Equals(u) => s.Equals(u)` (transitive)
-- **Post**: Returns `false` for `nil` input, never panics
-- **Rationale**: Proper equivalence relation for selector comparison
-
----
-
-### 4. `domain.SelectorSet`
-
-**File**: `internal/domain/selector_set.go`
-
-#### Invariants:
-
-```go
-// Invariant: Set preserves insertion order and ensures uniqueness
-// Location: Add 
-func (ss *SelectorSet) Add(selector *Selector)
-```
-- **Pre**: Any selector can be added
-- **Post**: After `Add(s)`, `ss.Contains(s) == true`
-- **Post**: If selector already exists, set size and order unchanged (no-op)
-- **Post**: No two selectors `s1, s2` where `s1.Equals(s2)` exist in set
-- **Post**: Selectors are returned by `All()` in insertion order (deterministic)
-- **Rationale**: Set semantics require uniqueness; order preservation ensures reproducible behavior
-
-```go
-// Invariant: Implementation uses both map and slice for O(1) add/contains
-// Location: SelectorSet struct 
-type SelectorSet struct { seen map[string]struct{}; list []*Selector }
-```
-- **Post**: `seen` map is used for O(1) deduplication checks
-- **Post**: `list` slice preserves insertion order for `All()`
-- **Post**: `len(seen) == len(list)` always holds (both updated atomically in Add)
-- **Rationale**: Combines O(1) operations with deterministic iteration order
-
-```go
-// Invariant: Contains() never modifies the set
-// Location: Contains 
-func (ss *SelectorSet) Contains(selector *Selector) bool
-```
-- **Post**: Calling `Contains()` never changes `ss.seen` or `ss.list`
-- **Rationale**: Query operation must be side-effect free
-
-```go
-// Invariant: All() returns defensive copy in insertion order
-// Location: All 
-func (ss *SelectorSet) All() []*Selector
-```
-- **Post**: Modifying returned slice does not affect `ss.list`
-- **Post**: Order matches insertion order (deterministic, reproducible)
-- **Rationale**: Immutability protection (DDD pattern) with predictable iteration
-
----
-
-### 5. `domain.IdentityDocument`
+### 3. `domain.IdentityDocument`
 
 **File**: `internal/domain/identity_document.go`
 
@@ -358,44 +259,30 @@ func (id *IdentityDocument) IsValid() bool
 
 ---
 
-### 6. `domain.IdentityMapper`
+### 4. `domain.Workload`
 
-**File**: `internal/domain/identity_mapper.go`
+**File**: `internal/domain/workload.go`
 
 #### Invariants:
 
 ```go
-// Invariant: identityCredential is never nil after construction
-// Location: NewIdentityMapper 
-func NewIdentityMapper(identityCredential *IdentityCredential, selectors *SelectorSet) (*IdentityMapper, error)
+// Invariant: Workload contains process information for attestation
+// Location: Workload struct
+type Workload struct {
+    PID  int32
+    UID  int32
+    GID  int32
+    Path string
+}
 ```
-- **Pre**: `identityCredential != nil` (validated, returns `ErrInvalidIdentityCredential` otherwise)
-- **Post**: If `err == nil`, then `im.identityCredential != nil` always holds
-- **Rationale**: Mapper without identity credential is meaningless
-
-```go
-// Invariant: selectors is never nil or empty after construction
-// Location: NewIdentityMapper 
-func NewIdentityMapper(identityCredential *IdentityCredential, selectors *SelectorSet) (*IdentityMapper, error)
-```
-- **Pre**: `selectors != nil && len(selectors.All()) > 0` (validated, returns `ErrInvalidSelectors` otherwise)
-- **Post**: If `err == nil`, then `im.selectors != nil && len(im.selectors.All()) > 0` always hold
-- **Rationale**: Mapper without selectors cannot match any workload
-
-```go
-// Invariant: MatchesSelectors() uses AND logic (ALL mapper selectors must be present)
-// Location: MatchesSelectors 
-func (im *IdentityMapper) MatchesSelectors(selectors *SelectorSet) bool
-```
-- **Post**: Returns `true` iff ALL selectors in `im.selectors` are contained in input `selectors`
-- **Post**: Returns `false` if ANY required selector is missing
-- **Rationale**: Workload must satisfy all required conditions to qualify for identity
+- **Post**: All fields are accessible for attestation purposes
+- **Rationale**: SPIRE agents use process information to attest workload identity
 
 ---
 
 ## Application Layer Invariants
 
-### 7. `app.IdentityService`
+### 5. `app.IdentityService`
 
 **File**: `internal/app/service.go`
 
@@ -444,7 +331,7 @@ func (s *IdentityService) ExchangeMessage(ctx context.Context, from dto.Identity
 
 ## Configuration Layer Invariants
 
-### 7. `config.splitCleanDedup()`
+### 6. `config.splitCleanDedup()`
 
 **File**: `internal/config/mtls_env.go` (private function)
 **Verified By**: Property-based tests in `mtls_env_pbt_test.go`
@@ -500,7 +387,7 @@ func splitCleanDedup(s string, sep string) []string
 
 ---
 
-### 8. `config.parseDurationInto()`
+### 7. `config.parseDurationInto()`
 
 **File**: `internal/config/mtls_env.go` (private function)
 **Verified By**: Property-based tests in `mtls_env_pbt_test.go`
@@ -538,192 +425,9 @@ func parseDurationInto(envVar string, target *time.Duration) error
 
 ---
 
-## Adapter Layer Invariants
-
-### 9. `inmemory.InMemoryRegistry`
-
-**File**: `internal/adapters/outbound/inmemory/registry.go`
-
-#### Invariants:
-
-```go
-// Invariant: Registry is immutable after sealing
-// Location: Seal 
-func (r *InMemoryRegistry) Seal()
-```
-- **Post**: Once `r.sealed == true`, `Seed()` always returns `ErrRegistrySealed`
-- **Post**: After sealing, `r.mappers` map is never modified
-- **Rationale**: Prevents runtime mutations to control plane configuration
-
-```go
-// Invariant: Seed() rejects duplicates by identity credential
-// Location: Seed 
-func (r *InMemoryRegistry) Seed(ctx context.Context, mapper *domain.IdentityMapper) error
-```
-- **Pre**: Registry is not sealed (`r.sealed == false`)
-- **Post**: If `err == nil`, mapper is added and `r.mappers[mapper.IdentityCredential().String()] == mapper`
-- **Post**: If mapper already exists, returns error and registry unchanged
-- **Rationale**: Each identity credential maps to exactly one set of selectors
-
-```go
-// Invariant: FindBySelectors() is read-only (never modifies registry)
-// Location: FindBySelectors 
-func (r *InMemoryRegistry) FindBySelectors(ctx context.Context, selectors *domain.SelectorSet) (*domain.IdentityMapper, error)
-```
-- **Post**: Calling `FindBySelectors()` never changes `r.mappers` or `r.sealed`
-- **Post**: Uses read lock only (`r.mu.RLock()`)
-- **Rationale**: Runtime queries must not mutate control plane state
-
-```go
-// Invariant: FindBySelectors() validates input before search
-// Location: FindBySelectors 
-func (r *InMemoryRegistry) FindBySelectors(ctx context.Context, selectors *domain.SelectorSet) (*domain.IdentityMapper, error)
-```
-- **Pre**: `selectors != nil && len(selectors.All()) > 0`
-- **Post**: If input invalid, returns `ErrInvalidSelectors` before searching
-- **Rationale**: Prevents wasteful search with invalid input
-
-```go
-// Invariant: FindBySelectors() returns first match using AND logic
-// Location: FindBySelectors 
-func (r *InMemoryRegistry) FindBySelectors(ctx context.Context, selectors *domain.SelectorSet) (*domain.IdentityMapper, error)
-```
-- **Post**: Returns mapper where `mapper.MatchesSelectors(selectors) == true`
-- **Post**: If no match found, returns `ErrNoMatchingMapper`
-- **Rationale**: Workload selectors must satisfy mapper's required selectors
-
-```go
-// Invariant: ListAll() never returns nil slice when mappers exist
-// Location: ListAll 
-func (r *InMemoryRegistry) ListAll(ctx context.Context) ([]*domain.IdentityMapper, error)
-```
-- **Post**: If `len(r.mappers) > 0`, returns non-nil slice
-- **Post**: If `len(r.mappers) == 0`, returns `ErrRegistryEmpty`
-- **Rationale**: Clear distinction between empty registry and error
-
----
-
-### 9. `inmemory.InMemoryServer`
-
-**File**: `internal/adapters/outbound/inmemory/server.go`
-
-#### Invariants:
-
-```go
-// Invariant: trustDomain is never nil after construction
-// Location: NewInMemoryServer 
-func NewInMemoryServer(ctx context.Context, trustDomainStr string, trustDomainParser ports.TrustDomainParser, certProvider ports.IdentityDocumentProvider) (*InMemoryServer, error)
-```
-- **Pre**: `trustDomainStr` is valid (validated by `trustDomainParser`)
-- **Post**: If `err == nil`, then `s.trustDomain != nil` always holds
-- **Rationale**: Server must operate within a trust domain
-
-```go
-// Invariant: CA certificate and key are never nil after construction
-// Location: NewInMemoryServer 
-func NewInMemoryServer(ctx context.Context, trustDomainStr string, trustDomainParser ports.TrustDomainParser, certProvider ports.IdentityDocumentProvider) (*InMemoryServer, error)
-```
-- **Post**: If `err == nil`, then `s.caCert != nil && s.caKey != nil` always hold
-- **Rationale**: Server must have CA to issue identity documents
-
-```go
-// Invariant: IssueIdentity() validates inputs before issuing
-// Location: IssueIdentity 
-func (s *InMemoryServer) IssueIdentity(ctx context.Context, identityCredential *domain.IdentityCredential) (*domain.IdentityDocument, error)
-```
-- **Pre**: `identityCredential != nil`
-- **Pre**: `s.caCert != nil && s.caKey != nil`
-- **Post**: If validation fails, returns error before calling provider
-- **Rationale**: Prevents issuing documents with invalid inputs
-
-```go
-// Invariant: IssueIdentity() delegates document creation to provider
-// Location: IssueIdentity 
-func (s *InMemoryServer) IssueIdentity(ctx context.Context, identityCredential *domain.IdentityCredential) (*domain.IdentityDocument, error)
-```
-- **Post**: If `err == nil`, returned document is created by `certificateProvider`
-- **Post**: Document's identity credential matches input `identityCredential`
-- **Rationale**: Document creation logic is in provider port
-
-```go
-// Invariant: GetTrustDomain() and GetCA() are read-only
-// Location: GetTrustDomain, GetCA
-func (s *InMemoryServer) GetTrustDomain() *domain.TrustDomain
-func (s *InMemoryServer) GetCA() *x509.Certificate
-```
-- **Post**: Calling these methods never modifies server state
-- **Rationale**: Accessors must be side-effect free
-
----
-
-### 10. `inmemory.InMemoryAgent`
-
-**File**: `internal/adapters/outbound/inmemory/agent.go`
-
-#### Invariants:
-
-```go
-// Invariant: identityCredential is never nil after construction
-// Location: NewInMemoryAgent 
-func NewInMemoryAgent(...) (*InMemoryAgent, error)
-```
-- **Pre**: `agentSpiffeIDStr` is valid (validated by `parser`)
-- **Post**: If `err == nil`, then `a.identityCredential != nil` always holds
-- **Rationale**: Agent must have its own identity credential
-
-```go
-// Invariant: agentIdentity is initialized before agent is returned
-// Location: NewInMemoryAgent 
-func NewInMemoryAgent(...) (*InMemoryAgent, error)
-```
-- **Post**: If `err == nil`, then `a.agentIdentity != nil` and `a.agentIdentity.IdentityDocument.IsValid() == true`
-- **Rationale**: Agent needs valid identity document to operate
-
-```go
-// Invariant: GetIdentity() never returns nil identity for initialized agent
-// Location: GetIdentity 
-func (a *InMemoryAgent) GetIdentity(ctx context.Context) (*domain.IdentityDocument, error)
-```
-- **Post**: If agent is initialized, `doc != nil && err == nil`
-- **Post**: If agent not initialized, `doc == nil && err != nil`
-- **Rationale**: GetIdentity should always succeed for valid agent
-
-```go
-// Invariant: FetchIdentityDocument() follows strict flow: Attest → Match → Issue
-// Location: FetchIdentityDocument 
-func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload *domain.Workload) (*domain.IdentityDocument, error)
-```
-- **Post**: If `err == nil`, then:
-  1. Workload was attested (selectors obtained)
-  2. Selectors matched registry (mapper found)
-  3. Document issued by server
-  4. Returned document has non-nil identity credential and is valid
-- **Rationale**: Identity issuance requires all steps to succeed
-
-```go
-// Invariant: FetchIdentityDocument() validates attestation result
-// Location: FetchIdentityDocument 
-func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload *domain.Workload) (*domain.IdentityDocument, error)
-```
-- **Post**: If attestation returns empty selectors, returns error (never proceeds to match)
-- **Rationale**: Cannot match workload without selectors
-
-```go
-// Invariant: FetchIdentityDocument() returns identity document with non-nil credential
-// Location: FetchIdentityDocument 
-func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload *domain.Workload) (*domain.IdentityDocument, error)
-```
-- **Post**: If `err == nil`, then:
-  - `doc != nil`
-  - `doc.IdentityCredential() != nil`
-  - `doc.IsValid() == true` (freshly issued)
-- **Rationale**: Returned identity document must be complete and valid
-
----
-
 ## Cross-Layer Invariants
 
-### 11. Identity Document Lifecycle
+### 8. Identity Document Lifecycle
 
 **Files**: Multiple (domain, app, adapters)
 
@@ -745,37 +449,14 @@ func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload *dom
 
 ```
 // Invariant: Valid documents are always non-nil and non-expired
-// Applies to: app.ExchangeMessage, inmemory.Agent.FetchIdentityDocument
+// Applies to: app.ExchangeMessage, SPIRE agent operations
 ```
 - **Pre**: Before use in authentication, `doc != nil && doc.IsValid() == true`
 - **Rationale**: Business logic requires valid credentials
 
 ---
 
-### 12. Registry Lifecycle
-
-**Files**: `inmemory/registry.go`, `app/application.go`
-
-#### Invariants:
-
-```
-// Invariant: Registry transitions: Unsealed (mutable) → Sealed (immutable)
-// Applies to: InMemoryRegistry
-```
-- **Post**: State transition is one-way: `sealed == false` → `sealed == true`, never reversed
-- **Rationale**: Control plane is configured once at startup, immutable at runtime
-
-```
-// Invariant: Registry is sealed before any runtime operations
-// Applies to: Bootstrap flow in application.go
-```
-- **Post**: After `Bootstrap()` completes, `registry.sealed == true`
-- **Post**: Runtime code (services, agents) only calls `FindBySelectors()` and `ListAll()` (read-only)
-- **Rationale**: Prevents runtime mutations to registration database
-
----
-
-### 13. Hexagonal Architecture Boundaries
+### 9. Hexagonal Architecture Boundaries
 
 **Files**: All layers (domain, app, adapters, ports)
 
@@ -857,8 +538,13 @@ func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload *dom
 
 1. **Constructor Validation**:
    ```go
-   func NewIdentityMapper(id *IdentityCredential, sel *SelectorSet) (*IdentityMapper, error) {
-       if id == nil {
+   func NewIdentityDocumentFromComponents(
+       identityCredential *IdentityCredential,
+       cert []byte,
+       privateKey interface{},
+       chain [][]byte,
+   ) (*IdentityDocument, error) {
+       if identityCredential == nil {
            return nil, ErrInvalidIdentityCredential // Enforce invariant
        }
        // ...
@@ -867,7 +553,7 @@ func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload *dom
 
 2. **Compile-Time Checks**:
    ```go
-   var _ ports.Agent = (*InMemoryAgent)(nil) // Enforces interface invariant
+   var _ ports.Agent = (*spire.Agent)(nil) // Enforces interface invariant
    ```
 
 3. **Documentation Comments**:
@@ -896,8 +582,8 @@ func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload *dom
 6. **Negative Test Cases**:
    ```go
    // Test that invariant violation is prevented
-   _, err := NewIdentityMapper(nil, selectors)
-   assert.Error(t, err) // Should reject nil namespace
+   _, err := NewIdentityCredentialFromComponents(nil, "/path")
+   assert.Error(t, err) // Should reject nil trust domain
    ```
 
 ### In Production
@@ -945,15 +631,15 @@ func (a *InMemoryAgent) FetchIdentityDocument(ctx context.Context, workload *dom
 ## Summary
 
 1. **Invariants Make Assumptions Explicit**: Document what must always hold true
-2. **Test Invariants Systematically**: Use unit tests, table-driven tests, and assertions
+2. **Test Invariants Systematically**: Use unit tests, property-based tests, and assertions
 3. **Enforce at Multiple Levels**: Constructors, compile-time checks, runtime validation
 4. **Hexagonal Boundaries Are Invariants**: Domain never imports app/adapters, ports are pure interfaces
-5. **Lifecycle Invariants Matter**: Registry sealing, document immutability, expiration monotonicity
+5. **Lifecycle Invariants Matter**: Document immutability, expiration monotonicity
 
 **Current Status:**
-- ✅ 15 major invariant categories documented across domain/config/app/adapter layers
-- ✅ 60+ specific invariants identified with pre/post conditions
-- ✅ Test coverage validates core invariants (51+ test cases)
+- ✅ 9 major invariant categories documented across domain/config/app layers
+- ✅ 30+ specific invariants identified with pre/post conditions
+- ✅ Test coverage validates core invariants (unit + integration tests)
 - ✅ Property-based testing implemented (14 properties verified with 10,000 cases each)
   - normalizePath: 6 algebraic properties
   - splitCleanDedup: 5 set-theoretic properties

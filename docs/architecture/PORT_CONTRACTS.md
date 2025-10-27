@@ -1,6 +1,6 @@
 # Port Contracts
 
-This document defines the contract for all ports in the system. These contracts must be honored by all implementations (in-memory, real SDK, mocks).
+This document defines the contract for all ports in the system. These contracts must be honored by all implementations (SPIRE SDK, mocks).
 
 ## Table of Contents
 
@@ -13,15 +13,8 @@ This document defines the contract for all ports in the system. These contracts 
    - [IdentityCredentialParser](#identitycredentialparser)
    - [IdentityDocumentValidator](#identitydocumentvalidator)
    - [IdentityProvider](#identityprovider)
-3. [Dev-Only Ports](#dev-only-ports)
-   - [IdentityMapperRegistry](#identitymapperregistry)
-   - [WorkloadAttestor](#workloadattestor)
-   - [IdentityServer](#identityserver)
-   - [IdentityDocumentCreator](#identitydocumentcreator)
-   - [IdentityDocumentProvider](#identitydocumentprovider)
-   - [TrustBundleProvider](#trustbundleprovider)
-4. [Testing Guidelines](#testing-guidelines)
-5. [Contract Checklist](#contract-checklist)
+3. [Testing Guidelines](#testing-guidelines)
+4. [Contract Checklist](#contract-checklist)
 
 ---
 
@@ -205,7 +198,7 @@ resp, err := client.Get(ctx, "https://server:8443/api/hello")
 
 ### Agent
 
-**Purpose**: SPIRE agent operations (workload attestation, SVID fetching)
+**Purpose**: SPIRE agent operations (identity fetching, SVID refresh)
 
 **SDK Equivalent**: `workloadapi.Client`
 
@@ -215,25 +208,29 @@ resp, err := client.Get(ctx, "https://server:8443/api/hello")
 
 | Method | Signature | Description | Returns | Error Cases |
 |--------|-----------|-------------|---------|-------------|
-| `GetIdentity` | `(ctx) → (*IdentityDocument, error)` | Returns agent's own identity | Agent identity document | `ErrAgentUnavailable` if not initialized |
-| `FetchIdentityDocument` | `(ctx, workload) → (*IdentityDocument, error)` | Attest → Match → Issue → Return | Workload identity document | `ErrWorkloadAttestationFailed`<br>`ErrNoMatchingMapper`<br>`ErrServerUnavailable` |
+| `GetIdentity` | `(ctx) → (*IdentityDocument, error)` | Returns agent's own identity, refreshing if expired | Agent identity document | `ErrAgentUnavailable` if SPIRE unavailable<br>`ErrIdentityDocumentExpired` if cannot refresh |
+| `FetchIdentityDocument` | `(ctx, workload) → (*IdentityDocument, error)` | Fetches workload SVID via SPIRE Workload API | Workload identity document | `ErrWorkloadNotFound` if not registered<br>`ErrServerUnavailable` if SPIRE unavailable |
 | `Close` | `() → error` | Releases resources | nil or error | `ErrCloseFailed` if cleanup fails |
 
-**Flow**: `Attest workload → Find mapper by selectors → Issue SVID from server → Return identity document`
+**Flow**: `Application → SPIRE Agent (via Workload API) → SPIRE Server → Return SVID`
 
 **Example Usage**:
 ```go
-// Fetch workload SVID
-workload := domain.NewWorkload(123, 1000, 1000, "/usr/bin/app")
-doc, err := agent.FetchIdentityDocument(ctx, workload)
+// Fetch agent's own identity
+doc, err := agent.GetIdentity(ctx)
 if err != nil {
     return err
 }
 
-// Unregistered workload
-workload := domain.NewWorkload(123, 9999, 9999, "/usr/bin/app")
+// Fetch workload identity via SPIRE
+workload := domain.NewWorkload(123, 1000, 1000, "/usr/bin/app")
 doc, err := agent.FetchIdentityDocument(ctx, workload)
-// errors.Is(err, domain.ErrNoMatchingMapper) == true
+if err != nil {
+    if errors.Is(err, domain.ErrWorkloadNotFound) {
+        // Workload not registered in SPIRE
+    }
+    return err
+}
 ```
 
 ---
@@ -367,215 +364,6 @@ tlsConfig := &tls.Config{
 
 ---
 
-## Dev-Only Ports
-
-These ports are only used in development/educational mode with in-memory implementations. They simulate SPIRE infrastructure locally for learning and testing.
-
-**Build Tag**: `//go:build dev`
-
-**Location**: `internal/ports/outbound_dev.go`, `internal/ports/inbound_dev.go`
-
-**Production Note**: In production, these functions are handled by real SPIRE Server and Agent infrastructure. The ports exist to enable local development without deploying SPIRE.
-
-### IdentityMapperRegistry
-
-**Purpose**: Read-only registry of identity mappers (selectors → identity credential mappings)
-
-**Dev-Only**: In production, SPIRE Server manages registration entries
-
-**Location**: `internal/ports/outbound_dev.go:26`
-
-**Lifecycle**: Seeded at bootstrap, sealed before runtime, immutable after
-
-**Methods**:
-
-| Method | Signature | Description | Returns | Error Cases |
-|--------|-----------|-------------|---------|-------------|
-| `FindBySelectors` | `(ctx, selectors) → (*IdentityMapper, error)` | Finds mapper matching selectors (AND logic) | First matching mapper | `ErrNoMatchingMapper` if none match<br>`ErrInvalidSelectors` if nil/empty |
-| `ListAll` | `(ctx) → ([]*IdentityMapper, error)` | Returns all seeded mappers | All mappers | `ErrRegistryEmpty` if no mappers |
-
-**Selector Matching Logic** (AND):
-```
-Mapper selectors: {unix:uid:1000, unix:gid:1000}
-Discovered selectors: {unix:uid:1000, unix:gid:1000, unix:path:/usr/bin/app}
-Result: MATCH (all mapper selectors present)
-
-Mapper selectors: {unix:uid:1000, unix:gid:1001}
-Discovered selectors: {unix:uid:1000, unix:gid:1000}
-Result: NO MATCH (unix:gid:1001 missing)
-```
-
-**Example Usage**:
-```go
-// Successful match
-selectors := domain.NewSelectorSet()
-selectors.Add(domain.ParseSelectorFromString("unix:uid:1000"))
-mapper, err := registry.FindBySelectors(ctx, selectors)
-// err == nil, mapper != nil
-
-// No match
-selectors := domain.NewSelectorSet()
-selectors.Add(domain.ParseSelectorFromString("unix:uid:9999"))
-mapper, err := registry.FindBySelectors(ctx, selectors)
-// errors.Is(err, domain.ErrNoMatchingMapper) == true
-```
-
----
-
-### WorkloadAttestor
-
-**Purpose**: Attests workload identity based on platform-specific attributes
-
-**Dev-Only**: In production, SPIRE Agent performs attestation automatically
-
-**Location**: `internal/ports/outbound_dev.go:45`
-
-**Methods**:
-
-| Method | Signature | Description | Returns | Error Cases |
-|--------|-----------|-------------|---------|-------------|
-| `Attest` | `(ctx, workload) → ([]string, error)` | Generates selectors from process attributes | Selector strings | `ErrWorkloadAttestationFailed` if attestation fails<br>`ErrWorkloadInvalid` if workload invalid<br>`ErrNoAttestationData` if no selectors |
-
-**Selector Format**: `"type:key:value"` (e.g., `"unix:uid:1000"`, `"k8s:namespace:prod"`)
-
-**Example Usage**:
-```go
-// Unix attestation
-workload := domain.NewWorkload(123, 1000, 1000, "/usr/bin/app")
-selectors, err := attestor.Attest(ctx, workload)
-// selectors = ["unix:uid:1000", "unix:gid:1000"]
-
-// Invalid workload
-workload := domain.NewWorkload(-1, 1000, 1000, "")
-err := workload.Validate()
-// errors.Is(err, domain.ErrWorkloadInvalid) == true
-```
-
----
-
-### IdentityServer
-
-**Purpose**: SPIRE server operations (CA management, SVID issuance)
-
-**Dev-Only**: In production, SPIRE Server runs as external infrastructure
-
-**Location**: `internal/ports/outbound_dev.go:62`
-
-**Methods**:
-
-| Method | Signature | Description | Returns | Error Cases |
-|--------|-----------|-------------|---------|-------------|
-| `IssueIdentity` | `(ctx, identityCredential) → (*IdentityDocument, error)` | Issues X.509 SVID signed by CA | Identity document | `ErrIdentityDocumentInvalid` if credential invalid<br>`ErrServerUnavailable` if server down<br>`ErrCANotInitialized` if CA missing |
-| `GetTrustDomain` | `() → *TrustDomain` | Returns server's trust domain | Trust domain or nil | None (returns nil if not initialized) |
-| `GetCACertPEM` | `() → []byte` | Returns CA certificate as PEM | PEM bytes or empty | None (returns empty if not initialized) |
-
-**Example Usage**:
-```go
-// Issue SVID
-cred, _ := parser.ParseFromString(ctx, "spiffe://example.org/workload")
-doc, err := server.IssueIdentity(ctx, cred)
-// err == nil, doc contains X.509 cert + private key
-
-// Check CA
-caPEM := server.GetCACertPEM()
-if len(caPEM) == 0 {
-    return errors.New("CA not initialized")
-}
-```
-
----
-
-### IdentityDocumentCreator
-
-**Purpose**: Creates identity documents (X.509 SVIDs)
-
-**Dev-Only**: In production, SPIRE Server handles creation
-
-**Location**: `internal/ports/outbound_dev.go:83`
-
-**Methods**:
-
-| Method | Signature | Description | Returns | Error Cases |
-|--------|-----------|-------------|---------|-------------|
-| `CreateX509IdentityDocument` | `(ctx, identityCredential, caCert, caKey) → (*IdentityDocument, error)` | Creates X.509 SVID | Identity document | `ErrIdentityDocumentInvalid` if inputs invalid<br>`ErrCANotInitialized` if CA unavailable |
-
-**Note**: `caCert` and `caKey` are `interface{}` to avoid leaking crypto/x509 types into ports. Implementations cast to `*x509.Certificate` and `crypto.Signer`.
-
-**Example Usage**:
-```go
-// Create SVID
-cred, _ := parser.ParseFromString(ctx, "spiffe://example.org/workload")
-doc, err := creator.CreateX509IdentityDocument(ctx, cred, caCert, caKey)
-// err == nil, doc contains X.509 cert + private key
-```
-
----
-
-### IdentityDocumentProvider
-
-**Purpose**: Combines creation and validation of identity documents
-
-**Dev-Only**: In production, use `IdentityDocumentValidator` (from `outbound.go`)
-
-**Location**: `internal/ports/outbound_dev.go:94`
-
-**Composition**:
-```go
-type IdentityDocumentProvider interface {
-    IdentityDocumentCreator
-    IdentityDocumentValidator
-}
-```
-
-**Example Usage**:
-```go
-// Create SVID
-cred, _ := parser.ParseFromString(ctx, "spiffe://example.org/workload")
-doc, err := provider.CreateX509IdentityDocument(ctx, cred, caCert, caKey)
-// err == nil, doc contains X.509 cert + private key
-
-// Validate SVID
-err = provider.ValidateIdentityDocument(ctx, doc, cred)
-// err == nil (valid)
-
-// Expired SVID
-expiredDoc := createExpiredDoc()
-err = provider.ValidateIdentityDocument(ctx, expiredDoc, cred)
-// errors.Is(err, domain.ErrIdentityDocumentExpired) == true
-```
-
----
-
-### TrustBundleProvider
-
-**Purpose**: Provides trust bundles (root CAs) for certificate chain validation
-
-**Dev-Only**: In production, use SPIRE's bundle management
-
-**SDK Equivalent**: `bundle.Source`
-
-**Location**: `internal/ports/outbound_dev.go:100`
-
-**Methods**:
-
-| Method | Signature | Description | Returns | Error Cases |
-|--------|-----------|-------------|---------|-------------|
-| `GetBundle` | `(ctx, trustDomain) → ([]byte, error)` | Gets trust bundle for trust domain | PEM-encoded CA cert(s) | `ErrTrustBundleNotFound` if no bundle<br>`ErrInvalidTrustDomain` if trust domain nil |
-| `GetBundleForIdentity` | `(ctx, identityCredential) → ([]byte, error)` | Gets bundle for identity's trust domain | PEM-encoded CA cert(s) | `ErrTrustBundleNotFound` if no bundle<br>`ErrInvalidIdentityCredential` if credential nil |
-
-**Example Usage**:
-```go
-// Get bundle
-td, _ := parser.FromString(ctx, "example.org")
-bundle, err := provider.GetBundle(ctx, td)
-// err == nil, bundle contains PEM-encoded CA cert(s)
-
-// Use in validation (dev mode)
-err = validateCertificateChain(cert, bundle)
-```
-
----
-
 ## Testing Guidelines
 
 ### Unit Tests
@@ -583,35 +371,37 @@ err = validateCertificateChain(cert, bundle)
 Mock interfaces with exact error returns:
 
 ```go
-type MockRegistry struct {
-    mapper *domain.IdentityMapper
-    err    error
+type MockX509Fetcher struct {
+    doc *domain.IdentityDocument
+    err error
 }
 
-func (m *MockRegistry) FindBySelectors(ctx, selectors) (*domain.IdentityMapper, error) {
-    return m.mapper, m.err
+func (m *MockX509Fetcher) FetchX509SVID(ctx context.Context) (*domain.IdentityDocument, error) {
+    return m.doc, m.err
 }
 
-func TestFetchWithNoMatch(t *testing.T) {
-    registry := &MockRegistry{err: domain.ErrNoMatchingMapper}
-    service := NewService(registry)
+func TestAgentGetIdentityRefresh(t *testing.T) {
+    mockFetcher := &MockX509Fetcher{doc: freshDoc}
+    agent := spire.NewAgent(ctx, mockFetcher, agentSpiffeID, parser)
 
-    _, err := service.Fetch(ctx, selectors)
-    require.Error(t, err)
-    assert.True(t, errors.Is(err, domain.ErrNoMatchingMapper))
+    doc, err := agent.GetIdentity(ctx)
+    require.NoError(t, err)
+    assert.False(t, doc.IsExpired())
 }
 ```
 
 ### Integration Tests
 
-Use in-memory implementations to test full flows:
+Test with real SPIRE infrastructure in containerized environment:
 
 ```go
-func TestWorkloadAttestation(t *testing.T) {
-    app, _ := app.Bootstrap(ctx, inmemory.NewInMemoryConfig(), compose.NewInMemoryDeps())
+func TestWorkloadIdentityFetch(t *testing.T) {
+    // Requires SPIRE Agent + Server (e.g., via Docker Compose)
+    config := config.Load()
+    agent := spire.NewAgent(ctx, client, config.AgentSpiffeID, parser)
 
     workload := domain.NewWorkload(123, 1000, 1000, "/usr/bin/app")
-    doc, err := app.Agent.FetchIdentityDocument(ctx, workload)
+    doc, err := agent.FetchIdentityDocument(ctx, workload)
 
     require.NoError(t, err)
     assert.Equal(t, "spiffe://example.org/test-workload", doc.IdentityCredential().String())
@@ -665,13 +455,11 @@ When implementing a new adapter:
 ### Testing
 - [ ] Unit tests assert exact error types with `errors.Is()`
 - [ ] Integration tests cover happy path + all error cases
-- [ ] Production tests use real SPIRE infrastructure (for production ports)
-- [ ] Dev tests use in-memory implementations (for dev-only ports)
+- [ ] Production tests use real SPIRE infrastructure
 
 ### Documentation
 - [ ] Port interface documented with error contract
 - [ ] Example usage provided
-- [ ] Build tags specified if dev-only (`//go:build dev`)
 - [ ] Cross-references to related docs
 
 ### Resource Management
@@ -684,29 +472,21 @@ When implementing a new adapter:
 
 ## See Also
 
-- **[PRODUCTION_VS_DEVELOPMENT.md](PRODUCTION_VS_DEVELOPMENT.md)** - Current project status and architecture overview
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Hexagonal architecture patterns and principles
+- **[ARCHITECTURE.md](../architecture/ARCHITECTURE.md)** - Hexagonal architecture patterns and principles
+- **[DOMAIN.md](../architecture/DOMAIN.md)** - Domain model and types
 - **`internal/ports/*.go`** - Actual port interface definitions
 
 ---
 
 ## Summary
 
-### Production Ports (Real SPIRE)
+### Production Ports (SPIRE SDK)
 - **MTLSServer**: HTTPS server with SPIFFE/mTLS authentication
 - **MTLSClient**: HTTP client with SPIFFE/mTLS authentication
-- **Agent**: Workload attestation and SVID fetching
+- **Agent**: Workload identity fetching and SVID refresh
 - **TrustDomainParser**: Parse trust domain strings
 - **IdentityCredentialParser**: Parse SPIFFE ID strings
 - **IdentityDocumentValidator**: Validate X.509 SVIDs
 - **IdentityProvider**: Client interface for fetching SVID
-
-### Dev-Only Ports (In-Memory)
-- **IdentityMapperRegistry**: Registration entry management
-- **WorkloadAttestor**: Platform-specific attestation
-- **IdentityServer**: CA and SVID issuance
-- **IdentityDocumentCreator**: X.509 SVID creation
-- **IdentityDocumentProvider**: Creation + validation combined
-- **TrustBundleProvider**: Trust bundle (root CA) management
 
 All implementations must honor the error contracts and validation rules specified in this document.

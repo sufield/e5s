@@ -54,10 +54,7 @@ Where the project is heading:
 **Audience**: Platform engineers (will move to separate repo)
 
 Operations and infrastructure concerns (to be migrated to `spire-infra` repo):
-- [CONTROL_PLANE.md](infra-notes/CONTROL_PLANE.md) - SPIRE control plane setup
-- [SELECTOR_DESIGN.md](infra-notes/SELECTOR_DESIGN.md) - Workload selector design
 - [SPIRE_DISTROLESS_WORKAROUND.md](infra-notes/SPIRE_DISTROLESS_WORKAROUND.md) - Image hardening
-- [iso-dev-prod.md](infra-notes/iso-dev-prod.md) - Environment isolation
 - [security-tools.md](infra-notes/security-tools.md) - Security scanning
 - [codeql-local-setup.md](infra-notes/codeql-local-setup.md) - Local security analysis
 - [UNIFIED_CONFIG_IMPROVEMENTS.md](infra-notes/UNIFIED_CONFIG_IMPROVEMENTS.md) - Config proposals
@@ -90,8 +87,8 @@ spire-infra/           # Infrastructure repo (future)
 ├── helm/
 ├── spire-config/
 └── docs/              # Operations documentation
-    ├── CONTROL_PLANE.md
-    ├── SELECTOR_DESIGN.md
+    ├── SPIRE_SETUP.md
+    ├── DEPLOYMENT.md
     └── ...
 
 spire-site/            # Public website (future)

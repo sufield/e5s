@@ -121,7 +121,7 @@ httpReq.Header.Set("X-Spire-Caller-UID", "9999") // Ignored!
 
 2. **Unit Tests**: Test service layer with mocked credentials
    - Test unregistered UID rejection
-   - Test invalid selector handling
+   - Test error handling for workloads without SPIRE registration
 
 3. **Manual Testing**: Run workloads with different UIDs
    - Use Docker/containers to test different UIDs
@@ -142,7 +142,7 @@ if err != nil {
 **No configuration changes needed!** The switch to SO_PEERCRED is transparent to:
 - Workload code
 - Server configuration
-- Identity mappings/selectors
+- SPIRE registration entries and workload matching
 
 ## Performance Impact
 

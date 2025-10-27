@@ -5,7 +5,7 @@ This document explains the different testing layers and what each one verifies.
 ## TL;DR
 
 ```bash
-# Unit tests (fast, in-memory, no SPIRE needed)
+# Unit tests (fast, no SPIRE needed)
 make test              # or: go test ./...
 
 # Property-based tests (verify algebraic properties, 10K cases each)
@@ -22,31 +22,30 @@ make test-integration          # All 8 tests pass ✅
 
 ## Testing Layers
 
-### 1. Unit Tests (In-Memory) ✅
+### 1. Unit Tests ✅
 
 **Command**: `go test ./...` or `make test`
 
 **What it tests**:
-- Domain layer business logic
-- In-memory adapter implementations
-- Application layer with mock backends
-- No external dependencies
+- Domain layer business logic (identity credentials, trust domains, workload information)
+- Configuration parsing and validation
+- HTTP middleware and handlers
+- Certificate management logic
+- No external dependencies (no SPIRE infrastructure required)
 
 **What it does NOT test**:
-- ❌ SPIRE production adapters
 - ❌ Live SPIRE connectivity
-- ❌ Actual SVID fetching from SPIRE
+- ❌ Actual SVID fetching from SPIRE Agent
+- ❌ Real certificate issuance
 
-**Output**:
+**Example Output**:
 ```
-ok    github.com/pocket/hexagon/spire/internal/domain           (cached)
-ok    github.com/pocket/hexagon/spire/internal/adapters/outbound/inmemory  1.001s
-?     github.com/pocket/hexagon/spire/internal/adapters/outbound/spire  [no test files]
+ok    github.com/pocket/hexagon/spire/internal/domain           0.287s
+ok    github.com/pocket/hexagon/spire/internal/config           0.156s
+ok    github.com/pocket/hexagon/spire/internal/adapters/inbound/httpapi  0.234s
 ```
 
-Note the `[no test files]` for the SPIRE adapter - this is expected! Unit tests use in-memory implementations.
-
-**Coverage**: ~45.8% (domain + in-memory adapters)
+**Coverage**: Tests verify domain logic, configuration handling, and HTTP layer without requiring SPIRE infrastructure.
 
 ---
 
@@ -222,10 +221,10 @@ PBT_MAX_COUNT=100000 go test -v -run Properties ./...
 
 | Test Type | Command | SPIRE Required? | Tests What | Speed | Coverage |
 |-----------|---------|-----------------|------------|-------|----------|
-| **Unit** | `go test ./...` | No | In-memory adapters | Fast (~2s) | 45.8% |
+| **Unit** | `go test ./...` | No | Domain logic, config, HTTP | Fast (~2s) | Core logic |
 | **Property-Based** | `go test -run Properties ./...` | No | Algebraic properties | Fast (~0.3s) | Domain invariants |
-| **Integration** | `make test-integration` | Yes | SPIRE adapters | Medium (~0.5s) | SPIRE adapters |
-| **Verification** | `make verify` | No | Everything + quality | Slow (~30s) | Full |
+| **Integration** | `make test-integration` | Yes | Live SPIRE connectivity | Medium (~0.5s) | SPIRE integration |
+| **Verification** | `make verify` | No | Everything + quality checks | Slow (~30s) | Full |
 
 ---
 
@@ -266,66 +265,89 @@ fi
 
 ## Understanding Test Output
 
-### Unit Tests (In-Memory)
+### Unit Tests
 ```
-?     github.com/pocket/hexagon/spire/internal/adapters/outbound/spire  [no test files]
+ok    github.com/pocket/hexagon/spire/internal/domain    0.287s
+ok    github.com/pocket/hexagon/spire/internal/config    0.156s
 ```
-This is EXPECTED! The SPIRE adapter has no unit tests because it requires live SPIRE.
+Unit tests verify domain logic, configuration, and other components without external dependencies.
+
+### Property-Based Tests
+```
+=== RUN   TestNormalizePath_Properties
+=== RUN   TestNormalizePath_Properties/idempotency
+--- PASS: TestNormalizePath_Properties/idempotency (0.05s)
+```
+Each property is tested with thousands of generated inputs (default: 10,000 cases).
 
 ### Integration Tests (Live SPIRE)
 ```
---- PASS: TestFetchX509SVID (0.12s)
-    integration_test.go:68: Fetched SVID for identity: spiffe://example.org/agent
+=== RUN   TestFetchX509SVID
+    integration_test.go:69: Fetched SVID for identity: spiffe://example.org/test/integration-test
+    integration_test.go:70: Certificate expires: 2025-10-06T21:48:38Z
+--- PASS: TestFetchX509SVID (0.01s)
 ```
-This confirms the SPIRE adapter works with real SPIRE infrastructure!
+Integration tests confirm connectivity to real SPIRE infrastructure and certificate fetching.
 
 ---
 
 ## Troubleshooting
 
-### "no test files" for SPIRE adapter
-This is normal for unit tests. The SPIRE adapter only has integration tests (with `-tags=integration`).
+See [`docs/guide/TROUBLESHOOTING.md`](../guide/TROUBLESHOOTING.md) for detailed troubleshooting, including:
 
-### Integration tests fail with "connection refused"
-```bash
-# Ensure SPIRE is running
-kubectl get pods -n spire-system
-
-# Check agent socket exists
-kubectl exec -n spire-system spire-agent-xxx -- ls -la /tmp/spire-agent/public/api.sock
-```
-
-### "Failed to fetch X.509 SVID"
-```bash
-# Check agent logs
-kubectl logs -n spire-system spire-agent-xxx
-
-# Verify workload registration
-kubectl exec -n spire-system spire-server-0 -- \
-  spire-server entry show
-```
+- Connection refused errors
+- SPIRE socket access issues
+- Registration and permission problems
+- Integration testing specific issues
 
 ---
 
 ## Adding New Tests
 
-### Unit Test (In-Memory)
+### Unit Test
 ```go
-// internal/domain/example_test.go
-func TestExample(t *testing.T) {
+// internal/domain/identity_credential_test.go
+func TestNewIdentityCredentialFromComponents(t *testing.T) {
     // Test domain logic with no external dependencies
+    trustDomain := NewTrustDomainFromName("example.org")
+    ic := NewIdentityCredentialFromComponents(trustDomain, "/webapp")
+
+    assert.NotNil(t, ic)
+    assert.Equal(t, "spiffe://example.org/webapp", ic.String())
+}
+```
+
+### Property-Based Test
+```go
+// internal/domain/identity_credential_pbt_test.go
+func TestNormalizePath_Properties(t *testing.T) {
+    t.Run("idempotency", func(t *testing.T) {
+        // Verify normalize(normalize(p)) == normalize(p)
+        property := func(p string) bool {
+            normalized := normalizePath(p)
+            renormalized := normalizePath(normalized)
+            return normalized == renormalized
+        }
+
+        if err := quick.Check(property, &quick.Config{MaxCount: 10000}); err != nil {
+            t.Error(err)
+        }
+    })
 }
 ```
 
 ### Integration Test (Live SPIRE)
 ```go
-//go:build integration
-
-// internal/adapters/outbound/spire/example_test.go
-func TestExample(t *testing.T) {
-    client, err := spire.NewSPIREClient(ctx, config)
+// internal/adapters/outbound/spire/integration_test.go
+func TestFetchX509SVID(t *testing.T) {
+    // Test against real SPIRE infrastructure
+    // Note: No build tags needed - integration tests are in separate package
+    client, err := NewSPIREClient(ctx, config)
     require.NoError(t, err)
-    // Test against real SPIRE
+
+    svid, err := client.FetchX509SVID(ctx)
+    require.NoError(t, err)
+    assert.NotNil(t, svid)
 }
 ```
 
@@ -333,18 +355,19 @@ func TestExample(t *testing.T) {
 
 ## Summary
 
-- **`go test ./...`** = Fast unit tests with in-memory adapters (NO live SPIRE)
+- **`go test ./...`** = Fast unit tests for domain logic and configuration (NO SPIRE infrastructure needed)
 - **`go test -run Properties ./...`** = Property-based tests verifying algebraic invariants (10K cases each)
-- **`make test-integration`** = Integration tests with live SPIRE (YES live SPIRE)
+- **`make test-integration`** = Integration tests with live SPIRE (YES live SPIRE infrastructure required)
 - **`make verify`** = Comprehensive verification (builds, tests, quality checks, PBT)
 
 **Best Practices:**
 - Run `make verify` before committing (includes unit + PBT + quality checks)
 - Run `make test-integration` before deploying (tests against real SPIRE)
 - Run PBT tests when modifying domain logic or configuration parsing
+- Unit tests should be fast and have no external dependencies
 
 **Test Coverage:**
-- Unit tests: Example-based verification
-- Property-based tests: Mathematical invariants (14 properties, 140,000 total test cases)
-- Integration tests: Real SPIRE connectivity
-- Fuzz tests: Crash safety and edge cases
+- **Unit tests**: Example-based verification of domain logic, configuration, HTTP handlers
+- **Property-based tests**: Mathematical invariants (14 properties, 140,000 total test cases)
+- **Integration tests**: Real SPIRE connectivity and certificate fetching
+- **Fuzz tests**: Crash safety and edge cases (path normalization, etc.)

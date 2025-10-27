@@ -88,7 +88,7 @@ func (td *TrustDomain) String() string {
 //
 // Note: SDK's spiffeid.TrustDomain uses Compare(other) == 0 for equality.
 // We provide an explicit Equals() method for clarity and consistency with
-// other domain value objects (IdentityCredential, Selector).
+// other domain value objects (IdentityCredential).
 func (td *TrustDomain) Equals(other *TrustDomain) bool {
 	if td == nil || other == nil {
 		return false

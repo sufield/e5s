@@ -1,11 +1,11 @@
 .PHONY: test test-verbose test-race test-coverage test-coverage-html test-short \
 	clean help prereqs check-prereqs check-prereqs-k8s check-prereqs-lint check-prereqs-misc \
-	build prod-build dev-build test-prod-build compare-sizes test-inmem test-inmem-html \
+	build prod-build test-prod-build \
 	helm-lint helm-template minikube-up minikube-down minikube-status \
 	minikube-delete ci-test ci-build verify verify-spire check-spire-ready \
 	test-integration test-integration-ci test-integration-keep test-prod-binary \
 	refactor-baseline refactor-compare refactor-check refactor-install-tools refactor-clean \
-	test-dev test-prod register-test-workload \
+	test-prod register-test-workload \
 	spire-server-shell-enable spire-server-shell-disable spire-server-shell-status \
 	sec-deps sec-lint sec-secrets sec-test sec-fuzz sec-all sec-install-tools check-prereqs-sec \
 	codeql-db codeql-analyze codeql-clean codeql check-prereqs-codeql
@@ -19,11 +19,9 @@ SHELL := /bin/bash
 
 # Binary names
 BINARY_PROD=bin/spire-server
-BINARY_DEV=bin/cp-minikube
 
 # Build flags
 LDFLAGS=-ldflags "-s -w"
-BUILD_TAGS_DEV=dev
 
 # Required tools (core minimum)
 REQUIRED_TOOLS=go
@@ -92,18 +90,15 @@ check-prereqs-misc:
 	done
 	@echo "✓ Misc tools satisfied"
 
-## test: Run all tests (same as test-dev)
-test: test-dev
+## test: Run all tests
+test:
+	@echo "Running all tests..."
+	@go test ./...
 
 ## test-prod: Run tests without dev tags (production build)
 test-prod:
 	@echo "Running production tests (no dev tags)..."
 	@go test ./...
-
-## test-dev: Run tests with dev tags (development build)
-test-dev:
-	@echo "Running development tests (with -tags=dev)..."
-	@go test -tags=dev ./...
 
 ## test-verbose: Run all tests with verbose output
 test-verbose:
@@ -133,23 +128,10 @@ test-coverage-html:
 	@go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
 
-## test-inmem: Run tests for inmemory package with coverage
-test-inmem:
-	@echo "Running inmemory package tests with coverage..."
-	@go test -tags=dev -coverprofile=inmem.out ./internal/adapters/outbound/inmemory
-	@go tool cover -func=inmem.out
-
-## test-inmem-html: Generate HTML coverage report for inmemory package
-test-inmem-html:
-	@echo "Generating HTML coverage report for inmemory package..."
-	@go test -tags=dev -coverprofile=inmem.out ./internal/adapters/outbound/inmemory
-	@go tool cover -html=inmem.out -o inmem_coverage.html
-	@echo "Coverage report generated: inmem_coverage.html"
-
 ## clean: Remove generated files
 clean:
 	@echo "Cleaning up..."
-	@rm -f coverage.out coverage.html inmem.out inmem_coverage.html
+	@rm -f coverage.out coverage.html
 	@rm -f gosec.sarif gitleaks.sarif codeql-results.sarif
 	@rm -rf bin/ codeql-db/
 	@echo "Clean complete"
@@ -165,68 +147,13 @@ prod-build:
 	@echo "Production binary: $(BINARY_PROD)"
 	@ls -lh $(BINARY_PROD)
 
-## dev-build: Build dev binary with dev tags
-dev-build:
-	@echo "Building dev binary with -tags=dev..."
-	@mkdir -p bin
-	@go build -tags=$(BUILD_TAGS_DEV) -o $(BINARY_DEV) ./cmd
-	@echo "Dev binary: $(BINARY_DEV)"
-	@ls -lh $(BINARY_DEV)
-
-## compare-sizes: Build both versions and compare binary sizes
-compare-sizes:
-	@echo "Building and comparing binary sizes..."
-	@mkdir -p bin
-	@echo "→ Building production binary..."
-	@go build -trimpath $(LDFLAGS) -o bin/agent-prod ./cmd
-	@echo "→ Building dev binary..."
-	@go build -tags=$(BUILD_TAGS_DEV) -o bin/agent-dev ./cmd
-	@echo ""
-	@echo "=== Binary Size Comparison ==="
-	@ls -lh bin/agent-prod bin/agent-dev
-	@echo ""
-	@PROD_SIZE=$$(stat -c%s bin/agent-prod 2>/dev/null || stat -f%z bin/agent-prod); \
-	DEV_SIZE=$$(stat -c%s bin/agent-dev 2>/dev/null || stat -f%z bin/agent-dev); \
-	DIFF=$$((DEV_SIZE - PROD_SIZE)); \
-	PERCENT=$$(echo "scale=2; ($$DIFF * 100) / $$DEV_SIZE" | bc -l); \
-	echo "Production binary: $$PROD_SIZE bytes"; \
-	echo "Development binary: $$DEV_SIZE bytes"; \
-	echo "Size difference: $$DIFF bytes ($$PERCENT% of dev binary)"; \
-	echo ""
-
-## test-prod-build: Verify production build excludes dev code
+## test-prod-build: Verify production build
 test-prod-build:
 	@echo "Testing production build..."
-	@echo "→ Checking production dependencies exclude dev packages..."
-	@PROD_DEPS=$$(go list -deps ./cmd); \
-	DEV_PKGS="internal/adapters/outbound/inmemory internal/adapters/inbound/cli internal/adapters/outbound/compose"; \
-	for pkg in $$DEV_PKGS; do \
-		if echo "$$PROD_DEPS" | grep -q "github.com/pocket/hexagon/spire/$$pkg"; then \
-			echo "✗ ERROR: Production build includes dev package: $$pkg"; \
-			exit 1; \
-		fi; \
-	done; \
-	echo "  ✓ No dev packages in production dependencies"
 	@echo "→ Building production binary..."
 	@go build -o /tmp/test-prod ./cmd 2>&1
 	@echo "  ✓ Production build successful"
-	@echo "→ Building dev binary..."
-	@go build -tags=dev -o /tmp/test-dev ./cmd 2>&1
-	@echo "  ✓ Dev build successful"
-	@echo "→ Verifying production tests exclude dev tests..."
-	@if go test -list . ./internal/domain 2>&1 | grep -q "TestSelector\|TestIdentityMapper"; then \
-		echo "✗ ERROR: Production build includes dev tests!"; \
-		exit 1; \
-	fi
-	@echo "  ✓ Dev tests excluded from production"
-	@echo "→ Verifying dev tests run with dev tags..."
-	@TEST_OUTPUT=$$(go test -tags=dev -list . ./internal/domain 2>&1); \
-	if ! echo "$$TEST_OUTPUT" | grep -q "TestSelector\|TestIdentityMapper"; then \
-		echo "✗ ERROR: Dev tests not found with -tags=dev!"; \
-		exit 1; \
-	fi
-	@echo "  ✓ Dev tests found with dev tags"
-	@rm -f /tmp/test-prod /tmp/test-dev
+	@rm -f /tmp/test-prod
 	@echo "✓ Production build check passed"
 
 ## verify: Run comprehensive verification (alias for verify-spire)
@@ -337,11 +264,11 @@ ci-test: check-prereqs test-coverage helm-lint helm-template test-prod-build
 	@echo "✓ All CI checks passed successfully!"
 	@echo "======================================"
 
-## ci-build: Build and validate all binaries for CI
-ci-build: check-prereqs prod-build dev-build test-prod-build
+## ci-build: Build and validate production binary for CI
+ci-build: check-prereqs prod-build test-prod-build
 	@echo ""
 	@echo "======================================"
-	@echo "✓ All builds completed successfully!"
+	@echo "✓ Production build completed successfully!"
 	@echo "======================================"
 
 ## refactor-install-tools: Install refactoring analysis tools

@@ -1,44 +1,37 @@
-// Package domain contains the domain model for the walking-skeleton.
-// It focuses on business concepts without any
-// adapter-specific logic or I/O. Parsing, validation, and crypto are delegated
-// to adapter ports; domain models remain simple value objects and services.
+// Package domain contains the domain model for the SPIRE wrapper.
+// It focuses on core business concepts without adapter-specific logic or I/O.
+// Parsing, validation, and crypto operations are delegated to adapter ports;
+// domain models remain simple value objects.
 //
 // Files and types
 // -----------------------
-//   - attestation.go
-//   - NodeAttestationResult, WorkloadAttestationResult: result objects used
-//     by attestation flows.
-//   - AttestationService: domain service for matching selectors to
-//     identity mappers (MatchWorkloadToMapper).
-//   - identity_document.go
-//   - IdentityDocument: a minimal container for identity documents (X.509
-//     or JWT). Includes expiration logic but delegates crypto/parsing to
-//     adapters via the IdentityDocumentProvider/Validator ports.
-//   - identity_mapper.go
-//   - IdentityMapper: maps selector sets to identity credentials. Provides
-//     matching logic via MatchesSelectors.
 //   - identity_credential.go
 //   - IdentityCredential: value object modeling a URI-formatted identity
-//     (e.g., SPIFFE ID). Construction and validation are handled by
-//     IdentityCredentialParser adapters.
-//   - node.go
-//   - Node: represents a host machine/environment and holds selectors and
-//     attestation status.
-//   - selector.go
-//   - Selector, SelectorSet: primitives for expressing and matching
-//     selectors (e.g., `unix:uid:1000`, `k8s:ns:default`). Includes
-//     parsing helpers and set operations.
+//     (e.g., SPIFFE ID: spiffe://trust-domain/path). Construction includes
+//     path normalization. Parsing is delegated to IdentityCredentialParser adapters.
+//
+//   - identity_document.go
+//   - IdentityDocument: container for identity credentials with expiration
+//     and validity logic. Delegates crypto/parsing to IdentityDocumentProvider
+//     and IdentityDocumentValidator adapter ports.
+//
 //   - trust_domain.go
 //   - TrustDomain: value object representing the trust domain namespace
-//     for identities.
-//   - workload.go
-//   - Workload: simple struct representing a process requesting an identity
-//     (pid/uid/gid/path).
+//     for identities (e.g., "example.org" in spiffe://example.org/path).
+//     Construction and validation delegated to TrustDomainParser adapters.
 //
-// notes
-//   - Domain types avoid depending on SDK specifics (go-spiffe) — adapters
-//     implement parsing and verification and translate into these value
-//     objects. This keeps the domain small and focused on business rules.
-//   - Keep all I/O and crypto out of this package; use ports/adapters for that
-//     functionality.
+//   - workload.go
+//   - Workload: represents a process requesting an identity. Contains
+//     process information (PID, UID, GID, path) used for attestation.
+//
+//   - errors.go
+//   - Domain-specific error types for identity credential, document,
+//     and trust domain operations.
+//
+// Design principles
+//   - Domain types avoid depending on SDK specifics (go-spiffe). Adapters
+//     implement parsing/verification and translate into these value objects.
+//   - All I/O, crypto, and external SDK integration happens in adapters,
+//     not in the domain layer.
+//   - Domain focuses on business rules and invariants (see docs/architecture/INVARIANTS.md).
 package domain

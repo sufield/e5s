@@ -358,6 +358,113 @@ If issues persist:
 
 ---
 
+## Integration Testing Issues
+
+### Issue: Connection Refused During Integration Tests
+
+**Symptoms**: Integration tests fail with connection refused errors
+
+**Diagnosis**:
+```bash
+# Check SPIRE Agent is running
+kubectl get pods -n spire-system | grep spire-agent
+
+# Check socket exists in pod
+kubectl exec -n spire-system deploy/spire-agent -- ls -la /run/spire/sockets/agent.sock
+```
+
+**Fix**:
+1. Ensure SPIRE infrastructure is running:
+   ```bash
+   make minikube-up
+   ```
+
+2. Verify SPIRE agent is healthy:
+   ```bash
+   kubectl exec -n spire-system deploy/spire-agent -- \
+     /opt/spire/bin/spire-agent healthcheck
+   ```
+
+3. Check test pod has access to socket (via hostPath volume)
+
+---
+
+### Issue: No X.509 SVIDs Available in Tests
+
+**Symptoms**: Integration tests fail because workload cannot get certificates
+
+**Cause**: Workload not registered with SPIRE Server
+
+**Diagnosis**:
+```bash
+# List all registration entries
+kubectl exec -n spire-system deploy/spire-server -- \
+  /opt/spire/bin/spire-server entry show
+
+# Check if test workload is registered
+kubectl exec -n spire-system deploy/spire-server -- \
+  /opt/spire/bin/spire-server entry show | grep "test"
+```
+
+**Fix**:
+Register the test workload before running integration tests:
+
+```bash
+# Register test workload
+kubectl exec -n spire-system deploy/spire-server -- \
+  /opt/spire/bin/spire-server entry create \
+    -parentID spiffe://example.org/agent \
+    -spiffeID spiffe://example.org/test/integration-test \
+    -selector k8s:pod-label:app:integration-test
+
+# Verify entry created
+kubectl exec -n spire-system deploy/spire-server -- \
+  /opt/spire/bin/spire-server entry show
+```
+
+Or use the automated script:
+```bash
+make register-test-workload
+```
+
+---
+
+### Issue: Permission Denied in Integration Tests
+
+**Symptoms**: Tests fail with permission denied errors when accessing SPIRE socket
+
+**Cause**: Process UID doesn't match registered selectors, or incorrect socket permissions
+
+**Diagnosis**:
+```bash
+# Check socket permissions
+kubectl exec -n spire-system deploy/spire-agent -- \
+  ls -la /run/spire/sockets/agent.sock
+
+# Check test pod UID
+kubectl exec -it <test-pod> -- id
+
+# Check registered selectors for test workload
+kubectl exec -n spire-system deploy/spire-server -- \
+  /opt/spire/bin/spire-server entry show | grep -A 10 "test"
+```
+
+**Fix**:
+1. Ensure process UID matches registered selectors
+2. Update registration entry with correct selectors:
+   ```bash
+   # For Kubernetes pods, use pod-label selector instead of unix:uid
+   kubectl exec -n spire-system deploy/spire-server -- \
+     /opt/spire/bin/spire-server entry create \
+       -parentID spiffe://example.org/agent \
+       -spiffeID spiffe://example.org/test/integration-test \
+       -selector k8s:pod-label:app:integration-test
+   ```
+
+3. Check SPIRE Agent attestation configuration for enabled plugins
+
+---
+
 ## Common Gotchas
 
 1. **Socket path format**: Must include `unix://` prefix (e.g., `unix:///spire-socket/api.sock`)
@@ -366,3 +473,5 @@ If issues persist:
 4. **Volume mount permissions**: Socket must be readable by the application user
 5. **Registration timing**: Workload must be registered before it can get certificates
 6. **Certificate propagation**: May take a few seconds for new certificates to be available
+7. **Integration test pod labels**: Test pods must have labels matching registered selectors
+8. **Minikube socket paths**: Use `/run/spire/sockets/` not `/tmp/spire-agent/`

@@ -2,39 +2,32 @@
 
 ## Overview
 
-This project uses Go build tags (`dev` vs production) to separate development-only code from production code. Your editor's gopls configuration needs to be aware of these tags for proper code analysis and navigation.
+This project uses minimal Go build tags for development infrastructure tooling. Most code has no build tags and works in all contexts.
 
 ## Understanding Build Tags
 
-- **`//go:build dev`** - Development-only files (in-memory implementations, CLI tools, test utilities)
-- **`//go:build !dev`** - Production-only files (real SPIRE adapter implementations)
-- **No tag** - Available in both dev and production builds
+> **Note**: As of the selector/inmemory cleanup, build tags are minimal. Only infrastructure tooling (Helm installer) uses `//go:build dev` tags.
+
+- **`//go:build dev`** - Development infrastructure tools (Helm installer for local SPIRE setup)
+- **No tag** - Available in all builds (production application code)
 
 ## Configuration Files
 
-### Dev Configuration (Default)
+> **Note**: With minimal dev tags, profile switching is largely unnecessary. The default configuration works for most development.
+
+### Default Configuration
 
 **Active files:**
-- `gopls.yaml` - Editor-agnostic gopls config (dev profile)
-- `.vscode/settings.json` - VSCode-specific config (dev profile)
+- `gopls.yaml` - Editor-agnostic gopls config
+- `.vscode/settings.json` - VSCode-specific config
 
 **Behavior:**
-- ✅ Analyzes files with `//go:build dev`
-- ❌ Excludes files with `//go:build !dev`
-- ✅ Best for: Development work, testing, examples
+- ✅ Analyzes all code including Helm installer (`//go:build dev`)
+- ✅ Works for: All development work
 
-### Prod Configuration (Optional)
+### Advanced: Profile Switching (Rarely Needed)
 
-**Available files:**
-- `gopls.prod.yaml` - Production profile template
-- `.vscode/settings.prod.json` - VSCode production profile template
-
-**Behavior:**
-- ❌ Excludes files with `//go:build dev`
-- ✅ Includes files with `//go:build !dev`
-- ✅ Best for: Production code reviews, adapter implementation work
-
-## Switching Between Dev and Prod
+If you want to exclude the Helm installer from analysis:
 
 ### Method 1: File Rename (Quick Switch)
 

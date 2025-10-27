@@ -1,5 +1,7 @@
 # IdentityCredential Refactoring
 
+> **Note**: This document describes a historical refactoring. The in-memory implementations referenced throughout this document have since been removed. The architecture now uses only SPIRE SDK adapters in production.
+
 ## Overview
 
 This document explains why parsing logic was moved from the domain layer to adapters via the `IdentityCredentialParser` port interface. 

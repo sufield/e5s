@@ -33,28 +33,15 @@ make check-spire-ready       # Verify SPIRE is ready for tests
 - Removed duplicate build tag definitions (was in both `buildFlags` and `env.GOFLAGS`)
 - Fixed completion settings location (`completion.usePlaceholders`, not `ui.completion.usePlaceholders`)
 - Added directory filters for faster analysis (`-vendor`, `-node_modules`, `-.git`)
-- Created separate dev/prod configuration profiles
 - Comprehensive editor setup documentation
 
-**Active Configurations:**
+> **Note**: After selector/inmemory cleanup, dev tags are minimal (only Helm installer). Profile switching largely unnecessary.
 
-**Dev Profile (default):**
+**Active Configuration:**
 ```yaml
 # gopls.yaml
 build:
-  buildFlags: ["-tags=dev"]
-  directoryFilters: ["-vendor", "-node_modules", "-.git"]
-completion:
-  usePlaceholders: true
-ui:
-  semanticTokens: true
-```
-
-**Prod Profile (optional):**
-```yaml
-# gopls.prod.yaml
-build:
-  # No buildFlags - analyzes production code
+  buildFlags: ["-tags=dev"]  # Includes Helm installer
   directoryFilters: ["-vendor", "-node_modules", "-.git"]
 completion:
   usePlaceholders: true
@@ -63,11 +50,9 @@ ui:
 ```
 
 **Files:**
-- `gopls.yaml` - Dev profile (analyzes `//go:build dev` files)
-- `gopls.prod.yaml` - Production profile (analyzes `//go:build !dev` files)
-- `.vscode/settings.json` - VSCode dev configuration
-- `.vscode/settings.prod.json` - VSCode prod configuration
-- `docs/EDITOR_SETUP.md` - Complete editor configuration guide
+- `gopls.yaml` - Default configuration (analyzes all code)
+- `.vscode/settings.json` - VSCode configuration
+- `docs/guide/EDITOR_SETUP.md` - Complete editor configuration guide
 
 ---
 
@@ -275,33 +260,6 @@ make refactor-install-tools
 staticcheck --version
 gocyclo --version
 ```
-
----
-
-### 4. Binary Size Optimization
-
-**Status:** ⚠️ **Uses `bc` Dependency**
-
-**What's Pending:**
-- `compare-sizes` target requires `bc` (not always available)
-- Could use `awk` for percentage calculation
-
-**Current Code:**
-```makefile
-PERCENT=$$(echo "scale=2; ($$DIFF * 100) / $$DEV_SIZE" | bc -l)
-```
-
-**Better Alternative:**
-```makefile
-PERCENT=$$(awk "BEGIN {printf \"%.2f\", ($$DIFF * 100) / $$DEV_SIZE}")
-```
-
-**Why Pending:**
-- Low priority (only affects one informational target)
-- `bc` commonly available on most systems
-- Easy to fix if needed
-
-**Estimated Effort:** 5 minutes
 
 ---
 

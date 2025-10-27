@@ -39,7 +39,7 @@ func (o *Options) normalize() {
 	}
 }
 
-// Agent delegates to external SPIRE (no local selector matching).
+// Agent delegates identity document fetching to external SPIRE infrastructure.
 // Concurrency: safe for concurrent use.
 type Agent struct {
 	client X509Fetcher

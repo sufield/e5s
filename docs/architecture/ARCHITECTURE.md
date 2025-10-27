@@ -18,19 +18,19 @@ This document describes the hexagonal architecture implementation of the SPIRE W
 
 ## Overview
 
-This project implements SPIRE's Workload API using hexagonal architecture. The design enables:
+This project implements a SPIRE Workload API wrapper using hexagonal architecture. The design enables:
 
 1. **Separation of concerns**: Domain logic isolated from infrastructure
-2. **Testability**: In-memory implementations for testing without real SPIRE
-3. **Flexibility**: Easy swap between in-memory and real SPIRE implementations
-4. **SDK readiness**: Interfaces designed to match go-spiffe SDK signatures
+2. **Testability**: Unit tests without requiring SPIRE infrastructure
+3. **Flexibility**: Clean adapter layer for SPIRE integration
+4. **SDK integration**: Uses go-spiffe SDK through adapter layer
 
 **Concepts**:
 - **SPIFFE ID**: Unique identity credential (e.g., `spiffe://example.org/workload`)
 - **SVID (Identity Document)**: X.509 certificate proving workload identity
-- **Workload Attestation**: Process of verifying workload attributes (UID, path, etc.)
-- **Selector**: Key-value attribute used for attestation (e.g., `unix:uid:1000`)
+- **Workload Attestation**: SPIRE process of verifying workload identity
 - **Trust Bundle**: Root CA certificates for verifying SVIDs
+- **Trust Domain**: Namespace for identities (e.g., `example.org`)
 
 ---
 
@@ -75,33 +75,21 @@ This project implements SPIRE's Workload API using hexagonal architecture. The d
 │  │  - TrustDomain                                        │       │
 │  │  - IdentityCredential (SPIFFE ID)                     │       │
 │  │  - IdentityDocument (SVID)                           │       │
-│  │  - Selector, SelectorSet                             │       │
-│  │  - IdentityMapper (selector → identity mapping)      │       │
+│  │  - Workload (process information)                    │       │
 │  │                                                       │       │
 │  │  Domain Errors (Typed Sentinels)                     │       │
-│  │  - ErrNoMatchingMapper                               │       │
-│  │  - ErrWorkloadAttestationFailed                      │       │
+│  │  - ErrInvalidIdentityCredential                      │       │
+│  │  - ErrInvalidTrustDomain                             │       │
 │  │  - ErrIdentityDocumentExpired                        │       │
-│  │  - ... (20+ typed errors)                            │       │
+│  │  - ... (10+ typed errors)                            │       │
 │  └──────────────────────────────────────────────────────┘       │
 ├──────────────────────────────────────────────────────────────────┤
 │                    Outbound Ports                                │
 │  ┌──────────────────────────────────────────────────────┐       │
-│  │  Server                                               │       │
-│  │  - IssueIdentity(namespace) → IdentityDocument       │       │
-│  │  - GetTrustDomain() → TrustDomain                    │       │
-│  │  - GetCA() → *x509.Certificate                       │       │
-│  │                                                       │       │
-│  │  Agent                                                │       │
+│  │  Agent (SPIRE Integration)                           │       │
 │  │  - GetIdentity() → Identity                          │       │
 │  │  - FetchIdentityDocument(workload) → Identity        │       │
-│  │                                                       │       │
-│  │  IdentityMapperRegistry                              │       │
-│  │  - FindBySelectors(selectors) → IdentityMapper      │       │
-│  │  - ListAll() → []*IdentityMapper                    │       │
-│  │                                                       │       │
-│  │  WorkloadAttestor                                    │       │
-│  │  - Attest(workload) → []string (selectors)          │       │
+│  │  - WatchIdentityUpdates(ctx) → Stream               │       │
 │  │                                                       │       │
 │  │  TrustDomainParser                                   │       │
 │  │  - FromString(name) → TrustDomain                   │       │
@@ -120,23 +108,15 @@ This project implements SPIRE's Workload API using hexagonal architecture. The d
 │  └──────────────────────────────────────────────────────┘       │
 ├──────────────────────────────────────────────────────────────────┤
 │                    Outbound Adapters                             │
-│  ┌─────────────────┐           ┌──────────────────────┐         │
-│  │ In-Memory       │           │ Real SPIRE SDK       │         │
-│  │ (Walking        │           │ (Production)         │         │
-│  │  Skeleton)      │           │ (Future)             │         │
-│  │                 │           │                      │         │
-│  │ - Registry      │           │ - SDK Parsers        │         │
-│  │ - Server        │           │ - Workload API       │         │
-│  │ - Agent         │           │ - Bundle Source      │         │
-│  │ - Attestors     │           │ - X.509 SVID         │         │
-│  │ - Parsers       │           │ - Chain Verify       │         │
-│  └─────────────────┘           └──────────────────────┘         │
-│                                                                  │
-│  ┌──────────────────────────────────────────────────┐           │
-│  │ Workload API Client (used by workloads)          │           │
-│  │ - HTTP over Unix socket                          │           │
-│  │ - Credential extraction (SO_PEERCRED)            │           │
-│  └──────────────────────────────────────────────────┘           │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │ SPIRE SDK Adapters (Production)                        │   │
+│  │                                                           │   │
+│  │ - SDK Parsers (TrustDomain, IdentityCredential)        │   │
+│  │ - Workload API Client (X.509 SVID fetch)               │   │
+│  │ - Bundle Source (Trust bundle management)              │   │
+│  │ - X.509 SVID Provider (Certificate operations)         │   │
+│  │ - Chain Verifier (Certificate validation)              │   │
+│  └──────────────────────────────────────────────────────────┘   │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -144,7 +124,7 @@ This project implements SPIRE's Workload API using hexagonal architecture. The d
 1. **Dependencies point inward**: Outer layers depend on inner, never reverse
 2. **Domain is pure**: No infrastructure dependencies (crypto/x509 used only for types)
 3. **Ports define contracts**: Interfaces owned by application layer
-4. **Adapters are swappable**: In-memory ↔ Real SPIRE with zero domain changes
+4. **Adapters use SPIRE SDK**: go-spiffe SDK integration through adapter layer
 
 ---
 
@@ -152,37 +132,40 @@ This project implements SPIRE's Workload API using hexagonal architecture. The d
 
 ### 1. Domain Layer (`internal/domain/`)
 
-**Purpose**: Pure business logic and entities
+**Purpose**: Pure business logic and value objects
 
 **Contents**:
-- **Entities**: `TrustDomain`, `IdentityCredential`, `IdentityDocument`, `Selector`, `IdentityMapper`
-- **Value Objects**: `SelectorSet` (collection with uniqueness guarantees)
-- **Errors**: Typed sentinel errors (`ErrNoMatchingMapper`, `ErrIdentityDocumentExpired`, etc.)
+- **Value Objects**: `TrustDomain`, `IdentityCredential`, `IdentityDocument`, `Workload`
+- **Errors**: Typed sentinel errors (`ErrInvalidIdentityCredential`, `ErrIdentityDocumentExpired`, etc.)
 
 **Rules**:
 - ✅ No external dependencies (except stdlib types like `crypto/x509.Certificate`)
-- ✅ Immutable entities (no setters, return new instances)
-- ✅ Rich domain models (behavior + data)
+- ✅ Immutable value objects (no setters, return new instances)
+- ✅ Validation at construction
 - ❌ No I/O, no database, no HTTP
 - ❌ No SDK dependencies
 
 **Example**:
 ```go
-// Domain entity with behavior
-type IdentityMapper struct {
-    identityCredential *IdentityCredential
-    selectors         *SelectorSet
+// Domain value object with validation
+type IdentityCredential struct {
+    trustDomain *TrustDomain
+    path        string
+    uri         string  // cached
 }
 
-// Business logic method
-func (m *IdentityMapper) MatchesSelectors(discovered *SelectorSet) bool {
-    // AND logic: all mapper selectors must be present in discovered
-    for _, required := range m.selectors.All() {
-        if !discovered.Contains(required) {
-            return false
-        }
+// Constructor with validation and normalization
+func NewIdentityCredentialFromComponents(
+    trustDomain *TrustDomain,
+    path string,
+) *IdentityCredential {
+    normalized := normalizePath(path)
+    uri := fmt.Sprintf("spiffe://%s%s", trustDomain.String(), normalized)
+    return &IdentityCredential{
+        trustDomain: trustDomain,
+        path:        normalized,
+        uri:         uri,
     }
-    return true
 }
 ```
 
@@ -193,15 +176,14 @@ func (m *IdentityMapper) MatchesSelectors(discovered *SelectorSet) bool {
 **Purpose**: Define contracts between layers (interfaces only)
 
 **Contents**:
-- **Inbound Ports**: `IdentityProvider`, `CLI`, `Service` (dev-only)
-- **Outbound Ports**: `Agent`, `IdentityMapperRegistry`, `WorkloadAttestor`, `TrustDomainParser`, etc.
-- **Configuration**: `MTLSConfig`, `WorkloadAPIConfig`, `SPIFFEConfig`, `HTTPConfig` (mTLS server/client config)
+- **Inbound Ports**: `IdentityProvider` - Workload identity fetching
+- **Outbound Ports**: `Agent`, `TrustDomainParser`, `IdentityCredentialParser`, `TrustBundleProvider`
+- **Configuration**: `MTLSConfig`, `WorkloadAPIConfig`, `SPIFFEConfig`, `HTTPConfig`
 
-**Data Transfer Objects**: Moved to `internal/dto/`
-- `dto.Identity` - Identity transport DTO
-- `dto.Config` - Runtime configuration (dev/prod variants)
-- `dto.WorkloadEntry` - Workload registration (dev-only)
-- `dto.Message` - Demo message (dev-only)
+**Data Transfer Objects**: Located in `internal/dto/`
+- `dto.Identity` - Identity transport DTO with credentials and certificate
+- `dto.Config` - Runtime configuration
+- `dto.Message` - Demo message exchange
 
 **Rules**:
 - ✅ Interfaces owned by application layer
@@ -214,12 +196,15 @@ func (m *IdentityMapper) MatchesSelectors(discovered *SelectorSet) bool {
 **Example**:
 ```go
 // Port interface with error contract
-// Error Contract:
-// - FindBySelectors returns domain.ErrNoMatchingMapper if no mapper matches
-// - FindBySelectors returns domain.ErrInvalidSelectors if selectors are nil/empty
-type IdentityMapperRegistry interface {
-    FindBySelectors(ctx context.Context, selectors *domain.SelectorSet) (*domain.IdentityMapper, error)
-    ListAll(ctx context.Context) ([]*domain.IdentityMapper, error)
+type Agent interface {
+    // GetIdentity returns the agent's own identity
+    GetIdentity(ctx context.Context) (*dto.Identity, error)
+
+    // FetchIdentityDocument fetches identity for a workload from SPIRE
+    FetchIdentityDocument(ctx context.Context, workload *domain.Workload) (*dto.Identity, error)
+
+    // WatchIdentityUpdates streams identity updates
+    WatchIdentityUpdates(ctx context.Context) (<-chan *dto.Identity, error)
 }
 ```
 
@@ -278,8 +263,7 @@ adapters/
 │   ├── workloadapi/  # HTTP server over Unix socket
 │   └── cli/          # Command-line presentation
 └── outbound/         # Implement infrastructure ports
-    ├── inmemory/     # In-memory implementations
-    ├── spire/        # Real SPIRE SDK implementations (future)
+    ├── spire/        # SPIRE SDK integrations
     ├── workloadapi/  # Workload API client
     └── compose/      # Dependency injection factories
 ```
@@ -292,30 +276,34 @@ adapters/
 
 **Example**:
 ```go
-// Outbound adapter implementing port
-type InMemoryRegistry struct {
-    mappers map[string]*domain.IdentityMapper
-    sealed  bool
+// Outbound adapter implementing ports.Agent interface
+type Agent struct {
+    client X509Fetcher  // go-spiffe SDK client
+    opts   Options
+    mu     sync.RWMutex
+    agentIdentity *dto.Identity
 }
 
-func (r *InMemoryRegistry) FindBySelectors(
-    ctx context.Context,
-    selectors *domain.SelectorSet,
-) (*domain.IdentityMapper, error) {
-    // Input validation
-    if selectors == nil || len(selectors.All()) == 0 {
-        return nil, fmt.Errorf("%w: selectors are nil or empty", domain.ErrInvalidSelectors)
-    }
+func (a *Agent) GetIdentity(ctx context.Context) (*domain.IdentityDocument, error) {
+    // Check if refresh needed
+    a.mu.RLock()
+    current := a.agentIdentity
+    need := needsRefresh(current.IdentityDocument, a.opts)
+    a.mu.RUnlock()
 
-    // Infrastructure logic
-    for _, mapper := range r.mappers {
-        if mapper.MatchesSelectors(selectors) {
-            return mapper, nil
+    if need {
+        // Fetch fresh SVID from SPIRE via SDK
+        doc, err := a.client.FetchX509SVID(ctx)
+        if err != nil {
+            return nil, fmt.Errorf("refresh agent identity: %w", err)
         }
+        // Update cached identity
+        a.mu.Lock()
+        a.agentIdentity.IdentityDocument = doc
+        a.mu.Unlock()
     }
 
-    // Map to domain error
-    return nil, fmt.Errorf("%w: no mapper matches selectors", domain.ErrNoMatchingMapper)
+    return current.IdentityDocument, nil
 }
 ```
 
@@ -323,420 +311,228 @@ func (r *InMemoryRegistry) FindBySelectors(
 
 ## Data Flows
 
-### 1. Workload SVID Fetch
+### 1. Workload Identity Fetch via SPIRE
 
-#### Development Mode (In-Memory)
-
-**Flow**: Workload → API Server → Service → Agent → Attestor → Registry → Server → Response
+**Flow**: Application → SPIRE Agent (via go-spiffe SDK) → SPIRE Server
 
 ```
-┌─────────────┐
-│  Workload   │  (Process with UID 1000)
-└──────┬──────┘
-       │ 1. GET /svid/x509
-       │    (Unix socket connection)
+┌─────────────────────┐
+│  Application        │  (Your workload process)
+│  internal/app/      │
+└──────┬──────────────┘
+       │ 1. Initialize SPIRE client
+       │    client, _ := workloadapi.New(ctx, workloadapi.WithAddr("unix:///run/spire/sockets/agent.sock"))
        ▼
 ┌────────────────────────────┐
-│  Workload API Server       │  (Inbound Adapter)
+│  SPIRE Agent Adapter       │  (Adapter Layer)
 │  internal/adapters/        │
-│  inbound/workloadapi/      │
+│  outbound/spire/agent.go   │
 └──────┬─────────────────────┘
-       │ 2. Extract caller credentials
-       │    (SO_PEERCRED: UID=1000, PID=12345)
+       │ 2. FetchX509Context(ctx)
+       │    - Uses go-spiffe SDK
+       │    - Connects to SPIRE Agent socket
        ▼
 ┌────────────────────────────┐
-│  IdentityClientService     │  (Application Layer)
-│  internal/app/             │
-└──────┬─────────────────────┘
-       │ 3. FetchIdentityDocument(*domain.Workload{UID:1000, PID:12345})
-       ▼
-┌────────────────────────────┐
-│  InMemoryAgent             │  (In-Memory Adapter)
-│  internal/adapters/        │
-│  outbound/inmemory/        │
-└──────┬─────────────────────┘
-       │ 4. Attest(workload)
-       ▼
-┌────────────────────────────┐
-│  WorkloadAttestor          │  (Attestor Adapter)
-│  Returns: [unix:uid:1000,  │
-│            unix:gid:1000]   │
-└──────┬─────────────────────┘
-       │ 5. FindBySelectors(selectors)
-       ▼
-┌────────────────────────────┐
-│  IdentityMapperRegistry    │  (Registry Adapter)
-│  Matches: unix:uid:1000 →  │
-│  spiffe://example.org/     │
-│  test-workload             │
-└──────┬─────────────────────┘
-       │ 6. IssueIdentity(namespace)
-       ▼
-┌────────────────────────────┐
-│  InMemoryServer            │  (Server Adapter)
-│  Generates X.509 cert with │
-│  SPIFFE ID in URI SAN      │
-└──────┬─────────────────────┘
-       │ 7. Return Identity{SVID, IdentityCredential}
-       ▼
-┌────────────────────────────┐
-│  Workload API Server       │
-│  Serializes to JSON        │
-└──────┬─────────────────────┘
-       │ 8. HTTP 200 OK
-       │    {spiffe_id, x509_svid, expires_at}
-       ▼
-┌─────────────┐
-│  Workload   │  Uses SVID for mTLS
-└─────────────┘
-```
-
-**Notes**:
-- Credential extraction happens at adapter boundary (Unix socket)
-- Attestation uses platform-specific mechanisms (Unix UID/GID)
-- Registry lookup uses AND logic (all selectors must match)
-- Server generates cryptographic material
-- Response is JSON over HTTP/Unix
-
-#### Production Mode (SPIRE)
-
-**Flow**: Workload → SPIRE Agent → SPIRE Server (external infrastructure)
-
-```
-┌─────────────┐
-│  Workload   │  (Process with UID 1000)
-└──────┬──────┘
-       │ 1. Connect to SPIRE Workload API
-       │    (Unix socket: /var/run/spire/sockets/agent.sock)
-       ▼
-┌────────────────────────────┐
-│  SPIRE Agent               │  (External Process)
-│  - Extracts credentials    │
+│  SPIRE Agent               │  (External - deployed in cluster)
 │  - Attests workload        │
+│  - Validates registration  │
 └──────┬─────────────────────┘
-       │ 2. Request SVID from SPIRE Server
-       │    (with workload selectors)
+       │ 3. Request SVID from Server
+       │    - Sends workload attestation
+       │    - Includes node attestation
        ▼
 ┌────────────────────────────┐
-│  SPIRE Server              │  (External Process)
-│  - Matches selectors       │
-│  - Issues SVID             │
-│  - Returns certificate     │
+│  SPIRE Server              │  (External - deployed in cluster)
+│  - Matches registration    │
+│  - Issues X.509 SVID       │
+│  - Signs with CA           │
 └──────┬─────────────────────┘
-       │ 3. Return SVID to workload
+       │ 4. Return SVID + Bundle
        ▼
-┌─────────────┐
-│  Workload   │  Uses SVID for mTLS
-└─────────────┘
+┌────────────────────────────┐
+│  SPIRE Agent               │
+│  - Caches SVID             │
+│  - Watches for updates     │
+└──────┬─────────────────────┘
+       │ 5. X509Context{SVID, Bundle}
+       ▼
+┌────────────────────────────┐
+│  SPIRE Agent Adapter       │
+│  - Converts to dto.Identity│
+│  - Extracts credentials    │
+└──────┬─────────────────────┘
+       │ 6. dto.Identity
+       ▼
+┌─────────────────────┐
+│  Application        │  Uses identity for mTLS
+│  - Certificate      │
+│  - Private key      │
+│  - Trust bundle     │
+└─────────────────────┘
 ```
 
-- ALL operations delegated to external SPIRE
-- No local registry, attestation, or selector matching
-- SPIRE Agent handles credential extraction automatically
-- SPIRE Server manages registration entries and selector matching
-- Your application simply calls `client.FetchX509SVID(ctx)` via Workload API
+**Key Points**:
+- **Delegated attestation**: SPIRE Agent handles all workload verification
+- **SPIRE-managed registration**: SPIRE Server matches workload to registration entries
+- **Automatic rotation**: SPIRE Agent automatically renews SVIDs before expiration
+- **Watch for updates**: Application can watch for identity updates via streaming API
+- **go-spiffe SDK**: All SPIRE communication uses official go-spiffe SDK
 
 ---
 
-### 2. CLI Demo Flow (Development Only)
+### 2. Application Bootstrap
 
-**Purpose**: Demonstrate hexagonal architecture without HTTP infrastructure
-
-**Important**: The CLI demo uses `InMemoryAgent` which is **NOT** used for HTTP mTLS examples. HTTP services use production `identityserver` adapter connecting to real SPIRE Workload API.
+**Flow**: main.go → Create SPIRE Client → Initialize Services → Start Server
 
 ```
 ┌────────────────┐
-│  cmd/main.go   │  (CLI Entry Point - dev only, build tag: dev)
+│  main.go       │  (Application entry point)
 └───────┬────────┘
-        │ 1. Bootstrap application with in-memory adapters
+        │ 1. Load configuration
+        │    - SPIRE socket path
+        │    - Server listen address
+        │    - mTLS settings
         ▼
 ┌────────────────────────────┐
-│  CLI Adapter               │  (Inbound Adapter)
-│  internal/adapters/        │  - Presentation layer only
-│  inbound/cli/              │  - Formats output
-│                            │  - Orchestrates demo flow
-└───────┬────────────────────┘
-        │ 2. c.application.Agent.FetchIdentityDocument(workload)
-        ▼
-┌────────────────────────────┐
-│  Application Layer         │  (Domain orchestration)
-│  internal/app/             │
-│  - Application struct      │
-│  - Holds Agent port        │
-└───────┬────────────────────┘
-        │ 3. Calls Agent port (outbound)
-        ▼
-┌────────────────────────────┐
-│  InMemoryAgent             │  (Outbound Adapter)
-│  internal/adapters/        │  - Implements ports.Agent interface
-│  outbound/inmemory/        │  - Infrastructure layer
-│  agent.go                  │  - Talks to InMemoryServer
-└───────┬────────────────────┘
-        │ 4. Attestation → Registry → Server
-        ▼
-┌────────────────────────────┐
-│  Infrastructure            │
-│  - WorkloadAttestor        │
-│  - Registry                │
-│  - Server (issues SVIDs)   │
-└────────────────────────────┘
-```
-
-#### Why Agent is in Outbound Adapters
-
-The agent is placed as an outbound adapter because:
-
-1. **Direction of dependency**: CLI (inbound) → Application → Agent (outbound) → Infrastructure
-2. **Infrastructure-facing**: Agent talks to SPIRE Server (infrastructure), not to domain logic
-3. **Port implementation**: Agent implements `ports.Agent` interface (outbound port)
-4. **Hexagonal principle**: Inbound adapters drive the application, outbound adapters are driven by it
-
-**Flow**:
-
-```
-CLI (drives application)
-  ↓
-Application (orchestrates use cases)
-  ↓
-Agent Port (outbound interface)
-  ↓
-InMemoryAgent (outbound adapter implementation)
-  ↓
-InMemoryServer (simulated SPIRE infrastructure)
-```
-
-Just because CLI calls it doesn't make it inbound. The agent is called BY the application to interact with infrastructure, making it outbound.
-
-#### CLI Demo vs HTTP mTLS
-
-| Aspect | CLI Demo | HTTP mTLS (Production) |
-|--------|----------|----------------------|
-| Entry Point | `cmd/main.go` | `examples/zeroconfig-example/main.go` |
-| Inbound Adapter | CLI (console) | identityserver (HTTP) |
-| Agent Used | InMemoryAgent | Production SPIRE Workload API |
-| Build Tag | `dev` | None (production code) |
-| Purpose | Architecture demo | Real mTLS communication |
-| Scope | Out of scope for "two services using mTLS" | **In scope** |
-
-**For HTTP mTLS**: Use `examples/zeroconfig-example/` which connects to real SPIRE via Workload API. This does NOT use InMemoryAgent.
-
----
-
-### 3. Bootstrap Flow
-
-**Flow**: main.go → Bootstrap → Create Dependencies → Wire Ports → Seed Registry → Seal
-
-```
-┌────────────────┐
-│  main.go       │  IDP_MODE=inmem
-└───────┬────────┘
-        │ 1. Select dependency factory
-        ▼
-┌────────────────────────────┐
-│  compose.NewInMemoryDeps() │  (Composition Root)
-└───────┬────────────────────┘
-        │ 2. Create all adapters
-        ▼
-┌────────────────────────────┐
-│  app.Bootstrap()           │
+│  app.Bootstrap()           │  (Application initialization)
 │                            │
-│  Step 1: Load Config       │
-│  ├─ ConfigLoader port      │
-│  └─ Returns: trust domain, │
-│     agent ID, workload     │
-│     entries                │
+│  Step 1: Create SPIRE      │
+│  Client                    │
+│  ├─ workloadapi.New()      │
+│  └─ Connect to SPIRE Agent │
 └───────┬────────────────────┘
         │
         ▼
 ┌────────────────────────────┐
-│  Step 2: Create Core Ports │
+│  Step 2: Create Agent      │
+│  Adapter                   │
+│  ├─ spire.NewAgent()       │
+│  └─ Wraps go-spiffe client │
+└───────┬────────────────────┘
+        │
+        ▼
+┌────────────────────────────┐
+│  Step 3: Create Parsers    │
 │  ├─ TrustDomainParser      │
 │  ├─ IdentityCredentialParser│
-│  ├─ IdentityDocumentProvider│
-│  ├─ TrustBundleProvider    │
-│  └─ WorkloadAttestor       │
+│  └─ TrustBundleProvider    │
 └───────┬────────────────────┘
         │
         ▼
 ┌────────────────────────────┐
-│  Step 3: Create Server     │
-│  ├─ Generate CA cert       │
-│  └─ Initialize trust domain│
+│  Step 4: Initialize        │
+│  Application               │
+│  └─ Wire all dependencies  │
 └───────┬────────────────────┘
         │
         ▼
 ┌────────────────────────────┐
-│  Step 4: Create Registry   │
-│  (Unsealed, mutable)       │
-└───────┬────────────────────┘
-        │
-        ▼
-┌────────────────────────────┐
-│  Step 5: Seed Registry     │
-│  For each workload entry:  │
-│  ├─ Parse selectors        │
-│  ├─ Parse identity credential│
-│  ├─ Create IdentityMapper  │
-│  └─ Registry.Seed(mapper)  │
-└───────┬────────────────────┘
-        │
-        ▼
-┌────────────────────────────┐
-│  Step 6: Seal Registry     │
-│  (Now immutable, read-only)│
-└───────┬────────────────────┘
-        │
-        ▼
-┌────────────────────────────┐
-│  Step 7: Create Agent      │
-│  ├─ Initialize agent SVID  │
-│  └─ Wire with registry,    │
-│     server, attestor       │
-└───────┬────────────────────┘
-        │
-        ▼
-┌────────────────────────────┐
-│  Step 8: Create Services   │
-│  ├─ IdentityClientService  │
-│  └─ DemoService (optional) │
-└───────┬────────────────────┘
-        │
-        ▼
-┌────────────────────────────┐
-│  Return Application        │
-│  ├─ Agent                  │
-│  ├─ Server                 │
-│  ├─ Registry               │
-│  ├─ IdentityClientService  │
-│  └─ Config                 │
+│  Step 5: Start Services    │
+│  ├─ HTTP server (optional) │
+│  ├─ Identity client        │
+│  └─ Ready for requests     │
 └────────────────────────────┘
 ```
 
-- Seeding happens **before** runtime (configuration phase)
-- Registry is **sealed** after seeding (immutable)
-- Agent gets own SVID during bootstrap
-- All dependencies wired at composition root
-- No runtime registration API
+**Key Points**:
+- **Single SPIRE connection**: One client connects to SPIRE Agent
+- **go-spiffe SDK**: All SPIRE operations use official SDK
+- **Automatic updates**: SPIRE client watches for SVID rotation
+- **Configuration-driven**: Socket path and settings from config
+- **Clean shutdown**: Graceful close of SPIRE connections
 
 ---
 
 ## Port Contracts
 
-All ports have complete error contracts documented in `docs/PORT_CONTRACTS.md` and `internal/ports/outbound.go`.
+All ports have complete error contracts documented in `docs/architecture/PORT_CONTRACTS.md` and `internal/ports/`.
 
 **Example Contract**:
 
 ```go
-// IdentityMapperRegistry provides read-only access to identity mappings
+// Agent provides access to SPIRE workload identities
 //
 // Error Contract:
-// - FindBySelectors returns domain.ErrNoMatchingMapper if no mapper matches
-// - FindBySelectors returns domain.ErrInvalidSelectors if selectors are nil/empty
-// - ListAll returns domain.ErrRegistryEmpty if no mappers seeded
-type IdentityMapperRegistry interface {
-    FindBySelectors(ctx context.Context, selectors *domain.SelectorSet) (*domain.IdentityMapper, error)
-    ListAll(ctx context.Context) ([]*domain.IdentityMapper, error)
+// - GetIdentity returns error if SPIRE client not initialized
+// - FetchIdentityDocument returns error if workload attestation fails
+// - WatchIdentityUpdates returns error if stream cannot be established
+type Agent interface {
+    // GetIdentity returns the agent's own identity
+    GetIdentity(ctx context.Context) (*dto.Identity, error)
+
+    // FetchIdentityDocument fetches identity for a workload from SPIRE
+    FetchIdentityDocument(ctx context.Context, workload *domain.Workload) (*dto.Identity, error)
+
+    // WatchIdentityUpdates streams identity updates
+    WatchIdentityUpdates(ctx context.Context) (<-chan *dto.Identity, error)
 }
 ```
 
 **Contract Guarantees**:
-1. **Exact error types**: Adapters **must** return documented sentinel errors
+1. **Exact error types**: Adapters **must** return documented errors
 2. **Validation**: Ports validate inputs and return typed errors
 3. **Idempotency**: Read operations are side-effect free
-4. **Immutability**: No mutations after sealing (registry)
+4. **SDK encapsulation**: go-spiffe types converted to domain types at adapter boundary
 
 ---
 
 ## Adapter Implementations
 
-### In-Memory Adapters (`internal/adapters/outbound/inmemory/`)
+### SPIRE SDK Adapters (`internal/adapters/outbound/spire/`)
 
-**Purpose**: Walking skeleton for development and testing
+**Status**: ✅ **Production Ready** - Fully implemented and tested
 
-**Characteristics**:
-- ✅ Pure Go implementation (no external dependencies)
-- ✅ Fast, deterministic
-- ✅ Complete port coverage
-- ✅ Typed domain errors
-- ❌ No real cryptographic verification (basic time checks only)
-- ❌ No persistence (ephemeral)
+**Purpose**: Integration with SPIRE infrastructure using go-spiffe SDK
 
-**Implementations**:
-- `InMemoryRegistry`: Map-based selector matching
-- `InMemoryServer`: Self-signed certificate generation
-- `InMemoryAgent`: Orchestrates attestation → matching → issuance
-- `UnixWorkloadAttestor`: UID-based selector generation
-- `InMemoryTrustDomainParser`: Simple string validation
-- `InMemoryIdentityCredentialParser`: URI parsing
-- `InMemoryTrustBundleProvider`: PEM-encoded multi-CA bundles
-- `InMemoryIdentityDocumentProvider`: Certificate generation and basic validation
-
----
-
-### Real SPIRE Adapters (`internal/adapters/outbound/spire/`)
-
-**Status**: ✅ **Complete** - Production SPIRE adapters fully implemented and tested
-
-**Purpose**: Production integration with go-spiffe SDK that fully delegates to external SPIRE infrastructure
-
-**Architecture**: Production mode delegates ALL operations to external SPIRE:
-- ❌ **No local registry** - SPIRE Server manages registration entries
-- ❌ **No local attestation** - SPIRE Agent performs workload attestation
-- ❌ **No local selector matching** - SPIRE Server matches selectors
-- ✅ **Full delegation** - Agent fetches SVIDs from SPIRE Workload API
+**Architecture**: All identity operations delegated to external SPIRE:
+- ✅ **SPIRE Agent**: Handles workload attestation automatically
+- ✅ **SPIRE Server**: Manages registration entries and issues SVIDs
+- ✅ **go-spiffe SDK**: Official SDK for all SPIRE communication
+- ✅ **Workload API**: Standard SPIRE protocol over Unix socket
 
 **Characteristics**:
 - ✅ Full cryptographic verification using go-spiffe SDK
 - ✅ Real SPIRE server/agent communication via Workload API
 - ✅ Bundle management and trust domain handling
-- ✅ X.509 SVID support
-- ✅ Automatic workload attestation through external SPIRE Agent
+- ✅ X.509 SVID support with automatic rotation
+- ✅ Streaming identity updates
 
-**Implemented**:
+**Implemented Components**:
 
-- `SPIREClient`: go-spiffe Workload API client wrapper with connection management
-- `Agent`: Production agent that **fully delegates** to external SPIRE (no local registry/attestor)
-  - Fetches SVIDs directly from SPIRE Workload API
-  - SPIRE Agent handles credential extraction and attestation
-  - SPIRE Server performs selector matching and SVID issuance
-- `Server`: Production server using SPIRE CA certificates and trust bundles
-- `Translation`: Domain model conversions using `spiffeid` package
-  - `TranslateSPIFFEIDToIdentityCredential`: Converts `spiffeid.ID` to domain types
-  - `TranslateTrustDomainToSPIFFEID`: Converts domain TrustDomain to `spiffeid.TrustDomain`
-  - `TranslateX509SVIDToIdentityDocument`: Converts `x509svid.SVID` to domain IdentityDocument
-- Identity operations using `workloadapi.Client`:
-  - `FetchX509SVID`: X.509 SVID fetching (delegates to SPIRE)
+1. **Agent** (`agent.go`):
+   - Wraps `workloadapi.X509Source` from go-spiffe SDK
+   - Fetches SVIDs directly from SPIRE Workload API
+   - Watches for identity updates and automatic rotation
+   - Converts SDK types to domain types at adapter boundary
 
-**Usage**:
+2. **Parsers** (`parsers.go`):
+   - `TrustDomainParser`: Converts strings to domain.TrustDomain
+   - `IdentityCredentialParser`: Parses SPIFFE IDs using spiffeid package
+   - Validates format according to SPIFFE specification
+
+3. **Translation** (`translation.go`):
+   - `TranslateSPIFFEIDToIdentityCredential`: spiffeid.ID → domain.IdentityCredential
+   - `TranslateTrustDomainToSPIFFEID`: domain.TrustDomain → spiffeid.TrustDomain
+   - `TranslateX509ContextToIdentity`: X509Context → dto.Identity
+
+**Usage Example**:
 ```go
-// Create SPIRE client
-client, err := spire.NewSPIREClient(ctx, config)
+// Create SPIRE client (uses go-spiffe SDK)
+source, err := workloadapi.NewX509Source(
+    ctx,
+    workloadapi.WithClientOptions(workloadapi.WithAddr("unix:///run/spire/sockets/agent.sock")),
+)
 
-// Create production agent (no registry/attestor needed - fully delegated to SPIRE)
-agent, err := spire.NewAgent(ctx, client, agentSpiffeID, parser)
+// Create agent adapter
+agent := spire.NewAgent(source, parsers)
 
-// Create production server
-server, err := spire.NewServer(ctx, client, trustDomainStr, trustDomainParser)
+// Fetch identity (delegates to SPIRE)
+identity, err := agent.GetIdentity(ctx)
 ```
 
-In production, selector domain logic is not required. SPIRE Server handles all selector matching against its own registration entries. See `docs/PRODUCTION_VS_DEVELOPMENT.md` for architecture comparison.
-
----
-
-### Workload API Client (`internal/adapters/outbound/workloadapi/`)
-
-**Purpose**: Client library for workloads to fetch SVIDs
-
-**Characteristics**:
-- HTTP client over Unix domain socket
-- Sends caller credentials (UID/PID/GID) in headers (demo)
-- Production: Relies on SO_PEERCRED for automatic credential extraction
-- JSON response parsing
-
-**Usage**:
-```go
-client := workloadapi.NewClient("/tmp/spire-agent/public/api.sock")
-svid, err := client.FetchX509SVID(ctx)
+**Integration Flow**:
+```
+Application → Agent Adapter → go-spiffe SDK → SPIRE Agent → SPIRE Server
 ```
 
 ---
@@ -748,39 +544,39 @@ svid, err := client.FetchX509SVID(ctx)
 **Pattern**: Factory interfaces for creating dependencies
 
 ```go
-type InMemoryDeps struct{}
-
-func (d *InMemoryDeps) CreateRegistry() ports.IdentityMapperRegistry {
-    return inmemory.NewInMemoryRegistry()
+type SPIREDeps struct {
+    socketPath string
 }
 
-func (d *InMemoryDeps) CreateServer(...) (ports.IdentityServer, error) {
-    return inmemory.NewInMemoryServer(...)
+func (d *SPIREDeps) CreateAgent(ctx context.Context, config *config.Config) (ports.Agent, error) {
+    client, err := workloadapi.New(ctx, workloadapi.WithAddr(d.socketPath))
+    if err != nil {
+        return nil, fmt.Errorf("failed to create SPIRE client: %w", err)
+    }
+    parser := spire.NewIdentityCredentialParser()
+    return spire.NewAgent(ctx, client, config.AgentSpiffeID, parser)
 }
 
 // ... other factory methods
 ```
 
-**Switching Implementations**:
+**Usage**:
 
 ```go
 // In main.go
-var deps compose.Dependencies
+config := config.Load()
+deps := compose.NewSPIREDeps(config.SocketPath)
 
-switch os.Getenv("IDP_MODE") {
-case "inmem":
-    deps = compose.NewInMemoryDeps()
-case "spire":
-    deps = compose.NewSPIREDeps(socketPath)  // Future
+app, err := app.Bootstrap(ctx, config, deps)
+if err != nil {
+    log.Fatalf("Bootstrap failed: %v", err)
 }
-
-app, _ := app.Bootstrap(ctx, configLoader, deps)
 ```
 
 **Benefits**:
-- Single place to change implementations (Open/Closed Principle)
-- Test with in-memory, deploy with real SPIRE
-- No domain changes when swapping adapters
+- Single place to configure SPIRE dependencies (Open/Closed Principle)
+- Centralized dependency creation and lifecycle management
+- No domain changes when updating adapter implementations
 
 ---
 
@@ -790,34 +586,33 @@ app, _ := app.Bootstrap(ctx, configLoader, deps)
 
 **Error Types** (`internal/domain/errors.go`):
 ```go
-// Registry errors
-var ErrNoMatchingMapper = errors.New("no identity mapper found matching selectors")
-var ErrRegistryEmpty = errors.New("registry is empty")
-var ErrRegistrySealed = errors.New("registry is sealed, cannot seed after bootstrap")
+// Identity credential errors
+var ErrInvalidIdentityCredential = errors.New("identity credential is invalid")
+var ErrInvalidTrustDomain = errors.New("trust domain is invalid")
 
 // Identity document errors
 var ErrIdentityDocumentExpired = errors.New("identity document is expired or not yet valid")
 var ErrIdentityDocumentInvalid = errors.New("identity document is invalid")
 var ErrCertificateChainInvalid = errors.New("certificate chain validation failed")
 
-// Attestation errors
-var ErrWorkloadAttestationFailed = errors.New("workload attestation failed")
-var ErrNoAttestationData = errors.New("no attestation data available")
+// Workload errors
+var ErrWorkloadNotFound = errors.New("workload not found")
+var ErrInvalidWorkload = errors.New("workload information is invalid")
 
-// ... 20+ total errors
+// ... additional domain errors
 ```
 
 **Usage**:
 ```go
 // Adapter wraps with context
-mapper, err := registry.FindBySelectors(ctx, selectors)
+doc, err := agent.GetIdentity(ctx)
 if err != nil {
-    return nil, fmt.Errorf("%w: no mapper matches selectors %v", domain.ErrNoMatchingMapper, selectors)
+    return nil, fmt.Errorf("failed to get agent identity: %w", err)
 }
 
 // Caller checks with errors.Is()
-if errors.Is(err, domain.ErrNoMatchingMapper) {
-    // Handle specific case
+if errors.Is(err, domain.ErrIdentityDocumentExpired) {
+    // Handle expired document
 }
 ```
 
@@ -846,30 +641,22 @@ workload := domain.NewWorkload(
 )
 ```
 
-**Selector Generation**:
-```go
-selectors := []string{
-    "unix:uid:1000",
-    "unix:gid:1000",
-    "unix:path:/usr/bin/workload",
-}
-```
-
 **Security Properties**:
-- Kernel-verified credentials (cannot be spoofed)
-- Per-connection isolation
-- Defense-in-depth: multiple selectors (AND logic)
+- Kernel-verified credentials (cannot be spoofed by workload process)
+- Per-connection isolation via Unix socket file descriptor
+- SPIRE Agent performs attestation based on process credentials
+- Workload identity determined by SPIRE registration entries
 
 ---
 
 ### 2. SVID Issuance
 
-**Flow**:
-1. Attest workload → get selectors
-2. Match selectors in registry (AND logic: **all** must match)
-3. Generate X.509 certificate with SPIFFE ID in URI SAN
-4. Sign with CA private key
-5. Return SVID to workload
+**Flow** (handled by SPIRE infrastructure):
+1. SPIRE Agent attests workload based on process credentials
+2. SPIRE Server matches workload to registration entries
+3. SPIRE Server generates X.509 certificate with SPIFFE ID in URI SAN
+4. SPIRE Server signs certificate with CA private key
+5. SPIRE Agent delivers SVID to workload via Workload API
 
 **Properties**:
 - Only registered workloads get SVIDs
@@ -919,22 +706,23 @@ tlsConfig := &tls.Config{
 Mock ports, test domain logic
 
 ```go
-type MockRegistry struct {
-    mapper *domain.IdentityMapper
-    err    error
+type MockX509Fetcher struct {
+    doc *domain.IdentityDocument
+    err error
 }
 
-func (m *MockRegistry) FindBySelectors(ctx, selectors) (*domain.IdentityMapper, error) {
-    return m.mapper, m.err
+func (m *MockX509Fetcher) FetchX509SVID(ctx context.Context) (*domain.IdentityDocument, error) {
+    return m.doc, m.err
 }
 
-func TestFetchWithNoMatch(t *testing.T) {
-    registry := &MockRegistry{err: domain.ErrNoMatchingMapper}
-    agent := inmemory.NewInMemoryAgent(..., registry, ...)
+func TestAgentRefreshExpiredDocument(t *testing.T) {
+    mockFetcher := &MockX509Fetcher{doc: freshDoc}
+    agent := spire.NewAgent(ctx, mockFetcher, agentSpiffeID, parser)
 
-    _, err := agent.FetchIdentityDocument(ctx, workload)
+    doc, err := agent.GetIdentity(ctx)
 
-    assert.True(t, errors.Is(err, domain.ErrNoMatchingMapper))
+    assert.NoError(t, err)
+    assert.False(t, doc.IsExpired())
 }
 ```
 
@@ -942,19 +730,20 @@ func TestFetchWithNoMatch(t *testing.T) {
 
 ### Integration Tests
 
-Use in-memory implementations for full flow
+Test with real SPIRE infrastructure in containerized environment
 
 ```go
-func TestWorkloadAttestation(t *testing.T) {
-    // Bootstrap with in-memory implementations
-    app, _ := app.Bootstrap(ctx, inmemory.NewInMemoryConfig(), compose.NewInMemoryDeps())
+func TestWorkloadIdentityFetch(t *testing.T) {
+    // Requires SPIRE Agent + Server running (e.g., via Docker Compose)
+    config := config.Load()
+    agent := spire.NewAgent(ctx, client, config.AgentSpiffeID, parser)
 
-    // Test full flow
-    workload := domain.NewWorkload(123, 1000, 1000, "/usr/bin/app")
-    doc, err := app.Agent.FetchIdentityDocument(ctx, workload)
+    // Fetch identity via SPIRE Workload API
+    doc, err := agent.GetIdentity(ctx)
 
     require.NoError(t, err)
-    assert.Equal(t, "spiffe://example.org/test-workload", doc.IdentityCredential().String())
+    assert.False(t, doc.IsExpired())
+    assert.Equal(t, config.TrustDomain, doc.IdentityCredential().TrustDomain())
 }
 ```
 
@@ -965,17 +754,16 @@ func TestWorkloadAttestation(t *testing.T) {
 **Purpose**: Verify port implementations obey contracts
 
 ```go
-func TestRegistryContract_FindBySelectors(t *testing.T) {
-    registry := inmemory.NewInMemoryRegistry()
+func TestAgentContract_GetIdentity(t *testing.T) {
+    agent := spire.NewAgent(ctx, client, agentSpiffeID, parser)
 
-    // Test error contract: nil selectors → ErrInvalidSelectors
-    _, err := registry.FindBySelectors(ctx, nil)
-    assert.True(t, errors.Is(err, domain.ErrInvalidSelectors))
+    // Test contract: returns non-expired document
+    doc, err := agent.GetIdentity(ctx)
+    require.NoError(t, err)
+    assert.False(t, doc.IsExpired())
 
-    // Test error contract: no match → ErrNoMatchingMapper
-    selectors := domain.NewSelectorSet(/* ... */)
-    _, err = registry.FindBySelectors(ctx, selectors)
-    assert.True(t, errors.Is(err, domain.ErrNoMatchingMapper))
+    // Test contract: refreshes when expired
+    // (implementation-specific test)
 }
 ```
 
@@ -1000,29 +788,7 @@ func TestRegistryContract_FindBySelectors(t *testing.T) {
 
 ---
 
-### 2. AND Logic for Selector Matching
-
-**Decision**: ALL mapper selectors must be present in discovered selectors
-
-**Rationale**:
-- Defense-in-depth: multiple attributes required
-- Precision: `unix:uid:1000 AND unix:gid:1000` is more specific than `unix:uid:1000 OR unix:gid:1000`
-- Matches SPIRE's registration entry semantics
-
-**Example**:
-```
-Mapper selectors: {unix:uid:1000, unix:gid:1000}
-Discovered selectors: {unix:uid:1000, unix:gid:1000, unix:path:/app}
-Result: MATCH (all mapper selectors present)
-
-Mapper selectors: {unix:uid:1000, unix:gid:1001}
-Discovered selectors: {unix:uid:1000, unix:gid:1000}
-Result: NO MATCH (unix:gid:1001 missing)
-```
-
----
-
-### 3. SDK-Agnostic Ports
+### 2. SDK-Agnostic Ports
 
 **Decision**: Ports use domain types (`*domain.TrustDomain`), not SDK types (`spiffeid.TrustDomain`)
 
@@ -1045,7 +811,7 @@ func (p *SDKTrustDomainParser) FromString(ctx context.Context, name string) (*do
 
 ---
 
-### 4. PEM-Encoded Trust Bundles
+### 3. PEM-Encoded Trust Bundles
 
 **Decision**: `TrustBundleProvider.GetBundle` returns `[]byte` (PEM), not parsed `*x509bundle.Bundle`
 

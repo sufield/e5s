@@ -47,8 +47,6 @@ The adapters act as an **anti-corruption layer** between the domain and external
 │   - TrustDomain                         │
 │   - IdentityCredential                  │
 │   - IdentityDocument                    │
-│   - Selector / SelectorSet              │
-│   - IdentityMapper (dev-only)           │
 │   - Workload                            │
 │   - Pure business logic                 │
 └─────────────────────────────────────────┘
@@ -108,61 +106,6 @@ id.IsInTrustDomain(td) // bool
 - Immutable after construction
 - See [INVARIANTS.md](INVARIANTS.md) for complete list
 
-#### **Selector** (`selector.go`)
-
-Key-value pair for workload attestation matching.
-
-```go
-selector, err := domain.NewSelector(domain.SelectorTypeWorkload, "uid", "1001")
-selector.Formatted() // "workload:uid:1001"
-selector.Type() // SelectorTypeWorkload
-selector.Key() // "uid"
-selector.Value() // "1001"
-
-// Handles multi-colon values
-k8sSelector, err := domain.ParseSelectorFromString("k8s:pod:ns:default:podname")
-k8sSelector.Value() // "ns:default:podname"
-```
-
-**Improvements**:
-
-- Uses sentinel errors (`ErrSelectorInvalid`) for validation
-- Robust multi-colon value parsing with `strings.Join()`
-- Field-by-field equality checking
-- Formatted string caching for performance
-
-**Invariants**:
-
-- Key and value are never empty after construction
-- Formatted matches "type:key:value" pattern
-- Type, key, and value are immutable
-- See [INVARIANTS.md](INVARIANTS.md) for complete list
-
-#### **SelectorSet** (`selector_set.go`)
-
-Collection of selectors for matching with automatic deduplication.
-
-```go
-set := domain.NewSelectorSet()
-set.Add(selector)
-set.Add(selector) // Duplicate - not added
-set.Contains(selector) // true
-len(set.All()) // 1 (no duplicates)
-```
-
-**Set Semantics**:
-
-- Enforces uniqueness automatically in `Add()`
-- True mathematical set behavior
-- Order-preserving (slice-based)
-- Defensive copy returned by `All()`
-
-**Invariants**:
-
-- Set contains no duplicate selectors (uniqueness)
-- `All()` returns defensive copy to prevent external mutation
-- See [INVARIANTS.md](INVARIANTS.md) for complete list
-
 ### Entities
 
 Entities have identity and lifecycle.
@@ -220,102 +163,21 @@ err := workload.Validate()
 - Path must be non-empty
 - See [INVARIANTS.md](INVARIANTS.md) for complete list
 
-#### **IdentityMapper** (`identity_mapper.go`) - Dev-Only
-
-**Build Tag**: `//go:build dev`
-
-Maps workload selectors to identity credentials. Represents SPIRE's registration entry concept for in-memory development mode.
-
-**Design Philosophy**:
-- **Dev-Only**: Only included in development builds
-- **Production**: SPIRE Server manages registration entries via CLI: `spire-server entry create`
-- **Educational**: Helps understand SPIRE's authorization model without deploying infrastructure
-
-```go
-// Create mapper requiring multiple selectors
-uidSelector := domain.MustParseSelectorFromString("unix:uid:1000")
-nsSelector := domain.MustParseSelectorFromString("k8s:namespace:prod")
-
-selectorSet := domain.NewSelectorSet()
-selectorSet.Add(uidSelector)
-selectorSet.Add(nsSelector)
-
-mapper, err := domain.NewIdentityMapper(identityCredential, selectorSet)
-if err != nil {
-    // Handles nil checks, empty selectors
-}
-
-// Set parent relationship (e.g., workload's parent is agent)
-mapper.SetParentID(agentIdentityCredential)
-
-// Authorization check during workload attestation (AND logic)
-// Workload MUST have ALL mapper selectors to qualify
-discoveredSelectors := domain.NewSelectorSet()
-discoveredSelectors.Add(uidSelector)
-discoveredSelectors.Add(nsSelector)
-discoveredSelectors.Add(otherSelector) // Extra selectors OK
-
-if mapper.MatchesSelectors(discoveredSelectors) {
-    // TRUE: workload has ALL required selectors (uid:1000 AND ns:prod)
-    // Can issue this SPIFFE ID
-}
-```
-
-**AND Semantics**:
-
-- ALL mapper selectors must be present in discovered selectors
-- Extra discovered selectors are ignored
-- Per SPIRE specification for strong attestation
-
-**Why Dev-Only**:
-
-- Real SPIRE Server manages registration via persistent database
-- Production workloads only fetch identities via Workload API
-- In-memory version enables local development and testing
-
-**Invariants**:
-
-- IdentityCredential is never nil after construction
-- Selectors is never nil or empty after construction
-- MatchesSelectors() uses AND logic (ALL selectors required)
-- See [INVARIANTS.md](INVARIANTS.md) for complete list
-
-### Domain Services
-
-#### **AttestationService** (`attestation.go`)
-
-Domain logic for attestation processes with sentinel error returns.
-
-```go
-service := domain.NewAttestationService()
-
-// Match workload to identity mapper (pure domain logic)
-// This demonstrates the authorization flow without SPIRE infrastructure
-result, err := service.AttestWorkload(selectors, mappers)
-if err != nil {
-    // Check error using errors.Is()
-    if errors.Is(err, domain.ErrNoMatchingMapper) {
-        // No mapper found matching selectors
-    }
-    if errors.Is(err, domain.ErrInvalidSelectors) {
-        // Invalid selectors provided
-    }
-}
-```
+## Domain Errors
 
 **Sentinel Errors**: The domain uses sentinel errors (`errors.go`) for better error handling:
 
-- `ErrNoMatchingMapper` - No identity mapper matches selectors
-- `ErrInvalidSelectors` - Selectors are nil or empty
 - `ErrInvalidIdentityCredential` - SPIFFE ID is nil or malformed
-- `ErrWorkloadAttestationFailed` - Workload attestation failed
-- `ErrIdentityDocumentExpired`, `ErrIdentityDocumentInvalid`, `ErrIdentityDocumentMismatch` - Document validation errors
-- `ErrCANotInitialized` - CA not available
-- `ErrServerUnavailable` - Server unreachable
+- `ErrInvalidTrustDomain` - Trust domain is invalid
+- `ErrWorkloadNotFound` - Workload not found
+- `ErrInvalidWorkload` - Workload information is invalid
+- `ErrIdentityDocumentExpired` - Identity document is expired or not yet valid
+- `ErrIdentityDocumentInvalid` - Identity document is invalid
+- `ErrCertificateChainInvalid` - Certificate chain validation failed
 
 Use with `errors.Is()` for checking and `fmt.Errorf("%w", ...)` for wrapping with context.
 
-Full chain-of-trust validation is handled by adapters using go-spiffe SDK's `x509svid.ParseAndVerify` and `Verify`, not reimplemented in domain.
+Full chain-of-trust validation is handled by adapters using go-spiffe SDK's verification capabilities, not reimplemented in domain.
 
 ## Usage in Ports
 
@@ -366,99 +228,13 @@ type IdentityProvider interface {
 }
 ```
 
-### Dev-Only Ports
-
-Used in development mode with in-memory implementations:
-
-```go
-// internal/ports/outbound_dev.go (//go:build dev)
-
-type IdentityMapperRegistry interface {
-    FindBySelectors(ctx context.Context, selectors *domain.SelectorSet) (*domain.IdentityMapper, error)
-    ListAll(ctx context.Context) ([]*domain.IdentityMapper, error)
-}
-
-type WorkloadAttestor interface {
-    Attest(ctx context.Context, workload *domain.Workload) ([]string, error)
-}
-
-type IdentityServer interface {
-    IssueIdentity(ctx context.Context, identityCredential *domain.IdentityCredential) (*domain.IdentityDocument, error)
-    GetTrustDomain() *domain.TrustDomain
-    GetCACertPEM() []byte
-}
-
-type IdentityDocumentCreator interface {
-    CreateX509IdentityDocument(ctx context.Context, identityCredential *domain.IdentityCredential, caCert interface{}, caKey interface{}) (*domain.IdentityDocument, error)
-}
-
-type IdentityDocumentProvider interface {
-    IdentityDocumentCreator
-    IdentityDocumentValidator
-}
-
-type TrustBundleProvider interface {
-    GetBundle(ctx context.Context, trustDomain *domain.TrustDomain) ([]byte, error)
-    GetBundleForIdentity(ctx context.Context, identityCredential *domain.IdentityCredential) ([]byte, error)
-}
-```
-
 **See Also**: [PORT_CONTRACTS.md](PORT_CONTRACTS.md) for complete port contracts and error handling
 
 ## Translation in Adapters
 
 Adapters translate between SDK types and domain types:
 
-### Dev-Mode Adapter (In-Memory)
-
-```go
-// In internal/adapters/outbound/inmemory/server.go
-type InMemoryServer struct {
-    trustDomain         *domain.TrustDomain
-    caCert              *x509.Certificate
-    caKey               *rsa.PrivateKey
-    certificateProvider ports.IdentityDocumentProvider
-}
-
-func (s *InMemoryServer) IssueIdentity(ctx context.Context, identityCredential *domain.IdentityCredential) (*domain.IdentityDocument, error) {
-    if identityCredential == nil {
-        return nil, fmt.Errorf("%w: identity credential cannot be nil", domain.ErrIdentityDocumentInvalid)
-    }
-
-    // Enforce trust-domain parity
-    if identityCredential.TrustDomain().String() != s.trustDomain.String() {
-        return nil, fmt.Errorf("%w: trust domain mismatch", domain.ErrIdentityDocumentInvalid)
-    }
-
-    if s.caCert == nil || s.caKey == nil {
-        return nil, fmt.Errorf("%w: CA not initialized", domain.ErrCANotInitialized)
-    }
-
-    // Delegate to certificate provider port
-    doc, err := s.certificateProvider.CreateX509IdentityDocument(ctx, identityCredential, s.caCert, s.caKey)
-    if err != nil {
-        return nil, fmt.Errorf("%w: %w", domain.ErrServerUnavailable, err)
-    }
-
-    return doc, nil
-}
-
-func (s *InMemoryServer) GetTrustDomain() *domain.TrustDomain {
-    return s.trustDomain
-}
-
-func (s *InMemoryServer) GetCACertPEM() []byte {
-    if s.caCert == nil {
-        return nil
-    }
-    return pem.EncodeToMemory(&pem.Block{
-        Type:  "CERTIFICATE",
-        Bytes: s.caCert.Raw,
-    })
-}
-```
-
-### Production Adapter (SPIRE SDK)
+### SPIRE SDK Adapter
 
 ```go
 // In internal/adapters/outbound/spire/translation.go
@@ -568,25 +344,19 @@ func TranslateIdentityCredentialToSPIFFEID(identityCredential *domain.IdentityCr
 3. **Flexibility**: Can swap SPIFFE SDK or implementation without changing domain
 4. **Clear Boundaries**: Anti-corruption layer provides clear translation points
 5. **Maintainability**: SDK updates only affect adapters, not core domain
-6. **Dev/Prod Separation**: Build tags enable dev-only entities for learning without affecting production
 
 ## Domain Files
 
 Current domain implementation:
 
-| File | Purpose | Build Tag |
-|------|---------|-----------|
-| `trust_domain.go` | Trust domain value object | (always) |
-| `identity_credential.go` | SPIFFE ID value object | (always) |
-| `identity_document.go` | SVID entity | (always) |
-| `selector.go` | Selector value object | (always) |
-| `selector_set.go` | Selector collection | (always) |
-| `selector_type.go` | Selector type enum | (always) |
-| `workload.go` | Workload entity | (always) |
-| `identity_mapper.go` | Identity mapper entity | `dev` |
-| `attestation.go` | Attestation service | (always) |
-| `errors.go` | Sentinel errors | (always) |
-| `doc.go` | Package documentation | (always) |
+| File | Purpose |
+|------|---------|
+| `trust_domain.go` | Trust domain value object |
+| `identity_credential.go` | SPIFFE ID value object |
+| `identity_document.go` | SVID entity |
+| `workload.go` | Workload entity |
+| `errors.go` | Sentinel errors |
+| `doc.go` | Package documentation |
 
 ## References
 
