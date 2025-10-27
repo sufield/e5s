@@ -29,7 +29,7 @@ An in-memory SPIRE implementation demonstrates:
 
 ## Getting Started
 
-**👉 New to this library?** Start with the [Quick Start Guide](docs/guide/QUICKSTART.md) for step-by-step instructions to deploy SPIRE and run examples.
+**👉 New to this library?** Start with the [Quick Start Guide](docs/tutorials/QUICKSTART.md) for step-by-step instructions to deploy SPIRE and run examples.
 
 The guide covers:
 - Deploying SPIRE infrastructure (Minikube)
@@ -39,7 +39,7 @@ The guide covers:
 
 ## API Examples
 
-Once you have SPIRE running (see [Quick Start Guide](docs/guide/QUICKSTART.md)), here's how to use the API:
+Once you have SPIRE running (see [Quick Start Guide](docs/tutorials/QUICKSTART.md)), here's how to use the API:
 
 ### Zero-Config mTLS Server
 
@@ -363,7 +363,7 @@ This project applies **Hexagonal Architecture** (Ports & Adapters pattern):
 
 Domain never depends on adapters. Adapters depend on ports.
 
-See [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) for detailed architecture documentation.
+See [docs/explanation/ARCHITECTURE.md](docs/explanation/ARCHITECTURE.md) for detailed architecture documentation.
 
 ## Domain Entities
 
@@ -391,7 +391,7 @@ type IdentityDocument struct {
 }
 ```
 
-See [docs/architecture/DOMAIN.md](docs/architecture/DOMAIN.md) for complete domain model documentation.
+See [docs/reference/DOMAIN.md](docs/reference/DOMAIN.md) for complete domain model documentation.
 
 ## Testing
 
@@ -417,7 +417,7 @@ PBT_MAX_COUNT=10000 go test -v -run "Properties" ./internal/...
 go test -fuzz=FuzzNormalizePath -fuzztime=30s ./internal/domain
 ```
 
-See [docs/engineering/TESTING.md](docs/engineering/TESTING.md) for complete testing guide.
+See [docs/reference/TESTING.md](docs/reference/TESTING.md) for complete testing guide.
 
 ## Security
 
@@ -445,22 +445,31 @@ See [security/README.md](security/README.md) for complete security documentation
 
 ## Documentation
 
-Comprehensive documentation is organized by audience and purpose:
+This project uses the [Diátaxis framework](https://diataxis.fr/) for clear, user-focused documentation.
 
-### Getting Started
-- **[docs/guide/QUICKSTART.md](docs/guide/QUICKSTART.md)** - Step-by-step guide to run examples ⭐
-- [docs/guide/TROUBLESHOOTING.md](docs/guide/TROUBLESHOOTING.md) - Common issues and solutions
-- [docs/guide/BUILD_MODES.md](docs/guide/BUILD_MODES.md) - Dev vs prod builds
+**Start here**: [Documentation Index](docs/README.md)
 
-### Architecture & Design
-- [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) - System design
-- [docs/architecture/PORT_CONTRACTS.md](docs/architecture/PORT_CONTRACTS.md) - API contracts
-- [docs/architecture/DOMAIN.md](docs/architecture/DOMAIN.md) - Domain model
+### Quick Links by Purpose
 
-### Testing & Verification
-- [docs/engineering/TESTING.md](docs/engineering/TESTING.md) - Testing strategy
-- [docs/engineering/VERIFICATION.md](docs/engineering/VERIFICATION.md) - Quality assurance
-- [docs/engineering/pbt.md](docs/engineering/pbt.md) - Property-based testing guide
+- 🎓 **[Tutorials](docs/tutorials/)** - Learn by doing
+  - [Quick Start Guide](docs/tutorials/QUICKSTART.md) - Get up and running ⭐
+  - [Editor Setup](docs/tutorials/EDITOR_SETUP.md) - Configure your IDE
+  - [Examples](docs/tutorials/examples/) - Hands-on code examples
+
+- 🔧 **[How-To Guides](docs/how-to-guides/)** - Solve specific problems
+  - [Production Deployment](docs/how-to-guides/PRODUCTION_WORKLOAD_API.md) - Deploy with kernel attestation
+  - [Troubleshooting](docs/how-to-guides/TROUBLESHOOTING.md) - Debug common issues
+  - [Security Tools](docs/how-to-guides/security-tools.md) - Set up security scanning
+
+- 📖 **[Reference](docs/reference/)** - Technical specifications
+  - [Port Contracts](docs/reference/PORT_CONTRACTS.md) - Interface definitions
+  - [Domain Model](docs/reference/DOMAIN.md) - Core domain types
+  - [Testing Guide](docs/reference/TESTING.md) - Comprehensive testing docs
+
+- 💡 **[Explanation](docs/explanation/)** - Understand the design
+  - [Architecture](docs/explanation/ARCHITECTURE.md) - System design rationale
+  - [Design by Contract](docs/explanation/DESIGN_BY_CONTRACT.md) - Why we use contracts
+  - [SPIFFE ID Refactoring](docs/explanation/SPIFFE_ID_REFACTORING.md) - Design evolution
 
 See [docs/README.md](docs/README.md) for the complete documentation index.
 

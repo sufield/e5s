@@ -1,5 +1,25 @@
 # SPIRE mTLS Examples
 
+---
+
+## ⚠️  **STOP! Read Prerequisites First** ⚠️
+
+**Before running these examples, you MUST read [PREREQUISITES.md](PREREQUISITES.md).**
+
+This document explains:
+- ✅ What SPIRE is and why registration is required
+- ✅ Who registers workloads and when
+- ✅ Common errors if you skip registration
+- ✅ The correct order of operations
+
+**If you skip the prerequisites, your workloads will fail with errors like "no identity issued".**
+
+👉 **Start here**: [PREREQUISITES.md](PREREQUISITES.md)
+
+---
+
+## Overview
+
 This directory contains examples demonstrating mTLS authentication using SPIFFE/SPIRE.
 
 ## Available Examples
@@ -94,7 +114,16 @@ This example demonstrates:
 
 **Architecture**: The example uses the zero-config API which wraps the production `identityserver` adapter with intelligent defaults.
 
+---
+
 ## Prerequisites
+
+**⚠️  If you haven't read [PREREQUISITES.md](PREREQUISITES.md) yet, stop here and read it first!**
+
+This guide assumes you understand:
+- What SPIRE is and how it issues identities
+- That workloads must be registered before deployment
+- The correct order of operations (SPIRE → registration → deployment)
 
 ### Required Tools
 
@@ -118,6 +147,23 @@ make check-prereqs-k8s
 ---
 
 ## Quick Start
+
+**Complete Flow Overview**:
+```
+Step 1: Start SPIRE infrastructure (server + agent)
+   ↓
+Step 2: Build your application binaries
+   ↓
+Step 3: ⚠️  REGISTER workloads (tells SPIRE who can get identities)
+   ↓
+Step 4: Deploy your application pods
+   ↓
+Step 5: Test that mTLS is working
+```
+
+**Critical**: Do NOT skip Step 3. Without workload registration, your applications cannot get identities and will fail.
+
+---
 
 ### 1. Start SPIRE Infrastructure
 
@@ -160,9 +206,13 @@ ls -lh bin/mtls-server
 
 ---
 
-### 3. Register Workloads with SPIRE
+### 3. Register Workloads with SPIRE (CRITICAL - Do This Before Deployment!)
 
-Create SPIRE registration entries for the server and client workloads.
+**⚠️  This step is REQUIRED before deploying your workloads.**
+
+Without registration, your workloads cannot get SPIFFE identities and will fail to start.
+
+This step creates SPIRE registration entries that tell SPIRE which pods are allowed to receive which identities.
 
 #### Get Agent SPIFFE ID
 
@@ -193,7 +243,18 @@ kubectl exec -n spire-system statefulset/spire-server -c spire-server -- \
     -dns localhost
 ```
 
-**Why DNS SANs?** The server certificate includes these DNS names for TLS hostname verification. Include all DNS names you'll use to reach the service.
+**What does this command do?**
+
+This registration entry tells SPIRE:
+- **Identity to issue**: `spiffe://example.org/server`
+- **Who can issue it**: The SPIRE agent with ID `$AGENT_ID`
+- **How to identify the workload**:
+  - Must be in namespace `default`
+  - Must use ServiceAccount `default`
+  - Must have container name `mtls-server`
+- **DNS names for TLS**: Include all hostnames you'll use to reach the service
+
+**Important**: ALL selectors must match for the workload to get this identity. If your pod uses a different namespace or container name, it won't match and won't get an identity.
 
 #### Register Client Workload
 
