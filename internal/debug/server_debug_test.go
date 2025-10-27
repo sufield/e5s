@@ -4,6 +4,7 @@ package debug
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -489,6 +490,108 @@ func TestServer_ConcurrentFaultAccess(t *testing.T) {
 		<-done
 	}
 	// If we get here without deadlock or panic, concurrent access is safe
+}
+
+// TestServer_handleIdentity_NoIntrospector tests identity endpoint without introspector
+func TestServer_handleIdentity_NoIntrospector(t *testing.T) {
+	srv := &Server{
+		mux:          http.NewServeMux(),
+		introspector: nil, // No introspector provided
+	}
+	srv.registerHandlers()
+
+	req := httptest.NewRequest(http.MethodGet, "/_debug/identity", nil)
+	w := httptest.NewRecorder()
+
+	srv.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotImplemented {
+		t.Errorf("Expected status 501, got %d", w.Code)
+	}
+
+	if !strings.Contains(w.Body.String(), "not available") {
+		t.Error("Expected error message about introspection not available")
+	}
+}
+
+// TestServer_handleIdentity_WithIntrospector tests identity endpoint with mock introspector
+func TestServer_handleIdentity_WithIntrospector(t *testing.T) {
+	// Create mock introspector
+	mockIntrospector := &mockIntrospector{
+		snapshot: Snapshot{
+			Mode:        "debug",
+			TrustDomain: "example.org",
+			Adapter:     "spire",
+			Certs: []CertView{
+				{
+					SpiffeID:         "spiffe://example.org/test",
+					ExpiresInSeconds: 3600,
+					RotationPending:  false,
+				},
+			},
+			RecentDecisions: []AuthDecision{
+				{
+					CallerSPIFFEID: "spiffe://example.org/client",
+					Resource:       "/api/test",
+					Decision:       "ALLOW",
+					Reason:         "valid certificate",
+				},
+			},
+		},
+	}
+
+	srv := &Server{
+		mux:          http.NewServeMux(),
+		introspector: mockIntrospector,
+	}
+	srv.registerHandlers()
+
+	req := httptest.NewRequest(http.MethodGet, "/_debug/identity", nil)
+	w := httptest.NewRecorder()
+
+	srv.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+
+	var snapshot Snapshot
+	if err := json.NewDecoder(w.Body).Decode(&snapshot); err != nil {
+		t.Fatalf("Failed to decode snapshot: %v", err)
+	}
+
+	if snapshot.Mode != "debug" {
+		t.Errorf("Expected mode=debug, got %s", snapshot.Mode)
+	}
+
+	if snapshot.TrustDomain != "example.org" {
+		t.Errorf("Expected trustDomain=example.org, got %s", snapshot.TrustDomain)
+	}
+
+	if len(snapshot.Certs) != 1 {
+		t.Fatalf("Expected 1 cert, got %d", len(snapshot.Certs))
+	}
+
+	if snapshot.Certs[0].SpiffeID != "spiffe://example.org/test" {
+		t.Errorf("Expected spiffeID=spiffe://example.org/test, got %s", snapshot.Certs[0].SpiffeID)
+	}
+
+	if len(snapshot.RecentDecisions) != 1 {
+		t.Fatalf("Expected 1 decision, got %d", len(snapshot.RecentDecisions))
+	}
+
+	if snapshot.RecentDecisions[0].Decision != "ALLOW" {
+		t.Errorf("Expected decision=ALLOW, got %s", snapshot.RecentDecisions[0].Decision)
+	}
+}
+
+// mockIntrospector is a test double for debug.Introspector
+type mockIntrospector struct {
+	snapshot Snapshot
+}
+
+func (m *mockIntrospector) SnapshotData(ctx context.Context) Snapshot {
+	return m.snapshot
 }
 
 // Helper functions

@@ -10,8 +10,9 @@ import (
 
 // Server is the debug HTTP server
 type Server struct {
-	addr string
-	mux  *http.ServeMux
+	addr         string
+	mux          *http.ServeMux
+	introspector Introspector
 }
 
 // FaultRequest represents a fault injection request
@@ -26,14 +27,18 @@ type FaultRequest struct {
 
 // Start starts the debug HTTP server (debug build only).
 // The server runs on localhost only and should never be exposed to external networks.
-func Start() {
+//
+// The introspector parameter provides access to sanitized identity state.
+// It can be nil, in which case the /_debug/identity endpoint will not be available.
+func Start(introspector Introspector) {
 	if !Active.LocalDebugServer {
 		return
 	}
 
 	srv := &Server{
-		addr: Active.DebugServerAddr,
-		mux:  http.NewServeMux(),
+		addr:         Active.DebugServerAddr,
+		mux:          http.NewServeMux(),
+		introspector: introspector,
 	}
 	srv.registerHandlers()
 
@@ -60,6 +65,7 @@ func (s *Server) registerHandlers() {
 	s.mux.HandleFunc("/_debug/faults", s.handleFaults)
 	s.mux.HandleFunc("/_debug/faults/reset", s.handleFaultsReset)
 	s.mux.HandleFunc("/_debug/config", s.handleConfig)
+	s.mux.HandleFunc("/_debug/identity", s.handleIdentity)
 }
 
 // handleIndex serves the debug interface index page.
@@ -78,6 +84,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 <h2>Available Endpoints:</h2>
 <ul>
 <li><a href="/_debug/state">/_debug/state</a> - View current state</li>
+<li><a href="/_debug/identity">/_debug/identity</a> - View identity snapshot (certs, auth decisions)</li>
 <li><a href="/_debug/faults">/_debug/faults</a> - View/modify fault injection (GET/POST)</li>
 <li><a href="/_debug/faults/reset">/_debug/faults/reset</a> - Reset all faults (POST)</li>
 <li><a href="/_debug/config">/_debug/config</a> - View debug configuration</li>
@@ -198,4 +205,18 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(config)
+}
+
+// handleIdentity returns a snapshot of the current identity state.
+// This endpoint is only available if an introspector was provided to Start().
+func (s *Server) handleIdentity(w http.ResponseWriter, r *http.Request) {
+	if s.introspector == nil {
+		http.Error(w, "Identity introspection not available (no introspector provided)", http.StatusNotImplemented)
+		return
+	}
+
+	snapshot := s.introspector.SnapshotData(r.Context())
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(snapshot)
 }
