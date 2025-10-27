@@ -160,11 +160,26 @@ When adding new documentation:
 4. **Update this index**: Add a link to the relevant section above
 5. **Check links**: Ensure all cross-references work
 
-**Good practices**:
-- Tutorials should be complete, self-contained lessons
-- How-to guides should focus on one specific task
-- Reference docs should be comprehensive and precise
-- Explanations should provide context, not instructions
+### Decision Matrix: Where Does a New Doc Go?
+
+**Is it teaching someone to use the system for the first time?**
+→ `tutorials/`
+
+**Is it solving a specific task or problem?**
+→ `how-to-guides/`
+
+**Is it documenting an API, contract, or specification?**
+→ `reference/`
+
+**Is it explaining why we made a design decision?**
+→ `explanation/`
+
+### Good Practices
+
+- **Tutorials** should be complete, self-contained lessons
+- **How-to guides** should focus on one specific task
+- **Reference** docs should be comprehensive and precise
+- **Explanations** should provide context, not instructions
 
 ---
 
