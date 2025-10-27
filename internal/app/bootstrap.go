@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/pocket/hexagon/spire/internal/adapters/outbound/compose"
 	"github.com/pocket/hexagon/spire/internal/ports"
 )
 
@@ -15,7 +14,7 @@ import (
 // - Applies a default timeout if the caller didn't set one
 // - Builds an agent via SPIRE (Workload API)
 // - Returns minimal Application for workloads
-func Bootstrap(ctx context.Context, configLoader ports.ConfigLoader, factory *compose.SPIREAdapterFactory) (*Application, error) {
+func Bootstrap(ctx context.Context, configLoader ports.ConfigLoader, factory ports.AdapterFactory) (*Application, error) {
 	if configLoader == nil {
 		return nil, fmt.Errorf("config loader is nil")
 	}

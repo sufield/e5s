@@ -1,13 +1,22 @@
-// Package app contains the application's composition root.
-// It wires adapters and domain logic together and exposes a minimal
-// Application type used by inbound adapters.
+// Package app contains the application's composition root and use-case orchestration.
+//
+// This package is the APPLICATION LAYER in hexagonal architecture - it orchestrates
+// domain objects and port interfaces to implement business use cases. It NEVER
+// depends on concrete adapters, only on port interfaces.
+//
+// Hexagonal Architecture Boundaries:
+//   - App imports from: internal/domain, internal/ports (interfaces only)
+//   - App NEVER imports from: internal/adapters/* (concrete implementations)
+//   - App receives: port interfaces (via dependency injection)
+//   - App coordinates: domain logic, use case workflows
+//   - Concrete adapter wiring: Done in cmd/main.go or examples/
 //
 // Responsibilities
 //   - Bootstrap the application's dependencies via `Bootstrap` (see bootstrap.go).
-//     Bootstrap loads configuration, constructs the SPIRE agent adapter, and
-//     returns a wired Application.
+//     Bootstrap loads configuration via ports.ConfigLoader and constructs components
+//     via ports.AdapterFactory (both are interfaces).
 //   - Provide the Application type that holds references to configuration and
-//     the SPIRE agent for workload identity operations.
+//     port interfaces for workload identity operations.
 //
 // Files
 // - application.go

@@ -1,7 +1,17 @@
 // Package domain contains the domain model for the SPIRE wrapper.
-// It focuses on core business concepts without adapter-specific logic or I/O.
-// Parsing, validation, and crypto operations are delegated to adapter ports;
-// domain models remain simple value objects.
+//
+// This package is the CORE of the hexagonal architecture - it defines business
+// entities and value objects with ZERO dependencies on external frameworks,
+// SDKs, or infrastructure. It focuses on pure business logic and domain concepts.
+//
+// Hexagonal Architecture Boundaries:
+//   - Domain NEVER imports from: internal/adapters, internal/ports, pkg/, external SDKs
+//   - Domain ONLY imports from: standard library, other domain types
+//   - Domain exposes: value objects, entities, domain errors
+//   - Domain does NOT: perform I/O, call external APIs, depend on frameworks
+//
+// All parsing, validation, crypto, and I/O operations are delegated to adapter
+// ports (defined in internal/ports). Domain models remain simple value objects.
 //
 // Files and types
 // -----------------------
