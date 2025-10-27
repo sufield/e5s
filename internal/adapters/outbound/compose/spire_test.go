@@ -128,6 +128,8 @@ func TestSPIREAdapterFactory_Close_Idempotent(t *testing.T) {
 }
 
 // TestSPIREAdapterFactory_CreateParsers verifies parser creation returns non-nil.
+// Note: Parsers are stateless and don't require a client. Validator requires a
+// client and is tested separately.
 func TestSPIREAdapterFactory_CreateParsers(t *testing.T) {
 	factory := &SPIREAdapterFactory{
 		config: &spire.Config{},
@@ -147,11 +149,47 @@ func TestSPIREAdapterFactory_CreateParsers(t *testing.T) {
 			t.Error("expected non-nil identity credential parser")
 		}
 	})
+}
 
-	t.Run("CreateIdentityDocumentValidator", func(t *testing.T) {
-		validator := factory.CreateIdentityDocumentValidator()
-		if validator == nil {
-			t.Error("expected non-nil identity document validator")
+// TestSPIREAdapterFactory_CreateIdentityDocumentValidator_PanicsWhenClosed verifies
+// that CreateIdentityDocumentValidator panics if factory is closed or uninitialized.
+func TestSPIREAdapterFactory_CreateIdentityDocumentValidator_PanicsWhenClosed(t *testing.T) {
+	t.Run("panics with nil client", func(t *testing.T) {
+		factory := &SPIREAdapterFactory{
+			config: &spire.Config{},
+			client: nil,
 		}
+
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("expected panic when client is nil")
+			} else if msg, ok := r.(string); ok {
+				if msg != "SPIREAdapterFactory.CreateIdentityDocumentValidator: client is not initialized" {
+					t.Errorf("unexpected panic message: %s", msg)
+				}
+			}
+		}()
+
+		factory.CreateIdentityDocumentValidator()
+	})
+
+	t.Run("panics when closed", func(t *testing.T) {
+		factory := &SPIREAdapterFactory{
+			config: &spire.Config{},
+			client: nil,
+			closed: true,
+		}
+
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("expected panic when factory is closed")
+			} else if msg, ok := r.(string); ok {
+				if msg != "SPIREAdapterFactory.CreateIdentityDocumentValidator: factory is closed" {
+					t.Errorf("unexpected panic message: %s", msg)
+				}
+			}
+		}()
+
+		factory.CreateIdentityDocumentValidator()
 	})
 }

@@ -255,6 +255,36 @@ func (i *IdentityCredential) Path() string {
 	return i.path
 }
 
+// SPIFFEID returns the full SPIFFE ID URI as a string.
+//
+// This is an alias for String() provided for clarity when populating
+// port-level Identity types that expect a SPIFFEID field.
+//
+// Format: spiffe://<trust-domain>/<path>
+//
+// Example:
+//
+//	id.SPIFFEID() // "spiffe://example.org/workload/server"
+func (i *IdentityCredential) SPIFFEID() string {
+	return i.uri
+}
+
+// TrustDomainString returns the trust domain as a string.
+//
+// This is a convenience method equivalent to i.TrustDomain().String()
+// provided for adapters that need to extract the trust domain string
+// without handling the TrustDomain pointer.
+//
+// Example:
+//
+//	id.TrustDomainString() // "example.org"
+func (i *IdentityCredential) TrustDomainString() string {
+	if i.trustDomain == nil {
+		return ""
+	}
+	return i.trustDomain.String()
+}
+
 // Equals checks if two IdentityCredentials are equal by comparing canonical URIs.
 //
 // Equality is based on canonical string representation, which ensures:

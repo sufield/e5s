@@ -47,7 +47,13 @@ func Bootstrap(ctx context.Context, configLoader ports.ConfigLoader, factory por
 		return nil, fmt.Errorf("create SPIRE agent: %w", err)
 	}
 
-	// Step 4: Wire application with constructor validation
-	// Workloads only need Agent to fetch their own identity
-	return New(cfg, agent)
+	// Step 4: Create identity service (SPIRE-agnostic identity interface)
+	identityService, err := factory.CreateIdentityService()
+	if err != nil {
+		return nil, fmt.Errorf("create identity service: %w", err)
+	}
+
+	// Step 5: Wire application with constructor validation
+	// Application layer uses IdentityService for SPIRE-agnostic identity operations
+	return New(cfg, agent, identityService)
 }

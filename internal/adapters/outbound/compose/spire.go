@@ -117,9 +117,21 @@ func (f *SPIREAdapterFactory) CreateIdentityCredentialParser() ports.IdentityCre
 // at compile-time in the spire package.
 //
 // Returns an SDK-based validator with full security validation for production use.
+//
+// Panics if the factory has been closed or client is uninitialized. Since this
+// method cannot return an error, panicking is preferable to returning a validator
+// that will fail on first use with cryptic errors.
 func (f *SPIREAdapterFactory) CreateIdentityDocumentValidator() ports.IdentityDocumentValidator {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
+
+	if f.closed {
+		panic("SPIREAdapterFactory.CreateIdentityDocumentValidator: factory is closed")
+	}
+
+	if f.client == nil {
+		panic("SPIREAdapterFactory.CreateIdentityDocumentValidator: client is not initialized")
+	}
 
 	// Client implements x509bundle.Source (compile-time assertion in spire package)
 	// No runtime check needed - any breakage is caught at build time
@@ -166,8 +178,60 @@ func (f *SPIREAdapterFactory) CreateAgent(
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
+	if f.closed {
+		return nil, fmt.Errorf("spire adapter factory: factory is closed")
+	}
+
+	if f.client == nil {
+		return nil, fmt.Errorf("spire adapter factory: client is not initialized")
+	}
+
 	// Delegate to SPIRE Agent which handles all identity operations
 	return spire.NewAgent(ctx, f.client, spiffeID, parser)
+}
+
+// CreateIdentityService creates a SPIRE-backed identity service.
+//
+// The identity service provides SPIRE-agnostic identity attestation for the
+// application layer. It wraps SPIRE-specific operations (FetchX509SVID) and
+// returns ports.Identity, hiding SPIRE terminology from application code.
+//
+// This implements the anti-corruption layer pattern:
+//   - Application depends on: ports.IdentityService (SPIRE-agnostic)
+//   - Adapter implements: IdentityServiceSPIRE (SPIRE-specific)
+//   - Translation happens: in adapter layer only
+//
+// Design Philosophy:
+//   - Application code never sees "X.509" or "SVID" terminology
+//   - SPIRE-specific errors (ErrAgentUnavailable) pass through as-is
+//   - Easy to mock for testing (mock ports.IdentityService, not SPIRE client)
+//
+// Returns:
+//   - ports.IdentityService: SPIRE-backed identity service implementation
+//   - error: Non-nil if factory is closed or identity service creation fails
+//
+// Example:
+//
+//	identitySvc, err := factory.CreateIdentityService()
+//	if err != nil {
+//	    return fmt.Errorf("create identity service: %w", err)
+//	}
+//	identity, err := identitySvc.Current(ctx)
+//	fmt.Printf("My identity: %s\n", identity.SPIFFEID)
+func (f *SPIREAdapterFactory) CreateIdentityService() (ports.IdentityService, error) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+
+	if f.closed {
+		return nil, fmt.Errorf("spire adapter factory: factory is closed")
+	}
+
+	if f.client == nil {
+		return nil, fmt.Errorf("spire adapter factory: client is not initialized")
+	}
+
+	// Create the identity service adapter that wraps our SPIRE client
+	return spire.NewIdentityServiceSPIRE(f.client)
 }
 
 // Close closes the SPIRE client connection and releases resources.
