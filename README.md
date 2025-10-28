@@ -1,40 +1,32 @@
-# Identity Based Authentication Library
+# e5s - SPIFFE/SPIRE mTLS Library
 
-An identity based authentication library using SPIFFE/SPIRE for service-to-service communication, built with hexagonal architecture.
+A lightweight Go library for building mutual TLS services with SPIFFE identity verification and automatic certificate rotation.
 
-## Overview
+## Features
 
-This is a mTLS library using `go-spiffe` SDK v2.6.0 for identity-based authentication.
+- **Provider-Agnostic Core** - Clean `CertSource` interface for any identity provider
+- **SPIRE Adapter** - Production-ready SPIRE Workload API implementation
+- **Automatic Rotation** - Zero-downtime certificate and trust bundle updates
+- **SPIFFE ID Verification** - Policy-based peer authentication
+- **TLS 1.3 Enforcement** - Strong cipher suites and security defaults
+- **Thread-Safe** - Share sources across multiple servers and clients
+- **Zero Dependencies** - Core library only depends on stdlib (SPIRE adapter uses `go-spiffe`)
 
-### Features
+## Quick Start
 
-- **Zero-Config API**: One-call setup with automatic socket and trust domain detection
-- **Automatic Certificate Management**: Zero-downtime certificate rotation via SPIRE
-- **mTLS Authentication**: Both client and server authenticate each other
-- **Identity Extraction**: SPIFFE ID available to application handlers
-- **Standard HTTP**: Compatible with Go's standard `http` package
-- **Authentication Only**: No authorization logic - app decides access
-- **Production Ready**: Comprehensive tests (unit + integration + property-based + fuzz)
-- **Simple API**: Structured configuration with sensible defaults
-- **Thread-Safe**: Proper shutdown and resource management
+### Installation
 
-## Getting Started
+```bash
+go get github.com/sufield/e5s@latest
+```
 
-**👉 New to this library?** Start with the [Quick Start Guide](docs/tutorials/QUICKSTART.md) for step-by-step instructions to deploy SPIRE and run examples.
+### Library Usage
 
-The guide covers:
-- Deploying SPIRE infrastructure (Minikube)
-- Running the example server and client
-- Verifying mTLS authentication
-- Troubleshooting common issues
+**New to the library?** → See [docs/QUICKSTART_LIBRARY.md](docs/QUICKSTART_LIBRARY.md) for detailed examples and API documentation.
 
-## API Examples
+**Want a working demo?** → See [examples/minikube/](examples/minikube/) for a complete mTLS server/client with SPIRE deployment.
 
-Once you have SPIRE running (see [Quick Start Guide](docs/tutorials/QUICKSTART.md)), here's how to use the API:
-
-### Zero-Config mTLS Server
-
-The simplest way to create an mTLS server - everything is auto-detected:
+### Example: mTLS Server
 
 ```go
 package main
@@ -44,484 +36,193 @@ import (
     "fmt"
     "log"
     "net/http"
-    "os/signal"
-    "syscall"
 
-    "github.com/pocket/hexagon/spire/pkg/zerotrustserver"
+    "github.com/sufield/e5s/pkg/identitytls"
+    "github.com/sufield/e5s/pkg/spire"
 )
 
-func rootHandler(w http.ResponseWriter, r *http.Request) {
-    id, ok := zerotrustserver.PeerIdentity(r.Context())
-    if !ok {
-        http.Error(w, "unauthorized", http.StatusUnauthorized)
-        return
-    }
-
-    fmt.Fprintf(w, "Success! Authenticated as: %s\n", id.SPIFFEID)
-}
-
 func main() {
-    ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-    defer stop()
+    ctx := context.Background()
 
-    routes := map[string]http.Handler{
-        "/": http.HandlerFunc(rootHandler),
+    // Create SPIRE certificate source
+    source, err := spire.NewSource(ctx, spire.Config{})
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer source.Close()
+
+    // Create server TLS config (accepts any client in same trust domain)
+    tlsConfig, err := identitytls.NewServerTLSConfig(
+        ctx,
+        source,
+        identitytls.ServerConfig{},
+    )
+    if err != nil {
+        log.Fatal(err)
     }
 
-    if err := zerotrustserver.Serve(ctx, routes); err != nil {
-        stop()
-        log.Fatalf("server error: %v", err)
+    // HTTP handler that extracts peer identity
+    http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+        peer, ok := identitytls.ExtractPeerInfo(r)
+        if !ok {
+            http.Error(w, "unauthorized", http.StatusUnauthorized)
+            return
+        }
+        fmt.Fprintf(w, "Hello, %s!\n", peer.SPIFFEID)
+    })
+
+    // Start HTTPS server with mTLS
+    server := &http.Server{
+        Addr:      ":8443",
+        TLSConfig: tlsConfig,
     }
+    log.Fatal(server.ListenAndServeTLS("", ""))
 }
 ```
 
-**What's auto-detected?**
-- SPIRE agent socket (checks `SPIFFE_ENDPOINT_SOCKET` env var and common paths)
-- Trust domain (extracted from workload's SVID)
-- TLS configuration (enforces TLS 1.3+ with mTLS)
-- Health endpoint (auto-mounted at `/health`)
-- HTTP timeouts (sensible defaults)
-
-### Zero-Config mTLS Client
-
-The simplest way to create an mTLS client - just specify the server's identity:
+### Example: mTLS Client
 
 ```go
 package main
 
 import (
     "context"
-    "fmt"
     "io"
     "log"
+    "net/http"
+    "os"
 
-    "github.com/pocket/hexagon/spire/pkg/zerotrustclient"
+    "github.com/sufield/e5s/pkg/identitytls"
+    "github.com/sufield/e5s/pkg/spire"
 )
 
 func main() {
     ctx := context.Background()
 
-    // Create zero-config client - only specify the server's SPIFFE ID
-    client, err := zerotrustclient.New(ctx, &zerotrustclient.Config{
-        ServerID: "spiffe://example.org/server",
-    })
+    // Create SPIRE certificate source
+    source, err := spire.NewSource(ctx, spire.Config{})
     if err != nil {
-        log.Fatalf("Failed to create client: %v", err)
+        log.Fatal(err)
     }
-    defer client.Close()
+    defer source.Close()
 
-    // Make a GET request (hostname doesn't matter - SPIFFE ID is verified)
-    resp, err := client.Get(ctx, "https://localhost:8443/api/hello")
+    // Create client TLS config
+    tlsConfig, err := identitytls.NewClientTLSConfig(
+        ctx,
+        source,
+        identitytls.ClientConfig{
+            ExpectedServerTrustDomain: "example.org",
+        },
+    )
     if err != nil {
-        log.Fatalf("Request failed: %v", err)
+        log.Fatal(err)
+    }
+
+    // Create HTTP client with mTLS
+    client := &http.Client{
+        Transport: &http.Transport{
+            TLSClientConfig: tlsConfig,
+        },
+    }
+
+    // Make mTLS request
+    resp, err := client.Get("https://server.example.org:8443")
+    if err != nil {
+        log.Fatal(err)
     }
     defer resp.Body.Close()
 
-    body, _ := io.ReadAll(resp.Body)
-    fmt.Printf("Response: %s\n", body)
+    io.Copy(os.Stdout, resp.Body)
 }
 ```
-
-**Server verification options:**
-```go
-// Option 1: Exact server ID (recommended for production)
-Config{ServerID: "spiffe://example.org/server"}
-
-// Option 2: Accept any server in trust domain
-Config{ServerTrustDomain: "example.org"}
-```
-
-### Advanced Configuration
-
-For fine-grained control, use the lower-level adapter API:
-
-```go
-package main
-
-import (
-    "context"
-    "fmt"
-    "log"
-    "net/http"
-    "time"
-
-    "github.com/pocket/hexagon/spire/internal/adapters/inbound/identityserver"
-    "github.com/pocket/hexagon/spire/internal/ports"
-)
-
-func main() {
-    ctx := context.Background()
-
-    // Configure the mTLS server
-    var cfg ports.MTLSConfig
-    cfg.WorkloadAPI.SocketPath = "unix:///tmp/spire-agent/public/api.sock"
-    cfg.SPIFFE.AllowedPeerID = "spiffe://example.org/client"
-    cfg.HTTP.Address = ":8443"
-    cfg.HTTP.ReadHeaderTimeout = 10 * time.Second
-    cfg.HTTP.WriteTimeout = 30 * time.Second
-
-    // Create the mTLS server
-    server, err := identityserver.New(ctx, cfg)
-    if err != nil {
-        log.Fatalf("Failed to create server: %v", err)
-    }
-    defer server.Close()
-
-    // Register handlers
-    server.Handle("/api/hello", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        id, ok := ports.PeerIdentity(r.Context())
-        if !ok {
-            http.Error(w, "Unauthorized", http.StatusUnauthorized)
-            return
-        }
-        fmt.Fprintf(w, "Hello, %s!\n", id.SPIFFEID)
-    }))
-
-    log.Println("Server listening on :8443")
-
-    // Start server (blocks until shutdown)
-    if err := server.Start(ctx); err != nil {
-        log.Fatalf("Server error: %v", err)
-    }
-}
-```
-
-### Production Configuration (YAML + Environment Variables)
-
-For production deployments, use configuration files with environment variable overrides:
-
-**config.yaml**:
-```yaml
-spire:
-  socket_path: unix:///tmp/spire-agent/public/api.sock
-  trust_domain: example.org
-
-http:
-  address: :8443
-  read_header_timeout: 10s
-  read_timeout: 30s
-  write_timeout: 30s
-  idle_timeout: 120s
-  authentication:
-    peer_verification: trust-domain
-    trust_domain: example.org
-```
-
-**Application code**:
-```go
-package main
-
-import (
-    "context"
-    "fmt"
-    "log"
-    "net/http"
-
-    "github.com/pocket/hexagon/spire/internal/config"
-    "github.com/pocket/hexagon/spire/internal/adapters/inbound/identityserver"
-    "github.com/pocket/hexagon/spire/internal/ports"
-)
-
-func main() {
-    ctx := context.Background()
-
-    // Load configuration from file with env variable overrides
-    cfg, err := config.Load("config.yaml")
-    if err != nil {
-        log.Fatalf("Failed to load config: %v", err)
-    }
-
-    // Create server from config
-    serverCfg := cfg.ToServerConfig()
-    server, err := identityserver.New(ctx, serverCfg)
-    if err != nil {
-        log.Fatalf("Failed to create server: %v", err)
-    }
-    defer server.Close()
-
-    // Register handlers
-    server.Handle("/api/hello", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        id, ok := ports.PeerIdentity(r.Context())
-        if !ok {
-            http.Error(w, "Unauthorized", http.StatusUnauthorized)
-            return
-        }
-        fmt.Fprintf(w, "Hello, %s!\n", id.SPIFFEID)
-    }))
-
-    log.Printf("Server listening on %s", cfg.HTTP.Address)
-
-    if err := server.Start(ctx); err != nil {
-        log.Fatalf("Server error: %v", err)
-    }
-}
-```
-
-**Environment variable overrides**:
-```bash
-# Override SPIRE socket path
-export SPIRE_AGENT_SOCKET=unix:///var/run/spire/sockets/agent.sock
-
-# Override SPIRE trust domain
-export SPIRE_TRUST_DOMAIN=production.example.org
-
-# Override HTTP address
-export HTTP_ADDRESS=:9443
-
-# Override authentication settings
-export AUTH_PEER_VERIFICATION=specific-id
-export ALLOWED_ID=spiffe://production.example.org/client
-```
-
-## Configuration Options
-
-```go
-// MTLSConfig holds all configuration
-type MTLSConfig struct {
-    WorkloadAPI WorkloadAPIConfig
-    SPIFFE      SPIFFEConfig
-    HTTP        HTTPConfig
-}
-
-// WorkloadAPI configuration
-type WorkloadAPIConfig struct {
-    SocketPath string // e.g., "unix:///tmp/spire-agent/public/api.sock"
-}
-
-// SPIFFE authorization configuration
-type SPIFFEConfig struct {
-    AllowedPeerID      string // Exact SPIFFE ID match
-    AllowedTrustDomain string // Any ID in trust domain
-}
-
-// HTTP server configuration
-type HTTPConfig struct {
-    Address           string        // Server address (e.g., ":8443")
-    ReadHeaderTimeout time.Duration // Prevents Slowloris attacks
-    ReadTimeout       time.Duration
-    WriteTimeout      time.Duration
-    IdleTimeout       time.Duration
-}
-```
-
-### Authorization Policy
-
-- **Exactly one** of `AllowedPeerID` or `AllowedTrustDomain` must be set
-- `AllowedPeerID`: Exact match against a specific SPIFFE ID
-- `AllowedTrustDomain`: Allow any ID in the trust domain
 
 ## Architecture
 
-This project applies **Hexagonal Architecture** (Ports & Adapters pattern):
+- **Hexagonal architecture is about boundaries, not folders.** You can follow its principles without the typical `domain/ports/adapters` directories.
+- **A library ≠ an application.** Libraries expose APIs; they don’t orchestrate or host servers, so they need fewer layers.
+- **Your domain is in `pkg/identitytls`.** It defines rules for trust domains, SPIFFE IDs, and TLS configuration—pure business logic.
+- **Your adapter is in `pkg/spire`.** It implements the boundary (`CertSource`) using SPIRE’s Workload API.
+- **The `CertSource` interface is the port.** It cleanly separates your core logic from SPIRE.
+- **Result:** You kept hexagonal *principles* (dependency inversion, clear boundaries) but dropped hexagonal *ceremony* (extra directories).
+- **Outcome:** A lean, production-grade Go library that makes SPIRE easy to use without losing architectural integrity.
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│             🔵 INBOUND ADAPTERS (Drivers)                │
-│           How external actors interact with us           │
-├─────────────────────────────────────────────────────────┤
-│  • identityserver/  → HTTP server exposing mTLS API     │
-│  • zerotrustserver/ → Zero-config API wrapper (pkg/)    │
-│  • zerotrustclient/ → Zero-config client API (pkg/)     │
-└─────────────────────┬───────────────────────────────────┘
-                      │
-                 ┌────▼────┐
-                 │  PORTS  │  ← Interfaces/Contracts
-                 └────┬────┘
-                      │
-┌─────────────────────▼───────────────────────────────────┐
-│              🟢 DOMAIN (Core Business Logic)             │
-│                  Pure Go, No Dependencies                │
-├─────────────────────────────────────────────────────────┤
-│  • domain/          → Entities (TrustDomain, SVID, etc.)│
-│  • app/             → Business logic & orchestration    │
-└─────────────────────┬───────────────────────────────────┘
-                      │
-                 ┌────▼────┐
-                 │  PORTS  │  ← Interfaces/Contracts
-                 └────┬────┘
-                      │
-┌─────────────────────▼───────────────────────────────────┐
-│             🟠 OUTBOUND ADAPTERS (Driven)                │
-│         How we interact with external systems            │
-├─────────────────────────────────────────────────────────┤
-│  • spire/       → SPIRE Workload API (go-spiffe SDK)    │
-│  • httpclient/  → mTLS HTTP client                      │
-│  • helm/        → Kubernetes/Helm deployment (dev)      │
-│  • compose/     → Dependency injection                  │
-└─────────────────────────────────────────────────────────┘
+pkg/
+├── identitytls/        # Core mTLS library (provider-agnostic)
+│   ├── client.go       # Client TLS config builder
+│   ├── server.go       # Server TLS config builder
+│   ├── peer.go         # SPIFFE ID extraction/validation
+│   └── source.go       # CertSource interface
+└── spire/              # SPIRE Workload API adapter
+    └── source.go       # Implements CertSource for SPIRE
 ```
 
-Domain never depends on adapters. Adapters depend on ports.
+**Clear separation:**
+- `pkg/identitytls` - Defines interfaces and TLS policy (no SPIRE dependency)
+- `pkg/spire` - Implements `CertSource` using SPIRE Workload API
 
-See [docs/explanation/ARCHITECTURE.md](docs/explanation/ARCHITECTURE.md) for detailed architecture documentation.
-
-## Domain Entities
-
-### IdentityCredential (SPIFFE ID)
-
-```go
-// IdentityCredential represents a SPIFFE ID: spiffe://<trust-domain>/<path>
-type IdentityCredential struct {
-    trustDomain *TrustDomain
-    path        string
-}
-```
-
-**Examples**: `spiffe://example.org/server`, `spiffe://example.org/client`
-
-### IdentityDocument (SVID)
-
-```go
-// IdentityDocument represents an X.509 SVID
-type IdentityDocument struct {
-    identityCredential *IdentityCredential
-    certificate        *x509.Certificate
-    certificateChain   []*x509.Certificate
-    expiresAt          time.Time
-}
-```
-
-See [docs/reference/DOMAIN.md](docs/reference/DOMAIN.md) for complete domain model documentation.
-
-## Testing
-
-The project has:
-
-- **Unit tests**: Fast, no dependencies
-- **Integration tests**: Real SPIRE infrastructure
-- **Property-based tests**: Algebraic properties (10k iterations)
-- **Fuzz tests**: Edge cases and invalid inputs
-
-```bash
-# Run unit tests
-make test
-
-# Run integration tests (requires SPIRE)
-make minikube-up
-make test-integration
-
-# Run property-based tests
-PBT_MAX_COUNT=10000 go test -v -run "Properties" ./internal/...
-
-# Run fuzz tests
-go test -fuzz=FuzzNormalizePath -fuzztime=30s ./internal/domain
-```
-
-See [docs/reference/TESTING.md](docs/reference/TESTING.md) for complete testing guide.
-
-## Security
-
-This project implements defense-in-depth security:
-
-**Application Security (mTLS)**:
-- mTLS required for all connections
-- Identity-based authentication via SPIFFE IDs
-- Automatic certificate rotation via SPIRE
-- TLS 1.3 minimum version enforced
-- SPIFFE verification (not DNS hostname)
-
-**Build-Time Security**:
-- gosec: Go code security scanning
-- golangci-lint: 22+ security-focused linters
-- govulncheck: Dependency vulnerability scanning
-- Trivy: Container image scanning
-
-**Runtime Security (Falco)**:
-- Syscall monitoring with eBPF
-- SPIRE socket protection
-- Container behavior analysis
-
-See [security/README.md](security/README.md) for complete security documentation.
+You can implement custom `CertSource` adapters for other identity providers (Vault, cert-manager, etc.).
 
 ## Documentation
 
-This project uses the [Diátaxis framework](https://diataxis.fr/) for clear, user-focused documentation.
+- **[Quick Start Guide](docs/QUICKSTART_LIBRARY.md)** - API usage and examples
+- **[Example Application](examples/minikube/)** - Full mTLS demo with SPIRE cluster
+- **[Security Posture](security/)** - Supply chain security and runtime monitoring
 
-**Start here**: [Documentation Index](docs/README.md)
-
-### Quick Links by Purpose
-
-- 🎓 **[Tutorials](docs/tutorials/)** - Learn by doing
-  - [Quick Start Guide](docs/tutorials/QUICKSTART.md) - Get up and running ⭐
-  - [Editor Setup](docs/tutorials/EDITOR_SETUP.md) - Configure your IDE
-  - [Examples](docs/tutorials/examples/) - Hands-on code examples
-
-- 🔧 **[How-To Guides](docs/how-to-guides/)** - Solve specific problems
-  - [Production Deployment](docs/how-to-guides/PRODUCTION_WORKLOAD_API.md) - Deploy with kernel attestation
-  - [Troubleshooting](docs/how-to-guides/TROUBLESHOOTING.md) - Debug common issues
-  - [Security Tools](docs/how-to-guides/security-tools.md) - Set up security scanning
-
-- 📖 **[Reference](docs/reference/)** - Technical specifications
-  - [Port Contracts](docs/reference/PORT_CONTRACTS.md) - Interface definitions
-  - [Domain Model](docs/reference/DOMAIN.md) - Core domain types
-  - [Testing Guide](docs/reference/TESTING.md) - Comprehensive testing docs
-
-- 💡 **[Explanation](docs/explanation/)** - Understand the design
-  - [Architecture](docs/explanation/ARCHITECTURE.md) - System design rationale
-  - [Design by Contract](docs/explanation/DESIGN_BY_CONTRACT.md) - Why we use contracts
-  - [SPIFFE ID Refactoring](docs/explanation/SPIFFE_ID_REFACTORING.md) - Design evolution
-
-See [docs/README.md](docs/README.md) for the complete documentation index.
-
-## Design Decisions
-
-### 1. Hexagonal Architecture
-
-Consists of domain, port interfaces, swappable adapters:
-- Production implementation uses `go-spiffe` SDK for SPIRE Workload API
-- No domain coupling to infrastructure
-- Domain logic tested in isolation without SPIRE dependencies
-
-### 2. Config Structs for Grouped Parameters
-
-APIs use config structs for maintainability and extensibility.
-
-### 3. Separate Shutdown and Close
+## Server Verification Policies
 
 ```go
-// Graceful shutdown
-shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-defer cancel()
-server.Shutdown(shutdownCtx)  // Wait for connections to drain
+// Accept any client in same trust domain (default)
+identitytls.NewServerTLSConfig(ctx, source, identitytls.ServerConfig{})
 
-// Release resources
-server.Close()  // Close X509Source, sockets, etc.
+// Accept specific trust domain
+identitytls.NewServerTLSConfig(ctx, source, identitytls.ServerConfig{
+    AllowedClientTrustDomain: "partner.example.org",
+})
+
+// Accept only specific SPIFFE ID
+identitytls.NewServerTLSConfig(ctx, source, identitytls.ServerConfig{
+    AllowedClientID: "spiffe://example.org/api-client",
+})
 ```
 
-### 4. Authentication Only (No Authorization)
+## Client Verification Policies
 
-The library only authenticates clients via SPIFFE IDs. Authorization decisions are left to the application.
+```go
+// Verify specific SPIFFE ID
+identitytls.NewClientTLSConfig(ctx, source, identitytls.ClientConfig{
+    ExpectedServerID: "spiffe://example.org/api-server",
+})
 
-## Quality and Best Practices
+// Accept any server in trust domain
+identitytls.NewClientTLSConfig(ctx, source, identitytls.ClientConfig{
+    ExpectedServerTrustDomain: "example.org",
+})
+```
 
-Follows Go best practices:
+## Development
 
-1. **Config Structs**: APIs use config structs for maintainability
-2. **Proper Validation**: Required fields validated with clear error messages
-3. **Resource Management**: Proper cleanup with defer, separate Shutdown/Close
-4. **Thread Safety**: Mutex protects shared state, sync.Once for initialization
-5. **Graceful Shutdown**: Separate shutdown context with timeout
-6. **Error Wrapping**: Context preserved with `fmt.Errorf("%w", err)`
-7. **Test Coverage**: Unit + Integration + Property-based + Fuzz tests
-8. **Documentation**: Inline docs, comprehensive guides, examples
+```bash
+# Run tests
+make test
 
-## SPIRE Integration
+# Run tests with coverage
+make test-coverage
 
-Production deployments use `go-spiffe` SDK v2.6.0:
+# Build examples
+make examples
 
-**Public APIs**:
-- `pkg/zerotrustserver` - Zero-config mTLS server (recommended)
-- `pkg/zerotrustclient` - Zero-config mTLS client (recommended)
+# Run security checks
+make sec-all
+```
 
-**Adapters**:
-- `internal/adapters/inbound/identityserver` - mTLS server
-- `internal/adapters/outbound/spire` - SPIRE Workload API client
-- `internal/adapters/outbound/httpclient` - mTLS HTTP client
-- `internal/adapters/outbound/helm` - Kubernetes/Helm deployment (dev tooling)
+## License
 
-## References
+MIT License - See [LICENSE](LICENSE) file for details.
 
-- [SPIFFE Specification](https://github.com/spiffe/spiffe)
-- [SPIRE Documentation](https://spiffe.io/docs/latest/spire/)
-- [go-spiffe SDK](https://github.com/spiffe/go-spiffe)
-- [Hexagonal Architecture](https://alistair.cockburn.us/hexagonal-architecture/)
+## Contributing
+
+Contributions welcome! Please ensure:
+- Tests pass: `make test`
+- Security checks pass: `make sec-all`
+- Examples build: `make examples`

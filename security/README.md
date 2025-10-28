@@ -1,6 +1,10 @@
 # Security Tools and Documentation
 
-This directory contains security tools, rules, and documentation for the SPIRE mTLS library.
+This directory contains security tools, rules, and documentation for the e5s mTLS library.
+
+## Library Security Implementation
+
+The mTLS security enforcement is implemented in **[`pkg/identitytls`](../pkg/identitytls/)** with SPIFFE identity verification, TLS 1.3 enforcement, and peer authentication. See the [library quickstart](../docs/QUICKSTART_LIBRARY.md) for usage examples.
 
 ## Contents
 
