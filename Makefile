@@ -1,11 +1,11 @@
 .PHONY: test test-verbose test-race test-coverage test-coverage-html test-short \
-	clean help \
-	example-server example-client \
+	clean help examples \
+	example-highlevel-server example-highlevel-client example-minikube-server example-minikube-client \
 	sec-deps sec-lint sec-secrets sec-test sec-all sec-install-tools
 
 # Use bash with strict error handling
 SHELL := /bin/bash
-.SHELLFLAGS := -eu -o pipefail -c
+.SHELLFLAGS := -o pipefail -o errexit -o nounset -c
 
 # Default target
 .DEFAULT_GOAL := help
@@ -59,23 +59,39 @@ clean:
 	@echo "Cleaning up..."
 	@rm -f coverage.out coverage.html
 	@rm -f gosec.sarif gitleaks.sarif
-	@rm -rf bin/
+	@if [ -d bin/ ]; then rm -rf bin/ && echo "  Removed bin/"; fi
 	@echo "Clean complete"
 
-## example-server: Build example mTLS server
-example-server:
-	@echo "Building example server..."
-	@cd examples/minikube && go build -o ../../bin/server ./cmd/server
-	@echo "Binary: bin/server"
+## example-highlevel-server: Build highlevel example mTLS server (high-level API)
+example-highlevel-server:
+	@echo "Building highlevel example server..."
+	@mkdir -p bin
+	@cd examples/highlevel && go build -o ../../bin/highlevel-server ./cmd/server
+	@echo "Binary: bin/highlevel-server"
 
-## example-client: Build example mTLS client
-example-client:
-	@echo "Building example client..."
-	@cd examples/minikube && go build -o ../../bin/client ./cmd/client
-	@echo "Binary: bin/client"
+## example-highlevel-client: Build highlevel example mTLS client (high-level API)
+example-highlevel-client:
+	@echo "Building highlevel example client..."
+	@mkdir -p bin
+	@cd examples/highlevel && go build -o ../../bin/highlevel-client ./cmd/client
+	@echo "Binary: bin/highlevel-client"
+
+## example-minikube-server: Build minikube-lowlevel example mTLS server (low-level API)
+example-minikube-server:
+	@echo "Building minikube-lowlevel example server..."
+	@mkdir -p bin
+	@cd examples/minikube-lowlevel && go build -o ../../bin/minikube-server ./cmd/server
+	@echo "Binary: bin/minikube-server"
+
+## example-minikube-client: Build minikube-lowlevel example mTLS client (low-level API)
+example-minikube-client:
+	@echo "Building minikube-lowlevel example client..."
+	@mkdir -p bin
+	@cd examples/minikube-lowlevel && go build -o ../../bin/minikube-client ./cmd/client
+	@echo "Binary: bin/minikube-client"
 
 ## examples: Build all examples
-examples: example-server example-client
+examples: example-highlevel-server example-highlevel-client example-minikube-server example-minikube-client
 
 # ============================================================================
 # Security Targets

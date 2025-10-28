@@ -1,19 +1,32 @@
 # e5s Documentation
 
-## Current Library
+## Overview
 
-This repository provides **`pkg/identitytls`** and **`pkg/spire`** - a lightweight Go library for SPIFFE/SPIRE-based mutual TLS.
+e5s provides **two APIs** for SPIFFE/SPIRE-based mutual TLS, serving different developer needs:
 
-### Quick Start
+### High-Level API (`e5s.Start`, `e5s.Client`)
 
-**New to the library?** → See [QUICKSTART_LIBRARY.md](QUICKSTART_LIBRARY.md)
+**For application developers** - Config-driven, one-line setup:
+- See [../README.md](../README.md) for quick examples
+- See [../examples/highlevel/](../examples/highlevel/) for production-ready server with chi router
 
-**Want a working example?** → See [examples/minikube/](../examples/minikube/)
+### Low-Level API (`pkg/identitytls`, `pkg/spire`)
+
+**For platform/infrastructure teams** - Full control over TLS and identity:
+- See [QUICKSTART_LIBRARY.md](QUICKSTART_LIBRARY.md) for API reference
+- See [../examples/minikube-lowlevel/](../examples/minikube-lowlevel/) for SPIRE cluster setup
+
+## Quick Start
+
+**New to e5s?** → Start with the [high-level API](../README.md#high-level-api-e5sstart-e5sclient) in the main README
+
+**Need full control?** → See [QUICKSTART_LIBRARY.md](QUICKSTART_LIBRARY.md) for low-level API usage
 
 ## What's Here
 
-- **[QUICKSTART_LIBRARY.md](QUICKSTART_LIBRARY.md)** - Library usage guide with code examples
-- **[../examples/minikube/](../examples/minikube/)** - Full working demo with SPIRE cluster
+- **[QUICKSTART_LIBRARY.md](QUICKSTART_LIBRARY.md)** - Low-level API reference with code examples
+- **[../examples/highlevel/](../examples/highlevel/)** - High-level API example (application developers)
+- **[../examples/minikube-lowlevel/](../examples/minikube-lowlevel/)** - Low-level API example with full SPIRE cluster (platform teams)
 
 ## Public API
 

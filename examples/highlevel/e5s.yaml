@@ -1,0 +1,28 @@
+# e5s configuration file
+# This single file is used by both server and client processes
+
+spire:
+  # Path to SPIRE Agent's Workload API socket
+  # Default for SPIRE: unix:///tmp/spire-agent/public/api.sock
+  workload_socket: unix:///tmp/spire-agent/public/api.sock
+
+server:
+  # Address to listen on for mTLS connections
+  listen_addr: ":8443"
+
+  # Client authorization policy (exactly one of these should be set)
+
+  # Option 1: Allow ONLY this specific client SPIFFE ID
+  # allowed_client_spiffe_id: "spiffe://example.org/workload-client"
+
+  # Option 2: Allow any client in this trust domain (used in this example)
+  allowed_client_trust_domain: "example.org"
+
+client:
+  # Server authentication policy (exactly one of these should be set)
+
+  # Option 1: Require this exact server SPIFFE ID
+  # expected_server_spiffe_id: "spiffe://example.org/api-server"
+
+  # Option 2: Allow any server in this trust domain (used in this example)
+  expected_server_trust_domain: "example.org"

@@ -4,13 +4,15 @@ A lightweight Go library for building mutual TLS services with SPIFFE identity v
 
 ## Features
 
+- **Simple High-Level API** - Config-driven with `e5s.Start()` and `e5s.Client()`
+- **Low-Level Control** - Direct access to `pkg/identitytls` and `pkg/spire` for custom use cases
 - **Provider-Agnostic Core** - Clean `CertSource` interface for any identity provider
 - **SPIRE Adapter** - Production-ready SPIRE Workload API implementation
 - **Automatic Rotation** - Zero-downtime certificate and trust bundle updates
 - **SPIFFE ID Verification** - Policy-based peer authentication
 - **TLS 1.3 Enforcement** - Strong cipher suites and security defaults
 - **Thread-Safe** - Share sources across multiple servers and clients
-- **Zero Dependencies** - Core library only depends on stdlib (SPIRE adapter uses `go-spiffe`)
+- **Minimal Dependencies** - Core (`pkg/identitytls`): stdlib only. SPIRE adapter (`pkg/spire`): `go-spiffe/v2`. High-level API (`e5s.go`): adds `yaml.v3`. Examples add `chi` (see `go.mod` for details)
 
 ## Quick Start
 
@@ -20,13 +22,132 @@ A lightweight Go library for building mutual TLS services with SPIFFE identity v
 go get github.com/sufield/e5s@latest
 ```
 
-### Library Usage
+## Two Ways to Use e5s
 
-**New to the library?** → See [docs/QUICKSTART_LIBRARY.md](docs/QUICKSTART_LIBRARY.md) for detailed examples and API documentation.
+We provide both **high-level** and **low-level** APIs because they serve different developer roles and abstraction levels:
 
-**Want a working demo?** → See [examples/minikube/](examples/minikube/) for a complete mTLS server/client with SPIRE deployment.
+### High-Level API (`e5s.Start`, `e5s.Client`)
 
-### Example: mTLS Server
+**For:** Application developers
+**Goal:** Make identity-based mTLS work with one line of code
+
+- Handles configuration, SPIRE connection, certificate rotation, and verification internally
+- Reads `e5s.yaml` → starts server/client automatically
+- Ideal when you just want secure communication without caring how certificates or trust domains are wired
+- Example use: web apps, microservices, APIs
+
+✅ **Benefits:** Zero boilerplate, hard to misuse, easy to run locally and in production with the same config
+
+### Low-Level API (`pkg/identitytls`, `pkg/spire`)
+
+**For:** Infrastructure/platform teams
+**Goal:** Allow full control over mTLS internals
+
+- Lets you manage `CertSource`, build custom TLS configs, and integrate with other identity systems (Vault, cert-manager, etc.)
+- Exposes `identitytls.NewServerTLSConfig` and `spire.NewSource`
+- Ideal for customizing certificate rotation intervals, trust domain logic, or integrating into non-HTTP systems
+
+✅ **Benefits:** Extensible for advanced use cases, can plug in custom identity providers, useful for testing/debugging or building frameworks
+
+### Which example should I look at?
+
+| Developer Type | API | Use Case |
+|----------------|-----|----------|
+| **Application Developer** | High-Level (`e5s.Start`) | Secure HTTP services quickly |
+| **Platform/Infra Engineer** | Low-Level (`pkg/identitytls`, `pkg/spire`) | Build custom SPIRE integrations or non-HTTP services |
+
+- **`examples/highlevel/`** - Start here for application development (production behavior, minimal code)
+- **`examples/minikube-lowlevel/`** - Platform/infrastructure example (full SPIRE + mTLS stack in Kubernetes)
+
+### 1. High-Level API (Recommended for Most Users)
+
+Config-driven approach - no TLS code needed. Just create an `e5s.yaml` file and call `e5s.Start()`.
+
+**Example Server:**
+
+```go
+package main
+
+import (
+    "fmt"
+    "log"
+    "net/http"
+
+    "github.com/sufield/e5s"
+)
+
+func main() {
+    http.HandleFunc("/hello", func(w http.ResponseWriter, r *http.Request) {
+        id, ok := e5s.PeerID(r)
+        if !ok {
+            http.Error(w, "unauthorized", http.StatusUnauthorized)
+            return
+        }
+        fmt.Fprintf(w, "Hello, %s!\n", id)
+    })
+
+    shutdown, err := e5s.Start("e5s.yaml", http.DefaultServeMux)
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer shutdown()
+
+    log.Println("Server running - press Ctrl+C to stop")
+    select {} // block forever
+}
+```
+
+**Example Client:**
+
+```go
+package main
+
+import (
+    "io"
+    "log"
+    "os"
+
+    "github.com/sufield/e5s"
+)
+
+func main() {
+    client, shutdown, err := e5s.Client("e5s.yaml")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer shutdown()
+
+    resp, err := client.Get("https://localhost:8443/hello")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer resp.Body.Close()
+
+    io.Copy(os.Stdout, resp.Body)
+}
+```
+
+**Config File (e5s.yaml):**
+
+```yaml
+spire:
+  workload_socket: unix:///tmp/spire-agent/public/api.sock
+
+server:
+  listen_addr: ":8443"
+  allowed_client_trust_domain: "example.org"
+
+client:
+  expected_server_trust_domain: "example.org"
+```
+
+**Want a production-ready example?** → See [examples/highlevel/](examples/highlevel/) for a complete server with chi router, graceful shutdown, health checks, and structured logging.
+
+### 2. Low-Level API (For Advanced Use Cases)
+
+Direct control over TLS configuration for custom scenarios.
+
+**Example: mTLS Server (Low-Level)**
 
 ```go
 package main
@@ -80,7 +201,7 @@ func main() {
 }
 ```
 
-### Example: mTLS Client
+**Example: mTLS Client (Low-Level)**
 
 ```go
 package main
@@ -136,69 +257,51 @@ func main() {
 }
 ```
 
+**Want more control?** → See [examples/minikube-lowlevel/](examples/minikube-lowlevel/) for low-level API usage with full SPIRE cluster setup.
+
 ## Architecture
 
-- **Hexagonal architecture is about boundaries, not folders.** You can follow its principles without the typical `domain/ports/adapters` directories.
-- **A library ≠ an application.** Libraries expose APIs; they don’t orchestrate or host servers, so they need fewer layers.
-- **Your domain is in `pkg/identitytls`.** It defines rules for trust domains, SPIFFE IDs, and TLS configuration—pure business logic.
-- **Your adapter is in `pkg/spire`.** It implements the boundary (`CertSource`) using SPIRE’s Workload API.
-- **The `CertSource` interface is the port.** It cleanly separates your core logic from SPIRE.
-- **Result:** You kept hexagonal *principles* (dependency inversion, clear boundaries) but dropped hexagonal *ceremony* (extra directories).
-- **Outcome:** A lean, production-grade Go library that makes SPIRE easy to use without losing architectural integrity.
-
 ```
+e5s.go                  # High-level config-driven API
+├── e5s.Start()         # Server with config file
+├── e5s.Client()        # Client with config file
+└── e5s.PeerID()        # Extract authenticated peer
+
 pkg/
 ├── identitytls/        # Core mTLS library (provider-agnostic)
 │   ├── client.go       # Client TLS config builder
 │   ├── server.go       # Server TLS config builder
 │   ├── peer.go         # SPIFFE ID extraction/validation
+│   ├── context.go      # Context helpers for peer info
 │   └── source.go       # CertSource interface
 └── spire/              # SPIRE Workload API adapter
     └── source.go       # Implements CertSource for SPIRE
+
+internal/config/        # Config file loading (not exported)
+├── config.go           # Config structs
+├── load.go             # YAML loader
+└── validate.go         # Config validation
 ```
 
-**Clear separation:**
+**Two-tier architecture:**
+1. **High-level** (`e5s.go`) - Config-driven, minimal code, works with any HTTP framework
+2. **Low-level** (`pkg/identitytls` + `pkg/spire`) - Full control over TLS, rotation, verification
+
+**Clean separation:**
 - `pkg/identitytls` - Defines interfaces and TLS policy (no SPIRE dependency)
 - `pkg/spire` - Implements `CertSource` using SPIRE Workload API
+- `e5s.go` - Wires everything together based on config file
 
 You can implement custom `CertSource` adapters for other identity providers (Vault, cert-manager, etc.).
 
+**Note:** The examples are separate modules (each has its own `go.mod`) so you can vendor/copy them without pulling extra dependencies into your service. The core library has minimal dependencies.
+
 ## Documentation
 
-- **[Quick Start Guide](docs/QUICKSTART_LIBRARY.md)** - API usage and examples
-- **[Example Application](examples/minikube/)** - Full mTLS demo with SPIRE cluster
+- **[High-Level Example](examples/highlevel/)** - Application developer example (production behavior, simplest API)
+- **[Minikube Low-Level Example](examples/minikube-lowlevel/)** - Platform / infrastructure example (full SPIRE + mTLS stack in local Kubernetes)
+- **[API Documentation](docs/QUICKSTART_LIBRARY.md)** - Low-level API usage
 - **[Security Posture](security/)** - Supply chain security and runtime monitoring
-
-## Server Verification Policies
-
-```go
-// Accept any client in same trust domain (default)
-identitytls.NewServerTLSConfig(ctx, source, identitytls.ServerConfig{})
-
-// Accept specific trust domain
-identitytls.NewServerTLSConfig(ctx, source, identitytls.ServerConfig{
-    AllowedClientTrustDomain: "partner.example.org",
-})
-
-// Accept only specific SPIFFE ID
-identitytls.NewServerTLSConfig(ctx, source, identitytls.ServerConfig{
-    AllowedClientID: "spiffe://example.org/api-client",
-})
-```
-
-## Client Verification Policies
-
-```go
-// Verify specific SPIFFE ID
-identitytls.NewClientTLSConfig(ctx, source, identitytls.ClientConfig{
-    ExpectedServerID: "spiffe://example.org/api-server",
-})
-
-// Accept any server in trust domain
-identitytls.NewClientTLSConfig(ctx, source, identitytls.ClientConfig{
-    ExpectedServerTrustDomain: "example.org",
-})
-```
 
 ## Development
 
@@ -209,8 +312,19 @@ make test
 # Run tests with coverage
 make test-coverage
 
-# Build examples
+# Build all examples (creates 4 binaries in bin/)
 make examples
+# Builds:
+#   bin/highlevel-server    - High-level API example with chi
+#   bin/highlevel-client    - High-level API client
+#   bin/minikube-server     - Low-level API example
+#   bin/minikube-client     - Low-level API client
+
+# Build specific examples
+make example-highlevel-server   # Application developer example
+make example-highlevel-client
+make example-minikube-server    # Platform/infra example
+make example-minikube-client
 
 # Run security checks
 make sec-all

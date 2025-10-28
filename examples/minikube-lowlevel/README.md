@@ -1,6 +1,8 @@
-# Minikube mTLS Example
+# Minikube-Lowlevel Example
 
-This example demonstrates production-like mTLS communication using e5s with SPIRE in Minikube.
+**Platform / Infrastructure Example** - Full SPIRE + mTLS demo in a local Kubernetes environment.
+
+This example demonstrates production-like mTLS communication using e5s with SPIRE in Minikube. It uses the low-level `pkg/identitytls` and `pkg/spire` APIs directly, giving you full control over TLS configuration.
 
 ## Prerequisites
 
@@ -37,7 +39,7 @@ This example demonstrates production-like mTLS communication using e5s with SPIR
 
 ```bash
 # From repository root
-cd examples/minikube
+cd examples/minikube-lowlevel
 
 # Start cluster and deploy SPIRE
 ./scripts/cluster-up.sh
@@ -60,13 +62,20 @@ This creates SPIFFE IDs:
 
 ### 3. Build and run the server
 
+**Server Configuration:**
+The server expects the SPIRE socket at:
+```yaml
+SPIFFE_ENDPOINT_SOCKET=/tmp/spire-agent/public/api.sock
+```
+
 ```bash
 # Build server binary
 go build -o bin/server ./cmd/server
 
 # Deploy to Minikube (or run locally with socket access)
 kubectl create configmap server-binary --from-file=bin/server -n spire
-kubectl apply -f manifests/server-deployment.yaml
+# Deploy using the helmfile in infra/
+# (Adjust based on your actual deployment method)
 
 # Check server logs
 kubectl logs -l app=mtls-server -n spire -f
@@ -88,7 +97,7 @@ Expected output:
 Response from server:
 Hello, spiffe://example.org/client!
 Trust Domain: example.org
-Cert Expires: 2024-10-28T10:30:00Z
+Cert Expires: <timestamp from your SPIRE deployment>
 ```
 
 ## Running Integration Tests
@@ -186,7 +195,7 @@ kubectl delete namespace spire
 ## Directory Structure
 
 ```
-examples/minikube/
+examples/minikube-lowlevel/
 ├── cmd/
 │   ├── server/main.go       # mTLS server application
 │   └── client/main.go       # mTLS client application
@@ -210,3 +219,4 @@ examples/minikube/
 - Update SPIRE registrations in `scripts/setup-spire-registrations.sh` for your workload selectors
 - Customize server/client verification policies in `NewServerTLSConfig` / `NewClientTLSConfig`
 - Deploy to production Kubernetes (see `deploy/values/values-prod.yaml`)
+- For integration with your own workloads, see `pkg/identitytls` and `pkg/spire` documentation for advanced control over identity and TLS behavior
