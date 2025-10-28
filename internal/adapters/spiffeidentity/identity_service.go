@@ -8,7 +8,7 @@ import (
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
 
-	"github.com/pocket/hexagon/spire/internal/ports"
+	"github.com/sufield/e5s/internal/ports"
 )
 
 // IdentityServiceSPIFFE implements ports.IdentityService using real SPIRE.

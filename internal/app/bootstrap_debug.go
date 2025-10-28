@@ -6,8 +6,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/pocket/hexagon/spire/internal/debug"
-	"github.com/pocket/hexagon/spire/internal/ports"
+	"github.com/sufield/e5s/internal/debug"
+	"github.com/sufield/e5s/internal/ports"
 )
 
 // BootstrapWithDebug extends Bootstrap to start the debug server in debug builds.

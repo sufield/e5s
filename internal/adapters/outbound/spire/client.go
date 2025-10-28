@@ -13,7 +13,7 @@ import (
 	"github.com/spiffe/go-spiffe/v2/svid/x509svid"
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
 
-	"github.com/pocket/hexagon/spire/internal/domain"
+	"github.com/sufield/e5s/internal/domain"
 )
 
 // Client provides access to the SPIRE Workload API for production environments.

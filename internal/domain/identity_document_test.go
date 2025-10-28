@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/pocket/hexagon/spire/internal/domain"
+	"github.com/sufield/e5s/internal/domain"
 )
 
 // Note: generateTestPrivateKey() is kept for certificate generation helpers,

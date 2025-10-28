@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/pocket/hexagon/spire/internal/ports"
+	"github.com/sufield/e5s/internal/ports"
 )
 
 // ToServerConfig converts MTLSConfig to ports.MTLSConfig for server use.

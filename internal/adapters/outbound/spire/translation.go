@@ -7,7 +7,7 @@ import (
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	"github.com/spiffe/go-spiffe/v2/svid/x509svid"
 
-	"github.com/pocket/hexagon/spire/internal/domain"
+	"github.com/sufield/e5s/internal/domain"
 )
 
 // TranslateX509SVIDToIdentityDocument converts a go-spiffe X509SVID to a domain IdentityDocument.

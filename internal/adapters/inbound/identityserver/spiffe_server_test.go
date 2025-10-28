@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/pocket/hexagon/spire/internal/ports"
+	"github.com/sufield/e5s/internal/ports"
 )
 
 func contains(s, substr string) bool {

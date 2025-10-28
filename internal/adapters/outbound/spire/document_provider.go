@@ -9,8 +9,8 @@ import (
 	"github.com/spiffe/go-spiffe/v2/bundle/x509bundle"
 	"github.com/spiffe/go-spiffe/v2/svid/x509svid"
 
-	"github.com/pocket/hexagon/spire/internal/domain"
-	"github.com/pocket/hexagon/spire/internal/ports"
+	"github.com/sufield/e5s/internal/domain"
+	"github.com/sufield/e5s/internal/ports"
 )
 
 // SDKDocumentProvider implements IdentityDocumentProvider using go-spiffe SDK.

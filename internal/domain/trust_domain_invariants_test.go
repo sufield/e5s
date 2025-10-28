@@ -14,7 +14,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/pocket/hexagon/spire/internal/domain"
+	"github.com/sufield/e5s/internal/domain"
 )
 
 // TestTrustDomain_Invariant_StringNeverEmpty tests the invariants:

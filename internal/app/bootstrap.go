@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/pocket/hexagon/spire/internal/ports"
+	"github.com/sufield/e5s/internal/ports"
 )
 
 // Bootstrap wires application components:

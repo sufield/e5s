@@ -12,7 +12,7 @@ import (
 
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
 
-	"github.com/pocket/hexagon/spire/pkg/identitytls"
+	"github.com/sufield/e5s/pkg/identitytls"
 )
 
 // Source implements identitytls.CertSource using the SPIRE Workload API.

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pocket/hexagon/spire/internal/adapters/outbound/spire"
+	"github.com/sufield/e5s/internal/adapters/outbound/spire"
 )
 
 // TestSimpleConnection is a minimal test to verify SPIRE connectivity

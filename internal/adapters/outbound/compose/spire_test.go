@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/pocket/hexagon/spire/internal/adapters/outbound/spire"
-	"github.com/pocket/hexagon/spire/internal/ports"
+	"github.com/sufield/e5s/internal/adapters/outbound/spire"
+	"github.com/sufield/e5s/internal/ports"
 )
 
 // TestSPIREAdapterFactory_InterfaceCompliance verifies the factory implements

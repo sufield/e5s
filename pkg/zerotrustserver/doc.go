@@ -12,7 +12,7 @@
 //	    "os/signal"
 //	    "syscall"
 //
-//	    "github.com/pocket/hexagon/spire/pkg/zerotrustserver"
+//	    "github.com/sufield/e5s/pkg/zerotrustserver"
 //	)
 //
 //	func main() {

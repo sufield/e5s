@@ -8,7 +8,7 @@ import (
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
 
-	"github.com/pocket/hexagon/spire/internal/domain"
+	"github.com/sufield/e5s/internal/domain"
 )
 
 // FetchX509Bundle returns the X.509 trust bundle for the chosen trust domain.

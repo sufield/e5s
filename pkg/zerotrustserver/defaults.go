@@ -11,7 +11,7 @@ import (
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
 
-	"github.com/pocket/hexagon/spire/internal/ports"
+	"github.com/sufield/e5s/internal/ports"
 )
 
 func buildDefaults(ctx context.Context, routes map[string]http.Handler) (ports.MTLSConfig, *http.ServeMux, error) {

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/pocket/hexagon/spire/internal/adapters/outbound/httpclient"
-	"github.com/pocket/hexagon/spire/internal/ports"
+	"github.com/sufield/e5s/internal/adapters/outbound/httpclient"
+	"github.com/sufield/e5s/internal/ports"
 )
 
 // Client is a zero-config mTLS HTTP client that automatically:

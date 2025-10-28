@@ -8,8 +8,8 @@ import (
 	"github.com/spiffe/go-spiffe/v2/svid/x509svid"
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
 
-	"github.com/pocket/hexagon/spire/internal/domain"
-	"github.com/pocket/hexagon/spire/internal/ports"
+	"github.com/sufield/e5s/internal/domain"
+	"github.com/sufield/e5s/internal/ports"
 )
 
 // FetchX509SVID fetches an X.509 SVID and converts it to a domain IdentityDocument.

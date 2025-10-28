@@ -3,7 +3,7 @@ package ports
 import (
 	"context"
 
-	"github.com/pocket/hexagon/spire/internal/dto"
+	"github.com/sufield/e5s/internal/dto"
 )
 
 // IdentityProvider issues the caller's identity credential.

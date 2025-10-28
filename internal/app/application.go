@@ -11,10 +11,10 @@ import (
 	// it's a stub type (see internal/debug/server_stub.go). The shared field +
 	// method (`SetDebugServer`, `Close`) must compile in both cases so shutdown
 	// behavior stays consistent across build tags.
-	"github.com/pocket/hexagon/spire/internal/debug"
+	"github.com/sufield/e5s/internal/debug"
 
-	"github.com/pocket/hexagon/spire/internal/dto"
-	"github.com/pocket/hexagon/spire/internal/ports"
+	"github.com/sufield/e5s/internal/dto"
+	"github.com/sufield/e5s/internal/ports"
 )
 
 // Application wires application dependencies.

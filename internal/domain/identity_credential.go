@@ -6,7 +6,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/pocket/hexagon/spire/internal/assert"
+	"github.com/sufield/e5s/internal/assert"
 )
 
 // IdentityCredential is an immutable value object representing a unique,

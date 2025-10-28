@@ -5,7 +5,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/pocket/hexagon/spire/internal/ports"
+	"github.com/sufield/e5s/internal/ports"
 )
 
 // buildConfig constructs an MTLSConfig from the user's Config, applying defaults.

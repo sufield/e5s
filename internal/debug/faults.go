@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/pocket/hexagon/spire/internal/assert"
+	"github.com/sufield/e5s/internal/assert"
 )
 
 // FaultProfile defines faults that can be injected for testing.

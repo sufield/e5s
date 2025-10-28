@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/pocket/hexagon/spire/internal/adapters/outbound/spire"
+	"github.com/sufield/e5s/internal/adapters/outbound/spire"
 )
 
 // getTestConfig returns test configuration from environment or defaults

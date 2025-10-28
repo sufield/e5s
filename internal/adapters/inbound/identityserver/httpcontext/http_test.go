@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	spiffeidhttp "github.com/pocket/hexagon/spire/internal/adapters/inbound/identityserver/httpcontext"
+	spiffeidhttp "github.com/sufield/e5s/internal/adapters/inbound/identityserver/httpcontext"
 )
 
 // Test helpers

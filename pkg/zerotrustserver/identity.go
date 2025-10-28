@@ -3,7 +3,7 @@ package zerotrustserver
 import (
 	"context"
 
-	"github.com/pocket/hexagon/spire/internal/ports"
+	"github.com/sufield/e5s/internal/ports"
 )
 
 // Identity is the authenticated workload identity.

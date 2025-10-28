@@ -5,7 +5,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/pocket/hexagon/spire/internal/adapters/inbound/identityserver"
+	"github.com/sufield/e5s/internal/adapters/inbound/identityserver"
 )
 
 // Serve runs a Zero Trust mTLS HTTP server with intelligent defaults.

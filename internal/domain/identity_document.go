@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/pocket/hexagon/spire/internal/assert"
+	"github.com/sufield/e5s/internal/assert"
 )
 
 // IdentityDocument represents an immutable X.509-based verifiable identity document (SVID).

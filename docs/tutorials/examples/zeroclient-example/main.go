@@ -6,7 +6,7 @@ import (
 	"io"
 	"log"
 
-	"github.com/pocket/hexagon/spire/pkg/zerotrustclient"
+	"github.com/sufield/e5s/pkg/zerotrustclient"
 )
 
 func main() {

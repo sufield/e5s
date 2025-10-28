@@ -3,8 +3,8 @@ package ports
 import (
 	"context"
 
-	"github.com/pocket/hexagon/spire/internal/domain"
-	"github.com/pocket/hexagon/spire/internal/dto"
+	"github.com/sufield/e5s/internal/domain"
+	"github.com/sufield/e5s/internal/dto"
 )
 
 type Agent interface {

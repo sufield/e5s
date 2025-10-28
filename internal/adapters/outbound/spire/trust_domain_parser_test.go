@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/pocket/hexagon/spire/internal/domain"
+	"github.com/sufield/e5s/internal/domain"
 )
 
 func TestTrustDomainParser_FromString(t *testing.T) {

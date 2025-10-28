@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pocket/hexagon/spire/internal/adapters/outbound/spire"
-	"github.com/pocket/hexagon/spire/internal/ports"
+	"github.com/sufield/e5s/internal/adapters/outbound/spire"
+	"github.com/sufield/e5s/internal/ports"
 )
 
 // SPIREAdapterFactory provides production SPIRE implementations of adapters.

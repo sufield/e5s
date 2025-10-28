@@ -3,7 +3,7 @@ package dto
 import (
 	"crypto"
 
-	"github.com/pocket/hexagon/spire/internal/domain"
+	"github.com/sufield/e5s/internal/domain"
 )
 
 // Identity is a transport DTO for app/adapters. Optional in prod; handy in dev/CLI.

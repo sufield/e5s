@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pocket/hexagon/spire/internal/domain"
-	"github.com/pocket/hexagon/spire/internal/dto"
-	"github.com/pocket/hexagon/spire/internal/ports"
+	"github.com/sufield/e5s/internal/domain"
+	"github.com/sufield/e5s/internal/dto"
+	"github.com/sufield/e5s/internal/ports"
 )
 
 // X509Fetcher abstracts SVID fetching for testability.

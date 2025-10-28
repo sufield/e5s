@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/pocket/hexagon/spire/internal/ports"
+	"github.com/sufield/e5s/internal/ports"
 )
 
 // IdentityServiceSPIRE is the production identity service implementation.

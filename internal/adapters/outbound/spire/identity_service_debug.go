@@ -6,7 +6,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/pocket/hexagon/spire/internal/debug"
+	"github.com/sufield/e5s/internal/debug"
 )
 
 // Ensure IdentityServiceSPIRE implements debug.Introspector in debug builds.
