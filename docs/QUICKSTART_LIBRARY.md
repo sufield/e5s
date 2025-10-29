@@ -13,7 +13,7 @@ go get github.com/sufield/e5s@latest
 The library has two main packages:
 
 - **`pkg/identitytls`** - Provider-agnostic mTLS primitives and policy
-- **`pkg/spire`** - SPIRE Workload API implementation of `identitytls.CertSource`
+- **`pkg/spire`** - SPIRE Workload API client
 
 ## Quick Example: mTLS Server
 
@@ -40,11 +40,15 @@ func main() {
     }
     defer source.Close()
 
+    // Get SDK X509Source for TLS config
+    x509Source := source.X509Source()
+
     // Create server TLS config
     // Accepts any client in the same trust domain by default
     tlsConfig, err := identitytls.NewServerTLSConfig(
         ctx,
-        source,
+        x509Source,
+        x509Source,
         identitytls.ServerConfig{},
     )
     if err != nil {
@@ -96,11 +100,15 @@ func main() {
     }
     defer source.Close()
 
+    // Get SDK X509Source for TLS config
+    x509Source := source.X509Source()
+
     // Create client TLS config
     // Accepts any server in the specified trust domain
     tlsConfig, err := identitytls.NewClientTLSConfig(
         ctx,
-        source,
+        x509Source,
+        x509Source,
         identitytls.ClientConfig{
             ExpectedServerTrustDomain: "example.org",
         },
@@ -136,8 +144,9 @@ func main() {
 ### Accept any client in same trust domain (default)
 
 ```go
+x509Source := source.X509Source()
 tlsConfig, err := identitytls.NewServerTLSConfig(
-    ctx, source,
+    ctx, x509Source, x509Source,
     identitytls.ServerConfig{},
 )
 ```
@@ -145,8 +154,9 @@ tlsConfig, err := identitytls.NewServerTLSConfig(
 ### Accept specific trust domain
 
 ```go
+x509Source := source.X509Source()
 tlsConfig, err := identitytls.NewServerTLSConfig(
-    ctx, source,
+    ctx, x509Source, x509Source,
     identitytls.ServerConfig{
         AllowedClientTrustDomain: "partner.example.org",
     },
@@ -156,8 +166,9 @@ tlsConfig, err := identitytls.NewServerTLSConfig(
 ### Accept only specific SPIFFE ID
 
 ```go
+x509Source := source.X509Source()
 tlsConfig, err := identitytls.NewServerTLSConfig(
-    ctx, source,
+    ctx, x509Source, x509Source,
     identitytls.ServerConfig{
         AllowedClientID: "spiffe://example.org/api-client",
     },
@@ -169,8 +180,9 @@ tlsConfig, err := identitytls.NewServerTLSConfig(
 ### Verify specific SPIFFE ID
 
 ```go
+x509Source := source.X509Source()
 tlsConfig, err := identitytls.NewClientTLSConfig(
-    ctx, source,
+    ctx, x509Source, x509Source,
     identitytls.ClientConfig{
         ExpectedServerID: "spiffe://example.org/api-server",
     },
@@ -180,8 +192,9 @@ tlsConfig, err := identitytls.NewClientTLSConfig(
 ### Accept any server in trust domain
 
 ```go
+x509Source := source.X509Source()
 tlsConfig, err := identitytls.NewClientTLSConfig(
-    ctx, source,
+    ctx, x509Source, x509Source,
     identitytls.ClientConfig{
         ExpectedServerTrustDomain: "example.org",
     },
@@ -254,8 +267,9 @@ if err != nil {
 }
 
 // Share across multiple TLS configs
-serverTLS, _ := identitytls.NewServerTLSConfig(ctx, source, ...)
-clientTLS, _ := identitytls.NewClientTLSConfig(ctx, source, ...)
+x509Source := source.X509Source()
+serverTLS, _ := identitytls.NewServerTLSConfig(ctx, x509Source, x509Source, ...)
+clientTLS, _ := identitytls.NewClientTLSConfig(ctx, x509Source, x509Source, ...)
 
 // Close when shutting down
 defer source.Close()

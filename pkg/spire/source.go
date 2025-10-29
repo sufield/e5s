@@ -2,8 +2,6 @@ package spire
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"errors"
 	"fmt"
 	"os"
@@ -11,11 +9,9 @@ import (
 	"sync"
 
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
-
-	"github.com/sufield/e5s/pkg/identitytls"
 )
 
-// Source implements identitytls.CertSource using the SPIRE Workload API.
+// Source provides SPIFFE X.509 identities from the SPIRE Workload API.
 //
 // This source:
 //   - Connects to the SPIRE Agent's Workload API socket
@@ -25,19 +21,12 @@ import (
 // The X509Source watches the Workload API and updates certificates/bundles
 // automatically, enabling zero-downtime rotation.
 //
-// Certificate Requirements:
-//
-//	GetTLSCertificate always populates the Leaf field with the parsed X.509
-//	certificate. This is required by identitytls.NewServerTLSConfig to extract
-//	the server's SPIFFE ID and trust domain during initialization.
-//
 // Trust Domain Federation:
 //
 //	This implementation currently only supports single trust domain deployments.
-//	GetRootCAs returns the CA bundle for the workload's own trust domain only.
-//	If you need cross-trust-domain mTLS (federation), you must either:
-//	  1. Configure SPIRE federation and use go-spiffe's federated bundle APIs, or
-//	  2. Implement a custom CertSource that merges multiple trust domain bundles
+//	The underlying SDK source returns the CA bundle for the workload's own trust domain only.
+//	If you need cross-trust-domain mTLS (federation), configure SPIRE federation
+//	and use go-spiffe's federated bundle APIs
 //
 // Lifecycle:
 //   - Create once per process (or trust domain)
@@ -137,100 +126,24 @@ func NewSource(ctx context.Context, cfg Config) (*Source, error) {
 	return s, nil
 }
 
-// GetTLSCertificate implements identitytls.CertSource.
-func (s *Source) GetTLSCertificate(_ context.Context) (tls.Certificate, error) {
-	// Snapshot source under read lock to prevent race with Close()
-	s.mu.RLock()
-	src := s.source
-	s.mu.RUnlock()
-
-	if src == nil {
-		return tls.Certificate{}, errors.New("source is closed")
-	}
-
-	// Get current SVID from the source
-	// This returns the latest rotated certificate if rotation has occurred
-	svid, err := src.GetX509SVID()
-	if err != nil {
-		return tls.Certificate{}, fmt.Errorf("failed to get X509 SVID: %w", err)
-	}
-
-	// Extract certificates and private key
-	certs := svid.Certificates
-	privateKey := svid.PrivateKey
-
-	if len(certs) == 0 {
-		return tls.Certificate{}, errors.New("SVID has no certificates")
-	}
-
-	if privateKey == nil {
-		return tls.Certificate{}, errors.New("SVID has no private key")
-	}
-
-	// Build tls.Certificate
-	// The Certificate field contains DER-encoded certificates (leaf first, then intermediates)
-	certDER := make([][]byte, len(certs))
-	for i, cert := range certs {
-		certDER[i] = cert.Raw
-	}
-
-	return tls.Certificate{
-		Certificate: certDER,
-		PrivateKey:  privateKey,
-		Leaf:        certs[0], // Cache parsed leaf for performance
-	}, nil
-}
-
-// GetRootCAs implements identitytls.CertSource.
-func (s *Source) GetRootCAs(_ context.Context) (*x509.CertPool, error) {
-	// Snapshot source under read lock to prevent race with Close()
-	s.mu.RLock()
-	src := s.source
-	s.mu.RUnlock()
-
-	if src == nil {
-		return nil, errors.New("source is closed")
-	}
-
-	// Get current SVID to determine our trust domain
-	svid, err := src.GetX509SVID()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get X509 SVID: %w", err)
-	}
-
-	// Get trust bundle from the source
-	// This returns the latest bundle if it has been updated
-	bundle, err := src.GetX509BundleForTrustDomain(svid.ID.TrustDomain())
-	if err != nil {
-		return nil, fmt.Errorf("failed to get X509 bundle: %w", err)
-	}
-
-	// Extract CA certificates from the bundle
-	//
-	// NOTE: We intentionally ONLY trust our own trust domain bundle here.
-	// We do NOT add federated bundles. Expanding trust domains is a
-	// security boundary change and must be an explicit API decision.
-	// See the Source type's "Trust Domain Federation" doc for guidance.
-	//
-	// A fresh *x509.CertPool is returned on each call; callers may modify it.
-	pool := x509.NewCertPool()
-	for _, cert := range bundle.X509Authorities() {
-		pool.AddCert(cert)
-	}
-
-	if len(pool.Subjects()) == 0 {
-		return nil, errors.New("trust bundle has no CA certificates")
-	}
-
-	return pool, nil
-}
-
-// Close implements identitytls.CertSource.
+// Close releases all resources (connections, watchers, goroutines).
 //
 // Closes the X509Source and releases all resources (connections, watchers, goroutines).
-// After Close returns, future GetTLSCertificate/GetRootCAs calls return "source is closed".
+// After Close returns, the underlying SDK source is closed and cannot be used.
 //
 // Idempotent: safe to call multiple times. Subsequent calls return the cached error.
+// X509Source returns the underlying SDK X509Source for use with SDK TLS helpers.
+//
+// The returned source implements both x509svid.Source and x509bundle.Source,
+// which can be passed directly to tlsconfig.MTLSServerConfig() and similar SDK functions.
+//
+// Returns nil if the source has been closed.
+func (s *Source) X509Source() *workloadapi.X509Source {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.source
+}
+
 func (s *Source) Close() error {
 	s.closeOnce.Do(func() {
 		s.mu.Lock()
@@ -329,5 +242,3 @@ func validateSocket(socketPath string) error {
 	return fmt.Errorf("unsupported socket scheme (must be unix:// or tcp://): %q", socketPath)
 }
 
-// Compile-time assertion that Source implements identitytls.CertSource
-var _ identitytls.CertSource = (*Source)(nil)

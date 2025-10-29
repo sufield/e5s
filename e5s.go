@@ -122,10 +122,14 @@ func Start(configPath string, handler http.Handler) (shutdown func() error, err 
 		return nil, fmt.Errorf("failed to create SPIRE source: %w", err)
 	}
 
+	// Get SDK X509Source for TLS config
+	x509Source := source.X509Source()
+
 	// Build server TLS config with client verification
 	tlsCfg, err := identitytls.NewServerTLSConfig(
 		ctx,
-		source,
+		x509Source,
+		x509Source,
 		identitytls.ServerConfig{
 			AllowedClientID:          cfg.Server.AllowedClientSPIFFEID,
 			AllowedClientTrustDomain: cfg.Server.AllowedClientTrustDomain,
@@ -330,10 +334,14 @@ func Client(configPath string) (*http.Client, func() error, error) {
 		return nil, nil, fmt.Errorf("failed to create SPIRE source: %w", err)
 	}
 
+	// Get SDK X509Source for TLS config
+	x509Source := source.X509Source()
+
 	// Build client TLS config with server verification
 	tlsCfg, err := identitytls.NewClientTLSConfig(
 		ctx,
-		source,
+		x509Source,
+		x509Source,
 		identitytls.ClientConfig{
 			ExpectedServerID:          cfg.Client.ExpectedServerSPIFFEID,
 			ExpectedServerTrustDomain: cfg.Client.ExpectedServerTrustDomain,

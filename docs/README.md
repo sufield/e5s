@@ -39,25 +39,22 @@ Provider-agnostic primitives for building mTLS connections with SPIFFE identity:
 - `NewServerTLSConfig()` - Create server TLS config with client verification
 - `NewClientTLSConfig()` - Create client TLS config with server verification
 - `ExtractPeerInfo()` - Extract authenticated peer identity from requests
-- `CertSource` interface - Abstract certificate/trust bundle provider
-
 ### `pkg/spire` - SPIRE Adapter
 
-SPIRE Workload API implementation of `CertSource`:
+SPIRE Workload API client:
 
 - `NewSource()` - Connect to SPIRE Agent
+- `X509Source()` - Access underlying SDK source
 - Automatic certificate rotation
 - Trust bundle updates
 - Thread-safe, share across servers/clients
 
 ## Architecture
 
-The old hexagonal architecture (ports, adapters, domain layer, HTTP services) has been removed. This is now a **focused library** with clean separation:
+This is a **focused library** with clean separation:
 
-- **Core** (`pkg/identitytls`) - Defines interfaces and TLS policy
-- **Adapter** (`pkg/spire`) - Implements interfaces using SPIRE
-
-Users can implement custom `CertSource` adapters for other identity providers (Vault, cert-manager, etc.).
+- **Core** (`pkg/identitytls`) - TLS configuration using go-spiffe SDK
+- **Adapter** (`pkg/spire`) - SPIRE Workload API client
 
 ## Security
 

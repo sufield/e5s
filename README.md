@@ -6,7 +6,7 @@ A lightweight Go library for building mutual TLS services with SPIFFE identity v
 
 - **Simple High-Level API** - Config-driven with `e5s.Start()` and `e5s.Client()`
 - **Low-Level Control** - Direct access to `pkg/identitytls` and `pkg/spire` for custom use cases
-- **Provider-Agnostic Core** - Clean `CertSource` interface for any identity provider
+- **SDK-Based Implementation** - Uses official go-spiffe SDK patterns
 - **SPIRE Adapter** - Production-ready SPIRE Workload API implementation
 - **Automatic Rotation** - Zero-downtime certificate and trust bundle updates
 - **SPIFFE ID Verification** - Policy-based peer authentication
@@ -43,7 +43,7 @@ We provide both **high-level** and **low-level** APIs because they serve differe
 **For:** Infrastructure/platform teams
 **Goal:** Allow full control over mTLS internals
 
-- Lets you manage `CertSource`, build custom TLS configs, and integrate with other identity systems (Vault, cert-manager, etc.)
+- Lets you build custom TLS configs and integrate with the go-spiffe SDK directly
 - Exposes `identitytls.NewServerTLSConfig` and `spire.NewSource`
 - Ideal for customizing certificate rotation intervals, trust domain logic, or integrating into non-HTTP systems
 
@@ -172,10 +172,14 @@ func main() {
     }
     defer source.Close()
 
+    // Get SDK X509Source for TLS config
+    x509Source := source.X509Source()
+
     // Create server TLS config (accepts any client in same trust domain)
     tlsConfig, err := identitytls.NewServerTLSConfig(
         ctx,
-        source,
+        x509Source,
+        x509Source,
         identitytls.ServerConfig{},
     )
     if err != nil {
@@ -227,10 +231,14 @@ func main() {
     }
     defer source.Close()
 
+    // Get SDK X509Source for TLS config
+    x509Source := source.X509Source()
+
     // Create client TLS config
     tlsConfig, err := identitytls.NewClientTLSConfig(
         ctx,
-        source,
+        x509Source,
+        x509Source,
         identitytls.ClientConfig{
             ExpectedServerTrustDomain: "example.org",
         },
@@ -272,10 +280,9 @@ pkg/
 │   ├── client.go       # Client TLS config builder
 │   ├── server.go       # Server TLS config builder
 │   ├── peer.go         # SPIFFE ID extraction/validation
-│   ├── context.go      # Context helpers for peer info
-│   └── source.go       # CertSource interface
+│   └── context.go      # Context helpers for peer info
 └── spire/              # SPIRE Workload API adapter
-    └── source.go       # Implements CertSource for SPIRE
+    └── source.go       # SPIRE Workload API client
 
 internal/config/        # Config file loading (not exported)
 ├── config.go           # Config structs
@@ -288,11 +295,9 @@ internal/config/        # Config file loading (not exported)
 2. **Low-level** (`pkg/identitytls` + `pkg/spire`) - Full control over TLS, rotation, verification
 
 **Clean separation:**
-- `pkg/identitytls` - Defines interfaces and TLS policy (no SPIRE dependency)
-- `pkg/spire` - Implements `CertSource` using SPIRE Workload API
+- `pkg/identitytls` - TLS configuration using go-spiffe SDK (no SPIRE dependency)
+- `pkg/spire` - SPIRE Workload API client
 - `e5s.go` - Wires everything together based on config file
-
-You can implement custom `CertSource` adapters for other identity providers (Vault, cert-manager, etc.).
 
 **Note:** The examples are separate modules (each has its own `go.mod`) so you can vendor/copy them without pulling extra dependencies into your service. The core library has minimal dependencies.
 
