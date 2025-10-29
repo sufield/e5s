@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
+	"github.com/spiffe/go-spiffe/v2/svid/x509svid"
 )
 
 // PeerInfo represents the authenticated identity extracted from an mTLS connection.
@@ -116,7 +117,7 @@ func ExtractPeerInfo(r *http.Request) (PeerInfo, bool) {
 // Example: "spiffe://example.org/service" -> ("spiffe://example.org/service", "example.org", nil)
 //
 // This is an internal helper used by ExtractPeerInfo and TLS verification callbacks.
-// It uses the official go-spiffe SDK for parsing and validation.
+// It uses the official go-spiffe SDK (x509svid.IDFromCert) for parsing and validation.
 //
 // Returns:
 //   - spiffeID: the full SPIFFE ID
@@ -127,21 +128,13 @@ func extractSPIFFEID(cert *x509.Certificate) (spiffeID string, trustDomain strin
 		return "", "", errors.New("certificate is nil")
 	}
 
-	// SPIFFE IDs are encoded as URI SANs
-	for _, uri := range cert.URIs {
-		if uri.Scheme == "spiffe" {
-			// Use official go-spiffe SDK for parsing and validation
-			id, err := spiffeid.FromURI(uri)
-			if err != nil {
-				// Wrap the error to preserve sentinel error types for callers who need them
-				return "", "", fmt.Errorf("invalid SPIFFE ID: %w", err)
-			}
-
-			return id.String(), id.TrustDomain().String(), nil
-		}
+	// Use official go-spiffe SDK to extract SPIFFE ID from certificate
+	id, err := x509svid.IDFromCert(cert)
+	if err != nil {
+		return "", "", fmt.Errorf("invalid peer certificate: %w", err)
 	}
 
-	return "", "", errors.New("no SPIFFE ID found in certificate")
+	return id.String(), id.TrustDomain().String(), nil
 }
 
 // ValidateSPIFFEID validates a SPIFFE ID string format.
