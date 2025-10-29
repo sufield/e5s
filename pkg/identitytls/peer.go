@@ -93,14 +93,10 @@ func ExtractPeerInfo(r *http.Request) (PeerInfo, bool) {
 		return PeerInfo{}, false
 	}
 
-	// Get certificate expiry from the leaf certificate
-	// Note: We know PeerCertificates[0] exists because PeerIDFromConnectionState succeeded
-	leaf := r.TLS.PeerCertificates[0]
-
 	return PeerInfo{
 		SPIFFEID:    peerID.String(),
 		TrustDomain: peerID.TrustDomain().String(),
-		ExpiresAt:   leaf.NotAfter,
+		ExpiresAt:   r.TLS.PeerCertificates[0].NotAfter,
 	}, true
 }
 
@@ -109,27 +105,21 @@ func ExtractPeerInfo(r *http.Request) (PeerInfo, bool) {
 // SPIFFE IDs are encoded in X.509 certificates as URI Subject Alternative Names
 // with the format: spiffe://<trust-domain>/<path>
 //
-// Example: "spiffe://example.org/service" -> ("spiffe://example.org/service", "example.org", nil)
-//
-// This is an internal helper used by ExtractPeerInfo and TLS verification callbacks.
+// This is an internal helper used by server and client TLS verification callbacks.
 // It uses the official go-spiffe SDK (x509svid.IDFromCert) for parsing and validation.
 //
-// Returns:
-//   - spiffeID: the full SPIFFE ID
-//   - trustDomain: the trust domain portion
-//   - error if no SPIFFE ID found or parsing failed (wraps spiffeid sentinel errors)
-func extractSPIFFEID(cert *x509.Certificate) (spiffeID string, trustDomain string, err error) {
+// Returns the SPIFFE ID as a strongly-typed spiffeid.ID, which provides methods for:
+//   - id.String() - full SPIFFE ID as string
+//   - id.TrustDomain() - trust domain object
+//   - id.Path() - workload path component
+//
+// Returns error if certificate is nil or has no valid SPIFFE ID.
+func extractSPIFFEID(cert *x509.Certificate) (spiffeid.ID, error) {
 	if cert == nil {
-		return "", "", errors.New("certificate is nil")
+		return spiffeid.ID{}, errors.New("certificate is nil")
 	}
 
-	// Use official go-spiffe SDK to extract SPIFFE ID from certificate
-	id, err := x509svid.IDFromCert(cert)
-	if err != nil {
-		return "", "", fmt.Errorf("invalid peer certificate: %w", err)
-	}
-
-	return id.String(), id.TrustDomain().String(), nil
+	return x509svid.IDFromCert(cert)
 }
 
 // ValidateSPIFFEID validates a SPIFFE ID string format.

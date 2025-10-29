@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/spiffe/go-spiffe/v2/spiffeid"
 )
 
 // ClientConfig configures an mTLS client's server verification policy.
@@ -194,14 +196,14 @@ func NewClientTLSConfig(ctx context.Context, source CertSource, cfg ClientConfig
 			}
 
 			// Extract server's SPIFFE ID
-			serverSPIFFEID, serverTrustDomain, err := extractSPIFFEID(serverCert)
+			serverID, err := extractSPIFFEID(serverCert)
 			if err != nil {
 				// Use "authorization failed" prefix so callers can distinguish auth from TLS errors
 				return fmt.Errorf("authorization failed: server certificate has no valid SPIFFE ID: %w", err)
 			}
 
 			// Apply SPIFFE ID policy
-			if err := verifyServerIdentity(serverSPIFFEID, serverTrustDomain, cfg); err != nil {
+			if err := verifyServerIdentity(serverID, cfg); err != nil {
 				return err // Already prefixed with "authorization failed:"
 			}
 
@@ -230,24 +232,38 @@ func NewClientTLSConfig(ctx context.Context, source CertSource, cfg ClientConfig
 //  1. If cfg.ExpectedServerID is set: require exact match
 //  2. If cfg.ExpectedServerTrustDomain is set: require trust domain match
 //
+// Uses go-spiffe SDK Matcher API for robust matching.
+//
 // Returns nil if allowed, error describing why denied otherwise.
-func verifyServerIdentity(serverSPIFFEID, serverTrustDomain string, cfg ClientConfig) error {
+func verifyServerIdentity(serverID spiffeid.ID, cfg ClientConfig) error {
+	// Build matcher based on policy
+	var matcher spiffeid.Matcher
+
 	// Policy 1: Exact SPIFFE ID match
 	if cfg.ExpectedServerID != "" {
-		if serverSPIFFEID == cfg.ExpectedServerID {
-			return nil // Allowed
+		expectedID, err := spiffeid.FromString(cfg.ExpectedServerID)
+		if err != nil {
+			// Should never happen - validated in NewClientTLSConfig
+			return fmt.Errorf("authorization failed: invalid ExpectedServerID config: %w", err)
 		}
-		return fmt.Errorf("authorization failed: server SPIFFE ID %q does not match expected ID %q", serverSPIFFEID, cfg.ExpectedServerID)
+		matcher = spiffeid.MatchID(expectedID)
+	} else if cfg.ExpectedServerTrustDomain != "" {
+		// Policy 2: Trust domain match
+		td, err := spiffeid.TrustDomainFromString(cfg.ExpectedServerTrustDomain)
+		if err != nil {
+			// Should never happen - validated in NewClientTLSConfig
+			return fmt.Errorf("authorization failed: invalid ExpectedServerTrustDomain config: %w", err)
+		}
+		matcher = spiffeid.MatchMemberOf(td)
+	} else {
+		// Should never reach here due to config validation
+		return errors.New("no server verification policy configured (internal misconfiguration)")
 	}
 
-	// Policy 2: Trust domain match
-	if cfg.ExpectedServerTrustDomain != "" {
-		if MatchesTrustDomain(serverSPIFFEID, cfg.ExpectedServerTrustDomain) {
-			return nil // Allowed
-		}
-		return fmt.Errorf("authorization failed: server trust domain %q does not match expected trust domain %q", serverTrustDomain, cfg.ExpectedServerTrustDomain)
+	// Apply matcher
+	if err := matcher(serverID); err != nil {
+		return fmt.Errorf("authorization failed: %w", err)
 	}
 
-	// Should never reach here due to config validation
-	return errors.New("no server verification policy configured (internal misconfiguration)")
+	return nil
 }

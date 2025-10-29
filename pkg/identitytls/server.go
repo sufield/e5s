@@ -123,11 +123,12 @@ func NewServerTLSConfig(ctx context.Context, source CertSource, cfg ServerConfig
 		return nil, errors.New("cert source returned certificate with no parsed Leaf; source must populate Leaf field")
 	}
 
-	// Extract server's SPIFFE ID and trust domain
-	_, serverTrustDomain, err := extractSPIFFEID(serverCert.Leaf)
+	// Extract server's SPIFFE ID
+	serverID, err := extractSPIFFEID(serverCert.Leaf)
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract server SPIFFE ID: %w", err)
 	}
+	serverTrustDomain := serverID.TrustDomain()
 
 	// Fetch initial trust bundle to validate source works
 	_, err = source.GetRootCAs(ctx)
@@ -220,14 +221,14 @@ func NewServerTLSConfig(ctx context.Context, source CertSource, cfg ServerConfig
 			}
 
 			// Extract client's SPIFFE ID
-			clientSPIFFEID, clientTrustDomain, err := extractSPIFFEID(leaf)
+			clientID, err := extractSPIFFEID(leaf)
 			if err != nil {
 				// Use "authorization failed" prefix so callers can distinguish auth from TLS errors
 				return fmt.Errorf("authorization failed: client certificate has no valid SPIFFE ID: %w", err)
 			}
 
 			// Apply SPIFFE ID policy
-			if err := verifyClientIdentity(clientSPIFFEID, clientTrustDomain, serverTrustDomain, cfg); err != nil {
+			if err := verifyClientIdentity(clientID, serverTrustDomain, cfg); err != nil {
 				return err // Already prefixed with "authorization failed:"
 			}
 
@@ -245,16 +246,10 @@ func NewServerTLSConfig(ctx context.Context, source CertSource, cfg ServerConfig
 //  2. If cfg.AllowedClientTrustDomain is set: require trust domain match
 //  3. Otherwise: require same trust domain as server
 //
-// Uses go-spiffe SDK Matcher API internally for robust matching.
+// Uses go-spiffe SDK Matcher API for robust matching.
 //
 // Returns nil if allowed, error describing why denied otherwise.
-func verifyClientIdentity(clientSPIFFEID, clientTrustDomain, serverTrustDomain string, cfg ServerConfig) error {
-	// Parse client SPIFFE ID using SDK
-	clientID, err := spiffeid.FromString(clientSPIFFEID)
-	if err != nil {
-		return fmt.Errorf("authorization failed: invalid client SPIFFE ID: %w", err)
-	}
-
+func verifyClientIdentity(clientID spiffeid.ID, serverTrustDomain spiffeid.TrustDomain, cfg ServerConfig) error {
 	// Build matcher based on policy
 	var matcher spiffeid.Matcher
 
@@ -276,11 +271,7 @@ func verifyClientIdentity(clientSPIFFEID, clientTrustDomain, serverTrustDomain s
 		matcher = spiffeid.MatchMemberOf(td)
 	} else {
 		// Policy 3: Same trust domain as server (default)
-		td, err := spiffeid.TrustDomainFromString(serverTrustDomain)
-		if err != nil {
-			return fmt.Errorf("authorization failed: invalid server trust domain: %w", err)
-		}
-		matcher = spiffeid.MatchMemberOf(td)
+		matcher = spiffeid.MatchMemberOf(serverTrustDomain)
 	}
 
 	// Apply matcher
