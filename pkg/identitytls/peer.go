@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
+	"github.com/spiffe/go-spiffe/v2/spiffetls"
 	"github.com/spiffe/go-spiffe/v2/svid/x509svid"
 )
 
@@ -36,6 +37,9 @@ type PeerInfo struct {
 // This function inspects the verified TLS connection state and returns the peer's
 // SPIFFE ID and certificate metadata. It works with any HTTP framework (chi, gin,
 // net/http, etc.) because it only depends on *http.Request.
+//
+// Uses the official go-spiffe SDK (spiffetls.PeerIDFromConnectionState) for
+// extracting the peer SPIFFE ID.
 //
 // SECURITY NOTE:
 //
@@ -83,28 +87,19 @@ func ExtractPeerInfo(r *http.Request) (PeerInfo, bool) {
 		return PeerInfo{}, false
 	}
 
-	// Check for peer certificates
-	if len(r.TLS.PeerCertificates) == 0 {
-		return PeerInfo{}, false
-	}
-
-	// Take the leaf certificate (first in the chain)
-	leaf := r.TLS.PeerCertificates[0]
-
-	// Defensive: reject malformed certs with zero-value expiry
-	if leaf.NotAfter.IsZero() {
-		return PeerInfo{}, false
-	}
-
-	// Extract SPIFFE ID from certificate
-	spiffeID, trustDomain, err := extractSPIFFEID(leaf)
+	// Use SDK to extract peer SPIFFE ID from TLS connection state
+	peerID, err := spiffetls.PeerIDFromConnectionState(*r.TLS)
 	if err != nil {
 		return PeerInfo{}, false
 	}
 
+	// Get certificate expiry from the leaf certificate
+	// Note: We know PeerCertificates[0] exists because PeerIDFromConnectionState succeeded
+	leaf := r.TLS.PeerCertificates[0]
+
 	return PeerInfo{
-		SPIFFEID:    spiffeID,
-		TrustDomain: trustDomain,
+		SPIFFEID:    peerID.String(),
+		TrustDomain: peerID.TrustDomain().String(),
 		ExpiresAt:   leaf.NotAfter,
 	}, true
 }
