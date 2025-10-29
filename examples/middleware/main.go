@@ -97,8 +97,9 @@ func helloHandler(w http.ResponseWriter, r *http.Request) {
 	// Retrieve peer from context (set by middleware)
 	peer, ok := spiffehttp.PeerFromContext(r.Context())
 	if !ok {
-		// This shouldn't happen if middleware ran, but handle it anyway
-		http.Error(w, "Internal error", http.StatusInternalServerError)
+		// This should never happen if auth middleware ran.
+		// Return 401 in case handler was mis-wired without middleware.
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
@@ -148,7 +149,10 @@ func main() {
 	mux.Handle("/api/hello", protectedHandler)
 
 	// Protected endpoint with trust domain check
-	allowedTD, _ := spiffeid.TrustDomainFromString("example.org")
+	allowedTD, err := spiffeid.TrustDomainFromString("example.org")
+	if err != nil {
+		log.Fatalf("Invalid trust domain: %v", err)
+	}
 	restrictedHandler := trustDomainMiddleware(allowedTD)(http.HandlerFunc(helloHandler))
 	mux.Handle("/api/restricted", restrictedHandler)
 
@@ -181,5 +185,9 @@ func main() {
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	server.Shutdown(shutdownCtx)
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Printf("Server shutdown error: %v", err)
+	}
+	log.Println("Server stopped")
 }

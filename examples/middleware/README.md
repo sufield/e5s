@@ -190,9 +190,10 @@ func rateLimitMiddleware(next http.Handler) http.Handler {
 1. **Keep middleware focused** - One middleware per concern (auth, logging, metrics)
 2. **Chain middleware** - Compose multiple simple middleware instead of one complex one
 3. **Use context for peer info** - Extract once in middleware, retrieve in handlers
-4. **Log authentication** - Always log who's accessing what for security auditing
-5. **Handle errors gracefully** - Return appropriate HTTP status codes
+4. **Log authentication carefully** - SPIFFE IDs may contain sensitive service/namespace info. Log for auditing but be aware this goes to log aggregation systems.
+5. **Handle errors gracefully** - Return appropriate HTTP status codes (401 for authentication, 403 for authorization)
 6. **Don't assume context has peer** - Always check the `ok` return value
+7. **Validate trust domain strings** - Always check errors from `TrustDomainFromString()` to avoid silent misconfigurations
 
 ## Integration with Frameworks
 
