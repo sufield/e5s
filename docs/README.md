@@ -41,7 +41,6 @@ Provider-agnostic primitives for building mTLS connections with SPIFFE identity:
 - `PeerFromRequest()` - Extract authenticated peer identity from requests
 - `PeerFromContext()` - Retrieve peer from request context
 - `WithPeer()` - Attach peer to context
-- `SPIFFEAuthMiddleware` - HTTP middleware for automatic peer extraction
 ### `pkg/spire` - SPIRE Adapter
 
 SPIRE Workload API client:

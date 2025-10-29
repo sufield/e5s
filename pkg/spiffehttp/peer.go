@@ -74,10 +74,6 @@ type Peer struct {
 //	    log.Printf("request from %s", peer.ID.String())
 //	}
 //
-// BEST PRACTICE: Use SPIFFEAuthMiddleware instead of calling PeerFromRequest
-// directly in every handler. The middleware extracts peer info once per request
-// and attaches it to the context, avoiding repeated TLS state parsing.
-//
 // Returns:
 //   - Peer with verified identity information
 //   - true if identity was successfully extracted
