@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/spiffe/go-spiffe/v2/bundle/x509bundle"
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
@@ -86,39 +85,51 @@ type ServerConfig struct {
 //   - Initial certificate fetch fails
 //   - Server certificate has no SPIFFE ID
 func NewServerTLSConfig(ctx context.Context, svidSource x509svid.Source, bundleSource x509bundle.Source, cfg ServerConfig) (*tls.Config, error) {
-	if ctx == nil {
-		return nil, errors.New("context cannot be nil")
+	if err := validateServerInputs(ctx, svidSource, bundleSource, cfg); err != nil {
+		return nil, err
 	}
 
-	if svidSource == nil {
-		return nil, errors.New("svidSource cannot be nil")
+	authorizer, err := buildServerAuthorizer(svidSource, cfg)
+	if err != nil {
+		return nil, err
 	}
 
-	if bundleSource == nil {
-		return nil, errors.New("bundleSource cannot be nil")
+	tlsCfg := tlsconfig.MTLSServerConfig(svidSource, bundleSource, authorizer)
+	tlsCfg.MinVersion = tls.VersionTLS13
+
+	return tlsCfg, nil
+}
+
+func validateServerInputs(ctx context.Context, svidSource x509svid.Source, bundleSource x509bundle.Source, cfg ServerConfig) error {
+	switch {
+	case ctx == nil:
+		return errors.New("context cannot be nil")
+	case svidSource == nil:
+		return errors.New("svidSource cannot be nil")
+	case bundleSource == nil:
+		return errors.New("bundleSource cannot be nil")
+	case cfg.AllowedClientID != "" && cfg.AllowedClientTrustDomain != "":
+		return errors.New("AllowedClientID and AllowedClientTrustDomain are mutually exclusive")
 	}
 
-	// Validate config
-	if cfg.AllowedClientID != "" && cfg.AllowedClientTrustDomain != "" {
-		return nil, errors.New("AllowedClientID and AllowedClientTrustDomain are mutually exclusive")
-	}
-
-	// Validate SPIFFE IDs if provided
+	// Validate SPIFFE ID format
 	if cfg.AllowedClientID != "" {
 		if _, err := spiffeid.FromString(cfg.AllowedClientID); err != nil {
-			return nil, fmt.Errorf("invalid AllowedClientID: %w", err)
+			return fmt.Errorf("invalid AllowedClientID: %w", err)
 		}
 	}
 
-	// Basic sanity check for trust domain input
+	// Validate trust domain format
 	if cfg.AllowedClientTrustDomain != "" {
-		if strings.ContainsAny(cfg.AllowedClientTrustDomain, "/?#") {
-			return nil, fmt.Errorf("invalid AllowedClientTrustDomain %q: trust domain must not contain '/', '?', or '#'", cfg.AllowedClientTrustDomain)
+		if _, err := spiffeid.TrustDomainFromString(cfg.AllowedClientTrustDomain); err != nil {
+			return fmt.Errorf("invalid AllowedClientTrustDomain: %w", err)
 		}
 	}
 
-	// Build authorizer based on config
-	var authorizer tlsconfig.Authorizer
+	return nil
+}
+
+func buildServerAuthorizer(svidSource x509svid.Source, cfg ServerConfig) (tlsconfig.Authorizer, error) {
 	switch {
 	case cfg.AllowedClientID != "":
 		// Policy 1: Exact SPIFFE ID match
@@ -126,7 +137,7 @@ func NewServerTLSConfig(ctx context.Context, svidSource x509svid.Source, bundleS
 		if err != nil {
 			return nil, fmt.Errorf("invalid AllowedClientID: %w", err)
 		}
-		authorizer = tlsconfig.AuthorizeID(id)
+		return tlsconfig.AuthorizeID(id), nil
 
 	case cfg.AllowedClientTrustDomain != "":
 		// Policy 2: Trust domain match (explicit)
@@ -134,22 +145,15 @@ func NewServerTLSConfig(ctx context.Context, svidSource x509svid.Source, bundleS
 		if err != nil {
 			return nil, fmt.Errorf("invalid AllowedClientTrustDomain: %w", err)
 		}
-		authorizer = tlsconfig.AuthorizeMemberOf(td)
+		return tlsconfig.AuthorizeMemberOf(td), nil
 
 	default:
 		// Policy 3: Same trust domain as server (default)
-		// Fetch server's SVID to determine trust domain
 		svid, err := svidSource.GetX509SVID()
 		if err != nil {
 			return nil, fmt.Errorf("failed to get server SVID: %w", err)
 		}
-		authorizer = tlsconfig.AuthorizeMemberOf(svid.ID.TrustDomain())
+		return tlsconfig.AuthorizeMemberOf(svid.ID.TrustDomain()), nil
 	}
-
-	// Use SDK helper to build TLS config
-	tlsCfg := tlsconfig.MTLSServerConfig(svidSource, bundleSource, authorizer)
-	tlsCfg.MinVersion = tls.VersionTLS13
-
-	return tlsCfg, nil
 }
 

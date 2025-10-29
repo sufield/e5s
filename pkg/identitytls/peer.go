@@ -1,14 +1,11 @@
 package identitytls
 
 import (
-	"crypto/x509"
-	"errors"
 	"net/http"
 	"time"
 
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	"github.com/spiffe/go-spiffe/v2/spiffetls"
-	"github.com/spiffe/go-spiffe/v2/svid/x509svid"
 )
 
 // PeerInfo represents the authenticated identity extracted from an mTLS connection.
@@ -99,27 +96,5 @@ func ExtractPeerInfo(r *http.Request) (PeerInfo, bool) {
 		ID:        peerID,
 		ExpiresAt: r.TLS.PeerCertificates[0].NotAfter,
 	}, true
-}
-
-// extractSPIFFEID parses the SPIFFE ID from a certificate's URI SAN.
-//
-// SPIFFE IDs are encoded in X.509 certificates as URI Subject Alternative Names
-// with the format: spiffe://<trust-domain>/<path>
-//
-// This is an internal helper used by server and client TLS verification callbacks.
-// It uses the official go-spiffe SDK (x509svid.IDFromCert) for parsing and validation.
-//
-// Returns the SPIFFE ID as a strongly-typed spiffeid.ID, which provides methods for:
-//   - id.String() - full SPIFFE ID as string
-//   - id.TrustDomain() - trust domain object
-//   - id.Path() - workload path component
-//
-// Returns error if certificate is nil or has no valid SPIFFE ID.
-func extractSPIFFEID(cert *x509.Certificate) (spiffeid.ID, error) {
-	if cert == nil {
-		return spiffeid.ID{}, errors.New("certificate is nil")
-	}
-
-	return x509svid.IDFromCert(cert)
 }
 
