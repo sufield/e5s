@@ -3,7 +3,6 @@ package identitytls
 import (
 	"crypto/x509"
 	"errors"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -19,13 +18,16 @@ import (
 // Security: PeerInfo does NOT contain private keys or raw certificate data.
 // It only exposes the verified SPIFFE ID and metadata.
 type PeerInfo struct {
-	// SPIFFEID is the verified SPIFFE ID from the peer's certificate.
-	// Example: "spiffe://example.org/service"
-	SPIFFEID string
-
-	// TrustDomain is extracted from the SPIFFE ID.
-	// Example: "example.org"
-	TrustDomain string
+	// ID is the verified SPIFFE ID from the peer's certificate.
+	// This provides strongly-typed access to both the full SPIFFE ID
+	// and its components (trust domain, path).
+	//
+	// Access methods:
+	//   - ID.String() returns the full SPIFFE ID (e.g., "spiffe://example.org/service")
+	//   - ID.TrustDomain().Name() returns the trust domain (e.g., "example.org")
+	//   - ID.Path() returns the workload path (e.g., "/service")
+	//   - ID.MemberOf(td) checks trust domain membership
+	ID spiffeid.ID
 
 	// ExpiresAt is when the peer's certificate expires.
 	// After this time, the peer must re-authenticate with a fresh certificate.
@@ -69,8 +71,8 @@ type PeerInfo struct {
 //	        http.Error(w, "unauthorized", http.StatusUnauthorized)
 //	        return
 //	    }
-//	    // Use peer.SPIFFEID for authorization decisions
-//	    log.Printf("request from %s", peer.SPIFFEID)
+//	    // Use peer.ID for authorization decisions
+//	    log.Printf("request from %s", peer.ID.String())
 //	}
 //
 // Returns:
@@ -94,9 +96,8 @@ func ExtractPeerInfo(r *http.Request) (PeerInfo, bool) {
 	}
 
 	return PeerInfo{
-		SPIFFEID:    peerID.String(),
-		TrustDomain: peerID.TrustDomain().String(),
-		ExpiresAt:   r.TLS.PeerCertificates[0].NotAfter,
+		ID:        peerID,
+		ExpiresAt: r.TLS.PeerCertificates[0].NotAfter,
 	}, true
 }
 
@@ -122,71 +123,3 @@ func extractSPIFFEID(cert *x509.Certificate) (spiffeid.ID, error) {
 	return x509svid.IDFromCert(cert)
 }
 
-// ValidateSPIFFEID validates a SPIFFE ID string format.
-//
-// Uses the official go-spiffe SDK for validation, ensuring compliance with the SPIFFE spec.
-//
-// A valid SPIFFE ID must:
-//   - Use the "spiffe" URI scheme
-//   - Have a non-empty trust domain
-//   - Include a workload path (not just "/" or empty)
-//   - Not contain query or fragment components
-//
-// Example valid IDs:
-//   - "spiffe://example.org/service"
-//   - "spiffe://example.org/ns/production/sa/api"
-//
-// Example invalid IDs:
-//   - "https://example.org/service" (wrong scheme)
-//   - "spiffe:///service" (empty trust domain)
-//   - "spiffe://example.org/" (missing workload path)
-//   - "spiffe://example.org/service?query=param" (has query string)
-//
-// Returns wrapped spiffeid sentinel errors (use errors.Is for programmatic checks).
-func ValidateSPIFFEID(id string) error {
-	_, err := spiffeid.FromString(id)
-	if err != nil {
-		return fmt.Errorf("invalid SPIFFE ID: %w", err)
-	}
-	return nil
-}
-
-// SPIFFEIDTrustDomain extracts the trust domain from a SPIFFE ID.
-//
-// Uses the official go-spiffe SDK for parsing.
-//
-// Example:
-//
-//	SPIFFEIDTrustDomain("spiffe://example.org/service") -> "example.org"
-//	SPIFFEIDTrustDomain("spiffe://prod.example.com/api") -> "prod.example.com"
-func SPIFFEIDTrustDomain(spiffeID string) (string, error) {
-	id, err := spiffeid.FromString(spiffeID)
-	if err != nil {
-		return "", fmt.Errorf("invalid SPIFFE ID: %w", err)
-	}
-
-	return id.TrustDomain().Name(), nil
-}
-
-// MatchesTrustDomain checks if a SPIFFE ID belongs to a specific trust domain.
-//
-// Uses the SDK's MemberOf() method for proper trust domain membership checks
-// according to SPIFFE spec. Trust domain comparison is case-sensitive per
-// SPIFFE spec (trust domains are DNS-like labels, not generic URIs).
-//
-// Example:
-//
-//	MatchesTrustDomain("spiffe://example.org/service", "example.org") -> true
-//	MatchesTrustDomain("spiffe://Example.org/service", "example.org") -> false
-//	MatchesTrustDomain("spiffe://other.org/service", "example.org") -> false
-func MatchesTrustDomain(spiffeID, trustDomain string) bool {
-	id, err := spiffeid.FromString(spiffeID)
-	if err != nil {
-		return false
-	}
-	td, err := spiffeid.TrustDomainFromString(trustDomain)
-	if err != nil {
-		return false
-	}
-	return id.MemberOf(td)
-}

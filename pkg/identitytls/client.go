@@ -98,7 +98,7 @@ func NewClientTLSConfig(ctx context.Context, source CertSource, cfg ClientConfig
 
 	// Validate SPIFFE ID if provided
 	if cfg.ExpectedServerID != "" {
-		if err := ValidateSPIFFEID(cfg.ExpectedServerID); err != nil {
+		if _, err := spiffeid.FromString(cfg.ExpectedServerID); err != nil {
 			return nil, fmt.Errorf("invalid ExpectedServerID: %w", err)
 		}
 	}

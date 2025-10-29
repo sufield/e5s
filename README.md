@@ -189,7 +189,7 @@ func main() {
             http.Error(w, "unauthorized", http.StatusUnauthorized)
             return
         }
-        fmt.Fprintf(w, "Hello, %s!\n", peer.SPIFFEID)
+        fmt.Fprintf(w, "Hello, %s!\n", peer.ID.String())
     })
 
     // Start HTTPS server with mTLS

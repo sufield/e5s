@@ -58,7 +58,7 @@ func main() {
             http.Error(w, "unauthorized", http.StatusUnauthorized)
             return
         }
-        fmt.Fprintf(w, "Hello, %s!\n", peer.SPIFFEID)
+        fmt.Fprintf(w, "Hello, %s!\n", peer.ID.String())
     })
 
     // Start HTTPS server
@@ -200,9 +200,9 @@ func handler(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    // Use peer.SPIFFEID for authorization
+    // Use peer.ID for authorization
     log.Printf("Request from: %s (trust domain: %s)",
-        peer.SPIFFEID, peer.TrustDomain)
+        peer.ID.String(), peer.ID.TrustDomain().Name())
 
     // Check certificate expiry
     if time.Until(peer.ExpiresAt) < 5*time.Minute {

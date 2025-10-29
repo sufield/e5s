@@ -52,8 +52,8 @@ func WithPeerInfo(ctx context.Context, peer PeerInfo) context.Context {
 //	        http.Error(w, "unauthorized", http.StatusUnauthorized)
 //	        return
 //	    }
-//	    // Use peer.SPIFFEID for authorization
-//	    log.Printf("Request from %s", peer.SPIFFEID)
+//	    // Use peer.ID for authorization
+//	    log.Printf("Request from %s", peer.ID.String())
 //	}
 //
 // Returns false if:

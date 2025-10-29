@@ -14,7 +14,7 @@
 //	        http.Error(w, "unauthorized", http.StatusUnauthorized)
 //	        return
 //	    }
-//	    fmt.Fprintf(w, "Hello %s\n", peer.SPIFFEID)
+//	    fmt.Fprintf(w, "Hello %s\n", peer.ID.String())
 //	})
 //
 //	shutdown, err := e5s.Start("e5s.yaml", handler)
@@ -227,7 +227,7 @@ func Start(configPath string, handler http.Handler) (shutdown func() error, err 
 //	    }
 //	    // Use peer for authorization decisions
 //	    log.Printf("Request from %s (trust domain: %s, expires: %s)",
-//	        peer.SPIFFEID, peer.TrustDomain, peer.ExpiresAt)
+//	        peer.ID.String(), peer.ID.TrustDomain().Name(), peer.ExpiresAt)
 //	}
 func PeerInfo(r *http.Request) (identitytls.PeerInfo, bool) {
 	return identitytls.PeerInfoFromContext(r.Context())
@@ -262,7 +262,7 @@ func PeerID(r *http.Request) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	return peer.SPIFFEID, true
+	return peer.ID.String(), true
 }
 
 // Client returns an HTTP client configured for mTLS using SPIRE.
