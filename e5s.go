@@ -88,8 +88,18 @@ import (
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
-//	defer shutdown()
-//	select {} // block forever
+//
+//	// Wait for interrupt signal
+//	sigChan := make(chan os.Signal, 1)
+//	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+//	<-sigChan
+//
+//	// Gracefully shutdown
+//	if err := shutdown(); err != nil {
+//	    log.Printf("Shutdown error: %v", err)
+//	    os.Exit(1)
+//	}
+//	os.Exit(0)
 func Start(configPath string, handler http.Handler) (shutdown func() error, err error) {
 	// Load configuration
 	cfg, err := config.Load(configPath)
