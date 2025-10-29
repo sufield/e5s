@@ -12,7 +12,7 @@ go get github.com/sufield/e5s@latest
 
 The library has two main packages:
 
-- **`pkg/identitytls`** - Provider-agnostic mTLS primitives and policy
+- **`pkg/spiffehttp`** - Provider-agnostic mTLS primitives and policy
 - **`pkg/spire`** - SPIRE Workload API client
 
 ## Quick Example: mTLS Server
@@ -26,7 +26,7 @@ import (
     "log"
     "net/http"
 
-    "github.com/sufield/e5s/pkg/identitytls"
+    "github.com/sufield/e5s/pkg/spiffehttp"
     "github.com/sufield/e5s/pkg/spire"
 )
 
@@ -45,11 +45,11 @@ func main() {
 
     // Create server TLS config
     // Accepts any client in the same trust domain by default
-    tlsConfig, err := identitytls.NewServerTLSConfig(
+    tlsConfig, err := spiffehttp.NewServerTLSConfig(
         ctx,
         x509Source,
         x509Source,
-        identitytls.ServerConfig{},
+        spiffehttp.ServerConfig{},
     )
     if err != nil {
         log.Fatal(err)
@@ -57,7 +57,7 @@ func main() {
 
     // Create HTTP handler that extracts peer identity
     http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-        peer, ok := identitytls.PeerFromRequest(r)
+        peer, ok := spiffehttp.PeerFromRequest(r)
         if !ok {
             http.Error(w, "unauthorized", http.StatusUnauthorized)
             return
@@ -86,7 +86,7 @@ import (
     "log"
     "net/http"
 
-    "github.com/sufield/e5s/pkg/identitytls"
+    "github.com/sufield/e5s/pkg/spiffehttp"
     "github.com/sufield/e5s/pkg/spire"
 )
 
@@ -105,11 +105,11 @@ func main() {
 
     // Create client TLS config
     // Accepts any server in the specified trust domain
-    tlsConfig, err := identitytls.NewClientTLSConfig(
+    tlsConfig, err := spiffehttp.NewClientTLSConfig(
         ctx,
         x509Source,
         x509Source,
-        identitytls.ClientConfig{
+        spiffehttp.ClientConfig{
             ExpectedServerTrustDomain: "example.org",
         },
     )
@@ -145,9 +145,9 @@ func main() {
 
 ```go
 x509Source := source.X509Source()
-tlsConfig, err := identitytls.NewServerTLSConfig(
+tlsConfig, err := spiffehttp.NewServerTLSConfig(
     ctx, x509Source, x509Source,
-    identitytls.ServerConfig{},
+    spiffehttp.ServerConfig{},
 )
 ```
 
@@ -155,9 +155,9 @@ tlsConfig, err := identitytls.NewServerTLSConfig(
 
 ```go
 x509Source := source.X509Source()
-tlsConfig, err := identitytls.NewServerTLSConfig(
+tlsConfig, err := spiffehttp.NewServerTLSConfig(
     ctx, x509Source, x509Source,
-    identitytls.ServerConfig{
+    spiffehttp.ServerConfig{
         AllowedClientTrustDomain: "partner.example.org",
     },
 )
@@ -167,9 +167,9 @@ tlsConfig, err := identitytls.NewServerTLSConfig(
 
 ```go
 x509Source := source.X509Source()
-tlsConfig, err := identitytls.NewServerTLSConfig(
+tlsConfig, err := spiffehttp.NewServerTLSConfig(
     ctx, x509Source, x509Source,
-    identitytls.ServerConfig{
+    spiffehttp.ServerConfig{
         AllowedClientID: "spiffe://example.org/api-client",
     },
 )
@@ -181,9 +181,9 @@ tlsConfig, err := identitytls.NewServerTLSConfig(
 
 ```go
 x509Source := source.X509Source()
-tlsConfig, err := identitytls.NewClientTLSConfig(
+tlsConfig, err := spiffehttp.NewClientTLSConfig(
     ctx, x509Source, x509Source,
-    identitytls.ClientConfig{
+    spiffehttp.ClientConfig{
         ExpectedServerID: "spiffe://example.org/api-server",
     },
 )
@@ -193,9 +193,9 @@ tlsConfig, err := identitytls.NewClientTLSConfig(
 
 ```go
 x509Source := source.X509Source()
-tlsConfig, err := identitytls.NewClientTLSConfig(
+tlsConfig, err := spiffehttp.NewClientTLSConfig(
     ctx, x509Source, x509Source,
-    identitytls.ClientConfig{
+    spiffehttp.ClientConfig{
         ExpectedServerTrustDomain: "example.org",
     },
 )
@@ -207,7 +207,7 @@ On the server side, extract the authenticated client's identity:
 
 ```go
 func handler(w http.ResponseWriter, r *http.Request) {
-    peer, ok := identitytls.PeerFromRequest(r)
+    peer, ok := spiffehttp.PeerFromRequest(r)
     if !ok {
         http.Error(w, "unauthorized", http.StatusUnauthorized)
         return
@@ -268,8 +268,8 @@ if err != nil {
 
 // Share across multiple TLS configs
 x509Source := source.X509Source()
-serverTLS, _ := identitytls.NewServerTLSConfig(ctx, x509Source, x509Source, ...)
-clientTLS, _ := identitytls.NewClientTLSConfig(ctx, x509Source, x509Source, ...)
+serverTLS, _ := spiffehttp.NewServerTLSConfig(ctx, x509Source, x509Source, ...)
+clientTLS, _ := spiffehttp.NewClientTLSConfig(ctx, x509Source, x509Source, ...)
 
 // Close when shutting down
 defer source.Close()

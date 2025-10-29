@@ -1,4 +1,4 @@
-package identitytls
+package spiffehttp
 
 import (
 	"context"
@@ -49,7 +49,7 @@ type Peer struct {
 //
 // You MUST only treat the returned Peer as trusted if BOTH are true:
 //  1. The server handling this request was started with a tls.Config returned
-//     by identitytls.NewServerTLSConfig(...) or SDK's tlsconfig.MTLSServerConfig.
+//     by spiffehttp.NewServerTLSConfig(...) or SDK's tlsconfig.MTLSServerConfig.
 //  2. The TLS handshake for this request succeeded, which means SPIFFE ID
 //     verification ran and accepted the client's identity.
 //
@@ -65,7 +65,7 @@ type Peer struct {
 // Usage in a handler:
 //
 //	func myHandler(w http.ResponseWriter, r *http.Request) {
-//	    peer, ok := identitytls.PeerFromRequest(r)
+//	    peer, ok := spiffehttp.PeerFromRequest(r)
 //	    if !ok {
 //	        http.Error(w, "unauthorized", http.StatusUnauthorized)
 //	        return
@@ -125,12 +125,12 @@ var peerKey = peerCtxKey{}
 //
 //	func authMiddleware(next http.Handler) http.Handler {
 //	    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-//	        peer, ok := identitytls.PeerFromRequest(r)
+//	        peer, ok := spiffehttp.PeerFromRequest(r)
 //	        if !ok {
 //	            http.Error(w, "unauthorized", http.StatusUnauthorized)
 //	            return
 //	        }
-//	        ctx := identitytls.WithPeer(r.Context(), peer)
+//	        ctx := spiffehttp.WithPeer(r.Context(), peer)
 //	        next.ServeHTTP(w, r.WithContext(ctx))
 //	    })
 //	}
@@ -146,7 +146,7 @@ func WithPeer(ctx context.Context, p Peer) context.Context {
 // Example handler:
 //
 //	func myHandler(w http.ResponseWriter, r *http.Request) {
-//	    peer, ok := identitytls.PeerFromContext(r.Context())
+//	    peer, ok := spiffehttp.PeerFromContext(r.Context())
 //	    if !ok {
 //	        http.Error(w, "unauthorized", http.StatusUnauthorized)
 //	        return

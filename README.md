@@ -5,14 +5,14 @@ A lightweight Go library for building mutual TLS services with SPIFFE identity v
 ## Features
 
 - **Simple High-Level API** - Config-driven with `e5s.Start()` and `e5s.Client()`
-- **Low-Level Control** - Direct access to `pkg/identitytls` and `pkg/spire` for custom use cases
+- **Low-Level Control** - Direct access to `pkg/spiffehttp` and `pkg/spire` for custom use cases
 - **SDK-Based Implementation** - Uses official go-spiffe SDK patterns
 - **SPIRE Adapter** - Production-ready SPIRE Workload API implementation
 - **Automatic Rotation** - Zero-downtime certificate and trust bundle updates
 - **SPIFFE ID Verification** - Policy-based peer authentication
 - **TLS 1.3 Enforcement** - Strong cipher suites and security defaults
 - **Thread-Safe** - Share sources across multiple servers and clients
-- **Minimal Dependencies** - Core (`pkg/identitytls`): stdlib only. SPIRE adapter (`pkg/spire`): `go-spiffe/v2`. High-level API (`e5s.go`): adds `yaml.v3`. Examples add `chi` (see `go.mod` for details)
+- **Minimal Dependencies** - Core (`pkg/spiffehttp`): stdlib only. SPIRE adapter (`pkg/spire`): `go-spiffe/v2`. High-level API (`e5s.go`): adds `yaml.v3`. Examples add `chi` (see `go.mod` for details)
 
 ## Quick Start
 
@@ -38,13 +38,13 @@ We provide both **high-level** and **low-level** APIs because they serve differe
 
 ✅ **Benefits:** Zero boilerplate, hard to misuse, easy to run locally and in production with the same config
 
-### Low-Level API (`pkg/identitytls`, `pkg/spire`)
+### Low-Level API (`pkg/spiffehttp`, `pkg/spire`)
 
 **For:** Infrastructure/platform teams
 **Goal:** Allow full control over mTLS internals
 
 - Lets you build custom TLS configs and integrate with the go-spiffe SDK directly
-- Exposes `identitytls.NewServerTLSConfig` and `spire.NewSource`
+- Exposes `spiffehttp.NewServerTLSConfig` and `spire.NewSource`
 - Ideal for customizing certificate rotation intervals, trust domain logic, or integrating into non-HTTP systems
 
 ✅ **Benefits:** Extensible for advanced use cases, can plug in custom identity providers, useful for testing/debugging or building frameworks
@@ -54,7 +54,7 @@ We provide both **high-level** and **low-level** APIs because they serve differe
 | Developer Type | API | Use Case |
 |----------------|-----|----------|
 | **Application Developer** | High-Level (`e5s.Start`) | Secure HTTP services quickly |
-| **Platform/Infra Engineer** | Low-Level (`pkg/identitytls`, `pkg/spire`) | Build custom SPIRE integrations or non-HTTP services |
+| **Platform/Infra Engineer** | Low-Level (`pkg/spiffehttp`, `pkg/spire`) | Build custom SPIRE integrations or non-HTTP services |
 
 - **`examples/highlevel/`** - Start here for application development (production behavior, minimal code)
 - **`examples/minikube-lowlevel/`** - Platform/infrastructure example (full SPIRE + mTLS stack in Kubernetes)
@@ -158,7 +158,7 @@ import (
     "log"
     "net/http"
 
-    "github.com/sufield/e5s/pkg/identitytls"
+    "github.com/sufield/e5s/pkg/spiffehttp"
     "github.com/sufield/e5s/pkg/spire"
 )
 
@@ -176,11 +176,11 @@ func main() {
     x509Source := source.X509Source()
 
     // Create server TLS config (accepts any client in same trust domain)
-    tlsConfig, err := identitytls.NewServerTLSConfig(
+    tlsConfig, err := spiffehttp.NewServerTLSConfig(
         ctx,
         x509Source,
         x509Source,
-        identitytls.ServerConfig{},
+        spiffehttp.ServerConfig{},
     )
     if err != nil {
         log.Fatal(err)
@@ -188,7 +188,7 @@ func main() {
 
     // HTTP handler that extracts peer identity
     http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-        peer, ok := identitytls.PeerFromRequest(r)
+        peer, ok := spiffehttp.PeerFromRequest(r)
         if !ok {
             http.Error(w, "unauthorized", http.StatusUnauthorized)
             return
@@ -217,7 +217,7 @@ import (
     "net/http"
     "os"
 
-    "github.com/sufield/e5s/pkg/identitytls"
+    "github.com/sufield/e5s/pkg/spiffehttp"
     "github.com/sufield/e5s/pkg/spire"
 )
 
@@ -235,11 +235,11 @@ func main() {
     x509Source := source.X509Source()
 
     // Create client TLS config
-    tlsConfig, err := identitytls.NewClientTLSConfig(
+    tlsConfig, err := spiffehttp.NewClientTLSConfig(
         ctx,
         x509Source,
         x509Source,
-        identitytls.ClientConfig{
+        spiffehttp.ClientConfig{
             ExpectedServerTrustDomain: "example.org",
         },
     )
@@ -276,7 +276,7 @@ e5s.go                  # High-level config-driven API
 └── e5s.PeerID()        # Extract authenticated peer
 
 pkg/
-├── identitytls/        # Core mTLS library (provider-agnostic)
+├── spiffehttp/        # Core mTLS library (provider-agnostic)
 │   ├── client.go       # Client TLS config builder
 │   ├── server.go       # Server TLS config builder
 │   ├── peer.go         # SPIFFE ID extraction/validation
@@ -292,10 +292,10 @@ internal/config/        # Config file loading (not exported)
 
 **Two-tier architecture:**
 1. **High-level** (`e5s.go`) - Config-driven, minimal code, works with any HTTP framework
-2. **Low-level** (`pkg/identitytls` + `pkg/spire`) - Full control over TLS, rotation, verification
+2. **Low-level** (`pkg/spiffehttp` + `pkg/spire`) - Full control over TLS, rotation, verification
 
 **Clean separation:**
-- `pkg/identitytls` - TLS configuration using go-spiffe SDK (no SPIRE dependency)
+- `pkg/spiffehttp` - TLS configuration using go-spiffe SDK (no SPIRE dependency)
 - `pkg/spire` - SPIRE Workload API client
 - `e5s.go` - Wires everything together based on config file
 

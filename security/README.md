@@ -4,7 +4,7 @@ This directory contains security tools, rules, and documentation for the e5s mTL
 
 ## Library Security Implementation
 
-The mTLS security enforcement is implemented in **[`pkg/identitytls`](../pkg/identitytls/)** with SPIFFE identity verification, TLS 1.3 enforcement, and peer authentication. See the [library quickstart](../docs/QUICKSTART_LIBRARY.md) for usage examples.
+The mTLS security enforcement is implemented in **[`pkg/spiffehttp`](../pkg/spiffehttp/)** with SPIFFE identity verification, TLS 1.3 enforcement, and peer authentication. See the [library quickstart](../docs/QUICKSTART_LIBRARY.md) for usage examples.
 
 ## Contents
 

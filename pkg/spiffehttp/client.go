@@ -1,4 +1,4 @@
-package identitytls
+package spiffehttp
 
 import (
 	"context"
@@ -57,7 +57,7 @@ type ClientConfig struct {
 //	defer source.Close()
 //	x509Source := source.X509Source()
 //
-//	tlsCfg, _ := identitytls.NewClientTLSConfig(ctx, x509Source, x509Source, identitytls.ClientConfig{
+//	tlsCfg, _ := spiffehttp.NewClientTLSConfig(ctx, x509Source, x509Source, spiffehttp.ClientConfig{
 //	    ExpectedServerID: "spiffe://example.org/api",
 //	})
 //

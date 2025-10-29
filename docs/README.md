@@ -10,7 +10,7 @@ e5s provides **two APIs** for SPIFFE/SPIRE-based mutual TLS, serving different d
 - See [../README.md](../README.md) for quick examples
 - See [../examples/highlevel/](../examples/highlevel/) for production-ready server with chi router
 
-### Low-Level API (`pkg/identitytls`, `pkg/spire`)
+### Low-Level API (`pkg/spiffehttp`, `pkg/spire`)
 
 **For platform/infrastructure teams** - Full control over TLS and identity:
 - See [QUICKSTART_LIBRARY.md](QUICKSTART_LIBRARY.md) for API reference
@@ -32,7 +32,7 @@ e5s provides **two APIs** for SPIFFE/SPIRE-based mutual TLS, serving different d
 
 The library exposes two packages:
 
-### `pkg/identitytls` - Core mTLS Library
+### `pkg/spiffehttp` - Core mTLS Library
 
 Provider-agnostic primitives for building mTLS connections with SPIFFE identity:
 
@@ -56,7 +56,7 @@ SPIRE Workload API client:
 
 This is a **focused library** with clean separation:
 
-- **Core** (`pkg/identitytls`) - TLS configuration using go-spiffe SDK
+- **Core** (`pkg/spiffehttp`) - TLS configuration using go-spiffe SDK
 - **Adapter** (`pkg/spire`) - SPIRE Workload API client
 
 ## Security

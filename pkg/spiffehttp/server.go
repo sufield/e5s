@@ -1,4 +1,4 @@
-package identitytls
+package spiffehttp
 
 import (
 	"context"
@@ -61,7 +61,7 @@ type ServerConfig struct {
 //	defer source.Close()
 //	x509Source := source.X509Source()
 //
-//	tlsCfg, _ := identitytls.NewServerTLSConfig(ctx, x509Source, x509Source, identitytls.ServerConfig{
+//	tlsCfg, _ := spiffehttp.NewServerTLSConfig(ctx, x509Source, x509Source, spiffehttp.ServerConfig{
 //	    AllowedClientTrustDomain: "example.org",
 //	})
 //

@@ -2,7 +2,7 @@
 
 **Platform / Infrastructure Example** - Full SPIRE + mTLS demo in a local Kubernetes environment.
 
-This example demonstrates production-like mTLS communication using e5s with SPIRE in Minikube. It uses the low-level `pkg/identitytls` and `pkg/spire` APIs directly, giving you full control over TLS configuration.
+This example demonstrates production-like mTLS communication using e5s with SPIRE in Minikube. It uses the low-level `pkg/spiffehttp` and `pkg/spire` APIs directly, giving you full control over TLS configuration.
 
 ## Prerequisites
 
@@ -219,4 +219,4 @@ examples/minikube-lowlevel/
 - Update SPIRE registrations in `scripts/setup-spire-registrations.sh` for your workload selectors
 - Customize server/client verification policies in `NewServerTLSConfig` / `NewClientTLSConfig`
 - Deploy to production Kubernetes (see `deploy/values/values-prod.yaml`)
-- For integration with your own workloads, see `pkg/identitytls` and `pkg/spire` documentation for advanced control over identity and TLS behavior
+- For integration with your own workloads, see `pkg/spiffehttp` and `pkg/spire` documentation for advanced control over identity and TLS behavior

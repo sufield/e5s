@@ -42,7 +42,7 @@ import (
 	"time"
 
 	"github.com/sufield/e5s/internal/config"
-	"github.com/sufield/e5s/pkg/identitytls"
+	"github.com/sufield/e5s/pkg/spiffehttp"
 	"github.com/sufield/e5s/pkg/spire"
 )
 
@@ -126,11 +126,11 @@ func Start(configPath string, handler http.Handler) (shutdown func() error, err 
 	x509Source := source.X509Source()
 
 	// Build server TLS config with client verification
-	tlsCfg, err := identitytls.NewServerTLSConfig(
+	tlsCfg, err := spiffehttp.NewServerTLSConfig(
 		ctx,
 		x509Source,
 		x509Source,
-		identitytls.ServerConfig{
+		spiffehttp.ServerConfig{
 			AllowedClientID:          cfg.Server.AllowedClientSPIFFEID,
 			AllowedClientTrustDomain: cfg.Server.AllowedClientTrustDomain,
 		},
@@ -142,8 +142,8 @@ func Start(configPath string, handler http.Handler) (shutdown func() error, err 
 
 	// Wrap handler to inject peer identity into request context
 	wrapped := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if peer, ok := identitytls.PeerFromRequest(r); ok {
-			r = r.WithContext(identitytls.WithPeer(r.Context(), peer))
+		if peer, ok := spiffehttp.PeerFromRequest(r); ok {
+			r = r.WithContext(spiffehttp.WithPeer(r.Context(), peer))
 		}
 		handler.ServeHTTP(w, r)
 	})
@@ -233,8 +233,8 @@ func Start(configPath string, handler http.Handler) (shutdown func() error, err 
 //	    log.Printf("Request from %s (trust domain: %s, expires: %s)",
 //	        peer.ID.String(), peer.ID.TrustDomain().Name(), peer.ExpiresAt)
 //	}
-func PeerInfo(r *http.Request) (identitytls.Peer, bool) {
-	return identitytls.PeerFromContext(r.Context())
+func PeerInfo(r *http.Request) (spiffehttp.Peer, bool) {
+	return spiffehttp.PeerFromContext(r.Context())
 }
 
 // PeerID extracts the authenticated caller's SPIFFE ID from a request.
@@ -262,7 +262,7 @@ func PeerInfo(r *http.Request) (identitytls.Peer, bool) {
 //	    log.Printf("Request from %s", id)
 //	}
 func PeerID(r *http.Request) (string, bool) {
-	peer, ok := identitytls.PeerFromContext(r.Context())
+	peer, ok := spiffehttp.PeerFromContext(r.Context())
 	if !ok {
 		return "", false
 	}
@@ -338,11 +338,11 @@ func Client(configPath string) (*http.Client, func() error, error) {
 	x509Source := source.X509Source()
 
 	// Build client TLS config with server verification
-	tlsCfg, err := identitytls.NewClientTLSConfig(
+	tlsCfg, err := spiffehttp.NewClientTLSConfig(
 		ctx,
 		x509Source,
 		x509Source,
-		identitytls.ClientConfig{
+		spiffehttp.ClientConfig{
 			ExpectedServerID:          cfg.Client.ExpectedServerSPIFFEID,
 			ExpectedServerTrustDomain: cfg.Client.ExpectedServerTrustDomain,
 		},

@@ -1,4 +1,4 @@
-package identitytls
+package spiffehttp
 
 import "net/http"
 
@@ -13,32 +13,32 @@ import "net/http"
 //   - Only allows requests through if mTLS verification succeeded
 //
 // SECURITY: This middleware assumes the server is using a TLS config returned
-// by identitytls.NewServerTLSConfig(). If the server is not enforcing mTLS with
+// by spiffehttp.NewServerTLSConfig(). If the server is not enforcing mTLS with
 // SPIFFE verification, this middleware will reject all requests (because no
 // valid peer identity will be found).
 //
 // Usage with standard net/http:
 //
 //	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-//	    peer, _ := identitytls.PeerFromContext(r.Context())
+//	    peer, _ := spiffehttp.PeerFromContext(r.Context())
 //	    fmt.Fprintf(w, "Hello %s\n", peer.ID.String())
 //	})
 //
-//	protectedHandler := identitytls.SPIFFEAuthMiddleware(handler)
+//	protectedHandler := spiffehttp.SPIFFEAuthMiddleware(handler)
 //
 //	server := &http.Server{
 //	    Addr:      ":8443",
 //	    Handler:   protectedHandler,
-//	    TLSConfig: tlsCfg, // from identitytls.NewServerTLSConfig
+//	    TLSConfig: tlsCfg, // from spiffehttp.NewServerTLSConfig
 //	}
 //	server.ListenAndServeTLS("", "")
 //
 // Usage with chi router:
 //
 //	r := chi.NewRouter()
-//	r.Use(identitytls.SPIFFEAuthMiddleware)
+//	r.Use(spiffehttp.SPIFFEAuthMiddleware)
 //	r.Get("/api/resource", func(w http.ResponseWriter, r *http.Request) {
-//	    peer, _ := identitytls.PeerFromContext(r.Context())
+//	    peer, _ := spiffehttp.PeerFromContext(r.Context())
 //	    // ... use peer.ID for authorization decisions
 //	})
 //
