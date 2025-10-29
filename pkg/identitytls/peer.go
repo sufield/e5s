@@ -46,10 +46,10 @@ type PeerInfo struct {
 // whatever certificate Go attached to r.TLS.
 //
 // You MUST only treat the returned PeerInfo as trusted if BOTH are true:
-//   1. The server handling this request was started with a tls.Config returned
-//      by identitytls.NewServerTLSConfig(...).
-//   2. The TLS handshake for this request succeeded, which means our
-//      VerifyPeerCertificate ran and accepted the client's SPIFFE ID.
+//  1. The server handling this request was started with a tls.Config returned
+//     by identitytls.NewServerTLSConfig(...).
+//  2. The TLS handshake for this request succeeded, which means our
+//     VerifyPeerCertificate ran and accepted the client's SPIFFE ID.
 //
 // If the server was not using identitytls.NewServerTLSConfig (for example,
 // someone used a plain net/http.Server with default TLS settings or with
@@ -72,6 +72,10 @@ type PeerInfo struct {
 //	    log.Printf("request from %s", peer.ID.String())
 //	}
 //
+// BEST PRACTICE: Use SPIFFEAuthMiddleware instead of calling ExtractPeerInfo
+// directly in every handler. The middleware extracts peer info once per request
+// and attaches it to the context, avoiding repeated TLS state parsing.
+//
 // Returns:
 //   - PeerInfo with verified identity information
 //   - true if identity was successfully extracted
@@ -81,20 +85,28 @@ type PeerInfo struct {
 // It only extracts the authenticated identity. Authorization logic belongs
 // in your handlers.
 func ExtractPeerInfo(r *http.Request) (PeerInfo, bool) {
-	// Check for TLS connection
-	if r.TLS == nil {
+	// Check for valid request and TLS connection
+	if r == nil || r.TLS == nil {
 		return PeerInfo{}, false
 	}
 
-	// Use SDK to extract peer SPIFFE ID from TLS connection state
+	// Use SDK to extract peer SPIFFE ID from TLS connection state.
+	// PeerIDFromConnectionState will fail if there are no peer certs or the ID
+	// can't be parsed as a SPIFFE ID.
 	peerID, err := spiffetls.PeerIDFromConnectionState(*r.TLS)
 	if err != nil {
 		return PeerInfo{}, false
 	}
 
+	// Defensive: PeerIDFromConnectionState already guarantees at least one
+	// peer certificate, but check to avoid panics if assumptions change.
+	var expiresAt time.Time
+	if len(r.TLS.PeerCertificates) > 0 && r.TLS.PeerCertificates[0] != nil {
+		expiresAt = r.TLS.PeerCertificates[0].NotAfter
+	}
+
 	return PeerInfo{
 		ID:        peerID,
-		ExpiresAt: r.TLS.PeerCertificates[0].NotAfter,
+		ExpiresAt: expiresAt,
 	}, true
 }
-
