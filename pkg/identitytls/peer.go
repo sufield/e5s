@@ -5,8 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"time"
+
+	"github.com/spiffe/go-spiffe/v2/spiffeid"
 )
 
 // PeerInfo represents the authenticated identity extracted from an mTLS connection.
@@ -115,11 +116,12 @@ func ExtractPeerInfo(r *http.Request) (PeerInfo, bool) {
 // Example: "spiffe://example.org/service" -> ("spiffe://example.org/service", "example.org", nil)
 //
 // This is an internal helper used by ExtractPeerInfo and TLS verification callbacks.
+// It uses the official go-spiffe SDK for parsing and validation.
 //
 // Returns:
 //   - spiffeID: the full SPIFFE ID
 //   - trustDomain: the trust domain portion
-//   - error if no SPIFFE ID found or parsing failed
+//   - error if no SPIFFE ID found or parsing failed (wraps spiffeid sentinel errors)
 func extractSPIFFEID(cert *x509.Certificate) (spiffeID string, trustDomain string, err error) {
 	if cert == nil {
 		return "", "", errors.New("certificate is nil")
@@ -128,29 +130,14 @@ func extractSPIFFEID(cert *x509.Certificate) (spiffeID string, trustDomain strin
 	// SPIFFE IDs are encoded as URI SANs
 	for _, uri := range cert.URIs {
 		if uri.Scheme == "spiffe" {
-			// Reject SPIFFE IDs with query or fragment (per SPIFFE spec)
-			if uri.RawQuery != "" || uri.Fragment != "" {
-				return "", "", errors.New("SPIFFE ID must not contain query or fragment")
+			// Use official go-spiffe SDK for parsing and validation
+			id, err := spiffeid.FromURI(uri)
+			if err != nil {
+				// Wrap the error to preserve sentinel error types for callers who need them
+				return "", "", fmt.Errorf("invalid SPIFFE ID: %w", err)
 			}
 
-			// Found a SPIFFE URI
-			spiffeID = uri.String()
-
-			// Parse trust domain from the host part
-			// Example: spiffe://example.org/service -> example.org
-			trustDomain = uri.Host
-
-			if trustDomain == "" {
-				return "", "", errors.New("SPIFFE ID has empty trust domain")
-			}
-
-			// Enforce workload path requirement (per SPIFFE spec)
-			path := uri.EscapedPath()
-			if path == "" || path == "/" {
-				return "", "", errors.New("SPIFFE ID must include a workload path")
-			}
-
-			return spiffeID, trustDomain, nil
+			return id.String(), id.TrustDomain().String(), nil
 		}
 	}
 
@@ -158,6 +145,8 @@ func extractSPIFFEID(cert *x509.Certificate) (spiffeID string, trustDomain strin
 }
 
 // ValidateSPIFFEID validates a SPIFFE ID string format.
+//
+// Uses the official go-spiffe SDK for validation, ensuring compliance with the SPIFFE spec.
 //
 // A valid SPIFFE ID must:
 //   - Use the "spiffe" URI scheme
@@ -174,50 +163,31 @@ func extractSPIFFEID(cert *x509.Certificate) (spiffeID string, trustDomain strin
 //   - "spiffe:///service" (empty trust domain)
 //   - "spiffe://example.org/" (missing workload path)
 //   - "spiffe://example.org/service?query=param" (has query string)
+//
+// Returns wrapped spiffeid sentinel errors (use errors.Is for programmatic checks).
 func ValidateSPIFFEID(id string) error {
-	u, err := url.Parse(id)
+	_, err := spiffeid.FromString(id)
 	if err != nil {
-		return fmt.Errorf("invalid SPIFFE ID format: %w", err)
+		return fmt.Errorf("invalid SPIFFE ID: %w", err)
 	}
-
-	if u.Scheme != "spiffe" {
-		return fmt.Errorf("SPIFFE ID must use 'spiffe' scheme, got '%s'", u.Scheme)
-	}
-
-	if u.Host == "" {
-		return errors.New("SPIFFE ID must have a trust domain (host part)")
-	}
-
-	if u.RawQuery != "" {
-		return errors.New("SPIFFE ID must not contain query parameters")
-	}
-
-	if u.Fragment != "" {
-		return errors.New("SPIFFE ID must not contain fragment")
-	}
-
-	path := u.EscapedPath()
-	if path == "" || path == "/" {
-		return errors.New("SPIFFE ID must include a workload path")
-	}
-
 	return nil
 }
 
 // SPIFFEIDTrustDomain extracts the trust domain from a SPIFFE ID.
+//
+// Uses the official go-spiffe SDK for parsing.
 //
 // Example:
 //
 //	SPIFFEIDTrustDomain("spiffe://example.org/service") -> "example.org"
 //	SPIFFEIDTrustDomain("spiffe://prod.example.com/api") -> "prod.example.com"
 func SPIFFEIDTrustDomain(spiffeID string) (string, error) {
-	if err := ValidateSPIFFEID(spiffeID); err != nil {
-		return "", err
+	id, err := spiffeid.FromString(spiffeID)
+	if err != nil {
+		return "", fmt.Errorf("invalid SPIFFE ID: %w", err)
 	}
 
-	// Parse the URL to extract the host (trust domain)
-	u, _ := url.Parse(spiffeID) // already validated above
-	return u.Host, nil
+	return id.TrustDomain().String(), nil
 }
 
 // MatchesTrustDomain checks if a SPIFFE ID belongs to a specific trust domain.
