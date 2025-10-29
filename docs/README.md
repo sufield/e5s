@@ -38,7 +38,10 @@ Provider-agnostic primitives for building mTLS connections with SPIFFE identity:
 
 - `NewServerTLSConfig()` - Create server TLS config with client verification
 - `NewClientTLSConfig()` - Create client TLS config with server verification
-- `ExtractPeerInfo()` - Extract authenticated peer identity from requests
+- `PeerFromRequest()` - Extract authenticated peer identity from requests
+- `PeerFromContext()` - Retrieve peer from request context
+- `WithPeer()` - Attach peer to context
+- `SPIFFEAuthMiddleware` - HTTP middleware for automatic peer extraction
 ### `pkg/spire` - SPIRE Adapter
 
 SPIRE Workload API client:

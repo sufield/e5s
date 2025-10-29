@@ -57,7 +57,7 @@ func main() {
 
     // Create HTTP handler that extracts peer identity
     http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-        peer, ok := identitytls.ExtractPeerInfo(r)
+        peer, ok := identitytls.PeerFromRequest(r)
         if !ok {
             http.Error(w, "unauthorized", http.StatusUnauthorized)
             return
@@ -207,7 +207,7 @@ On the server side, extract the authenticated client's identity:
 
 ```go
 func handler(w http.ResponseWriter, r *http.Request) {
-    peer, ok := identitytls.ExtractPeerInfo(r)
+    peer, ok := identitytls.PeerFromRequest(r)
     if !ok {
         http.Error(w, "unauthorized", http.StatusUnauthorized)
         return

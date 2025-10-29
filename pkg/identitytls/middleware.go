@@ -43,11 +43,11 @@ import "net/http"
 //	})
 //
 // For more fine-grained control (e.g., custom error responses or per-route
-// policies), you can build custom middleware using ExtractPeerInfo and
+// policies), you can build custom middleware using PeerFromRequest and
 // WithPeer directly.
 func SPIFFEAuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		peer, ok := ExtractPeerInfo(r)
+		peer, ok := PeerFromRequest(r)
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return

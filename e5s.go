@@ -142,7 +142,7 @@ func Start(configPath string, handler http.Handler) (shutdown func() error, err 
 
 	// Wrap handler to inject peer identity into request context
 	wrapped := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if peer, ok := identitytls.ExtractPeerInfo(r); ok {
+		if peer, ok := identitytls.PeerFromRequest(r); ok {
 			r = r.WithContext(identitytls.WithPeer(r.Context(), peer))
 		}
 		handler.ServeHTTP(w, r)
@@ -218,7 +218,7 @@ func Start(configPath string, handler http.Handler) (shutdown func() error, err 
 // it returns false.
 //
 // Returns:
-//   - PeerInfo: complete authenticated identity (SPIFFE ID, trust domain, cert expiry)
+//   - Peer: complete authenticated identity (SPIFFE ID, trust domain, cert expiry)
 //   - ok: true if identity was found, false otherwise
 //
 // Usage in handler:
@@ -233,7 +233,7 @@ func Start(configPath string, handler http.Handler) (shutdown func() error, err 
 //	    log.Printf("Request from %s (trust domain: %s, expires: %s)",
 //	        peer.ID.String(), peer.ID.TrustDomain().Name(), peer.ExpiresAt)
 //	}
-func PeerInfo(r *http.Request) (identitytls.PeerInfo, bool) {
+func PeerInfo(r *http.Request) (identitytls.Peer, bool) {
 	return identitytls.PeerFromContext(r.Context())
 }
 
