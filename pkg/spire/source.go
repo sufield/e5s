@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"sync"
 
@@ -48,10 +47,13 @@ type Source struct {
 // Config configures the SPIRE cert source.
 type Config struct {
 	// WorkloadSocket is the path to the SPIRE agent's Workload API socket.
-	// If empty, auto-detects from:
-	//   - SPIFFE_ENDPOINT_SOCKET env var
-	//   - /tmp/spire-agent/public/api.sock
-	//   - /var/run/spire/sockets/agent.sock
+	//
+	// If empty, the SDK auto-detects from SPIFFE_ENDPOINT_SOCKET environment variable.
+	//
+	// Accepts:
+	//   - unix:// scheme: "unix:///tmp/spire-agent/public/api.sock"
+	//   - tcp:// scheme: "tcp://spire-agent:8081"
+	//   - Bare filesystem path: "/tmp/spire-agent/public/api.sock" (treated as unix://)
 	WorkloadSocket string
 }
 
@@ -60,21 +62,21 @@ type Config struct {
 // This connects to the SPIRE Workload API and starts watching for certificate
 // and trust bundle updates. The connection remains active until Close() is called.
 //
-// Socket path resolution (first non-empty wins):
-//  1. cfg.WorkloadSocket (if provided)
-//  2. SPIFFE_ENDPOINT_SOCKET environment variable (tcp:// or unix:// allowed)
-//  3. /tmp/spire-agent/public/api.sock (common default)
-//  4. /var/run/spire/sockets/agent.sock (alternate location)
+// Socket path resolution:
+//   - If cfg.WorkloadSocket is provided, uses that address
+//   - If cfg.WorkloadSocket is empty, SDK auto-detects from SPIFFE_ENDPOINT_SOCKET
+//   - Bare filesystem paths are converted to unix:// scheme
+//
+// The SDK's workloadapi.NewX509Source handles:
+//   - Environment variable detection (SPIFFE_ENDPOINT_SOCKET)
+//   - Initial connection and SVID fetch
+//   - Starting background watchers for certificate rotation
 //
 // Returns error if:
-//   - No socket path could be determined
-//   - Socket does not exist or is not accessible
-//   - SPIRE agent is not running
+//   - Context is nil
+//   - SPIRE agent is not running or unreachable
 //   - Workload is not registered with SPIRE
 //   - Initial SVID fetch fails
-//
-// The ctx parameter is used only for the initial connection and SVID fetch.
-// The source continues running after this function returns until Close() is called.
 //
 // Context lifetime:
 // ctx is ONLY used for the initial connection and first SVID/bundle fetch.
@@ -86,44 +88,28 @@ func NewSource(ctx context.Context, cfg Config) (*Source, error) {
 		return nil, errors.New("context cannot be nil")
 	}
 
-	// Resolve socket path
-	socketPath := cfg.WorkloadSocket
-	if socketPath == "" {
-		socketPath = detectSocketPath()
+	// Build SDK options
+	var opts []workloadapi.X509SourceOption
+	if cfg.WorkloadSocket != "" {
+		// Normalize bare paths to unix:// scheme for SDK
+		addr := normalizeToAddr(cfg.WorkloadSocket)
+		opts = append(opts, workloadapi.WithClientOptions(workloadapi.WithAddr(addr)))
 	}
+	// If cfg.WorkloadSocket is empty, SDK will auto-detect from SPIFFE_ENDPOINT_SOCKET
 
-	if socketPath == "" {
-		return nil, errors.New("no SPIRE socket path configured and auto-detection failed")
-	}
-
-	// Normalize socket path to consistent format (unix:// or tcp:// prefix)
-	socketPath = normalizeSocketAddr(socketPath)
-
-	// Validate socket exists and is accessible
-	if err := validateSocket(socketPath); err != nil {
-		return nil, fmt.Errorf("invalid socket path %q: %w", socketPath, err)
-	}
-
-	// Create X509Source
+	// Create X509Source using SDK
 	// This:
 	//   - Connects to the Workload API
-	//   - Fetches initial SVID and trust bundle
-	//   - Starts watching for updates
-	//
-	// workloadapi.WithAddr expects full "unix://..." or "tcp://..." form.
-	// We pass the same value we validated.
-	x509src, err := workloadapi.NewX509Source(
-		ctx,
-		workloadapi.WithClientOptions(workloadapi.WithAddr(socketPath)),
-	)
+	//   - Performs initial SVID/bundle fetch (blocks until ready or error)
+	//   - Starts watching for updates in background
+	x509src, err := workloadapi.NewX509Source(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create X509Source: %w", err)
 	}
 
-	s := &Source{
+	return &Source{
 		source: x509src,
-	}
-	return s, nil
+	}, nil
 }
 
 // Close releases all resources (connections, watchers, goroutines).
@@ -157,88 +143,20 @@ func (s *Source) Close() error {
 	return s.closeErr
 }
 
-// normalizeSocketAddr ensures socket addresses have a consistent format.
+// normalizeToAddr converts a socket address to the scheme-prefixed format
+// expected by the SDK's workloadapi.WithAddr.
 //
-// If the input is a bare filesystem path (e.g. "/tmp/spire-agent/public/api.sock"),
-// it's converted to unix:// format. If it already has a scheme (unix:// or tcp://),
-// it's returned as-is.
+// If the input already has a scheme (unix:// or tcp://), returns it unchanged.
+// If it's a bare filesystem path, prefixes it with "unix://".
 //
-// This prevents validation inconsistencies and makes the format predictable for
-// workloadapi.WithAddr.
-func normalizeSocketAddr(raw string) string {
-	// Already has a scheme prefix
+// Examples:
+//   - "unix:///tmp/agent.sock" → "unix:///tmp/agent.sock" (unchanged)
+//   - "tcp://agent:8081" → "tcp://agent:8081" (unchanged)
+//   - "/tmp/agent.sock" → "unix:///tmp/agent.sock" (prefixed)
+func normalizeToAddr(raw string) string {
 	if strings.HasPrefix(raw, "unix://") || strings.HasPrefix(raw, "tcp://") {
 		return raw
 	}
-	// Bare filesystem path - treat as unix socket
 	return "unix://" + raw
-}
-
-// detectSocketPath attempts to auto-detect the SPIRE agent socket path.
-//
-// If SPIFFE_ENDPOINT_SOCKET is set, we trust it as-is (unix://, tcp://, or bare path).
-// We only proactively probe well-known unix:// defaults.
-//
-// Checks in order:
-//  1. SPIFFE_ENDPOINT_SOCKET environment variable
-//  2. /tmp/spire-agent/public/api.sock (common default)
-//  3. /var/run/spire/sockets/agent.sock (alternate location)
-//
-// Returns empty string if no socket is found.
-func detectSocketPath() string {
-	// Try env var first (normalize in case it's a bare path)
-	if socket := os.Getenv("SPIFFE_ENDPOINT_SOCKET"); socket != "" {
-		return normalizeSocketAddr(socket)
-	}
-
-	// Try common socket paths
-	commonPaths := []string{
-		"unix:///tmp/spire-agent/public/api.sock",
-		"unix:///var/run/spire/sockets/agent.sock",
-	}
-
-	for _, path := range commonPaths {
-		if err := validateSocket(path); err == nil {
-			return path
-		}
-	}
-
-	return ""
-}
-
-// validateSocket checks if a socket path is valid and accessible.
-//
-// For unix:// sockets, verifies the file exists and is a socket.
-//
-// For non-unix schemes (e.g. tcp://host:port), we do not verify locality
-// or existence here. We assume the caller intentionally pointed at a remote
-// SPIRE endpoint. Allowing TCP here is a policy decision: tightening this
-// is a breaking change.
-func validateSocket(socketPath string) error {
-	// If it starts with unix://, extract the actual filesystem path
-	if strings.HasPrefix(socketPath, "unix://") {
-		fsPath := socketPath[len("unix://"):]
-		info, err := os.Stat(fsPath)
-		if err != nil {
-			return fmt.Errorf("socket does not exist: %w", err)
-		}
-
-		// Check if it's a socket (not a regular file or directory)
-		if info.Mode()&os.ModeSocket == 0 {
-			return fmt.Errorf("path exists but is not a socket")
-		}
-		return nil
-	}
-
-	// For tcp:// sockets, do basic sanity check without network reachability test
-	if strings.HasPrefix(socketPath, "tcp://") {
-		hostPort := strings.TrimPrefix(socketPath, "tcp://")
-		if hostPort == "" || !strings.Contains(hostPort, ":") {
-			return fmt.Errorf("tcp socket must be host:port, got %q", socketPath)
-		}
-		return nil
-	}
-
-	return fmt.Errorf("unsupported socket scheme (must be unix:// or tcp://): %q", socketPath)
 }
 
