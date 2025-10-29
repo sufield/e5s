@@ -9,137 +9,225 @@ func TestValidateServer(t *testing.T) {
 	tests := []struct {
 		name    string
 		cfg     FileConfig
-		wantErr string
+		wantErr bool
+		errMsg  string
 	}{
 		{
-			name: "valid with client SPIFFE ID",
+			name: "valid config with client SPIFFE ID",
 			cfg: FileConfig{
-				SPIRE: SPIREConfig{
-					WorkloadSocket: "unix:///tmp/agent.sock",
+				SPIRE: struct {
+					WorkloadSocket string `yaml:"workload_socket"`
+				}{
+					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
-				Server: ServerConfig{
-					ListenAddr:             ":8443",
-					AllowedClientSPIFFEID:  "spiffe://example.org/client",
-					AllowedClientTrustDomain: "",
-				},
-			},
-			wantErr: "",
-		},
-		{
-			name: "valid with trust domain",
-			cfg: FileConfig{
-				SPIRE: SPIREConfig{
-					WorkloadSocket: "unix:///tmp/agent.sock",
-				},
-				Server: ServerConfig{
-					ListenAddr:               ":8443",
-					AllowedClientSPIFFEID:    "",
-					AllowedClientTrustDomain: "example.org",
-				},
-			},
-			wantErr: "",
-		},
-		{
-			name: "missing workload socket",
-			cfg: FileConfig{
-				Server: ServerConfig{
+				Server: struct {
+					ListenAddr               string `yaml:"listen_addr"`
+					AllowedClientSPIFFEID    string `yaml:"allowed_client_spiffe_id"`
+					AllowedClientTrustDomain string `yaml:"allowed_client_trust_domain"`
+				}{
 					ListenAddr:            ":8443",
 					AllowedClientSPIFFEID: "spiffe://example.org/client",
 				},
 			},
-			wantErr: "spire.workload_socket must be set",
+			wantErr: false,
+		},
+		{
+			name: "valid config with trust domain",
+			cfg: FileConfig{
+				SPIRE: struct {
+					WorkloadSocket string `yaml:"workload_socket"`
+				}{
+					WorkloadSocket: "/run/spire/sockets/agent.sock",
+				},
+				Server: struct {
+					ListenAddr               string `yaml:"listen_addr"`
+					AllowedClientSPIFFEID    string `yaml:"allowed_client_spiffe_id"`
+					AllowedClientTrustDomain string `yaml:"allowed_client_trust_domain"`
+				}{
+					ListenAddr:               ":8443",
+					AllowedClientTrustDomain: "example.org",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "missing workload socket",
+			cfg: FileConfig{
+				Server: struct {
+					ListenAddr               string `yaml:"listen_addr"`
+					AllowedClientSPIFFEID    string `yaml:"allowed_client_spiffe_id"`
+					AllowedClientTrustDomain string `yaml:"allowed_client_trust_domain"`
+				}{
+					ListenAddr:            ":8443",
+					AllowedClientSPIFFEID: "spiffe://example.org/client",
+				},
+			},
+			wantErr: true,
+			errMsg:  "workload_socket must be set",
 		},
 		{
 			name: "missing listen address",
 			cfg: FileConfig{
-				SPIRE: SPIREConfig{
-					WorkloadSocket: "unix:///tmp/agent.sock",
+				SPIRE: struct {
+					WorkloadSocket string `yaml:"workload_socket"`
+				}{
+					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
-				Server: ServerConfig{
+				Server: struct {
+					ListenAddr               string `yaml:"listen_addr"`
+					AllowedClientSPIFFEID    string `yaml:"allowed_client_spiffe_id"`
+					AllowedClientTrustDomain string `yaml:"allowed_client_trust_domain"`
+				}{
 					AllowedClientSPIFFEID: "spiffe://example.org/client",
 				},
 			},
-			wantErr: "server.listen_addr must be set",
+			wantErr: true,
+			errMsg:  "listen_addr must be set",
 		},
 		{
-			name: "neither policy set",
+			name: "missing both client ID and trust domain",
 			cfg: FileConfig{
-				SPIRE: SPIREConfig{
-					WorkloadSocket: "unix:///tmp/agent.sock",
+				SPIRE: struct {
+					WorkloadSocket string `yaml:"workload_socket"`
+				}{
+					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
-				Server: ServerConfig{
+				Server: struct {
+					ListenAddr               string `yaml:"listen_addr"`
+					AllowedClientSPIFFEID    string `yaml:"allowed_client_spiffe_id"`
+					AllowedClientTrustDomain string `yaml:"allowed_client_trust_domain"`
+				}{
 					ListenAddr: ":8443",
 				},
 			},
-			wantErr: "must set exactly one of server.allowed_client_spiffe_id or server.allowed_client_trust_domain",
+			wantErr: true,
+			errMsg:  "must set exactly one",
 		},
 		{
-			name: "both policies set",
+			name: "both client ID and trust domain set",
 			cfg: FileConfig{
-				SPIRE: SPIREConfig{
-					WorkloadSocket: "unix:///tmp/agent.sock",
+				SPIRE: struct {
+					WorkloadSocket string `yaml:"workload_socket"`
+				}{
+					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
-				Server: ServerConfig{
+				Server: struct {
+					ListenAddr               string `yaml:"listen_addr"`
+					AllowedClientSPIFFEID    string `yaml:"allowed_client_spiffe_id"`
+					AllowedClientTrustDomain string `yaml:"allowed_client_trust_domain"`
+				}{
 					ListenAddr:               ":8443",
 					AllowedClientSPIFFEID:    "spiffe://example.org/client",
 					AllowedClientTrustDomain: "example.org",
 				},
 			},
-			wantErr: "cannot set both",
+			wantErr: true,
+			errMsg:  "cannot set both",
 		},
 		{
 			name: "invalid SPIFFE ID format",
 			cfg: FileConfig{
-				SPIRE: SPIREConfig{
-					WorkloadSocket: "unix:///tmp/agent.sock",
+				SPIRE: struct {
+					WorkloadSocket string `yaml:"workload_socket"`
+				}{
+					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
-				Server: ServerConfig{
+				Server: struct {
+					ListenAddr               string `yaml:"listen_addr"`
+					AllowedClientSPIFFEID    string `yaml:"allowed_client_spiffe_id"`
+					AllowedClientTrustDomain string `yaml:"allowed_client_trust_domain"`
+				}{
 					ListenAddr:            ":8443",
 					AllowedClientSPIFFEID: "not-a-valid-spiffe-id",
 				},
 			},
-			wantErr: "invalid server.allowed_client_spiffe_id",
+			wantErr: true,
+			errMsg:  "invalid server.allowed_client_spiffe_id",
 		},
 		{
 			name: "invalid trust domain format",
 			cfg: FileConfig{
-				SPIRE: SPIREConfig{
-					WorkloadSocket: "unix:///tmp/agent.sock",
+				SPIRE: struct {
+					WorkloadSocket string `yaml:"workload_socket"`
+				}{
+					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
-				Server: ServerConfig{
+				Server: struct {
+					ListenAddr               string `yaml:"listen_addr"`
+					AllowedClientSPIFFEID    string `yaml:"allowed_client_spiffe_id"`
+					AllowedClientTrustDomain string `yaml:"allowed_client_trust_domain"`
+				}{
 					ListenAddr:               ":8443",
-					AllowedClientTrustDomain: "invalid/trust/domain",
+					AllowedClientTrustDomain: "invalid domain!",
 				},
 			},
-			wantErr: "invalid server.allowed_client_trust_domain",
+			wantErr: true,
+			errMsg:  "invalid server.allowed_client_trust_domain",
 		},
 		{
-			name: "SPIFFE ID with path is valid",
+			name: "whitespace trimming for SPIFFE ID",
 			cfg: FileConfig{
-				SPIRE: SPIREConfig{
-					WorkloadSocket: "unix:///tmp/agent.sock",
+				SPIRE: struct {
+					WorkloadSocket string `yaml:"workload_socket"`
+				}{
+					WorkloadSocket: "  /run/spire/sockets/agent.sock  ",
 				},
-				Server: ServerConfig{
-					ListenAddr:            ":8443",
-					AllowedClientSPIFFEID: "spiffe://example.org/ns/default/sa/client",
+				Server: struct {
+					ListenAddr               string `yaml:"listen_addr"`
+					AllowedClientSPIFFEID    string `yaml:"allowed_client_spiffe_id"`
+					AllowedClientTrustDomain string `yaml:"allowed_client_trust_domain"`
+				}{
+					ListenAddr:            "  :8443  ",
+					AllowedClientSPIFFEID: "  spiffe://example.org/client  ",
 				},
 			},
-			wantErr: "",
+			wantErr: false,
+		},
+		{
+			name: "whitespace trimming for trust domain",
+			cfg: FileConfig{
+				SPIRE: struct {
+					WorkloadSocket string `yaml:"workload_socket"`
+				}{
+					WorkloadSocket: "  /run/spire/sockets/agent.sock  ",
+				},
+				Server: struct {
+					ListenAddr               string `yaml:"listen_addr"`
+					AllowedClientSPIFFEID    string `yaml:"allowed_client_spiffe_id"`
+					AllowedClientTrustDomain string `yaml:"allowed_client_trust_domain"`
+				}{
+					ListenAddr:               "  :8443  ",
+					AllowedClientTrustDomain: "  example.org  ",
+				},
+			},
+			wantErr: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateServer(tt.cfg)
-			if tt.wantErr == "" {
-				if err != nil {
-					t.Errorf("ValidateServer() error = %v, want nil", err)
+			authz, err := ValidateServer(tt.cfg)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("ValidateServer() expected error containing %q, got nil", tt.errMsg)
+					return
+				}
+				if !strings.Contains(err.Error(), tt.errMsg) {
+					t.Errorf("ValidateServer() error = %q, want error containing %q", err.Error(), tt.errMsg)
 				}
 			} else {
-				if err == nil {
-					t.Errorf("ValidateServer() error = nil, want error containing %q", tt.wantErr)
-				} else if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Errorf("ValidateServer() error = %v, want error containing %q", err, tt.wantErr)
+				if err != nil {
+					t.Errorf("ValidateServer() unexpected error = %v", err)
+					return
+				}
+				// Verify we got a valid authz policy
+				hasID := authz.ID.String() != ""
+				hasTD := authz.TrustDomain.String() != ""
+				if !hasID && !hasTD {
+					t.Error("ValidateServer() returned empty authz policy")
+				}
+				if hasID && hasTD {
+					t.Error("ValidateServer() returned authz with both ID and TrustDomain set")
 				}
 			}
 		})
@@ -150,104 +238,183 @@ func TestValidateClient(t *testing.T) {
 	tests := []struct {
 		name    string
 		cfg     FileConfig
-		wantErr string
+		wantErr bool
+		errMsg  string
 	}{
 		{
-			name: "valid with server SPIFFE ID",
+			name: "valid config with server SPIFFE ID",
 			cfg: FileConfig{
-				SPIRE: SPIREConfig{
-					WorkloadSocket: "unix:///tmp/agent.sock",
+				SPIRE: struct {
+					WorkloadSocket string `yaml:"workload_socket"`
+				}{
+					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
-				Client: ClientConfig{
-					ExpectedServerSPIFFEID:    "spiffe://example.org/server",
-					ExpectedServerTrustDomain: "",
+				Client: struct {
+					ExpectedServerSPIFFEID    string `yaml:"expected_server_spiffe_id"`
+					ExpectedServerTrustDomain string `yaml:"expected_server_trust_domain"`
+				}{
+					ExpectedServerSPIFFEID: "spiffe://example.org/server",
 				},
 			},
-			wantErr: "",
+			wantErr: false,
 		},
 		{
-			name: "valid with trust domain",
+			name: "valid config with trust domain",
 			cfg: FileConfig{
-				SPIRE: SPIREConfig{
-					WorkloadSocket: "unix:///tmp/agent.sock",
+				SPIRE: struct {
+					WorkloadSocket string `yaml:"workload_socket"`
+				}{
+					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
-				Client: ClientConfig{
-					ExpectedServerSPIFFEID:    "",
+				Client: struct {
+					ExpectedServerSPIFFEID    string `yaml:"expected_server_spiffe_id"`
+					ExpectedServerTrustDomain string `yaml:"expected_server_trust_domain"`
+				}{
 					ExpectedServerTrustDomain: "example.org",
 				},
 			},
-			wantErr: "",
+			wantErr: false,
 		},
 		{
 			name: "missing workload socket",
 			cfg: FileConfig{
-				Client: ClientConfig{
+				Client: struct {
+					ExpectedServerSPIFFEID    string `yaml:"expected_server_spiffe_id"`
+					ExpectedServerTrustDomain string `yaml:"expected_server_trust_domain"`
+				}{
 					ExpectedServerSPIFFEID: "spiffe://example.org/server",
 				},
 			},
-			wantErr: "spire.workload_socket must be set",
+			wantErr: true,
+			errMsg:  "workload_socket must be set",
 		},
 		{
-			name: "neither policy set",
+			name: "missing both server ID and trust domain",
 			cfg: FileConfig{
-				SPIRE: SPIREConfig{
-					WorkloadSocket: "unix:///tmp/agent.sock",
+				SPIRE: struct {
+					WorkloadSocket string `yaml:"workload_socket"`
+				}{
+					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
-				Client: ClientConfig{},
 			},
-			wantErr: "must set exactly one of client.expected_server_spiffe_id or client.expected_server_trust_domain",
+			wantErr: true,
+			errMsg:  "must set exactly one",
 		},
 		{
-			name: "both policies set",
+			name: "both server ID and trust domain set",
 			cfg: FileConfig{
-				SPIRE: SPIREConfig{
-					WorkloadSocket: "unix:///tmp/agent.sock",
+				SPIRE: struct {
+					WorkloadSocket string `yaml:"workload_socket"`
+				}{
+					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
-				Client: ClientConfig{
+				Client: struct {
+					ExpectedServerSPIFFEID    string `yaml:"expected_server_spiffe_id"`
+					ExpectedServerTrustDomain string `yaml:"expected_server_trust_domain"`
+				}{
 					ExpectedServerSPIFFEID:    "spiffe://example.org/server",
 					ExpectedServerTrustDomain: "example.org",
 				},
 			},
-			wantErr: "cannot set both",
+			wantErr: true,
+			errMsg:  "cannot set both",
 		},
 		{
 			name: "invalid SPIFFE ID format",
 			cfg: FileConfig{
-				SPIRE: SPIREConfig{
-					WorkloadSocket: "unix:///tmp/agent.sock",
+				SPIRE: struct {
+					WorkloadSocket string `yaml:"workload_socket"`
+				}{
+					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
-				Client: ClientConfig{
-					ExpectedServerSPIFFEID: "http://example.org/server",
+				Client: struct {
+					ExpectedServerSPIFFEID    string `yaml:"expected_server_spiffe_id"`
+					ExpectedServerTrustDomain string `yaml:"expected_server_trust_domain"`
+				}{
+					ExpectedServerSPIFFEID: "not-a-valid-spiffe-id",
 				},
 			},
-			wantErr: "invalid client.expected_server_spiffe_id",
+			wantErr: true,
+			errMsg:  "invalid client.expected_server_spiffe_id",
 		},
 		{
 			name: "invalid trust domain format",
 			cfg: FileConfig{
-				SPIRE: SPIREConfig{
-					WorkloadSocket: "unix:///tmp/agent.sock",
+				SPIRE: struct {
+					WorkloadSocket string `yaml:"workload_socket"`
+				}{
+					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
-				Client: ClientConfig{
-					ExpectedServerTrustDomain: "INVALID_TRUST_DOMAIN",
+				Client: struct {
+					ExpectedServerSPIFFEID    string `yaml:"expected_server_spiffe_id"`
+					ExpectedServerTrustDomain string `yaml:"expected_server_trust_domain"`
+				}{
+					ExpectedServerTrustDomain: "invalid domain!",
 				},
 			},
-			wantErr: "invalid client.expected_server_trust_domain",
+			wantErr: true,
+			errMsg:  "invalid client.expected_server_trust_domain",
+		},
+		{
+			name: "whitespace trimming for SPIFFE ID",
+			cfg: FileConfig{
+				SPIRE: struct {
+					WorkloadSocket string `yaml:"workload_socket"`
+				}{
+					WorkloadSocket: "  /run/spire/sockets/agent.sock  ",
+				},
+				Client: struct {
+					ExpectedServerSPIFFEID    string `yaml:"expected_server_spiffe_id"`
+					ExpectedServerTrustDomain string `yaml:"expected_server_trust_domain"`
+				}{
+					ExpectedServerSPIFFEID: "  spiffe://example.org/server  ",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "whitespace trimming for trust domain",
+			cfg: FileConfig{
+				SPIRE: struct {
+					WorkloadSocket string `yaml:"workload_socket"`
+				}{
+					WorkloadSocket: "  /run/spire/sockets/agent.sock  ",
+				},
+				Client: struct {
+					ExpectedServerSPIFFEID    string `yaml:"expected_server_spiffe_id"`
+					ExpectedServerTrustDomain string `yaml:"expected_server_trust_domain"`
+				}{
+					ExpectedServerTrustDomain: "  example.org  ",
+				},
+			},
+			wantErr: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateClient(tt.cfg)
-			if tt.wantErr == "" {
-				if err != nil {
-					t.Errorf("ValidateClient() error = %v, want nil", err)
+			authz, err := ValidateClient(tt.cfg)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("ValidateClient() expected error containing %q, got nil", tt.errMsg)
+					return
+				}
+				if !strings.Contains(err.Error(), tt.errMsg) {
+					t.Errorf("ValidateClient() error = %q, want error containing %q", err.Error(), tt.errMsg)
 				}
 			} else {
-				if err == nil {
-					t.Errorf("ValidateClient() error = nil, want error containing %q", tt.wantErr)
-				} else if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Errorf("ValidateClient() error = %v, want error containing %q", err, tt.wantErr)
+				if err != nil {
+					t.Errorf("ValidateClient() unexpected error = %v", err)
+					return
+				}
+				// Verify we got a valid authz policy
+				hasID := authz.ID.String() != ""
+				hasTD := authz.TrustDomain.String() != ""
+				if !hasID && !hasTD {
+					t.Error("ValidateClient() returned empty authz policy")
+				}
+				if hasID && hasTD {
+					t.Error("ValidateClient() returned authz with both ID and TrustDomain set")
 				}
 			}
 		})

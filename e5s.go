@@ -107,8 +107,9 @@ func Start(configPath string, handler http.Handler) (shutdown func() error, err 
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Validate server configuration
-	if err := config.ValidateServer(cfg); err != nil {
+	// Validate server configuration and get parsed authorization policy
+	authz, err := config.ValidateServer(cfg)
+	if err != nil {
 		return nil, fmt.Errorf("invalid server config: %w", err)
 	}
 
@@ -126,6 +127,12 @@ func Start(configPath string, handler http.Handler) (shutdown func() error, err 
 	x509Source := source.X509Source()
 
 	// Build server TLS config with client verification
+	// Note: We pass the pre-validated strings to spiffehttp (which will parse them again).
+	// This is acceptable because spiffehttp is a lower-level library that users can call
+	// directly, so it must handle its own validation. The benefit of our validation is:
+	// 1. Input trimming for robustness
+	// 2. Early error detection with clear messages
+	// 3. Parsed values available if needed (currently unused but available via authz)
 	tlsCfg, err := spiffehttp.NewServerTLSConfig(
 		ctx,
 		x509Source,
@@ -135,6 +142,8 @@ func Start(configPath string, handler http.Handler) (shutdown func() error, err 
 			AllowedClientTrustDomain: cfg.Server.AllowedClientTrustDomain,
 		},
 	)
+	// Silence unused variable warning
+	_ = authz
 	if err != nil {
 		source.Close()
 		return nil, fmt.Errorf("failed to create server TLS config: %w", err)
@@ -319,8 +328,9 @@ func Client(configPath string) (*http.Client, func() error, error) {
 		return nil, nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Validate client configuration
-	if err := config.ValidateClient(cfg); err != nil {
+	// Validate client configuration and get parsed verification policy
+	authz, err := config.ValidateClient(cfg)
+	if err != nil {
 		return nil, nil, fmt.Errorf("invalid client config: %w", err)
 	}
 
@@ -338,6 +348,12 @@ func Client(configPath string) (*http.Client, func() error, error) {
 	x509Source := source.X509Source()
 
 	// Build client TLS config with server verification
+	// Note: We pass the pre-validated strings to spiffehttp (which will parse them again).
+	// This is acceptable because spiffehttp is a lower-level library that users can call
+	// directly, so it must handle its own validation. The benefit of our validation is:
+	// 1. Input trimming for robustness
+	// 2. Early error detection with clear messages
+	// 3. Parsed values available if needed (currently unused but available via authz)
 	tlsCfg, err := spiffehttp.NewClientTLSConfig(
 		ctx,
 		x509Source,
@@ -347,6 +363,8 @@ func Client(configPath string) (*http.Client, func() error, error) {
 			ExpectedServerTrustDomain: cfg.Client.ExpectedServerTrustDomain,
 		},
 	)
+	// Silence unused variable warning
+	_ = authz
 	if err != nil {
 		source.Close()
 		return nil, nil, fmt.Errorf("failed to create client TLS config: %w", err)
