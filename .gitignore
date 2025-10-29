@@ -23,6 +23,9 @@ coverage.html
 inmem.out
 inmem_coverage.html
 
+# Example binaries
+examples/*/bin/
+
 # Security scanning artifacts
 gosec.sarif
 gitleaks.sarif

@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/spiffe/go-spiffe/v2/spiffeid"
 )
 
 // ServerConfig configures an mTLS server's identity verification policy.
@@ -243,28 +245,48 @@ func NewServerTLSConfig(ctx context.Context, source CertSource, cfg ServerConfig
 //  2. If cfg.AllowedClientTrustDomain is set: require trust domain match
 //  3. Otherwise: require same trust domain as server
 //
+// Uses go-spiffe SDK Matcher API internally for robust matching.
+//
 // Returns nil if allowed, error describing why denied otherwise.
 func verifyClientIdentity(clientSPIFFEID, clientTrustDomain, serverTrustDomain string, cfg ServerConfig) error {
+	// Parse client SPIFFE ID using SDK
+	clientID, err := spiffeid.FromString(clientSPIFFEID)
+	if err != nil {
+		return fmt.Errorf("authorization failed: invalid client SPIFFE ID: %w", err)
+	}
+
+	// Build matcher based on policy
+	var matcher spiffeid.Matcher
+
 	// Policy 1: Exact SPIFFE ID match
 	if cfg.AllowedClientID != "" {
-		if clientSPIFFEID == cfg.AllowedClientID {
-			return nil // Allowed
+		expectedID, err := spiffeid.FromString(cfg.AllowedClientID)
+		if err != nil {
+			// Should never happen - validated in NewServerTLSConfig
+			return fmt.Errorf("authorization failed: invalid AllowedClientID config: %w", err)
 		}
-		return fmt.Errorf("authorization failed: client SPIFFE ID %q does not match allowed ID %q", clientSPIFFEID, cfg.AllowedClientID)
-	}
-
-	// Policy 2: Trust domain match (explicit)
-	if cfg.AllowedClientTrustDomain != "" {
-		if MatchesTrustDomain(clientSPIFFEID, cfg.AllowedClientTrustDomain) {
-			return nil // Allowed
+		matcher = spiffeid.MatchID(expectedID)
+	} else if cfg.AllowedClientTrustDomain != "" {
+		// Policy 2: Trust domain match (explicit)
+		td, err := spiffeid.TrustDomainFromString(cfg.AllowedClientTrustDomain)
+		if err != nil {
+			// Should never happen - validated in NewServerTLSConfig
+			return fmt.Errorf("authorization failed: invalid AllowedClientTrustDomain config: %w", err)
 		}
-		return fmt.Errorf("authorization failed: client trust domain %q does not match allowed trust domain %q", clientTrustDomain, cfg.AllowedClientTrustDomain)
+		matcher = spiffeid.MatchMemberOf(td)
+	} else {
+		// Policy 3: Same trust domain as server (default)
+		td, err := spiffeid.TrustDomainFromString(serverTrustDomain)
+		if err != nil {
+			return fmt.Errorf("authorization failed: invalid server trust domain: %w", err)
+		}
+		matcher = spiffeid.MatchMemberOf(td)
 	}
 
-	// Policy 3: Same trust domain as server (default)
-	if MatchesTrustDomain(clientSPIFFEID, serverTrustDomain) {
-		return nil // Allowed
+	// Apply matcher
+	if err := matcher(clientID); err != nil {
+		return fmt.Errorf("authorization failed: %w", err)
 	}
 
-	return fmt.Errorf("authorization failed: client trust domain %q does not match server trust domain %q", clientTrustDomain, serverTrustDomain)
+	return nil
 }
