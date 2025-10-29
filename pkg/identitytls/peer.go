@@ -165,13 +165,14 @@ func SPIFFEIDTrustDomain(spiffeID string) (string, error) {
 		return "", fmt.Errorf("invalid SPIFFE ID: %w", err)
 	}
 
-	return id.TrustDomain().String(), nil
+	return id.TrustDomain().Name(), nil
 }
 
 // MatchesTrustDomain checks if a SPIFFE ID belongs to a specific trust domain.
 //
-// Trust domain comparison is case-sensitive per SPIFFE spec (trust domains
-// are DNS-like labels, not generic URIs).
+// Uses the SDK's MemberOf() method for proper trust domain membership checks
+// according to SPIFFE spec. Trust domain comparison is case-sensitive per
+// SPIFFE spec (trust domains are DNS-like labels, not generic URIs).
 //
 // Example:
 //
@@ -179,9 +180,13 @@ func SPIFFEIDTrustDomain(spiffeID string) (string, error) {
 //	MatchesTrustDomain("spiffe://Example.org/service", "example.org") -> false
 //	MatchesTrustDomain("spiffe://other.org/service", "example.org") -> false
 func MatchesTrustDomain(spiffeID, trustDomain string) bool {
-	td, err := SPIFFEIDTrustDomain(spiffeID)
+	id, err := spiffeid.FromString(spiffeID)
 	if err != nil {
 		return false
 	}
-	return td == trustDomain
+	td, err := spiffeid.TrustDomainFromString(trustDomain)
+	if err != nil {
+		return false
+	}
+	return id.MemberOf(td)
 }

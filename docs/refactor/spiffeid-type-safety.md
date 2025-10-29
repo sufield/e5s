@@ -290,6 +290,72 @@ Public API remains unchanged:
 
 4. **Internal refactoring is safe** - When public API is stable, internal improvements can be made confidently
 
+### 5. Improved Helper Functions
+
+#### SPIFFEIDTrustDomain - Use Name() Instead of String()
+
+**Before:**
+```go
+func SPIFFEIDTrustDomain(spiffeID string) (string, error) {
+    id, err := spiffeid.FromString(spiffeID)
+    if err != nil {
+        return "", fmt.Errorf("invalid SPIFFE ID: %w", err)
+    }
+    return id.TrustDomain().String(), nil
+}
+```
+
+**After:**
+```go
+func SPIFFEIDTrustDomain(spiffeID string) (string, error) {
+    id, err := spiffeid.FromString(spiffeID)
+    if err != nil {
+        return "", fmt.Errorf("invalid SPIFFE ID: %w", err)
+    }
+    return id.TrustDomain().Name(), nil
+}
+```
+
+**Benefits:**
+- `Name()` returns just the trust domain name (e.g., "example.org")
+- `String()` would return the full URI form if used on TrustDomain
+- More semantically correct for extracting trust domain as a string
+
+#### MatchesTrustDomain - Use SDK's MemberOf() Method
+
+**Before:**
+```go
+func MatchesTrustDomain(spiffeID, trustDomain string) bool {
+    td, err := SPIFFEIDTrustDomain(spiffeID)
+    if err != nil {
+        return false
+    }
+    return td == trustDomain
+}
+```
+
+**After:**
+```go
+func MatchesTrustDomain(spiffeID, trustDomain string) bool {
+    id, err := spiffeid.FromString(spiffeID)
+    if err != nil {
+        return false
+    }
+    td, err := spiffeid.TrustDomainFromString(trustDomain)
+    if err != nil {
+        return false
+    }
+    return id.MemberOf(td)
+}
+```
+
+**Benefits:**
+- Uses SDK's built-in `MemberOf()` method for trust domain membership checks
+- Properly validates both SPIFFE ID and trust domain before comparison
+- More robust error handling (validates trust domain format)
+- Ensures SPIFFE spec-compliant comparison logic
+- More efficient than string extraction + comparison
+
 ## Future Work
 
 Potential next steps to further leverage SDK types:
@@ -298,7 +364,7 @@ Potential next steps to further leverage SDK types:
 
 2. **Use `spiffeid.Matcher` in config** - Instead of `AllowedClientID string`, could accept `Matcher` directly (would require API redesign)
 
-3. **Leverage more SDK functions** - Explore other SDK utilities we might be reimplementing
+3. **Evaluate replacing string-based public config** - ServerConfig/ClientConfig could accept typed `spiffeid.ID` and `spiffeid.TrustDomain` instead of strings
 
 ## References
 
