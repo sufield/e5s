@@ -6,13 +6,17 @@ A lightweight Go library for building mutual TLS services with SPIFFE identity v
 
 - **Simple High-Level API** - Config-driven with `e5s.Start()` and `e5s.Client()`
 - **Low-Level Control** - Direct access to `pkg/spiffehttp` and `pkg/spire` for custom use cases
-- **SDK-Based Implementation** - Uses official go-spiffe SDK patterns
+- **SDK-Based Implementation** - Uses official go-spiffe SDK API
 - **SPIRE Adapter** - Production-ready SPIRE Workload API implementation
 - **Automatic Rotation** - Zero-downtime certificate and trust bundle updates
 - **SPIFFE ID Verification** - Policy-based peer authentication
 - **TLS 1.3 Enforcement** - Strong cipher suites and security defaults
 - **Thread-Safe** - Share sources across multiple servers and clients
-- **Minimal Dependencies** - Core (`pkg/spiffehttp`): stdlib only. SPIRE adapter (`pkg/spire`): `go-spiffe/v2`. High-level API (`e5s.go`): adds `yaml.v3`. Examples add `chi` (see `go.mod` for details)
+- **Minimal Dependencies** 
+    - Core (`pkg/spiffehttp`): stdlib only. 
+    - SPIRE adapter (`pkg/spire`): `go-spiffe/v2`. 
+    - High-level API (`e5s.go`): adds `yaml.v3`.
+    - Examples add `chi` (see `go.mod` for details)
 
 ## Quick Start
 
@@ -24,7 +28,7 @@ go get github.com/sufield/e5s@latest
 
 ## Two Ways to Use e5s
 
-We provide both **high-level** and **low-level** APIs because they serve different developer roles and abstraction levels:
+We provide a **high-level** and a **low-level** APIs because they serve different developer roles and abstraction levels:
 
 ### High-Level API (`e5s.Start`, `e5s.Client`)
 
@@ -36,7 +40,7 @@ We provide both **high-level** and **low-level** APIs because they serve differe
 - Ideal when you just want secure communication without caring how certificates or trust domains are wired
 - Example use: web apps, microservices, APIs
 
-✅ **Benefits:** Zero boilerplate, hard to misuse, easy to run locally and in production with the same config
+**Benefits:** Zero boilerplate, hard to misuse, easy to run locally and in production with the same config
 
 ### Low-Level API (`pkg/spiffehttp`, `pkg/spire`)
 
@@ -47,7 +51,7 @@ We provide both **high-level** and **low-level** APIs because they serve differe
 - Exposes `spiffehttp.NewServerTLSConfig` and `spire.NewSource`
 - Ideal for customizing certificate rotation intervals, trust domain logic, or integrating into non-HTTP systems
 
-✅ **Benefits:** Extensible for advanced use cases, can plug in custom identity providers, useful for testing/debugging or building frameworks
+**Benefits:** Extensible for advanced use cases, can plug in custom identity providers, useful for testing/debugging or building frameworks
 
 ### Which example should I look at?
 
@@ -69,14 +73,21 @@ Config-driven approach - no TLS code needed. Just create an `e5s.yaml` file and 
 package main
 
 import (
+    "context"
     "fmt"
     "log"
     "net/http"
+    "os/signal"
+    "syscall"
 
     "github.com/sufield/e5s"
 )
 
 func main() {
+    // Create context that listens for interrupt signals
+    ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+    defer stop()
+
     http.HandleFunc("/hello", func(w http.ResponseWriter, r *http.Request) {
         id, ok := e5s.PeerID(r)
         if !ok {
@@ -93,7 +104,11 @@ func main() {
     defer shutdown()
 
     log.Println("Server running - press Ctrl+C to stop")
-    select {} // block forever
+
+    // Wait for interrupt signal for graceful shutdown
+    <-ctx.Done()
+    stop() // Stop receiving signals
+    log.Println("Shutting down gracefully...")
 }
 ```
 
@@ -103,27 +118,42 @@ func main() {
 package main
 
 import (
+    "context"
     "io"
     "log"
+    "net/http"
     "os"
+    "time"
 
     "github.com/sufield/e5s"
 )
 
 func main() {
+    // Create context with timeout for the request
+    ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+    defer cancel()
+
     client, shutdown, err := e5s.Client("e5s.yaml")
     if err != nil {
         log.Fatal(err)
     }
     defer shutdown()
 
-    resp, err := client.Get("https://localhost:8443/hello")
+    // Create request with context
+    req, err := http.NewRequestWithContext(ctx, "GET", "https://localhost:8443/hello", nil)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    resp, err := client.Do(req)
     if err != nil {
         log.Fatal(err)
     }
     defer resp.Body.Close()
 
-    io.Copy(os.Stdout, resp.Body)
+    if _, err := io.Copy(os.Stdout, resp.Body); err != nil {
+        log.Fatal(err)
+    }
 }
 ```
 
@@ -131,17 +161,33 @@ func main() {
 
 ```yaml
 spire:
+  # Path to SPIRE Agent's Workload API socket
   workload_socket: unix:///tmp/spire-agent/public/api.sock
+
+  # (Optional) How long to wait for identity from SPIRE before failing startup
+  # Format: Go duration (e.g. "5s", "30s", "1m")
+  # Default: 30s if not specified
+  # Set higher in dev (agent may start slowly), lower in prod (fail fast)
+  initial_fetch_timeout: 30s
 
 server:
   listen_addr: ":8443"
+
+  # Allow any client in this trust domain
   allowed_client_trust_domain: "example.org"
 
+  # Or allow only a specific client SPIFFE ID
+  # allowed_client_spiffe_id: "spiffe://example.org/client"
+
 client:
+  # Allow any server in this trust domain
   expected_server_trust_domain: "example.org"
+
+  # Or require a specific server SPIFFE ID
+  # expected_server_spiffe_id: "spiffe://example.org/server"
 ```
 
-**Want a production-ready example?** → See [examples/highlevel/](examples/highlevel/) for a complete server with chi router, graceful shutdown, health checks, and structured logging.
+**For a production-ready example** → See [examples/highlevel/](examples/highlevel/) for a complete server with chi router, graceful shutdown, health checks, and structured logging.
 
 ### 2. Low-Level API (For Advanced Use Cases)
 
@@ -157,13 +203,18 @@ import (
     "fmt"
     "log"
     "net/http"
+    "os/signal"
+    "syscall"
+    "time"
 
     "github.com/sufield/e5s/pkg/spiffehttp"
     "github.com/sufield/e5s/pkg/spire"
 )
 
 func main() {
-    ctx := context.Background()
+    // Create context that listens for interrupt signals
+    ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+    defer stop()
 
     // Create SPIRE certificate source
     source, err := spire.NewSource(ctx, spire.Config{})
@@ -201,7 +252,28 @@ func main() {
         Addr:      ":8443",
         TLSConfig: tlsConfig,
     }
-    log.Fatal(server.ListenAndServeTLS("", ""))
+
+    // Start server in a goroutine
+    go func() {
+        log.Println("Server listening on :8443")
+        if err := server.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
+            log.Fatalf("Server error: %v", err)
+        }
+    }()
+
+    // Wait for interrupt signal for graceful shutdown
+    <-ctx.Done()
+    stop()
+
+    // Graceful shutdown with timeout
+    shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+    defer cancel()
+
+    if err := server.Shutdown(shutdownCtx); err != nil {
+        log.Fatalf("Server shutdown error: %v", err)
+    }
+
+    log.Println("Server stopped gracefully")
 }
 ```
 
@@ -216,6 +288,7 @@ import (
     "log"
     "net/http"
     "os"
+    "time"
 
     "github.com/sufield/e5s/pkg/spiffehttp"
     "github.com/sufield/e5s/pkg/spire"
@@ -254,14 +327,26 @@ func main() {
         },
     }
 
+    // Create context with timeout for the request
+    reqCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+    defer cancel()
+
+    // Create request with context
+    req, err := http.NewRequestWithContext(reqCtx, "GET", "https://server.example.org:8443", nil)
+    if err != nil {
+        log.Fatal(err)
+    }
+
     // Make mTLS request
-    resp, err := client.Get("https://server.example.org:8443")
+    resp, err := client.Do(req)
     if err != nil {
         log.Fatal(err)
     }
     defer resp.Body.Close()
 
-    io.Copy(os.Stdout, resp.Body)
+    if _, err := io.Copy(os.Stdout, resp.Body); err != nil {
+        log.Fatal(err)
+    }
 }
 ```
 

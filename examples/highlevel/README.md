@@ -4,11 +4,16 @@
 
 This example demonstrates the high-level e5s API for building mTLS services with SPIRE. This is the recommended starting point for most users.
 
+## 🚀 New to SPIRE?
+
+**[Start with the Tutorial →](TUTORIAL.md)**
+
+The tutorial walks you through every step to get mTLS working in a development environment using Minikube. Perfect for developers who want to learn by doing.
+
 ## What's Here
 
-- `cmd/server/` - mTLS server using chi router
-- `cmd/client/` - mTLS client that calls the server
-- `e5s.yaml` - Configuration file (used by both)
+- `e5s.yaml` - Configuration file with production-ready settings
+- See [middleware example](../middleware/) for actual server implementation
 
 ## Features Demonstrated
 
@@ -53,7 +58,14 @@ The `e5s.yaml` file configures both server and client:
 
 ```yaml
 spire:
+  # Path to SPIRE Agent's Workload API socket
   workload_socket: unix:///tmp/spire-agent/public/api.sock
+
+  # (Optional) How long to wait for identity from SPIRE before failing startup
+  # Format: Go duration (e.g. "5s", "30s", "1m")
+  # Default: 30s if not specified
+  # Set higher in dev (agent may start slowly), lower in prod (fail fast)
+  initial_fetch_timeout: 30s
 
 server:
   listen_addr: ":8443"
@@ -75,78 +87,17 @@ client:
   expected_server_spiffe_id: "spiffe://example.org/api-server"
 ```
 
-## Running the Example
+## Using This Configuration
 
-### Build
+This `e5s.yaml` provides production-ready configuration settings. To see actual working examples:
 
-```bash
-# From examples/highlevel/
-go build -o bin/highlevel-server ./cmd/server
-go build -o bin/highlevel-client ./cmd/client
-```
+- **Server Example**: See [../middleware/](../middleware/) for a complete mTLS server implementation
+- **Client Example**: See the main README for client code examples
 
-### Run Server
-
-```bash
-./bin/highlevel-server
-```
-
-Output:
-```
-Starting e5s mTLS server (config: e5s.yaml)...
-✓ Server listening on :8443
-Health checks: /healthz, /healthz/ready
-Press Ctrl+C for graceful shutdown
-→ GET /hello from 127.0.0.1:54321
-← GET /hello → 200
-```
-
-The server provides:
-- **Graceful shutdown** - Handles SIGINT/SIGTERM and drains connections
-- **Health checks** - Lightweight health endpoints intended for readiness/liveness. In this example they're served on the same listener as the authenticated routes. In production you can expose them on a separate unauthenticated port if your platform requires that.
-- **Structured logging** - Redacts sensitive query params, skips health check noise
-- **Dynamic config** - Reads listen address from config (no hardcoded values)
-
-### Run Client
-
-In another terminal:
-
-```bash
-./bin/highlevel-client
-```
-
-(Example output; SPIFFE IDs and expiry will reflect your environment)
-
-Output:
-```
-Creating mTLS client (config: e5s.yaml)...
-Client created successfully
-Testing GET https://localhost:8443/
-
-=== Response from https://localhost:8443/ ===
-Status: 200 OK
-Server Identity: spiffe://example.org/server
-Body:
-Welcome to the e5s mTLS server
-
-Testing GET https://localhost:8443/hello
-=== Response from https://localhost:8443/hello ===
-Status: 200 OK
-Server Identity: spiffe://example.org/server
-Body:
-Hello, spiffe://example.org/client!
-
-Testing GET https://localhost:8443/api/status
-=== Response from https://localhost:8443/api/status ===
-Status: 200 OK
-Server Identity: spiffe://example.org/server
-Body:
-{"status":"ok","authenticated_as":"spiffe://example.org/client","trust_domain":"example.org","cert_expires":"2024-10-28T12:30:00Z"}
-
-✓ All requests completed successfully!
-```
-
-Note how the client logs the **Server Identity** - this demonstrates mutual TLS verification. Both client and server authenticate each other.
+The configuration in this directory demonstrates:
+- **Production settings**: Conservative timeout, explicit socket paths
+- **Authorization options**: Both trust domain and specific ID patterns
+- **Flexibility**: Optional timeout configuration with sensible defaults
 
 ## Health Check Endpoints
 
@@ -171,25 +122,52 @@ In this example, all endpoints (including `/healthz`) are served on the same mTL
 
 ## How It Works
 
-### Server Code
+### Server Code Example
 
 ```go
-r := chi.NewRouter()
+package main
 
-r.Get("/hello", func(w http.ResponseWriter, req *http.Request) {
-    id, ok := e5s.PeerID(req)
-    if !ok {
-        http.Error(w, "unauthorized", http.StatusUnauthorized)
-        return
+import (
+    "context"
+    "fmt"
+    "log"
+    "net/http"
+    "os/signal"
+    "syscall"
+
+    "github.com/go-chi/chi/v5"
+    "github.com/sufield/e5s"
+)
+
+func main() {
+    // Create context that listens for interrupt signals
+    ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+    defer stop()
+
+    r := chi.NewRouter()
+
+    r.Get("/hello", func(w http.ResponseWriter, req *http.Request) {
+        id, ok := e5s.PeerID(req)
+        if !ok {
+            http.Error(w, "unauthorized", http.StatusUnauthorized)
+            return
+        }
+        fmt.Fprintf(w, "Hello, %s!\n", id)
+    })
+
+    shutdown, err := e5s.Start("e5s.yaml", r)
+    if err != nil {
+        log.Fatal(err)
     }
-    fmt.Fprintf(w, "Hello, %s!\n", id)
-})
+    defer shutdown()
 
-shutdown, err := e5s.Start("e5s.yaml", r)
-if err != nil {
-    log.Fatal(err)
+    log.Println("Server running - press Ctrl+C to stop")
+
+    // Wait for interrupt signal for graceful shutdown
+    <-ctx.Done()
+    stop()
+    log.Println("Shutting down gracefully...")
 }
-defer shutdown()
 ```
 
 The server:
@@ -198,17 +176,51 @@ The server:
 3. Starts mTLS server with automatic cert rotation
 4. Injects peer identity into request context
 5. Handlers use `e5s.PeerID()` to get authenticated caller
+6. Gracefully shuts down on SIGINT/SIGTERM
 
-### Client Code
+### Client Code Example
 
 ```go
-client, shutdown, err := e5s.Client("e5s.yaml")
-if err != nil {
-    log.Fatal(err)
-}
-defer shutdown()
+package main
 
-resp, err := client.Get("https://localhost:8443/hello")
+import (
+    "context"
+    "io"
+    "log"
+    "net/http"
+    "os"
+    "time"
+
+    "github.com/sufield/e5s"
+)
+
+func main() {
+    // Create context with timeout for the request
+    ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+    defer cancel()
+
+    client, shutdown, err := e5s.Client("e5s.yaml")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer shutdown()
+
+    // Create request with context
+    req, err := http.NewRequestWithContext(ctx, "GET", "https://localhost:8443/hello", nil)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    resp, err := client.Do(req)
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer resp.Body.Close()
+
+    if _, err := io.Copy(os.Stdout, resp.Body); err != nil {
+        log.Fatal(err)
+    }
+}
 ```
 
 The client:
@@ -217,6 +229,7 @@ The client:
 3. Returns standard `*http.Client` with mTLS
 4. Automatically presents SPIFFE ID to servers
 5. Verifies server identity per config policy
+6. Uses context for request timeout/cancellation
 
 ## What You Don't See
 
