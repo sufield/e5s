@@ -156,4 +156,3 @@ func buildServerAuthorizer(svidSource x509svid.Source, cfg ServerConfig) (tlscon
 		return tlsconfig.AuthorizeMemberOf(svid.ID.TrustDomain()), nil
 	}
 }
-

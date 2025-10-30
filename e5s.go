@@ -37,14 +37,89 @@ package e5s
 import (
 	"context"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
+	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/sufield/e5s/internal/config"
 	"github.com/sufield/e5s/pkg/spiffehttp"
 	"github.com/sufield/e5s/pkg/spire"
 )
+
+// getConfigPath returns the config file path using intelligent defaults:
+//  1. Check E5S_CONFIG environment variable
+//  2. Fall back to "e5s.yaml" in current directory
+//
+// This allows zero-configuration usage in most cases while supporting
+// environment-specific overrides in production.
+func getConfigPath() string {
+	if path := os.Getenv("E5S_CONFIG"); path != "" {
+		return path
+	}
+	return "e5s.yaml"
+}
+
+// Run starts an mTLS server with zero configuration required.
+//
+// This is the simplest way to run an mTLS server. It automatically handles:
+//   - Config file discovery (E5S_CONFIG env var or e5s.yaml)
+//   - SPIRE connection and mTLS setup
+//   - Signal handling (SIGINT/SIGTERM)
+//   - Graceful shutdown
+//
+// The server will run until interrupted (Ctrl+C or kill signal).
+//
+// For more control over signal handling, use StartServer() instead.
+// For explicit config paths, use Start() instead.
+//
+// Configuration (e5s.yaml or path from E5S_CONFIG):
+//
+//	spire:
+//	  workload_socket: unix:///tmp/spire-agent/public/api.sock
+//	server:
+//	  listen_addr: ":8443"
+//	  allowed_client_trust_domain: "example.org"
+//
+// Usage:
+//
+//	func main() {
+//	    r := chi.NewRouter()
+//	    r.Get("/hello", func(w http.ResponseWriter, req *http.Request) {
+//	        id, ok := e5s.PeerID(req)
+//	        if !ok {
+//	            http.Error(w, "unauthorized", http.StatusUnauthorized)
+//	            return
+//	        }
+//	        fmt.Fprintf(w, "Hello, %s!\n", id)
+//	    })
+//	    e5s.Run(r)
+//	}
+//
+// This function will block until the server receives SIGINT or SIGTERM.
+func Run(handler http.Handler) {
+	// Create context that listens for interrupt signals
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	// Start server with intelligent config defaults
+	shutdown, err := StartServer(handler)
+	if err != nil {
+		log.Fatalf("Failed to start server: %v", err)
+	}
+	defer shutdown()
+
+	log.Println("Server running - press Ctrl+C to stop")
+
+	// Wait for interrupt signal for graceful shutdown
+	<-ctx.Done()
+	stop()
+	log.Println("Shutting down gracefully...")
+}
 
 // Start starts a production-grade mTLS server using SPIRE.
 //
@@ -216,6 +291,69 @@ func Start(configPath string, handler http.Handler) (shutdown func() error, err 
 	}
 
 	return shutdownFunc, nil
+}
+
+// StartServer starts a production-grade mTLS server with intelligent defaults.
+//
+// This is the recommended API for most users. It automatically:
+//   - Checks E5S_CONFIG environment variable for config file path
+//   - Falls back to "e5s.yaml" in current directory
+//   - Loads configuration and connects to SPIRE
+//   - Starts mTLS server with automatic certificate rotation
+//
+// For explicit config file paths, use Start(configPath, handler) instead.
+//
+// Configuration (e5s.yaml or path from E5S_CONFIG):
+//
+//	spire:
+//	  workload_socket: unix:///tmp/spire-agent/public/api.sock
+//	server:
+//	  listen_addr: ":8443"
+//	  allowed_client_trust_domain: "example.org"
+//
+// Usage:
+//
+//	shutdown, err := e5s.StartServer(myHandler)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	defer shutdown()
+//
+// See Start() documentation for full details on server behavior and configuration.
+func StartServer(handler http.Handler) (shutdown func() error, err error) {
+	return Start(getConfigPath(), handler)
+}
+
+// NewClient returns an HTTP client configured for mTLS with intelligent defaults.
+//
+// This is the recommended API for most users. It automatically:
+//   - Checks E5S_CONFIG environment variable for config file path
+//   - Falls back to "e5s.yaml" in current directory
+//   - Loads configuration and connects to SPIRE
+//   - Configures mTLS client with automatic certificate rotation
+//
+// For explicit config file paths, use Client(configPath) instead.
+//
+// Configuration (e5s.yaml or path from E5S_CONFIG):
+//
+//	spire:
+//	  workload_socket: unix:///tmp/spire-agent/public/api.sock
+//	client:
+//	  expected_server_trust_domain: "example.org"
+//
+// Usage:
+//
+//	client, shutdown, err := e5s.NewClient()
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	defer shutdown()
+//
+//	resp, err := client.Get("https://secure-service:8443/api")
+//
+// See Client() documentation for full details on client behavior and configuration.
+func NewClient() (*http.Client, func() error, error) {
+	return Client(getConfigPath())
 }
 
 // PeerInfo extracts the authenticated caller's full identity from a request.
@@ -392,4 +530,77 @@ func Client(configPath string) (*http.Client, func() error, error) {
 	}
 
 	return httpClient, shutdownFunc, nil
+}
+
+// bodyCloser wraps an io.ReadCloser to call an additional cleanup function on Close.
+// This allows automatic resource cleanup when the response body is closed.
+type bodyCloser struct {
+	io.ReadCloser
+	cleanup func()
+}
+
+func (b *bodyCloser) Close() error {
+	err := b.ReadCloser.Close()
+	b.cleanup()
+	return err
+}
+
+// Get performs an mTLS GET request with zero configuration required.
+//
+// This is the simplest way to make an mTLS request. It automatically:
+//   - Discovers config file (E5S_CONFIG env var or e5s.yaml)
+//   - Creates mTLS client with SPIRE connection
+//   - Performs the GET request
+//   - Ties cleanup to response body closure
+//
+// Shutdown is automatically handled when you close the response body.
+// This ensures proper resource cleanup without requiring explicit shutdown calls.
+//
+// Configuration (e5s.yaml or path from E5S_CONFIG):
+//
+//	spire:
+//	  workload_socket: unix:///tmp/spire-agent/public/api.sock
+//	client:
+//	  expected_server_trust_domain: "example.org"
+//
+// Usage:
+//
+//	func main() {
+//	    resp, err := e5s.Get("https://api.example.com:8443/data")
+//	    if err != nil {
+//	        log.Fatal(err)
+//	    }
+//	    defer resp.Body.Close()  // This also triggers cleanup
+//
+//	    body, _ := io.ReadAll(resp.Body)
+//	    fmt.Println(string(body))
+//	}
+//
+// For making multiple requests with the same client, use NewClient() instead.
+// For explicit config paths, use Client() instead.
+//
+// Returns:
+//   - response: HTTP response with wrapped body that handles cleanup
+//   - error: if config loading, SPIRE connection, or request fails
+func Get(url string) (*http.Response, error) {
+	// Create client with intelligent defaults
+	client, shutdown, err := NewClient()
+	if err != nil {
+		return nil, err
+	}
+
+	// Perform GET request
+	resp, err := client.Get(url)
+	if err != nil {
+		shutdown() // Early cleanup on request error
+		return nil, err
+	}
+
+	// Wrap response body to trigger cleanup on close
+	resp.Body = &bodyCloser{
+		ReadCloser: resp.Body,
+		cleanup:    func() { shutdown() },
+	}
+
+	return resp, nil
 }

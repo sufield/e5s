@@ -12,6 +12,24 @@
 
 ---
 
+This is divided into two main parts:
+
+### Part A: Infrastructure Setup (~15 minutes)
+Set up the SPIRE infrastructure that provides cryptographic identities for your services.
+- Start Minikube cluster
+- Install SPIRE Server and Agent
+- Register your workloads
+
+### Part B: Application Development (~15 minutes)
+Build and run your mTLS applications using the e5s library.
+- Write server and client code
+- Configure and test locally
+- Verify mTLS authentication
+
+Complete Part A before starting Part B. The infrastructure must be running for your applications to obtain certificates.
+
+---
+
 ## Prerequisites
 
 Before starting, ensure you have these tools installed:
@@ -42,13 +60,13 @@ Before starting, ensure you have these tools installed:
    # Should output: version.BuildInfo{Version:"v3.12.0" or higher
    ```
 
-5. **Go** - Programming language (1.21 or higher)
+5. **Go** - Programming language (1.25 or higher)
    ```bash
    go version
-   # Should output: go version go1.21.0 or higher
+   # Should output: go version go1.25.0 or higher
    ```
 
-### Installing Prerequisites (if needed)
+### Installing Prerequisites
 
 **macOS**:
 ```bash
@@ -75,6 +93,14 @@ curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 # Go
 sudo apt-get install golang-go
 ```
+
+---
+
+# Part A: Infrastructure Setup
+
+This part sets up the SPIRE infrastructure that will provide cryptographic identities to your applications. You'll install SPIRE Server and Agent in Minikube, then register your workloads.
+
+**Goal**: Have a working SPIRE deployment where workloads can request certificates.
 
 ---
 
@@ -243,9 +269,36 @@ kubectl exec -n spire $SERVER_POD -c spire-server -- \
 
 ---
 
-## Step 5: Build Example Application
+# Part B: Application Development
+
+Now that the SPIRE infrastructure is running, you can build applications that use it for mTLS. In this section, you'll write a simple server and client using the e5s library, which abstracts all the complexity of SPIRE integration.
+
+**Goal**: Build and run mTLS applications that automatically obtain certificates from SPIRE.
+
+---
+
+## Step 1: Build Example Application
 
 Now let's build a simple mTLS application using the e5s library.
+
+### Install Dependencies
+
+First, create a Go module and install the required dependencies:
+
+```bash
+# Create a directory for your application
+mkdir -p ~/mtls-demo
+cd ~/mtls-demo
+
+# Initialize Go module
+go mod init mtls-demo
+
+# Install e5s library
+go get github.com/sufield/e5s@latest
+
+# Install chi router
+go get github.com/go-chi/chi/v5
+```
 
 ### Create Server Application
 
@@ -255,23 +308,14 @@ Create `server/main.go`:
 package main
 
 import (
-	"context"
 	"fmt"
-	"log"
 	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/sufield/e5s"
 )
 
 func main() {
-	// Create context that listens for interrupt signals
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-
 	// Create HTTP router
 	r := chi.NewRouter()
 
@@ -292,28 +336,23 @@ func main() {
 		fmt.Fprintf(w, "Hello, %s!\n", id)
 	})
 
-	// Get config file path from environment or use default
-	configFile := os.Getenv("E5S_CONFIG")
-	if configFile == "" {
-		configFile = "e5s.yaml"
-	}
-
-	// Start mTLS server
-	log.Printf("Starting mTLS server (config: %s)...", configFile)
-	shutdown, err := e5s.Start(configFile, r)
-	if err != nil {
-		log.Fatalf("Failed to start server: %v", err)
-	}
-	defer shutdown()
-
-	log.Println("Server running - press Ctrl+C to stop")
-
-	// Wait for interrupt signal for graceful shutdown
-	<-ctx.Done()
-	stop()
-	log.Println("Shutting down gracefully...")
+	// Run mTLS server (handles config, SPIRE connection, and graceful shutdown)
+	e5s.Run(r)
 }
 ```
+
+**What this code does:**
+- Creates a chi router with two endpoints: `/healthz` and `/hello`
+- The `/hello` endpoint extracts the client's SPIFFE ID using `e5s.PeerID()`
+- Calls `e5s.Run(r)` which handles everything:
+  - Config file discovery (e5s.yaml or E5S_CONFIG)
+  - SPIRE connection and mTLS setup
+  - Signal handling (Ctrl+C)
+  - Graceful shutdown
+
+**That's it!** Zero boilerplate - just define your routes and call `e5s.Run()`.
+
+**For more control** over signal handling, config paths, or logging, see [ADVANCED.md](ADVANCED.md).
 
 ### Create Client Application
 
@@ -323,68 +362,38 @@ Create `client/main.go`:
 package main
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"log"
-	"net/http"
-	"os"
-	"time"
 
 	"github.com/sufield/e5s"
 )
 
 func main() {
-	// Get config file path from environment or use default
-	configFile := os.Getenv("E5S_CONFIG")
-	if configFile == "" {
-		configFile = "e5s.yaml"
-	}
-
-	// Get server address from environment or use default
-	serverAddr := os.Getenv("SERVER_ADDR")
-	if serverAddr == "" {
-		serverAddr = "https://localhost:8443"
-	}
-
-	// Create mTLS client
-	log.Printf("Creating mTLS client (config: %s)...", configFile)
-	client, shutdown, err := e5s.Client(configFile)
+	// Perform mTLS GET request (handles config, client creation, and cleanup)
+	resp, err := e5s.Get("https://localhost:8443/hello")
 	if err != nil {
-		log.Fatalf("Failed to create client: %v", err)
+		log.Fatal(err)
 	}
-	defer shutdown()
-
-	log.Println("Client created successfully")
-
-	// Create context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	// Make request to server
-	url := fmt.Sprintf("%s/hello", serverAddr)
-	log.Printf("Making request to %s...", url)
-
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		log.Fatalf("Failed to create request: %v", err)
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Fatalf("Request failed: %v", err)
-	}
-	defer resp.Body.Close()
+	defer resp.Body.Close()  // This also triggers cleanup automatically
 
 	// Read and print response
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatalf("Failed to read response: %v", err)
-	}
-
-	log.Printf("Response (status %d): %s", resp.StatusCode, string(body))
+	body, _ := io.ReadAll(resp.Body)
+	fmt.Println(string(body))
 }
 ```
+
+**What this code does:**
+- Calls `e5s.Get()` which handles everything:
+  - Config file discovery (e5s.yaml or E5S_CONFIG)
+  - mTLS client creation
+  - Making the request
+  - Automatic cleanup when body is closed
+- Prints the response from the server
+
+**That's it!** Zero boilerplate - just call `e5s.Get()` and read the response.
+
+**For advanced patterns** like multiple requests with the same client, explicit config paths, context timeouts, or custom headers, see [ADVANCED.md](ADVANCED.md).
 
 ### Create Configuration File
 
@@ -433,7 +442,7 @@ go build -o bin/client ./client
 
 ---
 
-## Step 6: Create Kubernetes Manifests
+## Step 2: Create Kubernetes Manifests
 
 ### Server Deployment
 
@@ -520,7 +529,7 @@ spec:
 
 ---
 
-## Step 7: Run Locally (Easier for Development)
+## Step 3: Run Locally (Easier for Development)
 
 Instead of deploying to Kubernetes initially, let's run locally and connect to SPIRE in Minikube:
 
@@ -559,7 +568,7 @@ ln -sf ~/.minikube/profiles/minikube/apiserver.sock /tmp/spire-agent.sock
 
 ---
 
-## Step 8: Run and Test
+## Step 4: Run and Test
 
 ### Terminal 1: Run Server
 
@@ -594,17 +603,122 @@ SERVER_ADDR=https://localhost:8443 ./bin/client
 
 ---
 
-## Step 9: Verify mTLS is Working
+## Step 5: Verify mTLS is Working
 
-### Test Without Valid Certificate
+Now let's verify that our mTLS setup is working correctly by testing both success and failure cases.
 
-Try connecting with curl (which doesn't have a SPIFFE identity):
+---
+
+### ✅ **SUCCESS CASE: Registered Client** (`client/main.go`)
+
+**Test: Registered Client Connects Successfully**
+
+The client you ran in Step 4 successfully connected because it was registered with SPIRE.
+
+**Why it worked:**
+- Client was registered in Part A, Step 4
+- SPIRE issued it a certificate with SPIFFE ID: `spiffe://example.org/client`
+- Server accepted it because it's in the allowed trust domain (`example.org`)
+
+**Expected success output** (from Step 4):
+```
+2024/10/30 10:00:01 Creating mTLS client (config: e5s.yaml)...
+2024/10/30 10:00:01 Client created successfully
+2024/10/30 10:00:01 Making request to https://localhost:8443/hello...
+2024/10/30 10:00:01 Response (status 200): Hello, spiffe://example.org/client!
+```
+
+This proves that:
+- ✅ Registered workloads can obtain certificates from SPIRE
+- ✅ mTLS handshake succeeds when both parties have valid certificates
+- ✅ Server can extract and verify client identity
+
+---
+
+### ❌ **FAILURE CASE: Unregistered Client** (`unregistered-client/main.go`)
+
+**Test: Unregistered Client Connection Blocked**
+
+This is the most important security test - it proves that SPIRE enforces identity-based access control. Let's try to connect with a client that is NOT registered with SPIRE.
+
+**Create an unregistered client:**
+
+Create `unregistered-client/main.go`:
+
+```go
+package main
+
+import (
+	"fmt"
+	"io"
+	"log"
+
+	"github.com/sufield/e5s"
+)
+
+func main() {
+	log.Println("Attempting to connect as unregistered workload...")
+
+	resp, err := e5s.Get("https://localhost:8443/hello")
+	if err != nil {
+		log.Fatalf("Connection failed (expected): %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	fmt.Println(string(body))
+}
+```
+
+**Try to run it:**
 
 ```bash
+cd ~/mtls-demo
+go run unregistered-client/main.go
+```
+
+**Expected failure:**
+```
+Attempting to connect as unregistered workload...
+Connection failed (expected): failed to create X509Source: no identity issued
+```
+
+**Why it fails:**
+1. The unregistered client tries to contact the SPIRE Agent
+2. SPIRE Agent checks if this workload has a registration entry
+3. No entry exists for this workload
+4. SPIRE refuses to issue a certificate
+5. Without a certificate, the client cannot establish mTLS connection
+
+This proves that:
+- ✅ Only registered workloads can obtain certificates
+- ✅ Unregistered workloads cannot communicate with mTLS services
+- ✅ SPIRE enforces zero-trust security model
+- ✅ Identity must be explicitly granted, not assumed
+
+---
+
+### ❌ **FAILURE CASE: curl** (No SPIFFE Identity)
+
+**Test: Traditional HTTP Client Blocked**
+
+Standard tools like curl also cannot connect because they don't have SPIFFE identities:
+
+```bash
+# This also fails because curl doesn't have a SPIFFE identity
 curl -k https://localhost:8443/hello
 ```
 
-**Expected output**: Connection should fail or be rejected because curl doesn't present a valid SPIFFE certificate.
+**Expected failure:**
+```
+curl: (35) error:14094410:SSL routines:ssl3_read_bytes:sslv3 alert handshake failure
+```
+
+**Why it fails**: The server requires client certificate authentication. curl cannot obtain a certificate from SPIRE without being a registered workload.
+
+This demonstrates that traditional HTTP clients cannot bypass SPIFFE-based mTLS security.
+
+---
 
 ### Check Certificate Details
 
@@ -621,7 +735,7 @@ Look for:
 
 ---
 
-## Step 10: Understand What Just Happened
+## Step 6: Understand What Just Happened
 
 Let's break down the mTLS flow:
 
@@ -658,60 +772,6 @@ Let's break down the mTLS flow:
 
 ---
 
-## Troubleshooting
-
-### Issue: "failed to create X509Source: workload endpoint socket address is not configured"
-
-**Solution**: Ensure the SPIRE Agent socket path in `e5s.yaml` matches the actual socket location.
-
-```bash
-# Check where SPIRE Agent socket actually is
-kubectl exec -n spire \
-  $(kubectl get pod -n spire -l app.kubernetes.io/name=agent -o jsonpath='{.items[0].metadata.name}') \
-  -- ls -la /tmp/spire-agent/public/
-
-# Update e5s.yaml with correct path
-```
-
-### Issue: "initial SPIRE fetch timed out after 30s"
-
-**Causes**:
-1. SPIRE Agent is not running
-2. Socket path is wrong
-3. Workload not registered in SPIRE
-
-**Solution**:
-```bash
-# Check SPIRE Agent is running
-kubectl get pods -n spire -l app.kubernetes.io/name=agent
-
-# Check registration entries exist
-kubectl exec -n spire $SERVER_POD -c spire-server -- \
-  /opt/spire/bin/spire-server entry show
-
-# Increase timeout in e5s.yaml
-initial_fetch_timeout: 60s
-```
-
-### Issue: "tls: failed to verify certificate: x509: certificate signed by unknown authority"
-
-**Cause**: Client doesn't trust the server's certificate authority (SPIRE).
-
-**Solution**: Ensure both client and server are getting certificates from the same SPIRE deployment and both specify the same trust domain in `e5s.yaml`.
-
-### Issue: "unauthorized" response from server
-
-**Cause**: Client presented a certificate, but it doesn't match the server's authorization policy.
-
-**Solution**: Check `e5s.yaml`:
-```yaml
-server:
-  # Must allow the client's trust domain or specific SPIFFE ID
-  allowed_client_trust_domain: "example.org"  # Client must be in this TD
-```
-
----
-
 ## Next Steps
 
 Now that you have mTLS working:
@@ -732,7 +792,7 @@ Now that you have mTLS working:
 
 3. **Deploy to Kubernetes**:
    - Build container images for server and client
-   - Deploy using the k8s manifests from Step 6
+   - Deploy using the k8s manifests from Step 2
    - Watch them communicate over mTLS in the cluster
 
 4. **Add More Endpoints**:
@@ -771,6 +831,8 @@ minikube delete
 
 ## Additional Resources
 
+- **Troubleshooting Guide**: See [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
+- **Advanced Examples**: See [ADVANCED.md](ADVANCED.md)
 - **SPIRE Documentation**: https://spiffe.io/docs/latest/spire/
 - **e5s Library Docs**: See [main README](../../README.md)
 - **SPIFFE Standard**: https://github.com/spiffe/spiffe

@@ -148,4 +148,3 @@ func buildClientAuthorizer(cfg ClientConfig) (tlsconfig.Authorizer, error) {
 		return nil, errors.New("no server verification policy configured (internal misconfiguration)")
 	}
 }
-

@@ -10,6 +10,10 @@ This example demonstrates the high-level e5s API for building mTLS services with
 
 The tutorial walks you through every step to get mTLS working in a development environment using Minikube. Perfect for developers who want to learn by doing.
 
+**[Advanced Examples →](ADVANCED.md)**
+
+See production patterns including environment variables, context timeouts, retry logic, circuit breakers, structured logging, and health checks.
+
 ## What's Here
 
 - `e5s.yaml` - Configuration file with production-ready settings
@@ -155,7 +159,7 @@ func main() {
         fmt.Fprintf(w, "Hello, %s!\n", id)
     })
 
-    shutdown, err := e5s.Start("e5s.yaml", r)
+    shutdown, err := e5s.StartServer(r)
     if err != nil {
         log.Fatal(err)
     }
@@ -171,7 +175,7 @@ func main() {
 ```
 
 The server:
-1. Loads config from `e5s.yaml`
+1. Uses intelligent defaults (checks E5S_CONFIG env var, falls back to `e5s.yaml`)
 2. Connects to SPIRE Agent
 3. Starts mTLS server with automatic cert rotation
 4. Injects peer identity into request context
@@ -184,57 +188,43 @@ The server:
 package main
 
 import (
-    "context"
+    "fmt"
     "io"
     "log"
-    "net/http"
-    "os"
-    "time"
 
     "github.com/sufield/e5s"
 )
 
 func main() {
-    // Create context with timeout for the request
-    ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-    defer cancel()
-
-    client, shutdown, err := e5s.Client("e5s.yaml")
+    client, shutdown, err := e5s.NewClient()
     if err != nil {
         log.Fatal(err)
     }
     defer shutdown()
 
-    // Create request with context
-    req, err := http.NewRequestWithContext(ctx, "GET", "https://localhost:8443/hello", nil)
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    resp, err := client.Do(req)
+    resp, err := client.Get("https://localhost:8443/hello")
     if err != nil {
         log.Fatal(err)
     }
     defer resp.Body.Close()
 
-    if _, err := io.Copy(os.Stdout, resp.Body); err != nil {
-        log.Fatal(err)
-    }
+    body, _ := io.ReadAll(resp.Body)
+    fmt.Println(string(body))
 }
 ```
 
 The client:
-1. Loads config from `e5s.yaml`
+1. Uses intelligent defaults (checks E5S_CONFIG env var, falls back to `e5s.yaml`)
 2. Connects to SPIRE Agent
 3. Returns standard `*http.Client` with mTLS
 4. Automatically presents SPIFFE ID to servers
 5. Verifies server identity per config policy
-6. Uses context for request timeout/cancellation
 
 ## What You Don't See
 
 All of this is handled internally by e5s:
 
+- Config file discovery (E5S_CONFIG env var or e5s.yaml)
 - SPIRE Workload API connection
 - Certificate fetching and rotation
 - TLS 1.3 configuration
@@ -243,7 +233,7 @@ All of this is handled internally by e5s:
 - SPIFFE ID verification
 - Shutdown sequencing
 
-You just use `e5s.Start()`, `e5s.Client()`, and `e5s.PeerID()`.
+You just use `e5s.StartServer()`, `e5s.NewClient()`, and `e5s.PeerID()`.
 
 ## Next Steps
 

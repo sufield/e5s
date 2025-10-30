@@ -65,7 +65,7 @@ We provide a **high-level** and a **low-level** APIs because they serve differen
 
 ### 1. High-Level API (Recommended for Most Users)
 
-Config-driven approach - no TLS code needed. Just create an `e5s.yaml` file and call `e5s.Start()`.
+Zero-configuration approach - just create an `e5s.yaml` file and call `e5s.Run()`.
 
 **Example Server:**
 
@@ -73,21 +73,13 @@ Config-driven approach - no TLS code needed. Just create an `e5s.yaml` file and 
 package main
 
 import (
-    "context"
     "fmt"
-    "log"
     "net/http"
-    "os/signal"
-    "syscall"
 
     "github.com/sufield/e5s"
 )
 
 func main() {
-    // Create context that listens for interrupt signals
-    ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-    defer stop()
-
     http.HandleFunc("/hello", func(w http.ResponseWriter, r *http.Request) {
         id, ok := e5s.PeerID(r)
         if !ok {
@@ -97,18 +89,8 @@ func main() {
         fmt.Fprintf(w, "Hello, %s!\n", id)
     })
 
-    shutdown, err := e5s.Start("e5s.yaml", http.DefaultServeMux)
-    if err != nil {
-        log.Fatal(err)
-    }
-    defer shutdown()
-
-    log.Println("Server running - press Ctrl+C to stop")
-
-    // Wait for interrupt signal for graceful shutdown
-    <-ctx.Done()
-    stop() // Stop receiving signals
-    log.Println("Shutting down gracefully...")
+    // Start mTLS server - handles config, SPIRE, and graceful shutdown
+    e5s.Run(http.DefaultServeMux)
 }
 ```
 
@@ -118,42 +100,23 @@ func main() {
 package main
 
 import (
-    "context"
+    "fmt"
     "io"
     "log"
-    "net/http"
-    "os"
-    "time"
 
     "github.com/sufield/e5s"
 )
 
 func main() {
-    // Create context with timeout for the request
-    ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-    defer cancel()
-
-    client, shutdown, err := e5s.Client("e5s.yaml")
+    // Perform mTLS GET request - handles everything automatically
+    resp, err := e5s.Get("https://localhost:8443/hello")
     if err != nil {
         log.Fatal(err)
     }
-    defer shutdown()
+    defer resp.Body.Close()  // Also triggers cleanup
 
-    // Create request with context
-    req, err := http.NewRequestWithContext(ctx, "GET", "https://localhost:8443/hello", nil)
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    resp, err := client.Do(req)
-    if err != nil {
-        log.Fatal(err)
-    }
-    defer resp.Body.Close()
-
-    if _, err := io.Copy(os.Stdout, resp.Body); err != nil {
-        log.Fatal(err)
-    }
+    body, _ := io.ReadAll(resp.Body)
+    fmt.Println(string(body))
 }
 ```
 
@@ -186,6 +149,8 @@ client:
   # Or require a specific server SPIFFE ID
   # expected_server_spiffe_id: "spiffe://example.org/server"
 ```
+
+**For advanced patterns** like environment variables, context timeouts, retry logic, and structured logging → See [examples/highlevel/ADVANCED.md](examples/highlevel/ADVANCED.md)
 
 **For a production-ready example** → See [examples/highlevel/](examples/highlevel/) for a complete server with chi router, graceful shutdown, health checks, and structured logging.
 
