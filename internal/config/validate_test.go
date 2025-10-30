@@ -3,6 +3,7 @@ package config
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestValidateServer(t *testing.T) {
@@ -16,7 +17,7 @@ func TestValidateServer(t *testing.T) {
 			name: "valid config with client SPIFFE ID",
 			cfg: FileConfig{
 				SPIRE: struct {
-					WorkloadSocket string `yaml:"workload_socket"`
+					WorkloadSocket string `yaml:"workload_socket"`; InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
 				}{
 					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
@@ -35,7 +36,7 @@ func TestValidateServer(t *testing.T) {
 			name: "valid config with trust domain",
 			cfg: FileConfig{
 				SPIRE: struct {
-					WorkloadSocket string `yaml:"workload_socket"`
+					WorkloadSocket string `yaml:"workload_socket"`; InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
 				}{
 					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
@@ -69,7 +70,7 @@ func TestValidateServer(t *testing.T) {
 			name: "missing listen address",
 			cfg: FileConfig{
 				SPIRE: struct {
-					WorkloadSocket string `yaml:"workload_socket"`
+					WorkloadSocket string `yaml:"workload_socket"`; InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
 				}{
 					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
@@ -88,7 +89,7 @@ func TestValidateServer(t *testing.T) {
 			name: "missing both client ID and trust domain",
 			cfg: FileConfig{
 				SPIRE: struct {
-					WorkloadSocket string `yaml:"workload_socket"`
+					WorkloadSocket string `yaml:"workload_socket"`; InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
 				}{
 					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
@@ -107,7 +108,7 @@ func TestValidateServer(t *testing.T) {
 			name: "both client ID and trust domain set",
 			cfg: FileConfig{
 				SPIRE: struct {
-					WorkloadSocket string `yaml:"workload_socket"`
+					WorkloadSocket string `yaml:"workload_socket"`; InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
 				}{
 					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
@@ -128,7 +129,7 @@ func TestValidateServer(t *testing.T) {
 			name: "invalid SPIFFE ID format",
 			cfg: FileConfig{
 				SPIRE: struct {
-					WorkloadSocket string `yaml:"workload_socket"`
+					WorkloadSocket string `yaml:"workload_socket"`; InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
 				}{
 					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
@@ -148,7 +149,7 @@ func TestValidateServer(t *testing.T) {
 			name: "invalid trust domain format",
 			cfg: FileConfig{
 				SPIRE: struct {
-					WorkloadSocket string `yaml:"workload_socket"`
+					WorkloadSocket string `yaml:"workload_socket"`; InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
 				}{
 					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
@@ -168,7 +169,7 @@ func TestValidateServer(t *testing.T) {
 			name: "whitespace trimming for SPIFFE ID",
 			cfg: FileConfig{
 				SPIRE: struct {
-					WorkloadSocket string `yaml:"workload_socket"`
+					WorkloadSocket string `yaml:"workload_socket"`; InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
 				}{
 					WorkloadSocket: "  /run/spire/sockets/agent.sock  ",
 				},
@@ -187,7 +188,7 @@ func TestValidateServer(t *testing.T) {
 			name: "whitespace trimming for trust domain",
 			cfg: FileConfig{
 				SPIRE: struct {
-					WorkloadSocket string `yaml:"workload_socket"`
+					WorkloadSocket string `yaml:"workload_socket"`; InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
 				}{
 					WorkloadSocket: "  /run/spire/sockets/agent.sock  ",
 				},
@@ -206,7 +207,7 @@ func TestValidateServer(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			authz, err := ValidateServer(tt.cfg)
+			spireConfig, authz, err := ValidateServer(tt.cfg)
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("ValidateServer() expected error containing %q, got nil", tt.errMsg)
@@ -219,6 +220,10 @@ func TestValidateServer(t *testing.T) {
 				if err != nil {
 					t.Errorf("ValidateServer() unexpected error = %v", err)
 					return
+				}
+				// Verify we got a valid SPIRE config
+				if spireConfig.InitialFetchTimeout <= 0 {
+					t.Errorf("ValidateServer() returned invalid timeout: %v", spireConfig.InitialFetchTimeout)
 				}
 				// Verify we got a valid authz policy
 				hasID := authz.ID.String() != ""
@@ -245,7 +250,7 @@ func TestValidateClient(t *testing.T) {
 			name: "valid config with server SPIFFE ID",
 			cfg: FileConfig{
 				SPIRE: struct {
-					WorkloadSocket string `yaml:"workload_socket"`
+					WorkloadSocket string `yaml:"workload_socket"`; InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
 				}{
 					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
@@ -262,7 +267,7 @@ func TestValidateClient(t *testing.T) {
 			name: "valid config with trust domain",
 			cfg: FileConfig{
 				SPIRE: struct {
-					WorkloadSocket string `yaml:"workload_socket"`
+					WorkloadSocket string `yaml:"workload_socket"`; InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
 				}{
 					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
@@ -292,7 +297,7 @@ func TestValidateClient(t *testing.T) {
 			name: "missing both server ID and trust domain",
 			cfg: FileConfig{
 				SPIRE: struct {
-					WorkloadSocket string `yaml:"workload_socket"`
+					WorkloadSocket string `yaml:"workload_socket"`; InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
 				}{
 					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
@@ -304,7 +309,7 @@ func TestValidateClient(t *testing.T) {
 			name: "both server ID and trust domain set",
 			cfg: FileConfig{
 				SPIRE: struct {
-					WorkloadSocket string `yaml:"workload_socket"`
+					WorkloadSocket string `yaml:"workload_socket"`; InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
 				}{
 					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
@@ -323,7 +328,7 @@ func TestValidateClient(t *testing.T) {
 			name: "invalid SPIFFE ID format",
 			cfg: FileConfig{
 				SPIRE: struct {
-					WorkloadSocket string `yaml:"workload_socket"`
+					WorkloadSocket string `yaml:"workload_socket"`; InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
 				}{
 					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
@@ -341,7 +346,7 @@ func TestValidateClient(t *testing.T) {
 			name: "invalid trust domain format",
 			cfg: FileConfig{
 				SPIRE: struct {
-					WorkloadSocket string `yaml:"workload_socket"`
+					WorkloadSocket string `yaml:"workload_socket"`; InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
 				}{
 					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
@@ -359,7 +364,7 @@ func TestValidateClient(t *testing.T) {
 			name: "whitespace trimming for SPIFFE ID",
 			cfg: FileConfig{
 				SPIRE: struct {
-					WorkloadSocket string `yaml:"workload_socket"`
+					WorkloadSocket string `yaml:"workload_socket"`; InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
 				}{
 					WorkloadSocket: "  /run/spire/sockets/agent.sock  ",
 				},
@@ -376,7 +381,7 @@ func TestValidateClient(t *testing.T) {
 			name: "whitespace trimming for trust domain",
 			cfg: FileConfig{
 				SPIRE: struct {
-					WorkloadSocket string `yaml:"workload_socket"`
+					WorkloadSocket string `yaml:"workload_socket"`; InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
 				}{
 					WorkloadSocket: "  /run/spire/sockets/agent.sock  ",
 				},
@@ -393,7 +398,7 @@ func TestValidateClient(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			authz, err := ValidateClient(tt.cfg)
+			spireConfig, authz, err := ValidateClient(tt.cfg)
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("ValidateClient() expected error containing %q, got nil", tt.errMsg)
@@ -407,6 +412,10 @@ func TestValidateClient(t *testing.T) {
 					t.Errorf("ValidateClient() unexpected error = %v", err)
 					return
 				}
+				// Verify we got a valid SPIRE config
+				if spireConfig.InitialFetchTimeout <= 0 {
+					t.Errorf("ValidateClient() returned invalid timeout: %v", spireConfig.InitialFetchTimeout)
+				}
 				// Verify we got a valid authz policy
 				hasID := authz.ID.String() != ""
 				hasTD := authz.TrustDomain.String() != ""
@@ -415,6 +424,138 @@ func TestValidateClient(t *testing.T) {
 				}
 				if hasID && hasTD {
 					t.Error("ValidateClient() returned authz with both ID and TrustDomain set")
+				}
+			}
+		})
+	}
+}
+
+func TestValidateSPIREConfig_Timeout(t *testing.T) {
+	tests := []struct {
+		name            string
+		cfg             FileConfig
+		wantErr         bool
+		errMsg          string
+		expectedTimeout time.Duration
+	}{
+		{
+			name: "default timeout when not specified",
+			cfg: FileConfig{
+				SPIRE: struct {
+					WorkloadSocket      string `yaml:"workload_socket"`
+					InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
+				}{
+					WorkloadSocket: "/run/spire/sockets/agent.sock",
+					// InitialFetchTimeout not set
+				},
+			},
+			wantErr:         false,
+			expectedTimeout: DefaultInitialFetchTimeout,
+		},
+		{
+			name: "valid timeout - seconds",
+			cfg: FileConfig{
+				SPIRE: struct {
+					WorkloadSocket      string `yaml:"workload_socket"`
+					InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
+				}{
+					WorkloadSocket:      "/run/spire/sockets/agent.sock",
+					InitialFetchTimeout: "10s",
+				},
+			},
+			wantErr:         false,
+			expectedTimeout: 10 * time.Second,
+		},
+		{
+			name: "valid timeout - minutes",
+			cfg: FileConfig{
+				SPIRE: struct {
+					WorkloadSocket      string `yaml:"workload_socket"`
+					InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
+				}{
+					WorkloadSocket:      "/run/spire/sockets/agent.sock",
+					InitialFetchTimeout: "2m",
+				},
+			},
+			wantErr:         false,
+			expectedTimeout: 2 * time.Minute,
+		},
+		{
+			name: "invalid timeout format",
+			cfg: FileConfig{
+				SPIRE: struct {
+					WorkloadSocket      string `yaml:"workload_socket"`
+					InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
+				}{
+					WorkloadSocket:      "/run/spire/sockets/agent.sock",
+					InitialFetchTimeout: "not-a-duration",
+				},
+			},
+			wantErr: true,
+			errMsg:  "invalid spire.initial_fetch_timeout",
+		},
+		{
+			name: "negative timeout",
+			cfg: FileConfig{
+				SPIRE: struct {
+					WorkloadSocket      string `yaml:"workload_socket"`
+					InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
+				}{
+					WorkloadSocket:      "/run/spire/sockets/agent.sock",
+					InitialFetchTimeout: "-5s",
+				},
+			},
+			wantErr: true,
+			errMsg:  "must be positive",
+		},
+		{
+			name: "zero timeout",
+			cfg: FileConfig{
+				SPIRE: struct {
+					WorkloadSocket      string `yaml:"workload_socket"`
+					InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
+				}{
+					WorkloadSocket:      "/run/spire/sockets/agent.sock",
+					InitialFetchTimeout: "0s",
+				},
+			},
+			wantErr: true,
+			errMsg:  "must be positive",
+		},
+		{
+			name: "whitespace trimming for timeout",
+			cfg: FileConfig{
+				SPIRE: struct {
+					WorkloadSocket      string `yaml:"workload_socket"`
+					InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
+				}{
+					WorkloadSocket:      "/run/spire/sockets/agent.sock",
+					InitialFetchTimeout: "  15s  ",
+				},
+			},
+			wantErr:         false,
+			expectedTimeout: 15 * time.Second,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			spireConfig, err := validateSPIREConfig(tt.cfg)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("validateSPIREConfig() expected error containing %q, got nil", tt.errMsg)
+					return
+				}
+				if !strings.Contains(err.Error(), tt.errMsg) {
+					t.Errorf("validateSPIREConfig() error = %q, want error containing %q", err.Error(), tt.errMsg)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("validateSPIREConfig() unexpected error = %v", err)
+					return
+				}
+				if spireConfig.InitialFetchTimeout != tt.expectedTimeout {
+					t.Errorf("validateSPIREConfig() timeout = %v, want %v", spireConfig.InitialFetchTimeout, tt.expectedTimeout)
 				}
 			}
 		})

@@ -108,16 +108,17 @@ func Start(configPath string, handler http.Handler) (shutdown func() error, err 
 	}
 
 	// Validate server configuration and get parsed authorization policy
-	authz, err := config.ValidateServer(cfg)
+	spireConfig, authz, err := config.ValidateServer(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("invalid server config: %w", err)
 	}
 
 	ctx := context.Background()
 
-	// Connect to SPIRE Workload API
+	// Connect to SPIRE Workload API with timeout for initial fetch
 	source, err := spire.NewSource(ctx, spire.Config{
-		WorkloadSocket: cfg.SPIRE.WorkloadSocket,
+		WorkloadSocket:      cfg.SPIRE.WorkloadSocket,
+		InitialFetchTimeout: spireConfig.InitialFetchTimeout,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SPIRE source: %w", err)
@@ -329,16 +330,17 @@ func Client(configPath string) (*http.Client, func() error, error) {
 	}
 
 	// Validate client configuration and get parsed verification policy
-	authz, err := config.ValidateClient(cfg)
+	spireConfig, authz, err := config.ValidateClient(cfg)
 	if err != nil {
 		return nil, nil, fmt.Errorf("invalid client config: %w", err)
 	}
 
 	ctx := context.Background()
 
-	// Connect to SPIRE Workload API
+	// Connect to SPIRE Workload API with timeout for initial fetch
 	source, err := spire.NewSource(ctx, spire.Config{
-		WorkloadSocket: cfg.SPIRE.WorkloadSocket,
+		WorkloadSocket:      cfg.SPIRE.WorkloadSocket,
+		InitialFetchTimeout: spireConfig.InitialFetchTimeout,
 	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create SPIRE source: %w", err)

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
 )
@@ -55,6 +56,18 @@ type Config struct {
 	//   - tcp:// scheme: "tcp://spire-agent:8081"
 	//   - Bare filesystem path: "/tmp/spire-agent/public/api.sock" (treated as unix://)
 	WorkloadSocket string
+
+	// InitialFetchTimeout is how long to wait for the first SVID/Bundle from
+	// the Workload API before giving up and failing startup.
+	//
+	// This timeout applies to:
+	//   - Connecting to the Workload API socket (dial timeout)
+	//   - Fetching the first SVID and bundle (initial fetch timeout)
+	//
+	// If zero, a reasonable default will be used (30 seconds).
+	// Set to a higher value in development environments where the SPIRE agent
+	// may start slowly. Set to a lower value in production to fail fast.
+	InitialFetchTimeout time.Duration
 }
 
 // NewSource creates a new SPIRE-backed certificate source.
@@ -79,13 +92,23 @@ type Config struct {
 //   - Initial SVID fetch fails
 //
 // Context lifetime:
-// ctx is ONLY used for the initial connection and first SVID/bundle fetch.
-// After NewSource returns, the Source keeps running (watchers, rotation goroutines)
-// even if ctx is canceled. To actually tear down identity, you MUST call Close().
-// Canceling ctx does NOT stop background rotation.
+// ctx controls the lifetime of the X509Source's background watchers.
+// The source will continue running (rotation, updates) until either:
+//   - ctx is canceled, OR
+//   - Close() is called
+//
+// InitialFetchTimeout (separate from ctx) bounds how long we wait for the
+// first SVID before returning an error. This prevents hanging forever if
+// SPIRE agent is unreachable.
 func NewSource(ctx context.Context, cfg Config) (*Source, error) {
 	if ctx == nil {
 		return nil, errors.New("context cannot be nil")
+	}
+
+	// Determine timeout for initial fetch
+	timeout := cfg.InitialFetchTimeout
+	if timeout == 0 {
+		timeout = 30 * time.Second // Default timeout
 	}
 
 	// Build SDK options
@@ -97,19 +120,39 @@ func NewSource(ctx context.Context, cfg Config) (*Source, error) {
 	}
 	// If cfg.WorkloadSocket is empty, SDK will auto-detect from SPIFFE_ENDPOINT_SOCKET
 
-	// Create X509Source using SDK
-	// This:
-	//   - Connects to the Workload API
-	//   - Performs initial SVID/bundle fetch (blocks until ready or error)
-	//   - Starts watching for updates in background
-	x509src, err := workloadapi.NewX509Source(ctx, opts...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create X509Source: %w", err)
-	}
+	// Create a cancellable context derived from the long-lived parent context.
+	// This context will control the X509Source lifetime (rotation, watching).
+	buildCtx, cancel := context.WithCancel(ctx)
 
-	return &Source{
-		source: x509src,
-	}, nil
+	// Channel to receive the result from the goroutine
+	type result struct {
+		src *workloadapi.X509Source
+		err error
+	}
+	ch := make(chan result, 1)
+
+	// Start X509Source creation in a goroutine so we can timeout
+	go func() {
+		// NewX509Source blocks until first SVID is received
+		src, err := workloadapi.NewX509Source(buildCtx, opts...)
+		ch <- result{src, err}
+	}()
+
+	// Wait for either success or timeout
+	select {
+	case r := <-ch:
+		if r.err != nil {
+			cancel() // Abort partial startup
+			return nil, fmt.Errorf("failed to create X509Source: %w", r.err)
+		}
+		// Success! buildCtx stays alive, controlled by parent ctx.
+		// The source's watchers will run until ctx is canceled or Close() is called.
+		return &Source{source: r.src}, nil
+
+	case <-time.After(timeout):
+		cancel() // Stop trying to build the source
+		return nil, fmt.Errorf("initial SPIRE fetch timed out after %v", timeout)
+	}
 }
 
 // Close releases all resources (connections, watchers, goroutines).

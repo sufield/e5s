@@ -4,7 +4,15 @@ package config
 // This single config file is used by both server and client processes.
 type FileConfig struct {
 	SPIRE struct {
+		// WorkloadSocket is the path to the SPIRE Agent's Workload API socket.
+		// Example: "unix:///tmp/spire-agent/public/api.sock"
 		WorkloadSocket string `yaml:"workload_socket"`
+
+		// InitialFetchTimeout is how long to wait for the first SVID/Bundle from
+		// the Workload API before giving up and failing startup.
+		// Use Go duration format: "5s", "30s", "1m", etc.
+		// If not set, defaults to 30 seconds.
+		InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
 	} `yaml:"spire"`
 
 	Server struct {
