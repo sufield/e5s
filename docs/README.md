@@ -53,7 +53,7 @@ SPIRE Workload API client:
 
 ## Architecture
 
-This is a **focused library** with clean separation:
+This has:
 
 - **Core** (`pkg/spiffehttp`) - TLS configuration using go-spiffe SDK
 - **Adapter** (`pkg/spire`) - SPIRE Workload API client

@@ -1,6 +1,6 @@
 # e5s Library Quickstart
 
-`github.com/sufield/e5s` is a lightweight Go library for SPIFFE/SPIRE-based mTLS. It provides clean, type-safe abstractions for building mutual TLS connections with automatic certificate rotation.
+`github.com/sufield/e5s` is a lightweight Go library for SPIFFE/SPIRE-based mTLS. It provides type-safe abstractions for building mutual TLS connections with automatic certificate rotation.
 
 ## Installation
 

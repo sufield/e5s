@@ -104,7 +104,7 @@ How **e5s library** directly addresses the pain points in *“State of AI in Sec
 
 ---
 
-### **Key Insight**
+### **Insight**
 
 > The *e5s* library embodies what the report calls *“developer-led, business-aligned, shared responsibility security.”*
 
