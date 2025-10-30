@@ -167,7 +167,7 @@ These endpoints:
 - Are excluded from noisy request logging
 - Can be moved to a separate unauthenticated port in production if needed
 
-**Note:** In this example, all endpoints (including `/healthz`) are served on the same mTLS listener. If your platform requires truly unauthenticated health checks, you'll need to run a separate HTTP listener on a different port.
+In this example, all endpoints (including `/healthz`) are served on the same mTLS listener. If your platform requires truly unauthenticated health checks, you'll need to run a separate HTTP listener on a different port.
 
 ## How It Works
 

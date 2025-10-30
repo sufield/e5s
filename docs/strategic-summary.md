@@ -25,7 +25,7 @@
 
 ---
 
-### **Strategic Summary**
+### **Summary**
 
 **Category:** Secure Identity Automation (Zero-Trust for Developers)
 **Audience:** Backend & Platform Engineers in cloud-native teams

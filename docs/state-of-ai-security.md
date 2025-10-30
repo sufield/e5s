@@ -1,4 +1,4 @@
-How **e5s library** directly addresses the pain points in *“State of AI in Security & Development 2026”* — matched against key survey findings:
+How **e5s library** directly addresses the pain points in *“State of AI in Security & Development 2026”* — matched against survey findings:
 
 ---
 

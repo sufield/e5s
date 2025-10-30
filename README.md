@@ -294,12 +294,12 @@ internal/config/        # Config file loading (not exported)
 1. **High-level** (`e5s.go`) - Config-driven, minimal code, works with any HTTP framework
 2. **Low-level** (`pkg/spiffehttp` + `pkg/spire`) - Full control over TLS, rotation, verification
 
-**Clean separation:**
+**Clear separation:**
 - `pkg/spiffehttp` - TLS configuration using go-spiffe SDK (no SPIRE dependency)
 - `pkg/spire` - SPIRE Workload API client
 - `e5s.go` - Wires everything together based on config file
 
-**Note:** The examples are separate modules (each has its own `go.mod`) so you can vendor/copy them without pulling extra dependencies into your service. The core library has minimal dependencies.
+The examples are separate modules (each has its own `go.mod`) so you can vendor/copy them without pulling extra dependencies into your service. The core library has minimal dependencies.
 
 ## Documentation
 
