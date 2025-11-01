@@ -98,7 +98,7 @@ sudo apt-get install golang-go
 
 # Part A: Infrastructure Setup
 
-This part sets up the SPIRE infrastructure that will provide cryptographic identities to your applications. You'll install SPIRE Server and Agent in Minikube, then register your workloads.
+This part sets up the SPIRE infrastructure that will provide cryptographic identities to applications. You'll install SPIRE Server and Agent in Minikube, then register workloads.
 
 **Goal**: Have a working SPIRE deployment where workloads can request certificates.
 
@@ -132,13 +132,31 @@ kubeconfig: Configured
 
 ---
 
-## Step 2: Install SPIRE Server
+## Step 2: Install SPIRE
 
 SPIRE has two components:
 - **SPIRE Server**: Central authority that issues identities
 - **SPIRE Agent**: Runs on each node, provides Workload API to applications
 
-Let's install the SPIRE Server first:
+The modern SPIRE Helm chart installs both components together.
+
+### Clean Up Previous Installations (if any)
+
+If you've previously attempted to install SPIRE, clean up first:
+
+```bash
+# Clean up any previous installations (safe to run even if nothing exists)
+helm uninstall spire -n spire 2>/dev/null || true
+helm uninstall spire-server -n spire 2>/dev/null || true
+helm uninstall spire-agent -n spire 2>/dev/null || true
+helm uninstall spire-crds -n spire 2>/dev/null || true
+kubectl delete namespace spire 2>/dev/null || true
+
+# Wait for cleanup to complete
+sleep 5
+```
+
+### Install SPIRE
 
 ```bash
 # Add the SPIFFE Helm repository
@@ -148,8 +166,14 @@ helm repo update
 # Create namespace for SPIRE
 kubectl create namespace spire
 
-# Install SPIRE Server
-helm install spire-server spiffe/spire \
+# Install SPIRE CRDs (Custom Resource Definitions) first
+helm install spire-crds spire-crds \
+  --repo https://spiffe.github.io/helm-charts-hardened/ \
+  --namespace spire
+
+# Install SPIRE (both server and agent)
+helm install spire spire \
+  --repo https://spiffe.github.io/helm-charts-hardened/ \
   --namespace spire \
   --set global.spire.trustDomain=example.org \
   --set global.spire.clusterName=minikube-cluster
@@ -159,37 +183,6 @@ kubectl wait --for=condition=ready pod \
   -l app.kubernetes.io/name=server \
   -n spire \
   --timeout=120s
-```
-
-**Expected output**:
-```
-pod/spire-server-0 condition met
-```
-
-**Verify SPIRE Server is running**:
-```bash
-kubectl get pods -n spire
-```
-
-**Expected output**:
-```
-NAME              READY   STATUS    RESTARTS   AGE
-spire-server-0    2/2     Running   0          1m
-```
-
----
-
-## Step 3: Install SPIRE Agent
-
-The SPIRE Agent runs on each Kubernetes node and provides the Workload API:
-
-```bash
-# Install SPIRE Agent as a DaemonSet (runs on every node)
-helm install spire-agent spiffe/spire \
-  --namespace spire \
-  --set global.spire.trustDomain=example.org \
-  --set spire-agent.enabled=true \
-  --set spire-server.enabled=false
 
 # Wait for SPIRE Agent to be ready
 kubectl wait --for=condition=ready pod \
@@ -198,20 +191,40 @@ kubectl wait --for=condition=ready pod \
   --timeout=120s
 ```
 
-**Verify SPIRE Agent is running**:
+**Expected output**:
+```
+NAME: spire-crds
+...
+NAME: spire
+...
+pod/spire-server-0 condition met
+pod/spire-agent-xxxxx condition met
+```
+
+**If installation fails**: Clean up and try again:
 ```bash
-kubectl get pods -n spire -l app.kubernetes.io/name=agent
+helm uninstall spire -n spire
+helm uninstall spire-crds -n spire
+# Then run the installation commands above again
+```
+
+**Verify SPIRE is running**:
+```bash
+kubectl get pods -n spire
 ```
 
 **Expected output**:
 ```
-NAME                READY   STATUS    RESTARTS   AGE
-spire-agent-xxxxx   1/1     Running   0          1m
+NAME                                         READY   STATUS    RESTARTS   AGE
+spire-agent-xxxxx                            3/3     Running   0          1m
+spire-server-0                               2/2     Running   0          1m
+spiffe-csi-driver-xxxxx                      3/3     Running   0          1m
+spiffe-oidc-discovery-provider-xxxxx         1/1     Running   0          1m
 ```
 
 ---
 
-## Step 4: Create Registration Entries
+## Step 3: Create Registration Entries
 
 SPIRE uses "registration entries" to map workload identities to SPIFFE IDs. Let's register two workloads: a server and a client.
 
@@ -616,7 +629,7 @@ Now let's verify that our mTLS setup is working correctly by testing both succes
 The client you ran in Step 4 successfully connected because it was registered with SPIRE.
 
 **Why it worked:**
-- Client was registered in Part A, Step 4
+- Client was registered in Part A, Step 3
 - SPIRE issued it a certificate with SPIFFE ID: `spiffe://example.org/client`
 - Server accepted it because it's in the allowed trust domain (`example.org`)
 
@@ -816,8 +829,8 @@ When you're done:
 # Stop local applications (Ctrl+C in each terminal)
 
 # Uninstall SPIRE from Minikube
-helm uninstall spire-server -n spire
-helm uninstall spire-agent -n spire
+helm uninstall spire -n spire
+helm uninstall spire-crds -n spire
 kubectl delete namespace spire
 
 # Stop Minikube

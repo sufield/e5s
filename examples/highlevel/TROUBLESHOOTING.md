@@ -4,6 +4,113 @@ Common issues and solutions when working with e5s and SPIRE.
 
 ---
 
+## Issue: "exists and cannot be imported into the current release" during SPIRE installation
+
+**Error message:**
+```
+Error: INSTALLATION FAILED: Unable to continue with install: ClusterRole "spire-agent" in namespace "" exists
+and cannot be imported into the current release: invalid ownership metadata;
+annotation validation error: key "meta.helm.sh/release-namespace" must equal "spire": current value is "spire-system"
+```
+
+**Cause**: Leftover resources from a previous SPIRE installation attempt (possibly in a different namespace).
+
+**Solution**: Clean up all SPIRE resources and reinstall from scratch.
+
+```bash
+# Delete any existing Helm releases
+helm uninstall spire -n spire 2>/dev/null || true
+helm uninstall spire-server -n spire 2>/dev/null || true
+helm uninstall spire-agent -n spire 2>/dev/null || true
+helm uninstall spire-crds -n spire 2>/dev/null || true
+
+# Delete the namespace (this removes all resources)
+kubectl delete namespace spire
+
+# Wait a moment for cleanup to complete
+sleep 5
+
+# Recreate the namespace
+kubectl create namespace spire
+
+# Install SPIRE CRDs
+helm install spire-crds spire-crds \
+  --repo https://spiffe.github.io/helm-charts-hardened/ \
+  --namespace spire
+
+# Install SPIRE
+helm install spire spire \
+  --repo https://spiffe.github.io/helm-charts-hardened/ \
+  --namespace spire \
+  --set global.spire.trustDomain=example.org \
+  --set global.spire.clusterName=minikube-cluster
+```
+
+**If namespace deletion hangs**, check for stuck resources:
+
+```bash
+# Check what's blocking namespace deletion
+kubectl api-resources --verbs=list --namespaced -o name | \
+  xargs -n 1 kubectl get --show-kind --ignore-not-found -n spire
+
+# Force cleanup if needed
+kubectl delete namespace spire --grace-period=0 --force
+```
+
+---
+
+## Issue: "no matches for kind ClusterSPIFFEID" during SPIRE installation
+
+**Error message:**
+```
+Error: INSTALLATION FAILED: unable to build kubernetes objects from release manifest:
+resource mapping not found for name: "spire-spire-server-default" namespace: "" from "":
+no matches for kind "ClusterSPIFFEID" in version "spire.spiffe.io/v1alpha1"
+ensure CRDs are installed first
+```
+
+**Cause**: The SPIRE Helm chart requires Custom Resource Definitions (CRDs) to be installed before the chart itself.
+
+**Solution**: Install CRDs first using the `spire-crds` Helm chart, then install SPIRE.
+
+```bash
+# Install SPIRE CRDs
+helm install spire-crds spire-crds \
+  --repo https://spiffe.github.io/helm-charts-hardened/ \
+  --namespace spire \
+  --create-namespace
+
+# Then install SPIRE (both server and agent)
+helm install spire spire \
+  --repo https://spiffe.github.io/helm-charts-hardened/ \
+  --namespace spire \
+  --set global.spire.trustDomain=example.org \
+  --set global.spire.clusterName=minikube-cluster
+```
+
+**If you already have a failed installation**, clean up first:
+
+```bash
+# Remove failed installation
+helm uninstall spire -n spire
+helm uninstall spire-crds -n spire
+
+# Install CRDs
+helm install spire-crds spire-crds \
+  --repo https://spiffe.github.io/helm-charts-hardened/ \
+  --namespace spire \
+  --create-namespace
+
+# Reinstall SPIRE
+helm install spire spire \
+  --repo https://spiffe.github.io/helm-charts-hardened/ \
+  --namespace spire \
+  --set global.spire.trustDomain=example.org \
+  --set global.spire.clusterName=minikube-cluster
+```
+
+---
+
 ## Issue: "failed to create X509Source: workload endpoint socket address is not configured"
 
 **Cause**: The SPIRE Agent socket path in `e5s.yaml` doesn't match the actual socket location.
