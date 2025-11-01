@@ -1,6 +1,6 @@
 # Advanced Usage Examples
 
-This document covers advanced patterns and configurations for production use of the e5s library.
+This covers advanced examples and configurations for production use of the e5s library.
 
 ## Table of Contents
 

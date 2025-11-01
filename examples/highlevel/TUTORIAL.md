@@ -842,7 +842,7 @@ minikube delete
 
 ---
 
-## Additional Resources
+## Resources
 
 - **Troubleshooting Guide**: See [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
 - **Advanced Examples**: See [ADVANCED.md](ADVANCED.md)

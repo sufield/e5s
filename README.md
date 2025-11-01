@@ -1,6 +1,6 @@
-# e5s - SPIFFE/SPIRE mTLS Library
+# e5s - Identity Based Authentication Library
 
-A lightweight Go library for building mutual TLS services with SPIFFE identity verification and automatic certificate rotation.
+A lightweight Go library for building mutual TLS services with SPIFFE identity verification and automatic certificate rotation based on go-spiffe SDK.
 
 ## Features
 
@@ -63,7 +63,9 @@ We provide a **high-level** and a **low-level** APIs because they serve differen
 - **`examples/highlevel/`** - Start here for application development (production behavior, minimal code)
 - **`examples/minikube-lowlevel/`** - Platform/infrastructure example (full SPIRE + mTLS stack in Kubernetes)
 
-### 1. High-Level API (Recommended for Most Users)
+### 1. High-Level API
+
+#### Recommended for Most Users
 
 Zero-configuration approach - just create an `e5s.yaml` file and call `e5s.Run()`.
 
@@ -154,7 +156,9 @@ client:
 
 **For a production-ready example** → See [examples/highlevel/](examples/highlevel/) for a complete server with chi router, graceful shutdown, health checks, and structured logging.
 
-### 2. Low-Level API (For Advanced Use Cases)
+### 2. Low-Level API
+
+#### For Advanced Use Cases
 
 Direct control over TLS configuration for custom scenarios.
 

@@ -56,3 +56,4 @@ Thumbs.db
 client
 server
 identityserver-example
+examples/middleware/middleware
