@@ -15,6 +15,7 @@ echo "1. Deleting Kubernetes resources..."
 kubectl delete deployment e5s-server 2>/dev/null || echo "   Server deployment not found"
 kubectl delete service e5s-server 2>/dev/null || echo "   Server service not found"
 kubectl delete job e5s-client 2>/dev/null || echo "   Client job not found"
+kubectl delete job e5s-unregistered-client 2>/dev/null || echo "   Unregistered client job not found"
 kubectl delete configmap e5s-config 2>/dev/null || echo "   ConfigMap not found"
 
 # Step 2: Delete Docker images

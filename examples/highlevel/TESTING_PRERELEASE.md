@@ -170,6 +170,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -191,9 +192,11 @@ func main() {
 		// Extract peer identity from mTLS connection
 		id, ok := e5s.PeerID(req)
 		if !ok {
+			log.Printf("❌ Unauthorized request from %s", req.RemoteAddr)
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
+		log.Printf("✓ Authenticated request from: %s", id)
 		fmt.Fprintf(w, "Hello, %s!\n", id)
 	})
 
