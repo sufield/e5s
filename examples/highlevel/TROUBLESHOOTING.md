@@ -15,7 +15,7 @@ annotation validation error: key "meta.helm.sh/release-namespace" must equal "sp
 
 **Cause**: Leftover resources from a previous SPIRE installation attempt (possibly in a different namespace).
 
-**Solution**: Clean up all SPIRE resources and reinstall from scratch.
+**Solution**: Clean up all SPIRE resources including cluster-scoped resources and reinstall from scratch.
 
 ```bash
 # Delete any existing Helm releases
@@ -24,10 +24,23 @@ helm uninstall spire-server -n spire 2>/dev/null || true
 helm uninstall spire-agent -n spire 2>/dev/null || true
 helm uninstall spire-crds -n spire 2>/dev/null || true
 
-# Delete the namespace (this removes all resources)
-kubectl delete namespace spire
+# Delete namespace-scoped resources
+kubectl delete namespace spire 2>/dev/null || true
 
-# Wait a moment for cleanup to complete
+# Delete cluster-scoped resources (ClusterRole, ClusterRoleBinding, CSIDriver, etc.)
+kubectl delete clusterrole spire-agent spire-server spire-controller-manager 2>/dev/null || true
+kubectl delete clusterrolebinding spire-agent spire-server spire-controller-manager 2>/dev/null || true
+kubectl delete csidriver csi.spiffe.io 2>/dev/null || true
+kubectl delete validatingwebhookconfiguration spire-server 2>/dev/null || true
+kubectl delete mutatingwebhookconfiguration spire-controller-manager 2>/dev/null || true
+
+# Delete CRDs (Custom Resource Definitions)
+kubectl delete crd clusterspiffeids.spire.spiffe.io 2>/dev/null || true
+kubectl delete crd clusterstaticentries.spire.spiffe.io 2>/dev/null || true
+kubectl delete crd clusterfederatedtrustdomains.spire.spiffe.io 2>/dev/null || true
+kubectl delete crd controllermanagerconfigs.spire.spiffe.io 2>/dev/null || true
+
+# Wait for cleanup to complete
 sleep 5
 
 # Recreate the namespace
@@ -56,6 +69,63 @@ kubectl api-resources --verbs=list --namespaced -o name | \
 # Force cleanup if needed
 kubectl delete namespace spire --grace-period=0 --force
 ```
+
+---
+
+## Issue: SPIRE Agent stuck in "Pending" state in Minikube
+
+**Symptom:**
+```
+kubectl get pods -n spire
+NAME                    READY   STATUS    RESTARTS   AGE
+spire-agent-xxxxx       0/1     Pending   0          5m
+spire-server-0          2/2     Running   0          5m
+```
+
+**Error from `kubectl describe pod`:**
+```
+Warning  FailedScheduling  0/1 nodes are available: 1 node(s) didn't have free ports for the requested pod ports
+```
+
+**Cause**: The SPIRE agent DaemonSet uses `hostPort`, and in single-node Minikube clusters, port conflicts can prevent scheduling.
+
+**Solution 1: Restart Minikube (cleanest approach)**
+
+```bash
+# Delete and recreate Minikube cluster
+minikube delete
+minikube start --cpus=4 --memory=8192 --driver=docker
+
+# Then reinstall SPIRE from Step 2 in the tutorial
+```
+
+**Solution 2: Disable hostPort (for development)**
+
+This requires creating a custom values file:
+
+```bash
+# Create values file
+cat > spire-values.yaml <<EOF
+spire-agent:
+  hostPorts:
+    enabled: false
+EOF
+
+# Uninstall and reinstall with custom values
+helm uninstall spire -n spire
+helm install spire spire \
+  --repo https://spiffe.github.io/helm-charts-hardened/ \
+  --namespace spire \
+  --set global.spire.trustDomain=example.org \
+  --set global.spire.clusterName=minikube-cluster \
+  -f spire-values.yaml
+```
+
+**Solution 3: Continue anyway (agent not critical for local development)**
+
+For the tutorial, you can continue even if the agent is pending. You'll use port-forwarding to access the SPIRE socket in Step 3 of Part B.
+
+The server is running, which is what issues the certificates. The agent is just a local gateway to the server.
 
 ---
 

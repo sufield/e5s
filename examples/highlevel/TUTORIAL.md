@@ -1,288 +1,37 @@
-# Getting Started Tutorial: mTLS with SPIRE in Development
+# Getting Started Tutorial: Building mTLS Applications with e5s
 
-**Target Audience**: New developers who want to learn how to use this library with SPIRE in a local development environment using Minikube.
+**Target Audience**: Developers who want to build secure mTLS services using SPIFFE/SPIRE.
 
 **What You'll Learn**:
-- Set up SPIRE infrastructure in Minikube
-- Register workloads with SPIRE
-- Build and run mTLS services with automatic certificate rotation
+- Build mTLS server and client applications using e5s
+- Configure identity-based authentication
 - Verify mutual TLS authentication is working
+- Test zero-trust security enforcement
 
-**Time Required**: ~30 minutes
-
----
-
-This is divided into two main parts:
-
-### Part A: Infrastructure Setup (~15 minutes)
-Set up the SPIRE infrastructure that provides cryptographic identities for your services.
-- Start Minikube cluster
-- Install SPIRE Server and Agent
-- Register your workloads
-
-### Part B: Application Development (~15 minutes)
-Build and run your mTLS applications using the e5s library.
-- Write server and client code
-- Configure and test locally
-- Verify mTLS authentication
-
-Complete Part A before starting Part B. The infrastructure must be running for your applications to obtain certificates.
+**Time Required**: ~15 minutes (after infrastructure setup)
 
 ---
 
 ## Prerequisites
 
-Before starting, ensure you have these tools installed:
+Before starting this tutorial, you must have:
 
-### Required Tools
+1. **SPIRE Infrastructure Running**: Follow [SPIRE_SETUP.md](SPIRE_SETUP.md) to set up SPIRE in Minikube (~15 minutes)
+   - Minikube cluster running
+   - SPIRE Server and Agent installed
+   - Server and client workloads registered
 
-1. **Docker** - Container runtime
-   ```bash
-   docker --version
-   # Should output: Docker version 20.x or higher
-   ```
-
-2. **Minikube** - Local Kubernetes cluster
-   ```bash
-   minikube version
-   # Should output: minikube version: v1.30.0 or higher
-   ```
-
-3. **kubectl** - Kubernetes CLI
-   ```bash
-   kubectl version --client
-   # Should output: Client Version: v1.27.0 or higher
-   ```
-
-4. **Helm** - Kubernetes package manager
-   ```bash
-   helm version
-   # Should output: version.BuildInfo{Version:"v3.12.0" or higher
-   ```
-
-5. **Go** - Programming language (1.25 or higher)
+2. **Go** - Programming language (1.21 or higher)
    ```bash
    go version
-   # Should output: go version go1.25.0 or higher
+   # Should output: go version go1.21.0 or higher
    ```
 
-### Installing Prerequisites
-
-**macOS**:
-```bash
-brew install docker minikube kubectl helm go
-```
-
-**Ubuntu/Debian**:
-```bash
-# Docker
-sudo apt-get update
-sudo apt-get install docker.io
-
-# Minikube
-curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
-sudo install minikube-linux-amd64 /usr/local/bin/minikube
-
-# kubectl
-curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-sudo install kubectl /usr/local/bin/kubectl
-
-# Helm
-curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-
-# Go
-sudo apt-get install golang-go
-```
+**If you haven't set up SPIRE yet**, stop here and follow [SPIRE_SETUP.md](SPIRE_SETUP.md) first. The examples in this tutorial require a running SPIRE infrastructure to obtain certificates.
 
 ---
 
-# Part A: Infrastructure Setup
-
-This part sets up the SPIRE infrastructure that will provide cryptographic identities to applications. You'll install SPIRE Server and Agent in Minikube, then register workloads.
-
-**Goal**: Have a working SPIRE deployment where workloads can request certificates.
-
----
-
-## Step 1: Start Minikube
-
-Start a local Kubernetes cluster with enough resources for SPIRE:
-
-```bash
-# Start minikube with appropriate resources
-minikube start --cpus=4 --memory=8192 --driver=docker
-
-# Verify cluster is running
-minikube status
-```
-
-**Expected output**:
-```
-minikube
-type: Control Plane
-host: Running
-kubelet: Running
-apiserver: Running
-kubeconfig: Configured
-```
-
-**Troubleshooting**:
-- If minikube fails to start, try: `minikube delete && minikube start`
-- On Linux, you may need to add your user to the docker group: `sudo usermod -aG docker $USER`
-
----
-
-## Step 2: Install SPIRE
-
-SPIRE has two components:
-- **SPIRE Server**: Central authority that issues identities
-- **SPIRE Agent**: Runs on each node, provides Workload API to applications
-
-The modern SPIRE Helm chart installs both components together.
-
-### Clean Up Previous Installations (if any)
-
-If you've previously attempted to install SPIRE, clean up first:
-
-```bash
-# Clean up any previous installations (safe to run even if nothing exists)
-helm uninstall spire -n spire 2>/dev/null || true
-helm uninstall spire-server -n spire 2>/dev/null || true
-helm uninstall spire-agent -n spire 2>/dev/null || true
-helm uninstall spire-crds -n spire 2>/dev/null || true
-kubectl delete namespace spire 2>/dev/null || true
-
-# Wait for cleanup to complete
-sleep 5
-```
-
-### Install SPIRE
-
-```bash
-# Add the SPIFFE Helm repository
-helm repo add spiffe https://spiffe.github.io/helm-charts-hardened/
-helm repo update
-
-# Create namespace for SPIRE
-kubectl create namespace spire
-
-# Install SPIRE CRDs (Custom Resource Definitions) first
-helm install spire-crds spire-crds \
-  --repo https://spiffe.github.io/helm-charts-hardened/ \
-  --namespace spire
-
-# Install SPIRE (both server and agent)
-helm install spire spire \
-  --repo https://spiffe.github.io/helm-charts-hardened/ \
-  --namespace spire \
-  --set global.spire.trustDomain=example.org \
-  --set global.spire.clusterName=minikube-cluster
-
-# Wait for SPIRE Server to be ready (this may take 1-2 minutes)
-kubectl wait --for=condition=ready pod \
-  -l app.kubernetes.io/name=server \
-  -n spire \
-  --timeout=120s
-
-# Wait for SPIRE Agent to be ready
-kubectl wait --for=condition=ready pod \
-  -l app.kubernetes.io/name=agent \
-  -n spire \
-  --timeout=120s
-```
-
-**Expected output**:
-```
-NAME: spire-crds
-...
-NAME: spire
-...
-pod/spire-server-0 condition met
-pod/spire-agent-xxxxx condition met
-```
-
-**If installation fails**: Clean up and try again:
-```bash
-helm uninstall spire -n spire
-helm uninstall spire-crds -n spire
-# Then run the installation commands above again
-```
-
-**Verify SPIRE is running**:
-```bash
-kubectl get pods -n spire
-```
-
-**Expected output**:
-```
-NAME                                         READY   STATUS    RESTARTS   AGE
-spire-agent-xxxxx                            3/3     Running   0          1m
-spire-server-0                               2/2     Running   0          1m
-spiffe-csi-driver-xxxxx                      3/3     Running   0          1m
-spiffe-oidc-discovery-provider-xxxxx         1/1     Running   0          1m
-```
-
----
-
-## Step 3: Create Registration Entries
-
-SPIRE uses "registration entries" to map workload identities to SPIFFE IDs. Let's register two workloads: a server and a client.
-
-### Register Server Workload
-
-```bash
-# Get SPIRE Server pod name
-SERVER_POD=$(kubectl get pod -n spire -l app.kubernetes.io/name=server -o jsonpath='{.items[0].metadata.name}')
-
-# Create server registration entry
-kubectl exec -n spire $SERVER_POD -c spire-server -- \
-  /opt/spire/bin/spire-server entry create \
-  -spiffeID spiffe://example.org/server \
-  -parentID spiffe://example.org/spire/agent/k8s_psat/minikube-cluster/default \
-  -selector k8s:ns:default \
-  -selector k8s:sa:default \
-  -selector k8s:pod-label:app:e5s-server
-```
-
-**Expected output**:
-```
-Entry ID         : 01234567-89ab-cdef-0123-456789abcdef
-SPIFFE ID        : spiffe://example.org/server
-Parent ID        : spiffe://example.org/spire/agent/k8s_psat/minikube-cluster/default
-Revision         : 0
-X509-SVID TTL    : default
-JWT-SVID TTL     : default
-Selector         : k8s:ns:default
-Selector         : k8s:sa:default
-Selector         : k8s:pod-label:app:e5s-server
-```
-
-### Register Client Workload
-
-```bash
-# Create client registration entry
-kubectl exec -n spire $SERVER_POD -c spire-server -- \
-  /opt/spire/bin/spire-server entry create \
-  -spiffeID spiffe://example.org/client \
-  -parentID spiffe://example.org/spire/agent/k8s_psat/minikube-cluster/default \
-  -selector k8s:ns:default \
-  -selector k8s:sa:default \
-  -selector k8s:pod-label:app:e5s-client
-```
-
-### Verify Registration Entries
-
-```bash
-# List all registration entries
-kubectl exec -n spire $SERVER_POD -c spire-server -- \
-  /opt/spire/bin/spire-server entry show
-```
-
-**Expected output**: You should see both entries (server and client) listed.
-
----
-
-# Part B: Application Development
+# Building Your mTLS Application
 
 Now that the SPIRE infrastructure is running, you can build applications that use it for mTLS. In this section, you'll write a simple server and client using the e5s library, which abstracts all the complexity of SPIRE integration.
 
@@ -290,13 +39,9 @@ Now that the SPIRE infrastructure is running, you can build applications that us
 
 ---
 
-## Step 1: Build Example Application
+## Step 1: Install Dependencies
 
-Now let's build a simple mTLS application using the e5s library.
-
-### Install Dependencies
-
-First, create a Go module and install the required dependencies:
+Create a new directory for your application and install dependencies:
 
 ```bash
 # Create a directory for your application
@@ -309,8 +54,20 @@ go mod init mtls-demo
 # Install e5s library
 go get github.com/sufield/e5s@latest
 
-# Install chi router
+# Install chi router (for HTTP routing)
 go get github.com/go-chi/chi/v5
+```
+
+Your `go.mod` should look like:
+```
+module mtls-demo
+
+go 1.21
+
+require (
+    github.com/go-chi/chi/v5 v5.2.3
+    github.com/sufield/e5s v0.1.0
+)
 ```
 
 ### Create Server Application
@@ -432,20 +189,10 @@ client:
   expected_server_trust_domain: "example.org"
 ```
 
-### Initialize Go Module
-
-```bash
-# Create go.mod if not exists
-go mod init example/e5s-demo
-
-# Add dependencies
-go get github.com/sufield/e5s@latest
-go get github.com/go-chi/chi/v5@latest
-```
-
 ### Build Binaries
 
 ```bash
+# From your mtls-demo directory
 # Build server
 go build -o bin/server ./server
 
@@ -823,43 +570,38 @@ Now that you have mTLS working:
 
 ## Clean Up
 
-When you're done:
+When you're done testing:
 
 ```bash
 # Stop local applications (Ctrl+C in each terminal)
 
-# Uninstall SPIRE from Minikube
-helm uninstall spire -n spire
-helm uninstall spire-crds -n spire
-kubectl delete namespace spire
-
-# Stop Minikube
-minikube stop
-
-# (Optional) Delete Minikube cluster
-minikube delete
+# Clean up your application binaries
+cd ~/mtls-demo
+rm -rf bin/
 ```
+
+**To clean up SPIRE infrastructure**, follow the cleanup instructions in [SPIRE_SETUP.md](SPIRE_SETUP.md).
 
 ---
 
 ## Resources
 
-- **Troubleshooting Guide**: See [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
-- **Advanced Examples**: See [ADVANCED.md](ADVANCED.md)
+- **SPIRE Setup**: See [SPIRE_SETUP.md](SPIRE_SETUP.md) for infrastructure setup and cleanup
+- **Troubleshooting Guide**: See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for common issues
+- **Advanced Examples**: See [ADVANCED.md](ADVANCED.md) for advanced patterns and control
+- **e5s Library Docs**: See [main README](../../README.md) for library documentation
 - **SPIRE Documentation**: https://spiffe.io/docs/latest/spire/
-- **e5s Library Docs**: See [main README](../../README.md)
 - **SPIFFE Standard**: https://github.com/spiffe/spiffe
-- **Minikube Docs**: https://minikube.sigs.k8s.io/docs/
 
 ---
 
 ## Summary
 
 You've successfully:
-- Set up SPIRE infrastructure in Minikube
-- Registered workloads with SPIRE
-- Built mTLS applications using e5s
-- Verified mutual TLS authentication
+- Built mTLS server and client applications using e5s
+- Configured identity-based authentication with SPIRE
+- Verified mutual TLS authentication is working
+- Tested zero-trust security enforcement (unregistered clients blocked)
 - Understood automatic certificate rotation
 
 The e5s library handles all the complexity:
@@ -869,4 +611,4 @@ The e5s library handles all the complexity:
 - mTLS handshake setup
 - SPIFFE ID verification
 
-You just write `e5s.Start()`, `e5s.Client()`, and `e5s.PeerID()` - the library does the rest!
+You just write `e5s.Run()`, `e5s.Get()`, and `e5s.PeerID()` - the library does the rest!
