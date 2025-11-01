@@ -4,7 +4,44 @@
 
 **Purpose**: Test local e5s code changes in a realistic environment before releasing to end users.
 
-**Time Required**: ~20 minutes (after infrastructure setup)
+**Time Required**:
+- **Quick Start**: ~5 minutes (automated)
+- **Manual Setup**: ~20 minutes (step-by-step)
+
+---
+
+## 🚀 Quick Start (Recommended)
+
+**For fast testing with minimal steps:**
+
+```bash
+# 1. Ensure SPIRE is running (one-time setup)
+#    Follow SPIRE_SETUP.md if not already done
+
+# 2. Run automated setup (from project root)
+./scripts/test-prerelease.sh
+
+# 3. After making code changes, rebuild and test
+./scripts/rebuild-and-test.sh
+
+# 4. Clean up when done
+./scripts/cleanup-prerelease.sh
+```
+
+**That's it!** The scripts handle all the setup, building, and deployment automatically.
+
+**What the scripts do:**
+- `test-prerelease.sh` - Creates test apps, builds binaries, builds Docker images, deploys to Kubernetes
+- `rebuild-and-test.sh` - Rebuilds after code changes, redeploys, and shows test results
+- `cleanup-prerelease.sh` - Removes all test resources
+
+---
+
+## 📖 Manual Setup (Optional)
+
+**If you prefer step-by-step control or need to understand the process:**
+
+Continue reading below for detailed manual instructions.
 
 ---
 
@@ -26,16 +63,32 @@ Before starting, you must have:
 
 1. **SPIRE Infrastructure Running**: Follow [SPIRE_SETUP.md](SPIRE_SETUP.md) to set up SPIRE in Minikube (~15 minutes)
    - Minikube cluster running
-   - SPIRE Server and Agent installed
+   - SPIRE Server and Agent installed via Helm
    - Server and client workloads registered
 
-2. **Go** - Programming language (1.21 or higher)
+   **Note**: SPIRE_SETUP.md uses Helm to install SPIRE infrastructure. This guide deploys test applications using kubectl directly (not Helm).
+
+2. **Required Tools**:
+   - **Docker** - For building container images
+   - **Minikube** - For Kubernetes cluster (installed via SPIRE_SETUP.md)
+   - **kubectl** - For deploying applications (installed via SPIRE_SETUP.md)
+   - **Helm** - For SPIRE installation only (installed via SPIRE_SETUP.md)
+
+   ```bash
+   # Verify tools are installed
+   docker --version
+   minikube version
+   kubectl version --client
+   helm version
+   ```
+
+3. **Go** - Programming language (1.21 or higher)
    ```bash
    go version
    # Should output: go version go1.21.0 or higher
    ```
 
-3. **Local e5s Code**: You should be in the e5s project directory
+4. **Local e5s Code**: You should be in the e5s project directory
    ```bash
    # Verify you're in the right place
    ls -la e5s.go pkg/ examples/
@@ -104,7 +157,7 @@ replace github.com/sufield/e5s => ..
 - You can modify e5s code and immediately see changes in your test application
 - Perfect for iterating on library changes
 
-**Note**: You don't need to run `go mod tidy` until after you create the source files in Steps 3 and 4.
+You don't need to run `go mod tidy` until after you create the source files in Steps 3 and 4.
 
 ---
 
@@ -162,13 +215,21 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 
 	"github.com/sufield/e5s"
 )
 
 func main() {
+	// Get server URL from environment variable, default to localhost
+	// This allows the client to work both locally and in Kubernetes
+	serverURL := os.Getenv("SERVER_URL")
+	if serverURL == "" {
+		serverURL = "https://localhost:8443/hello"
+	}
+
 	// Perform mTLS GET request (uses local e5s code)
-	resp, err := e5s.Get("https://localhost:8443/hello")
+	resp, err := e5s.Get(serverURL)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -179,6 +240,8 @@ func main() {
 	fmt.Println(string(body))
 }
 ```
+
+We include environment variable support from the start because we'll deploy to Kubernetes where the client needs to connect to a service name (e.g., `https://e5s-server:8443/hello`) instead of localhost.
 
 ---
 
@@ -225,57 +288,11 @@ go build -o bin/client ./client
 ls -lh bin/
 ```
 
-**Important**: Every time you modify e5s library code, you need to rebuild these binaries to see the changes.
+Every time you modify e5s library code, you need to rebuild these binaries to see the changes.
 
 ---
 
-## Step 7: Update Client Code for Kubernetes
-
-Update the client to support environment variable for server URL:
-
-**Edit `client/main.go`**:
-
-```go
-package main
-
-import (
-	"fmt"
-	"io"
-	"log"
-	"os"
-
-	"github.com/sufield/e5s"
-)
-
-func main() {
-	// Get server URL from environment variable, default to localhost
-	serverURL := os.Getenv("SERVER_URL")
-	if serverURL == "" {
-		serverURL = "https://localhost:8443/hello"
-	}
-
-	// Perform mTLS GET request (uses local e5s code)
-	resp, err := e5s.Get(serverURL)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer resp.Body.Close()
-
-	// Read and print response
-	body, _ := io.ReadAll(resp.Body)
-	fmt.Println(string(body))
-}
-```
-
-**Rebuild the client**:
-
-```bash
-CGO_ENABLED=0 go build -o bin/client ./client
-```
-
----
-
-## Step 8: Create Kubernetes Configuration
+## Step 7: Create Kubernetes Configuration
 
 **Why Kubernetes?** The SPIRE Workload API socket is only accessible inside Kubernetes pods, not from your local machine. You must deploy your test applications to Kubernetes.
 
@@ -311,7 +328,7 @@ kubectl apply -f k8s-e5s-config.yaml
 
 ---
 
-## Step 9: Build and Deploy to Kubernetes
+## Step 8: Build and Deploy to Kubernetes
 
 ### Build Static Binaries
 
@@ -462,7 +479,7 @@ Hello, spiffe://example.org/ns/default/sa/default!
 
 ---
 
-## Step 10: Iterate on Code Changes
+## Step 9: Iterate on Code Changes
 
 Now you can quickly test e5s library changes:
 
@@ -516,7 +533,7 @@ This workflow lets you test local e5s changes in a real Kubernetes environment b
 
 ---
 
-## Step 11: Verify mTLS Authentication
+## Step 10: Verify mTLS Authentication
 
 Check that your server and client are using proper mTLS with SPIRE identities:
 
@@ -549,7 +566,7 @@ This confirms your local e5s code properly implements zero-trust mTLS with SPIRE
 
 ---
 
-## Step 12: Debug and Monitoring
+## Step 11: Debug and Monitoring
 
 ### Check Pod Status
 
@@ -796,5 +813,7 @@ You've successfully:
 - The `replace` directive lets you test library changes locally before publishing
 - SPIRE Workload API is only accessible inside Kubernetes pods, requiring containerized deployment
 - The Kubernetes workflow ensures you test in a realistic environment matching production use
+- **Helm** is used only for SPIRE infrastructure installation (prerequisite step)
+- **kubectl** is used directly to deploy and test your applications (no Helm charts needed)
 
 **Next Step**: Once testing is complete, follow the publishing checklist above to release a new version.

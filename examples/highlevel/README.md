@@ -4,6 +4,14 @@
 
 This example demonstrates the high-level e5s API for building mTLS services with SPIRE. This is the recommended starting point for most users.
 
+---
+
+📚 **[View Complete Documentation →](TABLE_OF_CONTENTS.md)**
+
+*Quick navigation to all tutorials, guides, and references.*
+
+---
+
 ## New to SPIRE?
 
 **[Start with the Tutorial →](TUTORIAL.md)**
