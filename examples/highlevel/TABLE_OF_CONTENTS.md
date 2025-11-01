@@ -24,7 +24,7 @@ Complete guide to building mTLS applications with e5s and SPIRE.
 
 ### For Internal Testing
 
-- **[Quick Start Guide](../../QUICK_START_PRERELEASE.md)** - ⚡ Fast 3-step testing workflow
+- **[QUICK_START_PRERELEASE.md](QUICK_START_PRERELEASE.md)** - ⚡ Fast 3-step testing workflow
   *Automated scripts for quick testing (~5 minutes setup, ~30 seconds per iteration).*
 
 - **[TESTING_PRERELEASE.md](TESTING_PRERELEASE.md)** - Complete pre-release testing guide
@@ -82,7 +82,7 @@ TROUBLESHOOTING.md (as needed)
 | [SPIRE_SETUP.md](SPIRE_SETUP.md) | All users | SPIRE infrastructure setup in Minikube | ~15 min |
 | [README.md](README.md) | All users | API overview and quick reference | ~10 min |
 | [ADVANCED.md](ADVANCED.md) | Experienced users | Production patterns and best practices | ~20 min |
-| [Quick Start](../../QUICK_START_PRERELEASE.md) | Library developers | ⚡ Automated pre-release testing (3 commands) | ~5 min |
+| [QUICK_START_PRERELEASE.md](QUICK_START_PRERELEASE.md) | Library developers | ⚡ Automated pre-release testing (3 commands) | ~5 min |
 | [TESTING_PRERELEASE.md](TESTING_PRERELEASE.md) | Library developers | Detailed pre-release testing workflow | ~20 min |
 | [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | All users | Problem solving and debugging | Reference |
 | [e5s.yaml](e5s.yaml) | All users | Configuration template | Reference |
@@ -98,7 +98,7 @@ TROUBLESHOOTING.md (as needed)
 → Follow [SPIRE_SETUP.md](SPIRE_SETUP.md)
 
 **Testing library changes?**
-→ ⚡ [Quick Start](../../QUICK_START_PRERELEASE.md) (3 commands, ~5 min)
+→ ⚡ [QUICK_START_PRERELEASE.md](QUICK_START_PRERELEASE.md) (3 commands, ~5 min)
 → Or [TESTING_PRERELEASE.md](TESTING_PRERELEASE.md) (detailed guide)
 
 **Stuck on an issue?**

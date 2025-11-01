@@ -357,28 +357,14 @@ The examples are separate modules (each has its own `go.mod`) so you can vendor/
 
 ## Documentation
 
-📚 **[Complete Documentation & Tutorials →](examples/README.md)**
+📚 **[View All Documentation →](examples/highlevel/TABLE_OF_CONTENTS.md)**
 
-Comprehensive guides for all skill levels:
+**Quick Links:**
 
-- **[Examples Overview](examples/README.md)** - Choose the right example for your use case
-- **[Documentation Index](examples/highlevel/TABLE_OF_CONTENTS.md)** - Complete navigation for all tutorials and guides
 - **[Tutorial](examples/highlevel/TUTORIAL.md)** - Build your first mTLS app (start here!)
-- **[SPIRE Setup](examples/highlevel/SPIRE_SETUP.md)** - Set up SPIRE infrastructure in Minikube
-- **[Advanced Patterns](examples/highlevel/ADVANCED.md)** - Production-ready patterns and best practices
-- **[Troubleshooting](examples/highlevel/TROUBLESHOOTING.md)** - Common issues and solutions
-
-**For library developers:**
-
-- **⚡ [Quick Start: Pre-Release Testing](QUICK_START_PRERELEASE.md)** - Test local changes in 3 commands (~5 min)
-- **[Detailed Testing Guide](examples/highlevel/TESTING_PRERELEASE.md)** - Complete pre-release testing workflow
-
-Additional resources:
-
-- **[High-Level Example](examples/highlevel/)** - Application developer example (production behavior, simplest API)
-- **[Minikube Low-Level Example](examples/minikube-lowlevel/)** - Platform / infrastructure example (full SPIRE + mTLS stack in local Kubernetes)
-- **[API Documentation](docs/QUICKSTART_LIBRARY.md)** - Low-level API usage
-- **[Security Posture](security/)** - Supply chain security and runtime monitoring
+- **[Quick Start: Testing](examples/highlevel/QUICK_START_PRERELEASE.md)** - ⚡ For library developers (3 commands)
+- **[Examples](examples/)** - High-level, middleware, and infrastructure examples
+- **[API Docs](docs/QUICKSTART_LIBRARY.md)** - Low-level API reference
 
 ## Development
 
