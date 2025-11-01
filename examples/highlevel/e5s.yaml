@@ -6,11 +6,9 @@ spire:
   # Default for SPIRE: unix:///tmp/spire-agent/public/api.sock
   workload_socket: unix:///tmp/spire-agent/public/api.sock
 
-  # How long to wait for identity from SPIRE before failing startup.
-  # Format: Go duration (e.g. "5s", "30s", "1m").
-  # Default: 30s
-  # Set higher in development (agent may start slowly), lower in production (fail fast).
-  initial_fetch_timeout: 30s
+  # (Optional) How long to wait for identity from SPIRE before failing startup
+  # If not set, defaults to 30s
+  # initial_fetch_timeout: 30s
 
 server:
   # Address to listen on for mTLS connections

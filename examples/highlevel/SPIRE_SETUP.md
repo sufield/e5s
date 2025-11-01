@@ -249,6 +249,14 @@ kubectl exec -n spire $SERVER_POD -c spire-server -- \
 
 ---
 
+## Next Steps
+
+After completing this SPIRE setup:
+- **For end users**: Follow the [TUTORIAL.md](TUTORIAL.md) to build and run mTLS applications
+- **For internal testing**: Follow the [TESTING_PRERELEASE.md](TESTING_PRERELEASE.md) to test with local e5s code
+
+---
+
 ## Clean Up
 
 When you're done:
@@ -265,14 +273,6 @@ minikube stop
 # (Optional) Delete Minikube cluster
 minikube delete
 ```
-
----
-
-## Next Steps
-
-After completing this SPIRE setup:
-- **For end users**: Follow the [TUTORIAL.md](TUTORIAL.md) to build and run mTLS applications
-- **For internal testing**: Follow the [TESTING_PRERELEASE.md](TESTING_PRERELEASE.md) to test with local e5s code
 
 ---
 

@@ -191,8 +191,9 @@ spire:
   # Path to SPIRE Agent's Workload API socket
   workload_socket: unix:///tmp/spire-agent/public/api.sock
 
-  # How long to wait for identity from SPIRE before failing startup
-  initial_fetch_timeout: 30s
+  # (Optional) How long to wait for identity from SPIRE before failing startup
+  # If not set, defaults to 30s
+  # initial_fetch_timeout: 30s
 
 server:
   listen_addr: ":8443"
@@ -228,120 +229,11 @@ ls -lh bin/
 
 ---
 
-## Step 7: Port Forward SPIRE Agent Socket
+## Step 7: Update Client Code for Kubernetes
 
-In a separate terminal, port forward to access SPIRE from your local machine:
+Update the client to support environment variable for server URL:
 
-```bash
-# Keep this running in a separate terminal
-kubectl port-forward -n spire \
-  $(kubectl get pod -n spire -l app.kubernetes.io/name=agent -o jsonpath='{.items[0].metadata.name}') \
-  8081:8081
-```
-
----
-
-## Step 8: Create Symlink to Agent Socket
-
-Create a symlink so your local application can connect to SPIRE:
-
-```bash
-# Create symlink from local machine to forwarded socket
-# (Adjust path based on your Minikube profile)
-ln -sf ~/.minikube/profiles/minikube/apiserver.sock /tmp/spire-agent.sock
-
-# Verify symlink exists
-ls -la /tmp/spire-agent.sock
-```
-
-**Update e5s.yaml** to use the symlink:
-
-```yaml
-spire:
-  workload_socket: unix:///tmp/spire-agent.sock  # Updated path
-  initial_fetch_timeout: 30s
-
-server:
-  listen_addr: ":8443"
-  allowed_client_trust_domain: "example.org"
-
-client:
-  expected_server_trust_domain: "example.org"
-```
-
----
-
-## Step 9: Run and Test
-
-### Terminal 1: Run Server
-
-```bash
-cd test-demo
-./bin/server
-```
-
-**Expected output**:
-```
-2024/10/30 10:00:00 Starting mTLS server (config: e5s.yaml)...
-2024/10/30 10:00:00 Server running - press Ctrl+C to stop
-```
-
-### Terminal 2: Run Client
-
-```bash
-cd test-demo
-./bin/client
-```
-
-**Expected output**:
-```
-Hello, spiffe://example.org/client!
-```
-
-**Success!** Your local e5s code is working correctly.
-
----
-
-## Step 10: Test Local Code Changes
-
-Now you can iterate on e5s library changes:
-
-### Example: Modify e5s.go
-
-```bash
-# Go back to e5s project root
-cd ..  # Back to e5s directory
-
-# Edit e5s.go (make some changes)
-vim e5s.go  # or your favorite editor
-
-# Return to test-demo directory
-cd test-demo
-
-# Rebuild with your changes
-go build -o bin/server ./server
-go build -o bin/client ./client
-
-# Test again
-./bin/server  # In terminal 1
-./bin/client  # In terminal 2
-```
-
-**Workflow**:
-1. Make changes to e5s library code
-2. Rebuild test applications
-3. Test immediately
-4. Iterate quickly
-
-This is much faster than publishing to GitHub and downloading each time!
-
----
-
-## Step 11: Verify Security Enforcement
-
-Test that unregistered workloads cannot connect:
-
-Create `unregistered-client/main.go`:
+**Edit `client/main.go`**:
 
 ```go
 package main
@@ -350,59 +242,379 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 
 	"github.com/sufield/e5s"
 )
 
 func main() {
-	log.Println("Attempting to connect as unregistered workload...")
+	// Get server URL from environment variable, default to localhost
+	serverURL := os.Getenv("SERVER_URL")
+	if serverURL == "" {
+		serverURL = "https://localhost:8443/hello"
+	}
 
-	resp, err := e5s.Get("https://localhost:8443/hello")
+	// Perform mTLS GET request (uses local e5s code)
+	resp, err := e5s.Get(serverURL)
 	if err != nil {
-		log.Fatalf("Connection failed (expected): %v", err)
+		log.Fatal(err)
 	}
 	defer resp.Body.Close()
 
+	// Read and print response
 	body, _ := io.ReadAll(resp.Body)
 	fmt.Println(string(body))
 }
 ```
 
-**Run unregistered client:**
+**Rebuild the client**:
 
 ```bash
-go run unregistered-client/main.go
+CGO_ENABLED=0 go build -o bin/client ./client
 ```
-
-**Expected failure:**
-```
-Attempting to connect as unregistered workload...
-Connection failed (expected): failed to create X509Source: no identity issued
-```
-
-This confirms your local e5s code properly enforces zero-trust security.
 
 ---
 
-## Step 12: Run Tutorial Tests
+## Step 8: Create Kubernetes Configuration
 
-Before publishing, verify the end-user tutorial works:
+**Why Kubernetes?** The SPIRE Workload API socket is only accessible inside Kubernetes pods, not from your local machine. You must deploy your test applications to Kubernetes.
+
+Create a ConfigMap for e5s.yaml with the correct socket path for Kubernetes:
 
 ```bash
-# Copy tutorial examples
-cp -r ../examples/highlevel/server ./tutorial-server
-cp -r ../examples/highlevel/client ./tutorial-client
+cat > k8s-e5s-config.yaml <<'EOF'
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: e5s-config
+  namespace: default
+data:
+  e5s.yaml: |
+    spire:
+      # Path to SPIRE Agent socket inside Kubernetes pods
+      workload_socket: unix:///spire/agent-socket/spire-agent.sock
 
-# Build tutorial examples
-go build -o bin/tutorial-server ./tutorial-server
-go build -o bin/tutorial-client ./tutorial-client
+      # (Optional) How long to wait for identity from SPIRE before failing startup
+      # If not set, defaults to 30s
+      # initial_fetch_timeout: 30s
 
-# Test tutorial examples work
-./bin/tutorial-server  # Terminal 1
-./bin/tutorial-client  # Terminal 2
+    server:
+      listen_addr: ":8443"
+      allowed_client_trust_domain: "example.org"
+
+    client:
+      expected_server_trust_domain: "example.org"
+EOF
+
+kubectl apply -f k8s-e5s-config.yaml
 ```
 
-This ensures the tutorial will work for end users after you publish.
+---
+
+## Step 9: Build and Deploy to Kubernetes
+
+### Build Static Binaries
+
+```bash
+# Build static binaries (required for Alpine containers)
+CGO_ENABLED=0 go build -o bin/server ./server
+CGO_ENABLED=0 go build -o bin/client ./client
+```
+
+### Build Docker Images in Minikube
+
+```bash
+# Point Docker to Minikube's Docker daemon
+eval $(minikube docker-env)
+
+# Build server image
+docker build -t e5s-server:dev -f - . <<'EOF'
+FROM alpine:latest
+WORKDIR /app
+COPY bin/server .
+ENTRYPOINT ["/app/server"]
+EOF
+
+# Build client image
+docker build -t e5s-client:dev -f - . <<'EOF'
+FROM alpine:latest
+WORKDIR /app
+COPY bin/client .
+ENTRYPOINT ["/app/client"]
+EOF
+```
+
+### Deploy Server
+
+```bash
+cat > k8s-server.yaml <<'EOF'
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: e5s-server
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: e5s-server
+  template:
+    metadata:
+      labels:
+        app: e5s-server
+    spec:
+      serviceAccountName: default
+      containers:
+      - name: server
+        image: e5s-server:dev
+        imagePullPolicy: Never  # Use local image from Minikube
+        volumeMounts:
+        - name: spire-agent-socket
+          mountPath: /spire/agent-socket
+          readOnly: true
+        - name: config
+          mountPath: /app/e5s.yaml
+          subPath: e5s.yaml
+      volumes:
+      - name: spire-agent-socket
+        csi:
+          driver: "csi.spiffe.io"
+          readOnly: true
+      - name: config
+        configMap:
+          name: e5s-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: e5s-server
+  namespace: default
+spec:
+  selector:
+    app: e5s-server
+  ports:
+  - protocol: TCP
+    port: 8443
+    targetPort: 8443
+EOF
+
+kubectl apply -f k8s-server.yaml
+
+# Wait for server to be ready
+kubectl wait --for=condition=ready pod -l app=e5s-server -n default --timeout=60s
+```
+
+### Test with Client Job
+
+```bash
+cat > k8s-client-job.yaml <<'EOF'
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: e5s-client
+  namespace: default
+spec:
+  template:
+    metadata:
+      labels:
+        app: e5s-client
+    spec:
+      serviceAccountName: default
+      restartPolicy: Never
+      containers:
+      - name: client
+        image: e5s-client:dev
+        imagePullPolicy: Never
+        env:
+        - name: SERVER_URL
+          value: "https://e5s-server:8443/hello"
+        command: ["/app/client"]
+        volumeMounts:
+        - name: spire-agent-socket
+          mountPath: /spire/agent-socket
+          readOnly: true
+        - name: config
+          mountPath: /app/e5s.yaml
+          subPath: e5s.yaml
+      volumes:
+      - name: spire-agent-socket
+        csi:
+          driver: "csi.spiffe.io"
+          readOnly: true
+      - name: config
+        configMap:
+          name: e5s-config
+EOF
+
+kubectl apply -f k8s-client-job.yaml
+
+# Wait a few seconds and check logs
+sleep 10
+kubectl logs -l app=e5s-client
+```
+
+**Expected output**:
+```
+Hello, spiffe://example.org/ns/default/sa/default!
+```
+
+**Success!** Your local e5s code is working in Kubernetes with SPIRE.
+
+---
+
+## Step 10: Iterate on Code Changes
+
+Now you can quickly test e5s library changes:
+
+### Workflow
+
+```bash
+# 1. Make changes to e5s library code
+cd ..  # Go to e5s project root
+vim e5s.go  # Edit any e5s files
+
+# 2. Return to test-demo and rebuild binaries
+cd test-demo
+CGO_ENABLED=0 go build -o bin/server ./server
+CGO_ENABLED=0 go build -o bin/client ./client
+
+# 3. Rebuild Docker images
+eval $(minikube docker-env)
+
+docker build -t e5s-server:dev -f - . <<'EOF'
+FROM alpine:latest
+WORKDIR /app
+COPY bin/server .
+ENTRYPOINT ["/app/server"]
+EOF
+
+docker build -t e5s-client:dev -f - . <<'EOF'
+FROM alpine:latest
+WORKDIR /app
+COPY bin/client .
+ENTRYPOINT ["/app/client"]
+EOF
+
+# 4. Restart server deployment
+kubectl rollout restart deployment/e5s-server
+
+# 5. Test with client
+kubectl delete job e5s-client
+kubectl apply -f k8s-client-job.yaml
+sleep 10
+kubectl logs -l app=e5s-client
+```
+
+**Summary**:
+1. Make changes to e5s library code
+2. Rebuild binaries and Docker images
+3. Redeploy to Kubernetes
+4. Test immediately
+5. Iterate quickly
+
+This workflow lets you test local e5s changes in a real Kubernetes environment before publishing!
+
+---
+
+## Step 11: Verify mTLS Authentication
+
+Check that your server and client are using proper mTLS with SPIRE identities:
+
+```bash
+# Check server logs
+kubectl logs -l app=e5s-server
+
+# Check client logs - should show successful response
+kubectl logs -l app=e5s-client
+```
+
+**Expected client output**:
+```
+Hello, spiffe://example.org/ns/default/sa/default!
+```
+
+The response confirms:
+- ✓ Client successfully obtained SPIFFE identity from SPIRE
+- ✓ Client authenticated to server using mTLS
+- ✓ Server verified client's certificate
+- ✓ Server extracted and returned client's SPIFFE ID
+
+**View SPIRE server logs to see certificate issuance:**
+
+```bash
+kubectl logs -n spire -l app.kubernetes.io/name=server -c spire-server --tail=50
+```
+
+This confirms your local e5s code properly implements zero-trust mTLS with SPIRE.
+
+---
+
+## Step 12: Debug and Monitoring
+
+### Check Pod Status
+
+```bash
+# List all pods
+kubectl get pods
+
+# Describe server pod for details
+kubectl describe pod -l app=e5s-server
+
+# Check if SPIRE socket is mounted
+kubectl exec -l app=e5s-server -- ls -la /spire/agent-socket/
+```
+
+### View Server Logs
+
+```bash
+# Follow server logs in real-time
+kubectl logs -l app=e5s-server -f
+
+# View last 100 lines
+kubectl logs -l app=e5s-server --tail=100
+```
+
+### Interactive Testing
+
+Create an interactive pod to test manually:
+
+```bash
+kubectl run -it test-client --rm --restart=Never \
+  --image=e5s-client:dev \
+  --overrides='
+{
+  "spec": {
+    "containers": [{
+      "name": "test-client",
+      "image": "e5s-client:dev",
+      "command": ["/bin/sh"],
+      "stdin": true,
+      "tty": true,
+      "env": [{"name": "SERVER_URL", "value": "https://e5s-server:8443/hello"}],
+      "volumeMounts": [{
+        "name": "spire-agent-socket",
+        "mountPath": "/spire/agent-socket",
+        "readOnly": true
+      }, {
+        "name": "config",
+        "mountPath": "/app/e5s.yaml",
+        "subPath": "e5s.yaml"
+      }]
+    }],
+    "volumes": [{
+      "name": "spire-agent-socket",
+      "csi": {"driver": "csi.spiffe.io", "readOnly": true}
+    }, {
+      "name": "config",
+      "configMap": {"name": "e5s-config"}
+    }]
+  }
+}
+'
+
+# Inside the pod, run:
+/app/client
+```
 
 ---
 
@@ -413,13 +625,19 @@ This ensures the tutorial will work for end users after you publish.
 If you modify `internal/config/`:
 
 ```bash
-# Rebuild after config changes
-go build -o bin/server ./server
-go build -o bin/client ./client
+# 1. Update k8s-e5s-config.yaml with new config
+vim k8s-e5s-config.yaml
 
-# Test with different e5s.yaml configurations
-# Test with environment variables
-E5S_CONFIG=/path/to/alt/config.yaml ./bin/server
+# 2. Apply updated ConfigMap
+kubectl apply -f k8s-e5s-config.yaml
+
+# 3. Restart deployments to pick up new config
+kubectl rollout restart deployment/e5s-server
+kubectl delete job e5s-client
+kubectl apply -f k8s-client-job.yaml
+
+# 4. Check results
+kubectl logs -l app=e5s-client
 ```
 
 ### Testing SPIRE Integration Changes
@@ -427,15 +645,25 @@ E5S_CONFIG=/path/to/alt/config.yaml ./bin/server
 If you modify `pkg/spire/`:
 
 ```bash
-# Rebuild
-go build -o bin/server ./server
-go build -o bin/client ./client
+# 1. Rebuild binaries and images
+CGO_ENABLED=0 go build -o bin/server ./server
+CGO_ENABLED=0 go build -o bin/client ./client
+eval $(minikube docker-env)
+docker build -t e5s-server:dev -f - . <<'EOF'
+FROM alpine:latest
+WORKDIR /app
+COPY bin/server .
+ENTRYPOINT ["/app/server"]
+EOF
 
-# Watch SPIRE logs while testing
+# 2. Restart deployment
+kubectl rollout restart deployment/e5s-server
+
+# 3. Watch SPIRE logs while testing
 kubectl logs -n spire -l app.kubernetes.io/name=server -c spire-server --follow
 
-# Test certificate rotation
-# (SVIDs rotate every ~30 minutes, watch for automatic rotation)
+# 4. Test certificate rotation
+# SVIDs rotate every ~30 minutes - server should handle automatically
 ```
 
 ### Testing TLS Config Changes
@@ -443,15 +671,16 @@ kubectl logs -n spire -l app.kubernetes.io/name=server -c spire-server --follow
 If you modify `pkg/spiffehttp/`:
 
 ```bash
-# Rebuild
-go build -o bin/server ./server
-go build -o bin/client ./client
+# 1. Rebuild and redeploy (see Step 10 workflow)
 
-# Use openssl to inspect TLS handshake
+# 2. Use port-forward to inspect TLS from local machine
+kubectl port-forward svc/e5s-server 8443:8443
+
+# 3. In another terminal, inspect TLS handshake
 openssl s_client -connect localhost:8443 -showcerts
 
-# Verify TLS 1.3 is enforced
-# Verify client certificate is required
+# 4. Verify TLS 1.3 is enforced
+# 5. Verify client certificate is required (should fail without client cert)
 ```
 
 ---
@@ -461,15 +690,24 @@ openssl s_client -connect localhost:8443 -showcerts
 When you're done testing:
 
 ```bash
-# Stop local applications (Ctrl+C in each terminal)
+# 1. Delete Kubernetes resources
+kubectl delete deployment e5s-server
+kubectl delete service e5s-server
+kubectl delete job e5s-client
+kubectl delete configmap e5s-config
 
-# Clean up test directory
+# 2. Clean up test directory files
 cd test-demo
 rm -rf bin/
+rm -f k8s-*.yaml
 
-# Or remove entire test directory
+# 3. (Optional) Remove entire test directory
 cd ..
 rm -rf test-demo
+
+# 4. Clean up Docker images from Minikube
+eval $(minikube docker-env)
+docker rmi e5s-server:dev e5s-client:dev
 ```
 
 **To clean up SPIRE infrastructure**, follow the cleanup instructions in [SPIRE_SETUP.md](SPIRE_SETUP.md).
@@ -549,10 +787,14 @@ This means you're importing test code into the library. Keep test code separate 
 You've successfully:
 - Set up local development environment for e5s library
 - Used `replace` directive to test local code changes
-- Built and tested mTLS applications with local e5s code
-- Verified security enforcement works correctly
-- Learned how to iterate quickly on library changes
+- Built static binaries and containerized them for Kubernetes
+- Deployed and tested mTLS applications with local e5s code in Kubernetes
+- Verified mTLS authentication works correctly with SPIRE
+- Learned how to iterate quickly on library changes using the Kubernetes workflow
 
-**Key Takeaway**: The `replace` directive lets you test library changes locally before publishing, ensuring end users get a working, tested library.
+**Key Takeaways**:
+- The `replace` directive lets you test library changes locally before publishing
+- SPIRE Workload API is only accessible inside Kubernetes pods, requiring containerized deployment
+- The Kubernetes workflow ensures you test in a realistic environment matching production use
 
 **Next Step**: Once testing is complete, follow the publishing checklist above to release a new version.

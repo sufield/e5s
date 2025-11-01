@@ -1,9 +1,10 @@
 spire:
   # Path to SPIRE Agent's Workload API socket
-  workload_socket: unix:///tmp/spire-agent/public/api.sock
+  workload_socket: unix:///tmp/spire-agent.sock  # Updated path
 
-  # How long to wait for identity from SPIRE before failing startup
-  initial_fetch_timeout: 30s
+  # (Optional) How long to wait for identity from SPIRE before failing startup
+  # If not set, defaults to 30s
+  # initial_fetch_timeout: 30s
 
 server:
   listen_addr: ":8443"

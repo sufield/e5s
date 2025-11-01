@@ -1,0 +1,11 @@
+FROM golang:1.23-alpine AS builder
+WORKDIR /build
+COPY go.mod go.sum ./
+COPY server/ ./server/
+# Copy parent directory (e5s source code) into the build
+COPY ../ /e5s/
+RUN go build -o server ./server
+
+FROM alpine:latest
+COPY --from=builder /build/server /app/server
+ENTRYPOINT ["/app/server"]

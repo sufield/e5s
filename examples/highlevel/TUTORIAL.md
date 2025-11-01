@@ -175,9 +175,8 @@ spire:
   workload_socket: unix:///tmp/spire-agent/public/api.sock
 
   # (Optional) How long to wait for identity from SPIRE before failing startup
-  # Format: Go duration (e.g. "5s", "30s", "1m")
-  # Default: 30s if not specified
-  initial_fetch_timeout: 30s
+  # If not set, defaults to 30s
+  # initial_fetch_timeout: 30s
 
 server:
   listen_addr: ":8443"
@@ -309,7 +308,10 @@ Temporarily modify `e5s.yaml` to use the port-forwarded socket:
 ```yaml
 spire:
   workload_socket: unix:///tmp/spire-agent.sock
-  initial_fetch_timeout: 30s
+
+  # (Optional) How long to wait for identity from SPIRE before failing startup
+  # If not set, defaults to 30s
+  # initial_fetch_timeout: 30s
 
 server:
   listen_addr: ":8443"

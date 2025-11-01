@@ -1,6 +1,6 @@
 module github.com/sufield/e5s
 
-go 1.25.1
+go 1.25.3
 
 require (
 	github.com/spiffe/go-spiffe/v2 v2.6.0 // pkg/spire adapter
