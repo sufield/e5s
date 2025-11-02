@@ -28,7 +28,7 @@ Use this guide when you:
    - SPIRE Server and Agent installed via Helm
    - Server and client workloads registered
 
-   SPIRE_SETUP.md uses Helm to install SPIRE infrastructure. This guide deploys test applications using kubectl directly without using Helm.
+   The setup uses Helm to install SPIRE infrastructure. This guide deploys test applications using kubectl directly without using Helm.
 
 2. **Required Tools**:
    - **Docker** - For building container images
@@ -36,7 +36,7 @@ Use this guide when you:
    - **kubectl** - For deploying applications (installed via SPIRE_SETUP.md)
    - **Helm** - For SPIRE installation only (installed via SPIRE_SETUP.md)
 
-    Verify tools are installed
+  Verify tools are installed
 
    ```bash 
    docker --version
@@ -52,11 +52,14 @@ Use this guide when you:
    ```
 
 4. **Local e5s Code**: You should be in the e5s project directory
+
+   Verify you're in the right place
+
    ```bash
-   # Verify you're in the right place
    ls -la e5s.go pkg/ examples/
-   # Should show the e5s library source code
    ```
+
+   Should show the e5s library source code
 
 ---
 
@@ -94,13 +97,14 @@ go get github.com/go-chi/chi/v5
 go get github.com/sufield/e5s
 ```
 
-**Verify your `go.mod`:**
+**Verify `go.mod`:**
 
 ```bash
 cat go.mod
 ```
 
-**Your `go.mod` should look like:**
+It should look like:
+
 ```
 module test-demo
 
@@ -303,7 +307,11 @@ data:
     client:
       expected_server_trust_domain: "example.org"
 EOF
+```
 
+Create k8s ConfigMap containing e5s configuration that gets mounted into server and client pods.
+
+```bash
 kubectl apply -f k8s-e5s-config.yaml
 ```
 
@@ -313,27 +321,35 @@ kubectl apply -f k8s-e5s-config.yaml
 
 ### Build Static Binaries
 
+This is required for Alpine containers.
+
 ```bash
-# Build static binaries (required for Alpine containers)
 CGO_ENABLED=0 go build -o bin/server ./server
 CGO_ENABLED=0 go build -o bin/client ./client
 ```
 
 ### Build Docker Images in Minikube
 
-```bash
-# Point Docker to Minikube's Docker daemon
-eval $(minikube docker-env)
+Point Docker to Minikube's Docker daemon:
 
-# Build server image
+```bash 
+eval $(minikube docker-env)
+```
+
+Build server image:
+
+```bash
 docker build -t e5s-server:dev -f - . <<'EOF'
 FROM alpine:latest
 WORKDIR /app
 COPY bin/server .
 ENTRYPOINT ["/app/server"]
 EOF
+```
 
-# Build client image
+Build client image:
+
+```bash
 docker build -t e5s-client:dev -f - . <<'EOF'
 FROM alpine:latest
 WORKDIR /app
@@ -395,10 +411,17 @@ spec:
     port: 8443
     targetPort: 8443
 EOF
+```
 
+Deploy the e5s server Deployment and Service to Kubernetes to run the server pod with SPIRE integration.
+
+```bash
 kubectl apply -f k8s-server.yaml
+```
 
-# Wait for server to be ready
+Wait for server to be ready
+
+```bash
 kubectl wait --for=condition=ready pod -l app=e5s-server -n default --timeout=60s
 ```
 
@@ -443,11 +466,23 @@ spec:
         configMap:
           name: e5s-config
 EOF
+```
 
+Run the test client:
+
+```
 kubectl apply -f k8s-client-job.yaml
+```
 
-# Wait a few seconds and check logs
+Wait a few seconds:
+
+```
 sleep 10
+```
+
+Check logs:
+
+```
 kubectl logs -l app=e5s-client
 ```
 
@@ -477,44 +512,65 @@ Server time: 2025-01-15T10:15:24Z
 
 Now you can quickly test e5s library changes:
 
-### Workflow
+### Steps
+
+Make changes to e5s library code
 
 ```bash
-# 1. Make changes to e5s library code
 cd ..  # Go to e5s project root
 vim e5s.go  # Edit any e5s files
+```
 
-# 2. Return to test-demo and rebuild binaries
+Return to test-demo and rebuild binaries
+
+```bash
 cd test-demo
 CGO_ENABLED=0 go build -o bin/server ./server
 CGO_ENABLED=0 go build -o bin/client ./client
+```
 
-# 3. Point to Minikube's Docker daemon
+Point to Minikube's Docker daemon
+
+```bash
 eval $(minikube docker-env)
+```
 
-# 4. Remove old Docker images to force clean rebuild
+Remove old Docker images to force clean rebuild
+
+```bash
 docker rmi e5s-server:dev e5s-client:dev 2>/dev/null || true
+```
 
-# 5. Rebuild Docker images with updated binaries
+Rebuild Docker images with updated binaries
+
+```bash
 docker build -t e5s-server:dev -f - . <<'EOF'
 FROM alpine:latest
 WORKDIR /app
 COPY bin/server .
 ENTRYPOINT ["/app/server"]
 EOF
+```
 
+```bash
 docker build -t e5s-client:dev -f - . <<'EOF'
 FROM alpine:latest
 WORKDIR /app
 COPY bin/client .
 ENTRYPOINT ["/app/client"]
 EOF
+```
 
-# 6. Force server pods to restart with new image
+Force server pods to restart with new image
+
+```bash
 kubectl delete pods -l app=e5s-server
 kubectl wait --for=condition=ready pod -l app=e5s-server --timeout=60s
+```
 
-# 7. Test with client using new image
+Test with client using new image
+
+```bash
 kubectl delete job e5s-client 2>/dev/null || true
 kubectl apply -f k8s-client-job.yaml
 sleep 10
@@ -535,7 +591,7 @@ kubectl logs -l app=e5s-client
 - Deleting old images forces a complete rebuild
 - Deleting pods forces Kubernetes to load the freshly built images
 
-This workflow lets you test local e5s changes in a real Kubernetes environment before release.
+These steps test local e5s changes in a real Kubernetes environment before release.
 
 ---
 
@@ -543,11 +599,15 @@ This workflow lets you test local e5s changes in a real Kubernetes environment b
 
 Check that your server and client are using proper mTLS with SPIRE identities:
 
-```bash
-# Check client logs - should show successful response
-kubectl logs -l app=e5s-client
+Check client logs - should show successful response
 
-# Check server logs - should show authenticated request
+```bash
+kubectl logs -l app=e5s-client
+```
+
+Check server logs - should show authenticated request
+
+```bash
 kubectl logs -l app=e5s-server
 ```
 
@@ -914,25 +974,33 @@ openssl s_client -connect localhost:8443 -showcerts
 
 ## Clean Up
 
-When you're done testing:
+After testing, delete Kubernetes resources.
 
-```bash
-# 1. Delete Kubernetes resources
+```bash 
 kubectl delete deployment e5s-server
 kubectl delete service e5s-server
 kubectl delete job e5s-client
 kubectl delete configmap e5s-config
+```
 
-# 2. Clean up test directory files
+Clean up test directory files.
+
+```bash
 cd test-demo
 rm -rf bin/
 rm -f k8s-*.yaml
+```
 
-# 3. (Optional) Remove entire test directory
+Remove entire test directory (Optional)
+
+```bash
 cd ..
 rm -rf test-demo
+```
 
-# 4. Clean up Docker images from Minikube
+Clean up Docker images from Minikube
+
+```bash
 eval $(minikube docker-env)
 docker rmi e5s-server:dev e5s-client:dev
 ```
