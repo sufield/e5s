@@ -7,11 +7,7 @@
 **Time Required**:
 - **Manual Setup**: ~20 minutes (step-by-step)
 
----
-
-## Manual Setup (Optional)
-
-**If you prefer step-by-step control or need to understand the process:**
+If you prefer step-by-step control or need to understand the process:
 
 ---
 
@@ -32,7 +28,7 @@ Use this guide when you:
    - SPIRE Server and Agent installed via Helm
    - Server and client workloads registered
 
-   SPIRE_SETUP.md uses Helm to install SPIRE infrastructure. This guide deploys test applications using kubectl directly (not Helm).
+   SPIRE_SETUP.md uses Helm to install SPIRE infrastructure. This guide deploys test applications using kubectl directly without using Helm.
 
 2. **Required Tools**:
    - **Docker** - For building container images
@@ -40,8 +36,9 @@ Use this guide when you:
    - **kubectl** - For deploying applications (installed via SPIRE_SETUP.md)
    - **Helm** - For SPIRE installation only (installed via SPIRE_SETUP.md)
 
-   ```bash
-   # Verify tools are installed
+    Verify tools are installed
+
+   ```bash 
    docker --version
    minikube version
    kubectl version --client
@@ -134,14 +131,18 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/sufield/e5s"
 )
 
 func main() {
+	log.Println("Starting e5s mTLS server...")
+
 	// Create HTTP router
 	r := chi.NewRouter()
 
@@ -152,7 +153,7 @@ func main() {
 	})
 
 	// Authenticated endpoint that requires mTLS
-	r.Get("/hello", func(w http.ResponseWriter, req *http.Request) {
+	r.Post("/hello", func(w http.ResponseWriter, req *http.Request) {
 		// Extract peer identity from mTLS connection
 		id, ok := e5s.PeerID(req)
 		if !ok {
@@ -161,9 +162,25 @@ func main() {
 			return
 		}
 		log.Printf("✓ Authenticated request from: %s", id)
-		fmt.Fprintf(w, "Hello, %s!\n", id)
+
+		// Read message from client
+		body, err := io.ReadAll(req.Body)
+		if err != nil {
+			log.Printf("❌ Error reading request body: %v", err)
+			http.Error(w, "error reading body", http.StatusBadRequest)
+			return
+		}
+		clientMessage := string(body)
+		log.Printf("← Received message from client: %s", clientMessage)
+
+		// Create response with timestamp
+		timestamp := time.Now().Format(time.RFC3339)
+		response := fmt.Sprintf("Server received the message from client at %s: %s", timestamp, clientMessage)
+		log.Printf("→ Sending response: %s", response)
+		fmt.Fprintf(w, "%s\n", response)
 	})
 
+	log.Println("Server configured, initializing mTLS with SPIRE...")
 	// Run mTLS server (uses local e5s code)
 	e5s.Run(r)
 }
@@ -179,6 +196,7 @@ Create `client/main.go`:
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"log"
@@ -188,6 +206,8 @@ import (
 )
 
 func main() {
+	log.Println("Starting e5s mTLS client...")
+
 	// Get server URL from environment variable, default to localhost
 	// This allows the client to work both locally and in Kubernetes
 	serverURL := os.Getenv("SERVER_URL")
@@ -195,16 +215,25 @@ func main() {
 		serverURL = "https://localhost:8443/hello"
 	}
 
-	// Perform mTLS GET request (uses local e5s code)
-	resp, err := e5s.Get(serverURL)
+	// Message to send to server
+	message := "Hello from client"
+	log.Printf("→ Connecting to server: %s", serverURL)
+	log.Printf("→ Sending message: %s", message)
+	log.Println("→ Initializing SPIRE client and fetching SPIFFE identity...")
+
+	// Perform mTLS POST request with message body (uses local e5s code)
+	resp, err := e5s.Post(serverURL, "text/plain", bytes.NewBufferString(message))
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("❌ Request failed: %v", err)
 	}
 	defer resp.Body.Close()
 
+	log.Printf("✓ Received response: HTTP %d %s", resp.StatusCode, resp.Status)
+
 	// Read and print response
 	body, _ := io.ReadAll(resp.Body)
-	fmt.Println(string(body))
+	log.Printf("← Server response: %s", string(body))
+	fmt.Print(string(body))
 }
 ```
 
@@ -437,12 +466,27 @@ sleep 10
 kubectl logs -l app=e5s-client
 ```
 
-**Expected output**:
+**Expected client output**:
 ```
-Hello, spiffe://example.org/ns/default/sa/default!
+2025/01/15 10:15:23 Starting e5s mTLS client...
+2025/01/15 10:15:23 → Connecting to server: https://e5s-server:8443/hello
+2025/01/15 10:15:23 → Sending message: Hello from client
+2025/01/15 10:15:23 → Initializing SPIRE client and fetching SPIFFE identity...
+2025/01/15 10:15:24 ✓ Received response: HTTP 200 OK
+2025/01/15 10:15:24 ← Server response: Server received the message from client at 2025-01-15T10:15:24Z: Hello from client
+Server received the message from client at 2025-01-15T10:15:24Z: Hello from client
 ```
 
-**Success!** Your local e5s code is working in Kubernetes with SPIRE.
+**Expected server logs**:
+```
+2025/01/15 10:15:23 Starting e5s mTLS server...
+2025/01/15 10:15:23 Server configured, initializing mTLS with SPIRE...
+2025/01/15 10:15:24 ✓ Authenticated request from: spiffe://example.org/ns/default/sa/default
+2025/01/15 10:15:24 ← Received message from client: Hello from client
+2025/01/15 10:15:24 → Sending response: Server received the message from client at 2025-01-15T10:15:24Z: Hello from client
+```
+
+**Success!** Your local e5s code is working in Kubernetes with SPIRE. The logs clearly show the complete request/response flow with mTLS authentication, including the client's message and server's timestamped response.
 
 ---
 
@@ -505,23 +549,38 @@ This workflow lets you test local e5s changes in a real Kubernetes environment b
 Check that your server and client are using proper mTLS with SPIRE identities:
 
 ```bash
-# Check server logs
-kubectl logs -l app=e5s-server
-
 # Check client logs - should show successful response
 kubectl logs -l app=e5s-client
+
+# Check server logs - should show authenticated request
+kubectl logs -l app=e5s-server
 ```
 
-**Expected client output**:
+**Expected client logs**:
 ```
-Hello, spiffe://example.org/ns/default/sa/default!
+2025/01/15 10:15:23 Starting e5s mTLS client...
+2025/01/15 10:15:23 → Connecting to server: https://e5s-server:8443/hello
+2025/01/15 10:15:23 → Sending message: Hello from client
+2025/01/15 10:15:23 → Initializing SPIRE client and fetching SPIFFE identity...
+2025/01/15 10:15:24 ✓ Received response: HTTP 200 OK
+2025/01/15 10:15:24 ← Server response: Server received the message from client at 2025-01-15T10:15:24Z: Hello from client
+Server received the message from client at 2025-01-15T10:15:24Z: Hello from client
 ```
 
-The response confirms:
+**Expected server logs**:
+```
+2025/01/15 10:15:24 ✓ Authenticated request from: spiffe://example.org/ns/default/sa/default
+2025/01/15 10:15:24 ← Received message from client: Hello from client
+2025/01/15 10:15:24 → Sending response: Server received the message from client at 2025-01-15T10:15:24Z: Hello from client
+```
+
+This confirms:
 - ✓ Client successfully obtained SPIFFE identity from SPIRE
-- ✓ Client authenticated to server using mTLS
-- ✓ Server verified client's certificate
-- ✓ Server extracted and returned client's SPIFFE ID
+- ✓ Client sent POST request with message "Hello from client" using mTLS
+- ✓ Server verified client's certificate during TLS handshake
+- ✓ Server received and logged the client's message
+- ✓ Server responded with timestamp and echoed message
+- ✓ Complete request/response flow is visible in the logs
 
 **View SPIRE server logs to see certificate issuance:**
 
@@ -533,7 +592,190 @@ This confirms your local e5s code properly implements zero-trust mTLS with SPIRE
 
 ---
 
-## Step 11: Debug and Monitoring
+## Step 11: Zero-Trust Security Demonstration
+
+This section demonstrates that **only workloads with SPIRE identities can communicate**. We'll test both scenarios:
+1. ✅ **Authenticated client** (has SPIRE identity) - succeeds
+2. ❌ **Unregistered client** (no SPIRE identity) - fails
+
+### Create Unregistered Client Job
+
+An unregistered client is one that:
+- **HAS access to the SPIRE Workload API socket** (same infrastructure access)
+- **NOT registered in SPIRE control plane** (no workload registration entry)
+- Cannot obtain a SPIFFE identity (SPIRE refuses to issue one)
+- Cannot perform mTLS handshake
+- Will be rejected even though it uses the e5s library and has socket access
+
+```bash
+cat > k8s-unregistered-client-job.yaml <<'EOF'
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: e5s-unregistered-client
+  namespace: default
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: e5s-unregistered-client
+    spec:
+      serviceAccountName: default
+      restartPolicy: Never
+      containers:
+      - name: client
+        image: e5s-client:dev
+        imagePullPolicy: Never
+        env:
+        - name: SERVER_URL
+          value: "https://e5s-server:8443/hello"
+        command: ["/app/client"]
+        volumeMounts:
+        - name: spire-agent-socket
+          mountPath: /spire/agent-socket
+          readOnly: true
+        - name: config
+          mountPath: /app/e5s.yaml
+          subPath: e5s.yaml
+      volumes:
+      - name: spire-agent-socket
+        csi:
+          driver: "csi.spiffe.io"
+          readOnly: true
+      - name: config
+        configMap:
+          name: e5s-config
+EOF
+```
+
+**Difference**: This client has the SPIRE socket mounted and can communicate with the SPIRE Agent, but it's not registered in the SPIRE control plane. SPIRE will refuse to issue it a SPIFFE identity.
+
+### Run Both Tests
+
+```bash
+# Clean up any previous jobs
+kubectl delete job e5s-client e5s-unregistered-client 2>/dev/null
+sleep 2
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "TEST 1: Authenticated Client (HAS SPIRE identity)"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+# Deploy authenticated client
+kubectl apply -f k8s-client-job.yaml
+echo "Waiting for authenticated client..."
+sleep 10
+
+echo "Client Output:"
+kubectl logs -l app=e5s-client
+echo ""
+
+echo "Server Logs (authenticated request):"
+kubectl logs -l app=e5s-server --tail=3 | grep "Authenticated"
+echo ""
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "TEST 2: Unregistered Client (NO SPIRE identity)"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+# Deploy unregistered client
+kubectl apply -f k8s-unregistered-client-job.yaml
+echo "Waiting for unregistered client to fail..."
+sleep 30
+
+echo "Unregistered Client Output (will fail):"
+kubectl logs -l app=e5s-unregistered-client 2>&1
+echo ""
+```
+
+### Expected Results
+
+**Test 1: Authenticated Client (SUCCESS)** ✅
+
+```
+Client Logs:
+2025/01/15 10:20:15 Starting e5s mTLS client...
+2025/01/15 10:20:15 → Connecting to server: https://e5s-server:8443/hello
+2025/01/15 10:20:15 → Sending message: Hello from client
+2025/01/15 10:20:15 → Initializing SPIRE client and fetching SPIFFE identity...
+2025/01/15 10:20:16 ✓ Received response: HTTP 200 OK
+2025/01/15 10:20:16 ← Server response: Server received the message from client at 2025-01-15T10:20:16Z: Hello from client
+Server received the message from client at 2025-01-15T10:20:16Z: Hello from client
+
+Server Logs:
+2025/01/15 10:20:16 ✓ Authenticated request from: spiffe://example.org/ns/default/sa/default
+2025/01/15 10:20:16 ← Received message from client: Hello from client
+2025/01/15 10:20:16 → Sending response: Server received the message from client at 2025-01-15T10:20:16Z: Hello from client
+```
+
+**What happened:**
+1. Client connected to SPIRE Workload API via CSI volume
+2. SPIRE issued a SPIFFE identity: `spiffe://example.org/ns/default/sa/default`
+3. Client sent `POST /hello` request with message "Hello from client" using mTLS
+4. Server verified client's certificate during TLS handshake
+5. Server received and logged the client's message
+6. Server responded with timestamp and echoed message
+7. Client received and printed the response
+8. **All communication steps are visible in the logs with timestamps**
+
+**Test 2: Unregistered Client (FAILURE)** ❌
+
+```
+Client Logs:
+2025/01/15 10:20:45 Starting e5s mTLS client...
+2025/01/15 10:20:45 → Connecting to server: https://e5s-server:8443/hello
+2025/01/15 10:20:45 → Sending message: Hello from client
+2025/01/15 10:20:45 → Initializing SPIRE client and fetching SPIFFE identity...
+2025/01/15 10:21:15 ❌ Request failed: error fetching X.509 SVID: initial_fetch_timeout expired
+
+Server Logs:
+(no logs - server never received request or message)
+```
+
+**What happened:**
+1. Client attempted to initialize e5s library
+2. Client prepared to send "Hello from client" message
+3. Client connected to SPIRE Workload API socket successfully
+4. Client requested a SPIFFE identity from SPIRE
+5. **SPIRE refused** - this workload has no registration entry in the control plane
+6. Client waited for identity for 30 seconds (default initial_fetch_timeout)
+7. Client timed out and failed with error
+8. **Client failed during startup** - never obtained certificate, never sent HTTP request
+9. Server never receives the "Hello from client" message
+10. **Zero-trust enforced: message never transmitted without valid identity**
+
+### Security Analysis
+
+This demonstrates **zero-trust mTLS security**:
+
+| Component | Authenticated Client | Unregistered Client |
+|-----------|---------------------|---------------------|
+| SPIRE Socket | ✅ Mounted via CSI | ✅ Mounted via CSI |
+| SPIRE Registration | ✅ Registered | ❌ Not registered |
+| SPIFFE Identity | ✅ Obtained | ❌ SPIRE refused |
+| mTLS Handshake | ✅ Successful | ❌ Cannot initiate |
+| Server Communication | ✅ Allowed | ❌ Blocked |
+
+**Key Insights:**
+
+1. **Registration Required**: Even with socket access, workloads must be registered in SPIRE to get identities
+2. **Control Plane Authorization**: SPIRE control plane enforces which workloads can obtain identities
+3. **No Bypass**: Both clients have identical infrastructure access and code, but only registered clients work
+4. **Defense in Depth**: Network access + code + configuration isn't enough - explicit registration required
+5. **Zero-Trust**: Trust is based on cryptographic identity issued by SPIRE, not infrastructure access
+
+### Clean Up Test Jobs
+
+```bash
+kubectl delete job e5s-client e5s-unregistered-client
+```
+
+---
+
+## Step 12: Debug and Monitoring
 
 ### Check Pod Status
 
@@ -655,7 +897,7 @@ kubectl logs -n spire -l app.kubernetes.io/name=server -c spire-server --follow
 If you modify `pkg/spiffehttp/`:
 
 ```bash
-# 1. Rebuild and redeploy (see Step 10 workflow)
+# 1. Rebuild and redeploy (see Step 9 workflow)
 
 # 2. Use port-forward to inspect TLS from local machine
 kubectl port-forward svc/e5s-server 8443:8443
@@ -774,6 +1016,7 @@ You've successfully:
 - Built static binaries and containerized them for Kubernetes
 - Deployed and tested mTLS applications with local e5s code in Kubernetes
 - Verified mTLS authentication works correctly with SPIRE
+- Demonstrated zero-trust security by testing both authenticated and unregistered clients
 - Learned how to iterate quickly on library changes using the Kubernetes workflow
 
 **Notes**:
