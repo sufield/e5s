@@ -131,7 +131,6 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"time"
@@ -152,8 +151,8 @@ func main() {
 		w.Write([]byte("ok"))
 	})
 
-	// Authenticated endpoint that requires mTLS
-	r.Post("/hello", func(w http.ResponseWriter, req *http.Request) {
+	// Authenticated endpoint that returns server time
+	r.Get("/time", func(w http.ResponseWriter, req *http.Request) {
 		// Extract peer identity from mTLS connection
 		id, ok := e5s.PeerID(req)
 		if !ok {
@@ -163,19 +162,9 @@ func main() {
 		}
 		log.Printf("✓ Authenticated request from: %s", id)
 
-		// Read message from client
-		body, err := io.ReadAll(req.Body)
-		if err != nil {
-			log.Printf("❌ Error reading request body: %v", err)
-			http.Error(w, "error reading body", http.StatusBadRequest)
-			return
-		}
-		clientMessage := string(body)
-		log.Printf("← Received message from client: %s", clientMessage)
-
-		// Create response with timestamp
-		timestamp := time.Now().Format(time.RFC3339)
-		response := fmt.Sprintf("Server received the message from client at %s: %s", timestamp, clientMessage)
+		// Get current server time
+		serverTime := time.Now().Format(time.RFC3339)
+		response := fmt.Sprintf("Server time: %s", serverTime)
 		log.Printf("→ Sending response: %s", response)
 		fmt.Fprintf(w, "%s\n", response)
 	})
@@ -196,7 +185,6 @@ Create `client/main.go`:
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"log"
@@ -212,17 +200,14 @@ func main() {
 	// This allows the client to work both locally and in Kubernetes
 	serverURL := os.Getenv("SERVER_URL")
 	if serverURL == "" {
-		serverURL = "https://localhost:8443/hello"
+		serverURL = "https://localhost:8443/time"
 	}
 
-	// Message to send to server
-	message := "Hello from client"
-	log.Printf("→ Connecting to server: %s", serverURL)
-	log.Printf("→ Sending message: %s", message)
+	log.Printf("→ Requesting server time from: %s", serverURL)
 	log.Println("→ Initializing SPIRE client and fetching SPIFFE identity...")
 
-	// Perform mTLS POST request with message body (uses local e5s code)
-	resp, err := e5s.Post(serverURL, "text/plain", bytes.NewBufferString(message))
+	// Perform mTLS GET request (uses local e5s code)
+	resp, err := e5s.Get(serverURL)
 	if err != nil {
 		log.Fatalf("❌ Request failed: %v", err)
 	}
@@ -237,7 +222,7 @@ func main() {
 }
 ```
 
-We include environment variable support from the start because we'll deploy to Kubernetes where the client needs to connect to a service name (e.g., `https://e5s-server:8443/hello`) instead of localhost.
+We include environment variable support from the start because we'll deploy to Kubernetes where the client needs to connect to a service name (e.g., `https://e5s-server:8443/time`) instead of localhost.
 
 ---
 
@@ -440,7 +425,7 @@ spec:
         imagePullPolicy: Never
         env:
         - name: SERVER_URL
-          value: "https://e5s-server:8443/hello"
+          value: "https://e5s-server:8443/time"
         command: ["/app/client"]
         volumeMounts:
         - name: spire-agent-socket
@@ -469,12 +454,11 @@ kubectl logs -l app=e5s-client
 **Expected client output**:
 ```
 2025/01/15 10:15:23 Starting e5s mTLS client...
-2025/01/15 10:15:23 → Connecting to server: https://e5s-server:8443/hello
-2025/01/15 10:15:23 → Sending message: Hello from client
+2025/01/15 10:15:23 → Requesting server time from: https://e5s-server:8443/time
 2025/01/15 10:15:23 → Initializing SPIRE client and fetching SPIFFE identity...
 2025/01/15 10:15:24 ✓ Received response: HTTP 200 OK
-2025/01/15 10:15:24 ← Server response: Server received the message from client at 2025-01-15T10:15:24Z: Hello from client
-Server received the message from client at 2025-01-15T10:15:24Z: Hello from client
+2025/01/15 10:15:24 ← Server response: Server time: 2025-01-15T10:15:24Z
+Server time: 2025-01-15T10:15:24Z
 ```
 
 **Expected server logs**:
@@ -482,11 +466,10 @@ Server received the message from client at 2025-01-15T10:15:24Z: Hello from clie
 2025/01/15 10:15:23 Starting e5s mTLS server...
 2025/01/15 10:15:23 Server configured, initializing mTLS with SPIRE...
 2025/01/15 10:15:24 ✓ Authenticated request from: spiffe://example.org/ns/default/sa/default
-2025/01/15 10:15:24 ← Received message from client: Hello from client
-2025/01/15 10:15:24 → Sending response: Server received the message from client at 2025-01-15T10:15:24Z: Hello from client
+2025/01/15 10:15:24 → Sending response: Server time: 2025-01-15T10:15:24Z
 ```
 
-**Success!** Your local e5s code is working in Kubernetes with SPIRE. The logs clearly show the complete request/response flow with mTLS authentication, including the client's message and server's timestamped response.
+**Success!** Your local e5s code is working in Kubernetes with SPIRE. The client requested the server time using mTLS, and the server responded with its current time.
 
 ---
 
@@ -506,9 +489,13 @@ cd test-demo
 CGO_ENABLED=0 go build -o bin/server ./server
 CGO_ENABLED=0 go build -o bin/client ./client
 
-# 3. Rebuild Docker images
+# 3. Point to Minikube's Docker daemon
 eval $(minikube docker-env)
 
+# 4. Remove old Docker images to force clean rebuild
+docker rmi e5s-server:dev e5s-client:dev 2>/dev/null || true
+
+# 5. Rebuild Docker images with updated binaries
 docker build -t e5s-server:dev -f - . <<'EOF'
 FROM alpine:latest
 WORKDIR /app
@@ -523,11 +510,12 @@ COPY bin/client .
 ENTRYPOINT ["/app/client"]
 EOF
 
-# 4. Restart server deployment
-kubectl rollout restart deployment/e5s-server
+# 6. Force server pods to restart with new image
+kubectl delete pods -l app=e5s-server
+kubectl wait --for=condition=ready pod -l app=e5s-server --timeout=60s
 
-# 5. Test with client
-kubectl delete job e5s-client
+# 7. Test with client using new image
+kubectl delete job e5s-client 2>/dev/null || true
 kubectl apply -f k8s-client-job.yaml
 sleep 10
 kubectl logs -l app=e5s-client
@@ -535,10 +523,17 @@ kubectl logs -l app=e5s-client
 
 **Summary**:
 1. Make changes to e5s library code
-2. Rebuild binaries and Docker images
-3. Redeploy to Kubernetes
-4. Test immediately
-5. Iterate quickly
+2. Rebuild binaries with updated e5s code
+3. Delete old Docker images to ensure clean rebuild
+4. Rebuild Docker images with new binaries
+5. Force pods to restart and use new images
+6. Test immediately
+
+**Why delete Docker images?**
+- Kubernetes with `imagePullPolicy: Never` uses local Minikube images
+- Rebuilding with same tag doesn't guarantee Kubernetes sees the change
+- Deleting old images forces a complete rebuild
+- Deleting pods forces Kubernetes to load the freshly built images
 
 This workflow lets you test local e5s changes in a real Kubernetes environment before release.
 
@@ -559,27 +554,24 @@ kubectl logs -l app=e5s-server
 **Expected client logs**:
 ```
 2025/01/15 10:15:23 Starting e5s mTLS client...
-2025/01/15 10:15:23 → Connecting to server: https://e5s-server:8443/hello
-2025/01/15 10:15:23 → Sending message: Hello from client
+2025/01/15 10:15:23 → Requesting server time from: https://e5s-server:8443/time
 2025/01/15 10:15:23 → Initializing SPIRE client and fetching SPIFFE identity...
 2025/01/15 10:15:24 ✓ Received response: HTTP 200 OK
-2025/01/15 10:15:24 ← Server response: Server received the message from client at 2025-01-15T10:15:24Z: Hello from client
-Server received the message from client at 2025-01-15T10:15:24Z: Hello from client
+2025/01/15 10:15:24 ← Server response: Server time: 2025-01-15T10:15:24Z
+Server time: 2025-01-15T10:15:24Z
 ```
 
 **Expected server logs**:
 ```
 2025/01/15 10:15:24 ✓ Authenticated request from: spiffe://example.org/ns/default/sa/default
-2025/01/15 10:15:24 ← Received message from client: Hello from client
-2025/01/15 10:15:24 → Sending response: Server received the message from client at 2025-01-15T10:15:24Z: Hello from client
+2025/01/15 10:15:24 → Sending response: Server time: 2025-01-15T10:15:24Z
 ```
 
 This confirms:
 - ✓ Client successfully obtained SPIFFE identity from SPIRE
-- ✓ Client sent POST request with message "Hello from client" using mTLS
+- ✓ Client sent GET request to fetch server time using mTLS
 - ✓ Server verified client's certificate during TLS handshake
-- ✓ Server received and logged the client's message
-- ✓ Server responded with timestamp and echoed message
+- ✓ Server responded with its current time
 - ✓ Complete request/response flow is visible in the logs
 
 **View SPIRE server logs to see certificate issuance:**
@@ -629,7 +621,7 @@ spec:
         imagePullPolicy: Never
         env:
         - name: SERVER_URL
-          value: "https://e5s-server:8443/hello"
+          value: "https://e5s-server:8443/time"
         command: ["/app/client"]
         volumeMounts:
         - name: spire-agent-socket
@@ -698,54 +690,50 @@ echo ""
 ```
 Client Logs:
 2025/01/15 10:20:15 Starting e5s mTLS client...
-2025/01/15 10:20:15 → Connecting to server: https://e5s-server:8443/hello
-2025/01/15 10:20:15 → Sending message: Hello from client
+2025/01/15 10:20:15 → Requesting server time from: https://e5s-server:8443/time
 2025/01/15 10:20:15 → Initializing SPIRE client and fetching SPIFFE identity...
 2025/01/15 10:20:16 ✓ Received response: HTTP 200 OK
-2025/01/15 10:20:16 ← Server response: Server received the message from client at 2025-01-15T10:20:16Z: Hello from client
-Server received the message from client at 2025-01-15T10:20:16Z: Hello from client
+2025/01/15 10:20:16 ← Server response: Server time: 2025-01-15T10:20:16Z
+Server time: 2025-01-15T10:20:16Z
 
 Server Logs:
 2025/01/15 10:20:16 ✓ Authenticated request from: spiffe://example.org/ns/default/sa/default
-2025/01/15 10:20:16 ← Received message from client: Hello from client
-2025/01/15 10:20:16 → Sending response: Server received the message from client at 2025-01-15T10:20:16Z: Hello from client
+2025/01/15 10:20:16 → Sending response: Server time: 2025-01-15T10:20:16Z
 ```
 
 **What happened:**
 1. Client connected to SPIRE Workload API via CSI volume
 2. SPIRE issued a SPIFFE identity: `spiffe://example.org/ns/default/sa/default`
-3. Client sent `POST /hello` request with message "Hello from client" using mTLS
+3. Client sent `GET /time` request using mTLS
 4. Server verified client's certificate during TLS handshake
-5. Server received and logged the client's message
-6. Server responded with timestamp and echoed message
-7. Client received and printed the response
-8. **All communication steps are visible in the logs with timestamps**
+5. Server responded with its current time
+6. Client received and printed the response
+7. **All communication steps are visible in the logs with timestamps**
 
 **Test 2: Unregistered Client (FAILURE)** ❌
 
 ```
 Client Logs:
 2025/01/15 10:20:45 Starting e5s mTLS client...
-2025/01/15 10:20:45 → Connecting to server: https://e5s-server:8443/hello
-2025/01/15 10:20:45 → Sending message: Hello from client
+2025/01/15 10:20:45 → Requesting server time from: https://e5s-server:8443/time
 2025/01/15 10:20:45 → Initializing SPIRE client and fetching SPIFFE identity...
 2025/01/15 10:21:15 ❌ Request failed: error fetching X.509 SVID: initial_fetch_timeout expired
 
 Server Logs:
-(no logs - server never received request or message)
+(no logs - server never received request)
 ```
 
 **What happened:**
 1. Client attempted to initialize e5s library
-2. Client prepared to send "Hello from client" message
+2. Client tried to request server time
 3. Client connected to SPIRE Workload API socket successfully
 4. Client requested a SPIFFE identity from SPIRE
 5. **SPIRE refused** - this workload has no registration entry in the control plane
 6. Client waited for identity for 30 seconds (default initial_fetch_timeout)
 7. Client timed out and failed with error
 8. **Client failed during startup** - never obtained certificate, never sent HTTP request
-9. Server never receives the "Hello from client" message
-10. **Zero-trust enforced: message never transmitted without valid identity**
+9. Server never receives the time request
+10. **Zero-trust enforced: no communication without valid identity**
 
 ### Security Analysis
 
@@ -871,10 +859,15 @@ kubectl logs -l app=e5s-client
 If you modify `pkg/spire/`:
 
 ```bash
-# 1. Rebuild binaries and images
+# 1. Rebuild binaries
 CGO_ENABLED=0 go build -o bin/server ./server
 CGO_ENABLED=0 go build -o bin/client ./client
+
+# 2. Point to Minikube's Docker and clean old images
 eval $(minikube docker-env)
+docker rmi e5s-server:dev e5s-client:dev 2>/dev/null || true
+
+# 3. Rebuild Docker images
 docker build -t e5s-server:dev -f - . <<'EOF'
 FROM alpine:latest
 WORKDIR /app
@@ -882,13 +875,21 @@ COPY bin/server .
 ENTRYPOINT ["/app/server"]
 EOF
 
-# 2. Restart deployment
-kubectl rollout restart deployment/e5s-server
+docker build -t e5s-client:dev -f - . <<'EOF'
+FROM alpine:latest
+WORKDIR /app
+COPY bin/client .
+ENTRYPOINT ["/app/client"]
+EOF
 
-# 3. Watch SPIRE logs while testing
+# 4. Force pods to use new images
+kubectl delete pods -l app=e5s-server
+kubectl wait --for=condition=ready pod -l app=e5s-server --timeout=60s
+
+# 5. Watch SPIRE logs while testing
 kubectl logs -n spire -l app.kubernetes.io/name=server -c spire-server --follow
 
-# 4. Test certificate rotation
+# 6. Test certificate rotation
 # SVIDs rotate every ~30 minutes - server should handle automatically
 ```
 

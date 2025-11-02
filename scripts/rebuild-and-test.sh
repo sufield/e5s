@@ -19,10 +19,13 @@ echo "1. Rebuilding static binaries..."
 CGO_ENABLED=0 go build -o bin/server ./server
 CGO_ENABLED=0 go build -o bin/client ./client
 
-# Step 2: Rebuild Docker images
-echo "2. Rebuilding Docker images..."
+# Step 2: Point to Minikube's Docker and clean old images
+echo "2. Cleaning old Docker images..."
 eval $(minikube docker-env)
+docker rmi e5s-server:dev e5s-client:dev 2>/dev/null || true
 
+# Step 3: Rebuild Docker images
+echo "3. Rebuilding Docker images..."
 docker build -t e5s-server:dev -q -f - . <<'DOCKERFILE'
 FROM alpine:latest
 WORKDIR /app
@@ -37,15 +40,15 @@ COPY bin/client .
 ENTRYPOINT ["/app/client"]
 DOCKERFILE
 
-# Step 3: Restart server deployment
-echo "3. Restarting server deployment..."
-kubectl rollout restart deployment/e5s-server
-kubectl rollout status deployment/e5s-server --timeout=90s
-echo "   ✓ Server restarted successfully"
+# Step 4: Force server pods to restart with new image
+echo "4. Forcing server pods to restart with new image..."
+kubectl delete pods -l app=e5s-server
+kubectl wait --for=condition=ready pod -l app=e5s-server --timeout=90s
+echo "   ✓ Server restarted with new image"
 
-# Step 4: Test with authenticated client
+# Step 5: Test with authenticated client
 echo ""
-echo "4. Testing with authenticated client..."
+echo "5. Testing with authenticated client..."
 kubectl delete job e5s-client 2>/dev/null || true
 
 cat <<'JOBEOF' | kubectl apply -f -
@@ -69,7 +72,7 @@ spec:
         imagePullPolicy: Never
         env:
         - name: SERVER_URL
-          value: "https://e5s-server:8443/hello"
+          value: "https://e5s-server:8443/time"
         command: ["/app/client"]
         volumeMounts:
         - name: spire-agent-socket
@@ -103,9 +106,9 @@ echo ""
 echo "Client logs:"
 kubectl logs -l app=e5s-client --tail=20
 
-# Step 5: Test unregistered client
+# Step 6: Test unregistered client
 echo ""
-echo "5. Testing unregistered client (zero-trust verification)..."
+echo "6. Testing unregistered client (zero-trust verification)..."
 
 kubectl delete job e5s-unregistered-client 2>/dev/null || true
 
@@ -130,14 +133,20 @@ spec:
         imagePullPolicy: Never
         env:
         - name: SERVER_URL
-          value: "https://e5s-server:8443/hello"
+          value: "https://e5s-server:8443/time"
         command: ["/app/client"]
         volumeMounts:
+        - name: spire-agent-socket
+          mountPath: /spire/agent-socket
+          readOnly: true
         - name: config
           mountPath: /app/e5s.yaml
           subPath: e5s.yaml
-        # NOTE: NO SPIRE socket mounted!
       volumes:
+      - name: spire-agent-socket
+        csi:
+          driver: "csi.spiffe.io"
+          readOnly: true
       - name: config
         configMap:
           name: e5s-config
@@ -148,15 +157,15 @@ kubectl wait --for=condition=failed job/e5s-unregistered-client --timeout=60s 2>
     kubectl wait --for=condition=complete job/e5s-unregistered-client --timeout=5s 2>/dev/null || true
 
 echo ""
-echo "❌ Unregistered Client (NO SPIRE identity):"
+echo "❌ Unregistered Client (NOT registered in control plane):"
 echo "---"
-echo "Unregistered client logs (should fail to get identity):"
+echo "Unregistered client logs (SPIRE refuses to issue identity):"
 kubectl logs -l app=e5s-unregistered-client --tail=20 || echo "   (Pod failed before producing logs - expected)"
 
 echo ""
 echo "=== Zero-Trust Verification ==="
-echo "✓ Authenticated client:   SUCCESS (has SPIRE identity)"
-echo "❌ Unregistered client:   FAILED (no SPIRE identity)"
+echo "✓ Authenticated client:   SUCCESS (registered in SPIRE control plane)"
+echo "❌ Unregistered client:   FAILED (not registered, no identity issued)"
 
 echo ""
 echo "=== Rebuild Complete ==="
