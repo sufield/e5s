@@ -1,17 +1,16 @@
 # Quick Start: Pre-Release Testing
 
-**⚡ Fast way to test e5s library changes before publishing**
-
 ---
 
 ## Prerequisites (One-Time Setup)
 
 1. **SPIRE must be running in Minikube**
+   If not already done:
    ```bash
-   # If not already done:
    cd examples/highlevel
-   # Follow SPIRE_SETUP.md (~15 minutes)
    ```
+   
+   Follow [SPIRE_SETUP.md](SPIRE_SETUP.md) to set up SPIRE in Minikube (~15 minutes)
 
 2. **Verify tools are installed**
    ```bash
@@ -23,7 +22,7 @@
 
 ---
 
-## 3-Step Workflow
+## Steps
 
 ### Step 1: Initial Setup (First Time Only)
 
@@ -95,8 +94,6 @@ vim pkg/spiffehttp/server.go
 - `test-prerelease.sh` - Initial setup
 - `rebuild-and-test.sh` - Test after code changes
 - `cleanup-prerelease.sh` - Remove all test resources
-
-**Detailed docs**: See `examples/highlevel/TESTING_PRERELEASE.md` for manual step-by-step instructions
 
 ---
 

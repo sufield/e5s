@@ -5,43 +5,13 @@
 **Purpose**: Test local e5s code changes in a realistic environment before releasing to end users.
 
 **Time Required**:
-- **Quick Start**: ~5 minutes (automated)
 - **Manual Setup**: ~20 minutes (step-by-step)
 
 ---
 
-## 🚀 Quick Start (Recommended)
-
-**For fast testing with minimal steps:**
-
-```bash
-# 1. Ensure SPIRE is running (one-time setup)
-#    Follow SPIRE_SETUP.md if not already done
-
-# 2. Run automated setup (from project root)
-./scripts/test-prerelease.sh
-
-# 3. After making code changes, rebuild and test
-./scripts/rebuild-and-test.sh
-
-# 4. Clean up when done
-./scripts/cleanup-prerelease.sh
-```
-
-**That's it!** The scripts handle all the setup, building, and deployment automatically.
-
-**What the scripts do:**
-- `test-prerelease.sh` - Creates test apps, builds binaries, builds Docker images, deploys to Kubernetes
-- `rebuild-and-test.sh` - Rebuilds after code changes, redeploys, and shows test results
-- `cleanup-prerelease.sh` - Removes all test resources
-
----
-
-## 📖 Manual Setup (Optional)
+## Manual Setup (Optional)
 
 **If you prefer step-by-step control or need to understand the process:**
-
-Continue reading below for detailed manual instructions.
 
 ---
 
@@ -53,20 +23,16 @@ Use this guide when you:
 - Want to validate bug fixes in a real environment
 - Are testing the tutorial steps before publishing
 
-**For end users**: See [TUTORIAL.md](TUTORIAL.md) instead - this guide is for internal testing only.
-
 ---
 
 ## Prerequisites
-
-Before starting, you must have:
 
 1. **SPIRE Infrastructure Running**: Follow [SPIRE_SETUP.md](SPIRE_SETUP.md) to set up SPIRE in Minikube (~15 minutes)
    - Minikube cluster running
    - SPIRE Server and Agent installed via Helm
    - Server and client workloads registered
 
-   **Note**: SPIRE_SETUP.md uses Helm to install SPIRE infrastructure. This guide deploys test applications using kubectl directly (not Helm).
+   SPIRE_SETUP.md uses Helm to install SPIRE infrastructure. This guide deploys test applications using kubectl directly (not Helm).
 
 2. **Required Tools**:
    - **Docker** - For building container images
@@ -156,8 +122,6 @@ replace github.com/sufield/e5s => ..
 - Any `import "github.com/sufield/e5s"` in your code will use your local e5s code
 - You can modify e5s code and immediately see changes in your test application
 - Perfect for iterating on library changes
-
-You don't need to run `go mod tidy` until after you create the source files in Steps 3 and 4.
 
 ---
 
@@ -532,7 +496,7 @@ kubectl logs -l app=e5s-client
 4. Test immediately
 5. Iterate quickly
 
-This workflow lets you test local e5s changes in a real Kubernetes environment before publishing!
+This workflow lets you test local e5s changes in a real Kubernetes environment before release.
 
 ---
 
@@ -734,9 +698,9 @@ docker rmi e5s-server:dev e5s-client:dev
 
 ---
 
-## Publishing Checklist
+## Release Checklist
 
-Before publishing a new version of e5s:
+Before releasing a new version of e5s:
 
 - [ ] All tests pass: `make test`
 - [ ] Security checks pass: `make sec-all`
@@ -748,9 +712,9 @@ Before publishing a new version of e5s:
 - [ ] Git tag created
 - [ ] Published to GitHub
 
-After publishing, verify:
+After release, verify:
 
-- [ ] Tutorial works with published version: `go get github.com/sufield/e5s@latest`
+- [ ] Tutorial works with released version: `go get github.com/sufield/e5s@latest`
 - [ ] Examples work for end users
 
 ---
@@ -812,11 +776,11 @@ You've successfully:
 - Verified mTLS authentication works correctly with SPIRE
 - Learned how to iterate quickly on library changes using the Kubernetes workflow
 
-**Key Takeaways**:
+**Notes**:
 - The `replace` directive lets you test library changes locally before publishing
 - SPIRE Workload API is only accessible inside Kubernetes pods, requiring containerized deployment
 - The Kubernetes workflow ensures you test in a realistic environment matching production use
 - **Helm** is used only for SPIRE infrastructure installation (prerequisite step)
 - **kubectl** is used directly to deploy and test your applications (no Helm charts needed)
 
-**Next Step**: Once testing is complete, follow the publishing checklist above to release a new version.
+**Next Step**: Once testing is complete, follow the release checklist above to release a new version.
