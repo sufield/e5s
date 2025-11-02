@@ -82,10 +82,10 @@ Before starting, you must have:
    helm version
    ```
 
-3. **Go** - Programming language (1.21 or higher)
+3. **Go** - Programming language (1.25.3 or higher)
    ```bash
    go version
-   # Should output: go version go1.21.0 or higher
+   # Should output: go version go1.25.3 or higher
    ```
 
 4. **Local e5s Code**: You should be in the e5s project directory

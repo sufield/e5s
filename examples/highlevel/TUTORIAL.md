@@ -21,10 +21,10 @@ Before starting this tutorial, you must have:
    - SPIRE Server and Agent installed
    - Server and client workloads registered
 
-2. **Go** - Programming language (1.21 or higher)
+2. **Go** - Programming language (1.25 or higher)
    ```bash
    go version
-   # Should output: go version go1.21.0 or higher
+   # Should output: go version go1.25.0 or higher
    ```
 
 **If you haven't set up SPIRE yet**, stop here and follow [SPIRE_SETUP.md](SPIRE_SETUP.md) first. The examples in this tutorial require a running SPIRE infrastructure to obtain certificates.
@@ -62,7 +62,7 @@ Your `go.mod` should look like:
 ```
 module mtls-demo
 
-go 1.21
+go 1.25
 
 require (
     github.com/go-chi/chi/v5 v5.2.3
@@ -218,7 +218,7 @@ metadata:
 spec:
   containers:
   - name: server
-    image: golang:1.21
+    image: golang:1.25
     command: ["/app/bin/server"]
     volumeMounts:
     - name: app
@@ -262,7 +262,7 @@ spec:
       restartPolicy: Never
       containers:
       - name: client
-        image: golang:1.21
+        image: golang:1.25
         command: ["/app/bin/client"]
         volumeMounts:
         - name: app
