@@ -1,23 +1,27 @@
+{{- if .Values.client.enabled }}
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: e5s-client
-  namespace: default
+  name: {{ .Values.client.name }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ .Values.client.name }}
 spec:
+  backoffLimit: 0
   template:
     metadata:
       labels:
-        app: e5s-client
+        app: {{ .Values.client.name }}
     spec:
-      serviceAccountName: default
+      serviceAccountName: {{ .Values.serviceAccountName }}
       restartPolicy: Never
       containers:
       - name: client
-        image: e5s-client:dev
-        imagePullPolicy: Never
+        image: {{ .Values.client.image.repository }}:{{ .Values.client.image.tag }}
+        imagePullPolicy: {{ .Values.client.image.pullPolicy }}
         env:
         - name: SERVER_URL
-          value: "https://e5s-server:8443/hello"
+          value: {{ .Values.client.serverUrl | quote }}
         command: ["/app/client"]
         volumeMounts:
         - name: spire-agent-socket
@@ -33,4 +37,5 @@ spec:
           readOnly: true
       - name: config
         configMap:
-          name: e5s-config
+          name: {{ .Values.config.name }}
+{{- end }}

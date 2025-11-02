@@ -26,6 +26,12 @@ inmem_coverage.html
 # Example binaries
 examples/*/bin/
 
+# Test demo generated files (scripts create these)
+test-demo/bin/
+test-demo/server/
+test-demo/client/
+test-demo/k8s-*.yaml
+
 # Security scanning artifacts
 gosec.sarif
 gitleaks.sarif

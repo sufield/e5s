@@ -3,6 +3,7 @@ set -e
 
 # Quick rebuild and test script for e5s library developers
 # Use this after making changes to e5s library code
+# Now uses Helm for production-like deployment
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -10,7 +11,7 @@ TEST_DIR="$PROJECT_ROOT/test-demo"
 
 cd "$TEST_DIR"
 
-echo "=== Rebuilding and Testing e5s Changes ==="
+echo "=== Rebuilding and Testing e5s Changes (Helm-based) ==="
 echo ""
 
 # Step 1: Rebuild binaries
@@ -39,15 +40,57 @@ DOCKERFILE
 # Step 3: Restart server deployment
 echo "3. Restarting server deployment..."
 kubectl rollout restart deployment/e5s-server
-kubectl rollout status deployment/e5s-server --timeout=60s
+kubectl rollout status deployment/e5s-server --timeout=90s
+echo "   ✓ Server restarted successfully"
 
-# Step 4: Test with client
-echo "4. Testing with client..."
+# Step 4: Test with authenticated client
+echo ""
+echo "4. Testing with authenticated client..."
 kubectl delete job e5s-client 2>/dev/null || true
-kubectl apply -f k8s-client-job.yaml -o name
 
-echo "   Waiting for client to complete..."
-sleep 15
+cat <<'JOBEOF' | kubectl apply -f -
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: e5s-client
+  namespace: default
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: e5s-client
+    spec:
+      serviceAccountName: default
+      restartPolicy: Never
+      containers:
+      - name: client
+        image: e5s-client:dev
+        imagePullPolicy: Never
+        env:
+        - name: SERVER_URL
+          value: "https://e5s-server:8443/hello"
+        command: ["/app/client"]
+        volumeMounts:
+        - name: spire-agent-socket
+          mountPath: /spire/agent-socket
+          readOnly: true
+        - name: config
+          mountPath: /app/e5s.yaml
+          subPath: e5s.yaml
+      volumes:
+      - name: spire-agent-socket
+        csi:
+          driver: "csi.spiffe.io"
+          readOnly: true
+      - name: config
+        configMap:
+          name: e5s-config
+JOBEOF
+
+echo "   Waiting for client job to complete (max 60s)..."
+kubectl wait --for=condition=complete job/e5s-client --timeout=60s 2>/dev/null || \
+    kubectl wait --for=condition=failed job/e5s-client --timeout=5s 2>/dev/null || true
 
 echo ""
 echo "=== Test Results ==="
@@ -60,18 +103,20 @@ echo ""
 echo "Client logs:"
 kubectl logs -l app=e5s-client --tail=20
 
-# Test unregistered client
+# Step 5: Test unregistered client
 echo ""
-echo "Testing unregistered client (zero-trust verification)..."
+echo "5. Testing unregistered client (zero-trust verification)..."
 
-if [ ! -f k8s-unregistered-client-job.yaml ]; then
-    cat > k8s-unregistered-client-job.yaml <<'EOF'
+kubectl delete job e5s-unregistered-client 2>/dev/null || true
+
+cat <<'UNREGEOF' | kubectl apply -f -
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: e5s-unregistered-client
   namespace: default
 spec:
+  backoffLimit: 0
   template:
     metadata:
       labels:
@@ -92,24 +137,21 @@ spec:
           mountPath: /app/e5s.yaml
           subPath: e5s.yaml
         # NOTE: NO SPIRE socket mounted!
-        # This client has config but no access to SPIRE Workload API
-        # It cannot obtain a SPIFFE identity, so it cannot authenticate
       volumes:
       - name: config
         configMap:
           name: e5s-config
-EOF
-fi
+UNREGEOF
 
-kubectl delete job e5s-unregistered-client 2>/dev/null || true
-kubectl apply -f k8s-unregistered-client-job.yaml -o name
-sleep 10
+echo "   Waiting for unregistered client to fail (max 60s)..."
+kubectl wait --for=condition=failed job/e5s-unregistered-client --timeout=60s 2>/dev/null || \
+    kubectl wait --for=condition=complete job/e5s-unregistered-client --timeout=5s 2>/dev/null || true
 
 echo ""
 echo "❌ Unregistered Client (NO SPIRE identity):"
 echo "---"
 echo "Unregistered client logs (should fail to get identity):"
-kubectl logs -l app=e5s-unregistered-client --tail=20 || echo "No logs (pod failed as expected)"
+kubectl logs -l app=e5s-unregistered-client --tail=20 || echo "   (Pod failed before producing logs - expected)"
 
 echo ""
 echo "=== Zero-Trust Verification ==="

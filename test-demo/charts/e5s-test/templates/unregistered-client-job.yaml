@@ -1,0 +1,37 @@
+{{- if .Values.unregisteredClient.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Values.unregisteredClient.name }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ .Values.unregisteredClient.name }}
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.unregisteredClient.name }}
+    spec:
+      serviceAccountName: {{ .Values.serviceAccountName }}
+      restartPolicy: Never
+      containers:
+      - name: client
+        image: {{ .Values.unregisteredClient.image.repository }}:{{ .Values.unregisteredClient.image.tag }}
+        imagePullPolicy: {{ .Values.unregisteredClient.image.pullPolicy }}
+        env:
+        - name: SERVER_URL
+          value: {{ .Values.unregisteredClient.serverUrl | quote }}
+        command: ["/app/client"]
+        volumeMounts:
+        - name: config
+          mountPath: /app/e5s.yaml
+          subPath: e5s.yaml
+        # NOTE: NO SPIRE socket mounted!
+        # This client has config but no access to SPIRE Workload API
+        # It cannot obtain a SPIFFE identity, so it cannot authenticate
+      volumes:
+      - name: config
+        configMap:
+          name: {{ .Values.config.name }}
+{{- end }}

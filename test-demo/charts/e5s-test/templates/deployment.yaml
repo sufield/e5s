@@ -1,23 +1,23 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: e5s-server
-  namespace: default
+  name: {{ .Values.server.name }}
+  namespace: {{ .Values.namespace }}
 spec:
-  replicas: 1
+  replicas: {{ .Values.server.replicas }}
   selector:
     matchLabels:
-      app: e5s-server
+      app: {{ .Values.server.name }}
   template:
     metadata:
       labels:
-        app: e5s-server
+        app: {{ .Values.server.name }}
     spec:
-      serviceAccountName: default
+      serviceAccountName: {{ .Values.serviceAccountName }}
       containers:
       - name: server
-        image: e5s-server:dev
-        imagePullPolicy: Never
+        image: {{ .Values.server.image.repository }}:{{ .Values.server.image.tag }}
+        imagePullPolicy: {{ .Values.server.image.pullPolicy }}
         volumeMounts:
         - name: spire-agent-socket
           mountPath: /spire/agent-socket
@@ -32,17 +32,4 @@ spec:
           readOnly: true
       - name: config
         configMap:
-          name: e5s-config
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: e5s-server
-  namespace: default
-spec:
-  selector:
-    app: e5s-server
-  ports:
-  - protocol: TCP
-    port: 8443
-    targetPort: 8443
+          name: {{ .Values.config.name }}

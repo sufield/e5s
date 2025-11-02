@@ -2,13 +2,24 @@
 set -e
 
 # Quick prerelease testing script for e5s library developers
-# This script automates the setup and deployment of test applications
+# This script automates the setup and deployment of test applications using Helm
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 TEST_DIR="$PROJECT_ROOT/test-demo"
+CHART_DIR="$TEST_DIR/charts/e5s-test"
 
-echo "=== e5s Pre-Release Testing Setup ==="
+echo "=== e5s Pre-Release Testing Setup (Helm-based) ==="
+echo ""
+
+# Prerequisites check
+echo "Checking prerequisites..."
+command -v helm >/dev/null 2>&1 || { echo "ERROR: Helm is not installed"; exit 1; }
+command -v kubectl >/dev/null 2>&1 || { echo "ERROR: kubectl is not installed"; exit 1; }
+command -v docker >/dev/null 2>&1 || { echo "ERROR: Docker is not installed"; exit 1; }
+command -v minikube >/dev/null 2>&1 || { echo "ERROR: Minikube is not installed"; exit 1; }
+minikube status >/dev/null 2>&1 || { echo "ERROR: Minikube is not running"; exit 1; }
+echo "✓ All prerequisites met"
 echo ""
 
 # Step 1: Create test directory structure
@@ -95,110 +106,73 @@ func main() {
 }
 EOF
 
-# Step 5: Create e5s.yaml
-echo "5. Creating e5s.yaml..."
-cat > e5s.yaml <<'EOF'
-spire:
-  workload_socket: unix:///tmp/spire-agent.sock
-
-  # (Optional) How long to wait for identity from SPIRE before failing startup
-  # If not set, defaults to 30s
-  # initial_fetch_timeout: 30s
-
-server:
-  listen_addr: ":8443"
-  allowed_client_trust_domain: "example.org"
-
-client:
-  expected_server_trust_domain: "example.org"
-EOF
-
-# Step 6: Build binaries
-echo "6. Building static binaries..."
+# Step 5: Build binaries
+echo "5. Building static binaries..."
 CGO_ENABLED=0 go build -o bin/server ./server
 CGO_ENABLED=0 go build -o bin/client ./client
 
-# Step 7: Create Kubernetes manifests
-echo "7. Creating Kubernetes manifests..."
+# Step 6: Build Docker images in Minikube
+echo "6. Building Docker images in Minikube..."
+eval $(minikube docker-env)
 
-cat > k8s-e5s-config.yaml <<'EOF'
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: e5s-config
-  namespace: default
-data:
-  e5s.yaml: |
-    spire:
-      workload_socket: unix:///spire/agent-socket/spire-agent.sock
-      # initial_fetch_timeout: 30s
+docker build -t e5s-server:dev -q -f - . <<'DOCKERFILE'
+FROM alpine:latest
+WORKDIR /app
+COPY bin/server .
+ENTRYPOINT ["/app/server"]
+DOCKERFILE
 
-    server:
-      listen_addr: ":8443"
-      allowed_client_trust_domain: "example.org"
+docker build -t e5s-client:dev -q -f - . <<'DOCKERFILE'
+FROM alpine:latest
+WORKDIR /app
+COPY bin/client .
+ENTRYPOINT ["/app/client"]
+DOCKERFILE
 
-    client:
-      expected_server_trust_domain: "example.org"
-EOF
+# Step 7: Validate Helm chart
+echo "7. Validating Helm chart..."
+if [ ! -d "$CHART_DIR" ]; then
+    echo "   ERROR: Helm chart not found at $CHART_DIR"
+    echo "   The chart directory should exist in the repository."
+    exit 1
+fi
 
-cat > k8s-server.yaml <<'EOF'
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: e5s-server
-  namespace: default
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: e5s-server
-  template:
-    metadata:
-      labels:
-        app: e5s-server
-    spec:
-      serviceAccountName: default
-      containers:
-      - name: server
-        image: e5s-server:dev
-        imagePullPolicy: Never
-        volumeMounts:
-        - name: spire-agent-socket
-          mountPath: /spire/agent-socket
-          readOnly: true
-        - name: config
-          mountPath: /app/e5s.yaml
-          subPath: e5s.yaml
-      volumes:
-      - name: spire-agent-socket
-        csi:
-          driver: "csi.spiffe.io"
-          readOnly: true
-      - name: config
-        configMap:
-          name: e5s-config
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: e5s-server
-  namespace: default
-spec:
-  selector:
-    app: e5s-server
-  ports:
-  - protocol: TCP
-    port: 8443
-    targetPort: 8443
-EOF
+helm lint "$CHART_DIR" || { echo "ERROR: Helm chart validation failed"; exit 1; }
+echo "   ✓ Chart validation passed"
 
-cat > k8s-client-job.yaml <<'EOF'
+# Preview rendered manifests
+echo "   Previewing rendered templates..."
+helm template e5s-test "$CHART_DIR" > /dev/null || { echo "ERROR: Template rendering failed"; exit 1; }
+echo "   ✓ Template rendering successful"
+
+# Step 8: Deploy using Helm (server only, no jobs)
+echo "8. Deploying server to Kubernetes using Helm..."
+helm upgrade --install e5s-test "$CHART_DIR" \
+    --set client.enabled=false \
+    --set unregisteredClient.enabled=false \
+    --wait \
+    --timeout 90s
+
+echo "   Waiting for server pod to be ready..."
+kubectl wait --for=condition=ready pod -l app=e5s-server -n default --timeout=90s
+echo "   ✓ Server is ready"
+
+# Step 9: Test with authenticated client (using kubectl, not Helm)
+echo ""
+echo "9. Testing with authenticated client..."
+
+# Clean up any previous test jobs
+kubectl delete job e5s-client 2>/dev/null || true
+
+# Create job manifest and apply
+cat <<'JOBEOF' | kubectl apply -f -
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: e5s-client
   namespace: default
 spec:
+  backoffLimit: 0
   template:
     metadata:
       labels:
@@ -229,41 +203,11 @@ spec:
       - name: config
         configMap:
           name: e5s-config
-EOF
+JOBEOF
 
-# Step 8: Build Docker images in Minikube
-echo "8. Building Docker images in Minikube..."
-eval $(minikube docker-env)
-
-docker build -t e5s-server:dev -f - . <<'DOCKERFILE'
-FROM alpine:latest
-WORKDIR /app
-COPY bin/server .
-ENTRYPOINT ["/app/server"]
-DOCKERFILE
-
-docker build -t e5s-client:dev -f - . <<'DOCKERFILE'
-FROM alpine:latest
-WORKDIR /app
-COPY bin/client .
-ENTRYPOINT ["/app/client"]
-DOCKERFILE
-
-# Step 9: Deploy to Kubernetes
-echo "9. Deploying to Kubernetes..."
-kubectl apply -f k8s-e5s-config.yaml
-kubectl apply -f k8s-server.yaml
-
-echo "   Waiting for server to be ready..."
-kubectl wait --for=condition=ready pod -l app=e5s-server -n default --timeout=60s
-
-# Step 10: Test with client
-echo "10. Testing with client..."
-kubectl delete job e5s-client 2>/dev/null || true
-kubectl apply -f k8s-client-job.yaml
-
-echo "    Waiting for client to complete..."
-sleep 15
+echo "   Waiting for client job to complete (max 60s)..."
+kubectl wait --for=condition=complete job/e5s-client --timeout=60s 2>/dev/null || \
+    kubectl wait --for=condition=failed job/e5s-client --timeout=5s 2>/dev/null || true
 
 echo ""
 echo "=== Test Results ==="
@@ -276,17 +220,20 @@ echo ""
 echo "Client logs:"
 kubectl logs -l app=e5s-client --tail=20
 
-# Test 11: Verify unauthorized client is rejected
+# Step 10: Test unregistered client
 echo ""
-echo "11. Testing zero-trust enforcement with unregistered client..."
+echo "10. Testing zero-trust enforcement with unregistered client..."
 
-cat > k8s-unregistered-client-job.yaml <<'EOF'
+kubectl delete job e5s-unregistered-client 2>/dev/null || true
+
+cat <<'UNREGEOF' | kubectl apply -f -
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: e5s-unregistered-client
   namespace: default
 spec:
+  backoffLimit: 0
   template:
     metadata:
       labels:
@@ -307,28 +254,24 @@ spec:
           mountPath: /app/e5s.yaml
           subPath: e5s.yaml
         # NOTE: NO SPIRE socket mounted!
-        # This client has config but no access to SPIRE Workload API
-        # It cannot obtain a SPIFFE identity, so it cannot authenticate
       volumes:
       - name: config
         configMap:
           name: e5s-config
-EOF
+UNREGEOF
 
-kubectl delete job e5s-unregistered-client 2>/dev/null || true
-kubectl apply -f k8s-unregistered-client-job.yaml
-
-echo "    Waiting for unregistered client to fail..."
-sleep 10
+echo "   Waiting for unregistered client to fail (max 60s)..."
+kubectl wait --for=condition=failed job/e5s-unregistered-client --timeout=60s 2>/dev/null || \
+    kubectl wait --for=condition=complete job/e5s-unregistered-client --timeout=5s 2>/dev/null || true
 
 echo ""
 echo "❌ Unregistered Client (NO SPIRE identity):"
 echo "---"
-echo "Server logs (should show no new requests or reject):"
+echo "Server logs (should show no new unauthorized requests):"
 kubectl logs -l app=e5s-server --tail=5
 echo ""
 echo "Unregistered client logs (should fail to get identity):"
-kubectl logs -l app=e5s-unregistered-client --tail=20 || echo "No logs (pod failed as expected)"
+kubectl logs -l app=e5s-unregistered-client --tail=20 2>/dev/null || echo "   (Pod failed before producing logs - expected)"
 
 echo ""
 echo "=== Zero-Trust Verification ==="
@@ -342,6 +285,10 @@ echo ""
 echo "=== Setup Complete ==="
 echo ""
 echo "Your test environment is ready!"
+echo ""
+echo "Helm release deployed:"
+echo "  helm status e5s-test"
+echo "  helm get values e5s-test"
 echo ""
 echo "To iterate on code changes:"
 echo "  ./scripts/rebuild-and-test.sh"
