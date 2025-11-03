@@ -1,0 +1,72 @@
+# Fuzzing workflow for SPIRE mTLS library
+# Runs Go native fuzzing to find security vulnerabilities and edge cases
+# Addresses OSSF Scorecard fuzzing requirement
+
+name: Fuzzing
+
+on:
+  # Run on schedule (weekly)
+  schedule:
+    - cron: '0 3 * * 1'  # Every Monday at 3 AM UTC
+  # Allow manual trigger
+  workflow_dispatch:
+    inputs:
+      fuzztime:
+        description: 'Fuzz time per test (e.g., 30s, 5m)'
+        required: false
+        default: '1m'
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    name: Fuzz Testing
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Download modules
+        run: go mod download
+
+      # Run fuzzing on config package (security-critical)
+      - name: Fuzz config loading
+        run: go test -fuzz=FuzzLoad -fuzztime=${{ github.event.inputs.fuzztime || '1m' }} ./internal/config/
+        continue-on-error: false
+
+      - name: Fuzz server config validation
+        run: go test -fuzz=FuzzValidateServer -fuzztime=${{ github.event.inputs.fuzztime || '1m' }} ./internal/config/
+        continue-on-error: false
+
+      - name: Fuzz client config validation
+        run: go test -fuzz=FuzzValidateClient -fuzztime=${{ github.event.inputs.fuzztime || '1m' }} ./internal/config/
+        continue-on-error: false
+
+      # Run fuzzing on spire package
+      - name: Fuzz path normalization
+        run: go test -fuzz=FuzzNormalizeToAddr -fuzztime=${{ github.event.inputs.fuzztime || '1m' }} ./pkg/spire/
+        continue-on-error: false
+
+      - name: Fuzz config struct
+        run: go test -fuzz=FuzzConfig -fuzztime=${{ github.event.inputs.fuzztime || '1m' }} ./pkg/spire/
+        continue-on-error: false
+
+      # Archive crash artifacts if any
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crashes
+          path: |
+            **/testdata/fuzz/
+          retention-days: 30
+          if-no-files-found: ignore
