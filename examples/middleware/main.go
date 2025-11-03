@@ -162,9 +162,10 @@ func main() {
 
 	// Start HTTPS server
 	server := &http.Server{
-		Addr:      ":8443",
-		Handler:   mux,
-		TLSConfig: tlsConfig,
+		Addr:              ":8443",
+		Handler:           mux,
+		TLSConfig:         tlsConfig,
+		ReadHeaderTimeout: 10 * time.Second, // Prevent Slowloris attacks
 	}
 
 	go func() {

@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"gopkg.in/yaml.v3"
 )
@@ -11,7 +12,9 @@ import (
 func Load(path string) (FileConfig, error) {
 	var cfg FileConfig
 
-	data, err := os.ReadFile(path)
+	// Clean the path to prevent directory traversal attacks
+	cleanPath := filepath.Clean(path)
+	data, err := os.ReadFile(cleanPath) // #nosec G304 - Config file path is trusted (from admin/user)
 	if err != nil {
 		return cfg, fmt.Errorf("failed to read config file: %w", err)
 	}

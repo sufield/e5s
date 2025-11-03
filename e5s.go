@@ -225,7 +225,9 @@ func Start(configPath string, handler http.Handler) (shutdown func() error, err 
 	// Silence unused variable warning
 	_ = authz
 	if err != nil {
-		source.Close()
+		if closeErr := source.Close(); closeErr != nil {
+			return nil, fmt.Errorf("failed to create server TLS config: %w (cleanup error: %v)", err, closeErr)
+		}
 		return nil, fmt.Errorf("failed to create server TLS config: %w", err)
 	}
 
@@ -239,9 +241,10 @@ func Start(configPath string, handler http.Handler) (shutdown func() error, err 
 
 	// Create HTTP server with mTLS
 	srv := &http.Server{
-		Addr:      cfg.Server.ListenAddr,
-		Handler:   wrapped,
-		TLSConfig: tlsCfg,
+		Addr:              cfg.Server.ListenAddr,
+		Handler:           wrapped,
+		TLSConfig:         tlsCfg,
+		ReadHeaderTimeout: 10 * time.Second, // Prevent Slowloris attacks
 	}
 
 	// Channel to capture server startup errors
@@ -261,7 +264,9 @@ func Start(configPath string, handler http.Handler) (shutdown func() error, err 
 	// This prevents returning success when bind fails immediately
 	select {
 	case err := <-errCh:
-		source.Close()
+		if closeErr := source.Close(); closeErr != nil {
+			return nil, fmt.Errorf("server startup failed: %w (cleanup error: %v)", err, closeErr)
+		}
 		return nil, fmt.Errorf("server startup failed: %w", err)
 	case <-time.After(100 * time.Millisecond):
 		// Server started successfully (or will report error later via logs)
@@ -510,7 +515,9 @@ func Client(configPath string) (*http.Client, func() error, error) {
 	// Silence unused variable warning
 	_ = authz
 	if err != nil {
-		source.Close()
+		if closeErr := source.Close(); closeErr != nil {
+			return nil, nil, fmt.Errorf("failed to create client TLS config: %w (cleanup error: %v)", err, closeErr)
+		}
 		return nil, nil, fmt.Errorf("failed to create client TLS config: %w", err)
 	}
 
