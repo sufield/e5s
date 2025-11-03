@@ -1,0 +1,137 @@
+# GoReleaser configuration for e5s SPIRE mTLS library
+# Automates building, archiving, and releasing to GitHub
+
+version: 2
+
+before:
+  hooks:
+    # Ensure dependencies are up to date
+    - go mod tidy
+    - go mod verify
+
+builds:
+  # Build cp-minikube utility for local Kubernetes testing
+  - id: cp-minikube
+    main: ./cmd/cp-minikube
+    binary: cp-minikube
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.ShortCommit}}
+      - -X main.date={{.Date}}
+    flags:
+      - -trimpath
+
+archives:
+  - id: default
+    format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      # Include important files in release archives
+      - README.md
+      - LICENSE
+      - SECURITY.md
+      - docs/**/*
+      - examples/**/*
+
+checksum:
+  name_template: "{{ .ProjectName }}_{{ .Version }}_SHA256SUMS"
+  algorithm: sha256
+
+changelog:
+  use: github
+  sort: asc
+  abbrev: 7
+  groups:
+    - title: "Security"
+      regexp: "^.*?(sec|security|vuln).*?:"
+      order: 0
+    - title: "Features"
+      regexp: "^.*?(feat|feature).*?:"
+      order: 1
+    - title: "Bug Fixes"
+      regexp: "^.*?(fix|bug).*?:"
+      order: 2
+    - title: "Documentation"
+      regexp: "^.*?doc.*?:"
+      order: 3
+    - title: "Dependencies"
+      regexp: "^.*?(dep|deps|dependenc).*?:"
+      order: 4
+    - title: "Other"
+      order: 999
+  filters:
+    exclude:
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+      - Merge pull request
+      - Merge branch
+
+release:
+  github:
+    owner: sufield
+    name: e5s
+  draft: false
+  prerelease: auto
+  mode: replace
+  header: |
+    ## e5s {{ .Tag }} - SPIRE mTLS Library Release
+
+    This release includes the e5s library and utilities for building SPIRE-based mTLS applications.
+
+    ### Installation
+
+    For Go developers:
+    ```bash
+    go get github.com/sufield/e5s@{{ .Tag }}
+    ```
+
+    For utilities (download pre-built binaries below):
+    - **cp-minikube**: Kubernetes configuration utility for local testing
+
+    See the [documentation](https://github.com/sufield/e5s/tree/{{ .Tag }}/docs) for usage examples.
+  footer: |
+    ---
+
+    **Full Changelog**: https://github.com/sufield/e5s/compare/{{ .PreviousTag }}...{{ .Tag }}
+
+    ### Verification
+
+    Verify downloads using the provided SHA256 checksums:
+    ```bash
+    sha256sum -c {{ .ProjectName }}_{{ .Version }}_SHA256SUMS
+    ```
+
+    ### Support
+
+    - 📖 Documentation: https://github.com/sufield/e5s/tree/{{ .Tag }}/docs
+    - 🐛 Issues: https://github.com/sufield/e5s/issues
+    - 🔒 Security: See [SECURITY.md](https://github.com/sufield/e5s/blob/{{ .Tag }}/.github/SECURITY.md)
+
+    Thank you for using e5s!
+
+# Source code archives
+source:
+  enabled: true
+  name_template: "{{ .ProjectName }}_{{ .Version }}_source"
+  format: tar.gz
+
+# Announce releases (disabled for now, can enable for Slack/Discord/etc)
+announce:
+  skip: true
+
+# Metadata
+metadata:
+  mod_timestamp: "{{ .CommitTimestamp }}"
