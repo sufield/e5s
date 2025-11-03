@@ -19,7 +19,9 @@ func main() {
 	// Health check endpoint
 	r.Get("/healthz", func(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ok"))
+		if _, err := w.Write([]byte("ok")); err != nil {
+			log.Printf("❌ write error: %v", err)
+		}
 	})
 
 	// Authenticated endpoint that returns server time
@@ -37,7 +39,9 @@ func main() {
 		serverTime := time.Now().Format(time.RFC3339)
 		response := fmt.Sprintf("Server time: %s", serverTime)
 		log.Printf("→ Sending response: %s", response)
-		fmt.Fprintf(w, "%s\n", response)
+		if _, err := fmt.Fprintf(w, "%s\n", response); err != nil {
+			log.Printf("❌ write error: %v", err)
+		}
 	})
 
 	log.Println("Server configured, initializing mTLS with SPIRE...")
