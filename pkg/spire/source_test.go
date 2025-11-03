@@ -94,6 +94,7 @@ func TestNewSource_NilContext(t *testing.T) {
 		InitialFetchTimeout: 5 * time.Second,
 	}
 
+	//nolint:staticcheck // Intentionally passing nil to test error handling
 	src, err := NewSource(nil, cfg)
 	if err == nil {
 		t.Fatal("NewSource with nil context should fail, got success")

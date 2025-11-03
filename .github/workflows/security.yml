@@ -37,13 +37,24 @@ jobs:
       - name: Download modules
         run: go mod download
 
-      # Dependency vulnerability scanning (SARIF)
-      # Install and run govulncheck directly to avoid action input issues
-      - name: govulncheck (SARIF)
+      # Dependency vulnerability scanning with SARIF output for GitHub Code Scanning
+      - name: govulncheck
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
-          govulncheck -scan package ./...
-        continue-on-error: false
+          govulncheck -format=sarif -scan package ./... > govulncheck.sarif
+        continue-on-error: true
+
+      # Check govulncheck results and fail if vulnerabilities found
+      - name: Check for vulnerabilities
+        if: always()
+        run: |
+          if [ -f govulncheck.sarif ]; then
+            vuln_count=$(jq '.runs[0].results | length' govulncheck.sarif)
+            if [ "$vuln_count" -gt 0 ]; then
+              echo "::error::Found $vuln_count vulnerabilities! See govulncheck.sarif for details."
+              exit 1
+            fi
+          fi
 
       # Module hygiene (optional gate; keep if you want drift to fail PRs)
       - name: Verify Go modules are tidy
@@ -53,24 +64,24 @@ jobs:
           go mod verify
           git diff --exit-code -- go.mod go.sum || (echo "::error::go.mod/go.sum changed after tidy" && exit 1)
 
-      # Lint - compile golangci-lint with runner Go to avoid build mismatch
-      # This ensures the binary is built with the same Go version as the project
+      # Lint using official action for better caching and PR annotations
       - name: golangci-lint
-        run: |
-          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-          golangci-lint run --timeout=5m
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --timeout=5m
 
       # Security SAST (SARIF, do not fail the job by default for demo visibility)
       - name: gosec (SARIF)
         run: |
-          go install github.com/securego/gosec/v2/cmd/gosec@v2.20.0
+          go install github.com/securego/gosec/v2/cmd/gosec@v2.22.10
           gosec -fmt=sarif -out=gosec.sarif ./...
         continue-on-error: true
 
       # Secret scanning (SARIF)
       - name: gitleaks (SARIF)
         run: |
-          go install github.com/gitleaks/gitleaks/v8@v8.18.4
+          go install github.com/gitleaks/gitleaks/v8@v8.28.0
           gitleaks detect --source . --report-format sarif --report-path gitleaks.sarif
         continue-on-error: true
 
@@ -86,6 +97,15 @@ jobs:
           echo '```' >> $GITHUB_STEP_SUMMARY
 
       # Check if SARIF files exist before uploading
+      - name: Check govulncheck SARIF
+        id: check_govulncheck
+        run: |
+          if [ -f govulncheck.sarif ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Check gosec SARIF
         id: check_gosec
         run: |
@@ -112,12 +132,20 @@ jobs:
           name: security-artifacts
           path: |
             coverage.out
+            govulncheck.sarif
             gosec.sarif
             gitleaks.sarif
           retention-days: 30
           if-no-files-found: warn
 
       # Publish SARIF to GitHub code scanning (only if files exist)
+      - name: Upload govulncheck SARIF
+        if: steps.check_govulncheck.outputs.exists == 'true'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: govulncheck.sarif
+          category: govulncheck
+
       - name: Upload gosec SARIF
         if: steps.check_gosec.outputs.exists == 'true'
         uses: github/codeql-action/upload-sarif@v3
@@ -132,5 +160,5 @@ jobs:
           sarif_file: gitleaks.sarif
           category: gitleaks
 
-  # Note: CodeQL analysis has been moved to local development workflow.
-  # See docs/codeql-local-setup.md for instructions on running CodeQL locally.
+  # Note: CodeQL analysis runs in a separate workflow (.github/workflows/codeql.yml)
+  # for better performance and separation of concerns.

@@ -40,7 +40,7 @@ type ClientAuthz struct {
 }
 
 // validateSPIREConfig validates and parses common SPIRE configuration.
-func validateSPIREConfig(cfg FileConfig) (SPIREConfig, error) {
+func validateSPIREConfig(cfg *FileConfig) (SPIREConfig, error) {
 	// Validate workload socket
 	if strings.TrimSpace(cfg.SPIRE.WorkloadSocket) == "" {
 		return SPIREConfig{}, errors.New("spire.workload_socket must be set")
@@ -78,7 +78,7 @@ func validateSPIREConfig(cfg FileConfig) (SPIREConfig, error) {
 //   - SPIFFE ID / trust domain strings are syntactically valid (using SDK validation)
 //
 // Returns parsed SPIRE config and authorization policy to avoid reparsing downstream.
-func ValidateServer(cfg FileConfig) (SPIREConfig, ServerAuthz, error) {
+func ValidateServer(cfg *FileConfig) (SPIREConfig, ServerAuthz, error) {
 	// Validate SPIRE config
 	spireConfig, err := validateSPIREConfig(cfg)
 	if err != nil {
@@ -134,7 +134,7 @@ func ValidateServer(cfg FileConfig) (SPIREConfig, ServerAuthz, error) {
 //   - SPIFFE ID / trust domain strings are syntactically valid (using SDK validation)
 //
 // Returns parsed SPIRE config and verification policy to avoid reparsing downstream.
-func ValidateClient(cfg FileConfig) (SPIREConfig, ClientAuthz, error) {
+func ValidateClient(cfg *FileConfig) (SPIREConfig, ClientAuthz, error) {
 	// Validate SPIRE config
 	spireConfig, err := validateSPIREConfig(cfg)
 	if err != nil {

@@ -104,14 +104,18 @@ func getConfigPath() string {
 func Run(handler http.Handler) {
 	// Create context that listens for interrupt signals
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
 
 	// Start server with intelligent config defaults
 	shutdown, err := StartServer(handler)
 	if err != nil {
+		stop() // Clean up signal handler before exit
 		log.Fatalf("Failed to start server: %v", err)
 	}
-	defer shutdown()
+	defer func() {
+		if err := shutdown(); err != nil {
+			log.Printf("Error during shutdown: %v", err)
+		}
+	}()
 
 	log.Println("Server running - press Ctrl+C to stop")
 
@@ -183,7 +187,7 @@ func Start(configPath string, handler http.Handler) (shutdown func() error, err 
 	}
 
 	// Validate server configuration and get parsed authorization policy
-	spireConfig, authz, err := config.ValidateServer(cfg)
+	spireConfig, authz, err := config.ValidateServer(&cfg)
 	if err != nil {
 		return nil, fmt.Errorf("invalid server config: %w", err)
 	}
@@ -468,7 +472,7 @@ func Client(configPath string) (*http.Client, func() error, error) {
 	}
 
 	// Validate client configuration and get parsed verification policy
-	spireConfig, authz, err := config.ValidateClient(cfg)
+	spireConfig, authz, err := config.ValidateClient(&cfg)
 	if err != nil {
 		return nil, nil, fmt.Errorf("invalid client config: %w", err)
 	}
@@ -592,14 +596,20 @@ func Get(url string) (*http.Response, error) {
 	// Perform GET request
 	resp, err := client.Get(url)
 	if err != nil {
-		shutdown() // Early cleanup on request error
+		if shutdownErr := shutdown(); shutdownErr != nil {
+			log.Printf("Error during shutdown: %v", shutdownErr)
+		}
 		return nil, err
 	}
 
 	// Wrap response body to trigger cleanup on close
 	resp.Body = &bodyCloser{
 		ReadCloser: resp.Body,
-		cleanup:    func() { shutdown() },
+		cleanup: func() {
+			if shutdownErr := shutdown(); shutdownErr != nil {
+				log.Printf("Error during shutdown: %v", shutdownErr)
+			}
+		},
 	}
 
 	return resp, nil

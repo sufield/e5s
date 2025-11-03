@@ -216,7 +216,7 @@ func TestValidateServer(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			spireConfig, authz, err := ValidateServer(tt.cfg)
+			spireConfig, authz, err := ValidateServer(&tt.cfg)
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("ValidateServer() expected error containing %q, got nil", tt.errMsg)
@@ -415,7 +415,7 @@ func TestValidateClient(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			spireConfig, authz, err := ValidateClient(tt.cfg)
+			spireConfig, authz, err := ValidateClient(&tt.cfg)
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("ValidateClient() expected error containing %q, got nil", tt.errMsg)
@@ -557,7 +557,7 @@ func TestValidateSPIREConfig_Timeout(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			spireConfig, err := validateSPIREConfig(tt.cfg)
+			spireConfig, err := validateSPIREConfig(&tt.cfg)
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("validateSPIREConfig() expected error containing %q, got nil", tt.errMsg)
