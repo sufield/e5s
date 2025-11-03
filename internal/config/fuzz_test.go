@@ -50,9 +50,9 @@ func FuzzValidateServer(f *testing.F) {
 				InitialFetchTimeout: timeout,
 			},
 			Server: ServerSection{
-				ListenAddr:                 addr,
-				AllowedClientSPIFFEID:      clientID,
-				AllowedClientTrustDomain:   trustDomain,
+				ListenAddr:               addr,
+				AllowedClientSPIFFEID:    clientID,
+				AllowedClientTrustDomain: trustDomain,
 			},
 		}
 
@@ -74,8 +74,8 @@ func FuzzValidateClient(f *testing.F) {
 				InitialFetchTimeout: timeout,
 			},
 			Client: ClientSection{
-				ExpectedServerSPIFFEID:      serverID,
-				ExpectedServerTrustDomain:   trustDomain,
+				ExpectedServerSPIFFEID:    serverID,
+				ExpectedServerTrustDomain: trustDomain,
 			},
 		}
 

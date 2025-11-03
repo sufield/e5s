@@ -23,7 +23,7 @@ func FuzzNormalizeToAddr(f *testing.F) {
 
 		// If input has unix:// or tcp://, result should preserve it
 		// This is a basic sanity check
-		if len(input) > 0 {
+		if input != "" {
 			_ = len(result) // Just ensure we can get length without panic
 		}
 	})
