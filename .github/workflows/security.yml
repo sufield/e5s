@@ -25,10 +25,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
           go-version-file: 'go.mod'
           cache: true
@@ -67,7 +67,7 @@ jobs:
       # Lint using official action for better caching and PR annotations
       # Use goinstall mode to ensure golangci-lint is built with the correct Go version
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@55c2c1448f86e01eaae002a5a3a9624417608d84 # v6.5.2
         with:
           version: latest
           install-mode: goinstall
@@ -120,7 +120,7 @@ jobs:
 
       # Upload artifacts (optional files use wildcard to avoid failures)
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: security-artifacts
@@ -134,14 +134,14 @@ jobs:
       # Publish SARIF to GitHub code scanning (only if files exist)
       - name: Upload govulncheck SARIF
         if: steps.check_govulncheck.outputs.exists == 'true'
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@5d5cd550d3e189c569da8f16ea8de2d821c9bf7a # v3.31.2
         with:
           sarif_file: govulncheck.sarif
           category: govulncheck
 
       - name: Upload gitleaks SARIF
         if: steps.check_gitleaks.outputs.exists == 'true'
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@5d5cd550d3e189c569da8f16ea8de2d821c9bf7a # v3.31.2
         with:
           sarif_file: gitleaks.sarif
           category: gitleaks
