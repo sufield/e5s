@@ -1,5 +1,7 @@
 # e5s - Identity Based Authentication Library
 
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/11425/badge)](https://www.bestpractices.dev/projects/11425)
+
 A lightweight Go library for building mutual TLS services with SPIFFE identity verification and automatic certificate rotation based on go-spiffe SDK.
 
 ## Features
