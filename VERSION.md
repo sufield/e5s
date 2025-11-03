@@ -170,8 +170,8 @@ Once v1.0.0 is released:
 
 ### Go Version Compatibility
 
-- Minimum Go version: 1.23
-- We test against: Go 1.23 and latest stable
+- Minimum Go version: 1.25.3
+- We test against: Go 1.25.3 and latest stable
 - We support: Current and previous Go minor versions
 
 ### SPIRE Version Compatibility

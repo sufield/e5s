@@ -146,7 +146,7 @@ This is the first release. To get started:
 
 ### Requirements
 
-- **Go**: 1.23 or later
+- **Go**: 1.25.3 or later
 - **SPIRE**: 1.8.0 or later (1.10.0 recommended)
 - **OS**: Linux, macOS, or Windows (with WSL for best experience)
 
@@ -178,7 +178,7 @@ This is the initial production-ready release of e5s, a lightweight Go library fo
 - Requires a SPIRE deployment (not suitable for projects without SPIRE infrastructure).
 
 **Compatibility:**
-- Go 1.23+ required
+- Go 1.25.3+ required
 - SPIRE 1.8.0+ required (tested with 1.8.x, 1.9.x, 1.10.x)
 - Linux, macOS, Windows (WSL)
 

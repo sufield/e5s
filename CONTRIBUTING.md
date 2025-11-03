@@ -78,7 +78,7 @@ Types:
 
 ### Prerequisites
 
-- Go 1.23 or later
+- Go 1.25.3 or later
 - SPIRE (for integration tests)
 - golangci-lint
 - gosec
