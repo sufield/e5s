@@ -1,5 +1,5 @@
 # GoReleaser configuration for e5s SPIRE mTLS library
-# Automates building, archiving, and releasing to GitHub
+# Automates building, archiving, Docker images, and releasing to GitHub
 
 version: 2
 
@@ -10,6 +10,46 @@ before:
     - go mod verify
 
 builds:
+  # Example server binary (for Docker and local use)
+  - id: example-server
+    main: ./cmd/example-server
+    binary: e5s-example-server
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.ShortCommit}}
+      - -X main.date={{.Date}}
+    flags:
+      - -trimpath
+
+  # Example client binary (for Docker and local use)
+  - id: example-client
+    main: ./cmd/example-client
+    binary: e5s-example-client
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.ShortCommit}}
+      - -X main.date={{.Date}}
+    flags:
+      - -trimpath
+
   # Build cp-minikube utility for local Kubernetes testing
   - id: cp-minikube
     main: ./cmd/cp-minikube
@@ -29,6 +69,76 @@ builds:
       - -X main.date={{.Date}}
     flags:
       - -trimpath
+
+# Docker images for examples (enables `helm install` without Go)
+dockers:
+  - ids: [example-server]
+    image_templates:
+      - "ghcr.io/sufield/e5s-demo-server:{{ .Tag }}"
+      - "ghcr.io/sufield/e5s-demo-server:latest"
+    dockerfile: Dockerfile.server
+    use: buildx
+    build_flag_templates:
+      - "--pull"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title=e5s-demo-server"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--platform=linux/amd64"
+    extra_files:
+      - go.mod
+      - go.sum
+
+  - ids: [example-server]
+    image_templates:
+      - "ghcr.io/sufield/e5s-demo-server:{{ .Tag }}-arm64"
+    dockerfile: Dockerfile.server
+    use: buildx
+    build_flag_templates:
+      - "--pull"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title=e5s-demo-server"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--platform=linux/arm64"
+    goarch: arm64
+    extra_files:
+      - go.mod
+      - go.sum
+
+  - ids: [example-client]
+    image_templates:
+      - "ghcr.io/sufield/e5s-demo-client:{{ .Tag }}"
+      - "ghcr.io/sufield/e5s-demo-client:latest"
+    dockerfile: Dockerfile.client
+    use: buildx
+    build_flag_templates:
+      - "--pull"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title=e5s-demo-client"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--platform=linux/amd64"
+    extra_files:
+      - go.mod
+      - go.sum
+
+  - ids: [example-client]
+    image_templates:
+      - "ghcr.io/sufield/e5s-demo-client:{{ .Tag }}-arm64"
+    dockerfile: Dockerfile.client
+    use: buildx
+    build_flag_templates:
+      - "--pull"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title=e5s-demo-client"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--platform=linux/arm64"
+    goarch: arm64
+    extra_files:
+      - go.mod
+      - go.sum
 
 archives:
   - id: default
@@ -89,16 +199,25 @@ release:
   header: |
     ## e5s {{ .Tag }} - SPIRE mTLS Library Release
 
-    This release includes the e5s library and utilities for building SPIRE-based mTLS applications.
+    This release includes the e5s library, utilities, and ready-to-run Docker images for demonstrations.
 
     ### Installation
 
-    For Go developers:
+    **For Go developers (library usage):**
     ```bash
     go get github.com/sufield/e5s@{{ .Tag }}
     ```
 
-    For utilities (download pre-built binaries below):
+    **For trying examples (Docker images):**
+    ```bash
+    # Pull pre-built images
+    docker pull ghcr.io/sufield/e5s-demo-server:{{ .Tag }}
+    docker pull ghcr.io/sufield/e5s-demo-client:{{ .Tag }}
+
+    # Or use in Kubernetes/Helm - see documentation
+    ```
+
+    **For utilities (download pre-built binaries below):**
     - **cp-minikube**: Kubernetes configuration utility for local testing
 
     See the [documentation](https://github.com/sufield/e5s/tree/{{ .Tag }}/docs) for usage examples.
@@ -106,6 +225,12 @@ release:
     ---
 
     **Full Changelog**: https://github.com/sufield/e5s/compare/{{ .PreviousTag }}...{{ .Tag }}
+
+    ### Docker Images
+
+    Multi-arch images (amd64/arm64) are available at:
+    - Server: `ghcr.io/sufield/e5s-demo-server:{{ .Tag }}`
+    - Client: `ghcr.io/sufield/e5s-demo-client:{{ .Tag }}`
 
     ### Verification
 

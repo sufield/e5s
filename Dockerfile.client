@@ -1,0 +1,25 @@
+# Multi-stage Dockerfile for e5s example client
+# Builds a minimal container image for demonstrating mTLS with SPIRE
+
+FROM alpine:3.19
+LABEL org.opencontainers.image.source="https://github.com/sufield/e5s"
+LABEL org.opencontainers.image.description="e5s mTLS client example - SPIRE/SPIFFE-based zero-trust authentication"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
+
+# Install ca-certificates for HTTPS and create non-root user
+RUN apk --no-cache add ca-certificates && \
+    addgroup -g 1000 e5s && \
+    adduser -D -u 1000 -G e5s e5s
+
+# Copy the pre-built binary from GoReleaser
+# GoReleaser handles multi-arch builds and places binaries in platform-specific paths
+COPY e5s-example-client /usr/local/bin/e5s-example-client
+
+# Run as non-root user
+USER e5s
+
+# Client connects to server URL specified via SERVER_URL environment variable
+# Default: https://e5s-server:8443/time
+ENV SERVER_URL="https://e5s-server:8443/time"
+
+ENTRYPOINT ["/usr/local/bin/e5s-example-client"]
