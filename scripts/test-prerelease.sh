@@ -33,7 +33,7 @@ if [ ! -f go.mod ]; then
     go mod init test-demo
     go mod edit -replace github.com/sufield/e5s=..
     go get github.com/go-chi/chi/v5@v5.2.3
-    go get github.com/sufield/e5s@latest  # Uses local replace directive
+    # Note: e5s uses local replace directive above, no explicit go get needed
 else
     echo "2. Go module already initialized"
 fi
