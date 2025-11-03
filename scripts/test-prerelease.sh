@@ -32,8 +32,8 @@ if [ ! -f go.mod ]; then
     echo "2. Initializing Go module..."
     go mod init test-demo
     go mod edit -replace github.com/sufield/e5s=..
-    go get github.com/go-chi/chi/v5
-    go get github.com/sufield/e5s
+    go get github.com/go-chi/chi/v5@v5.2.3
+    go get github.com/sufield/e5s@latest  # Uses local replace directive
 else
     echo "2. Go module already initialized"
 fi
