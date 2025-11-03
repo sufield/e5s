@@ -73,11 +73,12 @@ jobs:
           install-mode: goinstall
           args: --timeout=5m
 
-      # Security SAST (SARIF, do not fail the job by default for demo visibility)
-      - name: gosec (SARIF)
+      # Security SAST (text output only due to SARIF format bug in v2.22.10)
+      # Skip SARIF upload for gosec until the artifactChanges schema issue is resolved
+      - name: gosec
         run: |
           go install github.com/securego/gosec/v2/cmd/gosec@v2.22.10
-          gosec -fmt=sarif -out=gosec.sarif ./...
+          gosec ./...
         continue-on-error: true
 
       # Secret scanning (SARIF)
@@ -108,15 +109,6 @@ jobs:
             echo "exists=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Check gosec SARIF
-        id: check_gosec
-        run: |
-          if [ -f gosec.sarif ]; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-          fi
-
       - name: Check gitleaks SARIF
         id: check_gitleaks
         run: |
@@ -135,7 +127,6 @@ jobs:
           path: |
             coverage.out
             govulncheck.sarif
-            gosec.sarif
             gitleaks.sarif
           retention-days: 30
           if-no-files-found: warn
@@ -147,13 +138,6 @@ jobs:
         with:
           sarif_file: govulncheck.sarif
           category: govulncheck
-
-      - name: Upload gosec SARIF
-        if: steps.check_gosec.outputs.exists == 'true'
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: gosec.sarif
-          category: gosec
 
       - name: Upload gitleaks SARIF
         if: steps.check_gitleaks.outputs.exists == 'true'
