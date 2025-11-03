@@ -39,6 +39,7 @@ import (
 type Source struct {
 	mu     sync.RWMutex
 	source *workloadapi.X509Source
+	cancel context.CancelFunc // Cancels the context used to create the source
 
 	// Close coordination
 	closeOnce sync.Once
@@ -147,7 +148,8 @@ func NewSource(ctx context.Context, cfg Config) (*Source, error) {
 		}
 		// Success! buildCtx stays alive, controlled by parent ctx.
 		// The source's watchers will run until ctx is canceled or Close() is called.
-		return &Source{source: r.src}, nil
+		// Store cancel so it can be called in Close()
+		return &Source{source: r.src, cancel: cancel}, nil
 
 	case <-time.After(timeout):
 		cancel() // Stop trying to build the source
@@ -177,6 +179,11 @@ func (s *Source) Close() error {
 	s.closeOnce.Do(func() {
 		s.mu.Lock()
 		defer s.mu.Unlock()
+
+		// Cancel the context to stop watchers and background operations
+		if s.cancel != nil {
+			s.cancel()
+		}
 
 		if s.source != nil {
 			s.closeErr = s.source.Close()
