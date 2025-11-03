@@ -48,7 +48,6 @@ linters-settings:
     locale: US
 
   nolintlint:
-    allow-leading-space: false
     allow-unused: false          # require a reason and proper scoping
     require-explanation: true
     require-specific: true
