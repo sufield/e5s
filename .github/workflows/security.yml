@@ -83,7 +83,7 @@ jobs:
       # Secret scanning (SARIF)
       - name: gitleaks (SARIF)
         run: |
-          go install github.com/gitleaks/gitleaks/v8@v8.28.0
+          go install github.com/zricethezav/gitleaks/v8@v8.28.0
           gitleaks detect --source . --report-format sarif --report-path gitleaks.sarif
         continue-on-error: true
 
