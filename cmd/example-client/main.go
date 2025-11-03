@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -9,8 +10,25 @@ import (
 	"github.com/sufield/e5s"
 )
 
+// Version information (set via ldflags during build)
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
 func main() {
-	log.Println("Starting e5s mTLS client...")
+	versionFlag := flag.Bool("version", false, "Print version information and exit")
+	flag.Parse()
+
+	if *versionFlag {
+		fmt.Printf("e5s-example-client %s\n", version)
+		fmt.Printf("  commit: %s\n", commit)
+		fmt.Printf("  built:  %s\n", date)
+		os.Exit(0)
+	}
+
+	log.Printf("Starting e5s mTLS client (version %s)...", version)
 
 	// Get server URL from environment variable, default to localhost
 	// This allows the client to work both locally and in Kubernetes
