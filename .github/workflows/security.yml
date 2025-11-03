@@ -65,10 +65,12 @@ jobs:
           git diff --exit-code -- go.mod go.sum || (echo "::error::go.mod/go.sum changed after tidy" && exit 1)
 
       # Lint using official action for better caching and PR annotations
+      # Use goinstall mode to ensure golangci-lint is built with the correct Go version
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
           version: latest
+          install-mode: goinstall
           args: --timeout=5m
 
       # Security SAST (SARIF, do not fail the job by default for demo visibility)
