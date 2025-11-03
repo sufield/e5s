@@ -147,8 +147,15 @@ This is the first release. To get started:
 ### Requirements
 
 - **Go**: 1.25.3 or later
-- **SPIRE**: 1.8.0 or later (1.10.0 recommended)
+- **SPIRE**: 1.8.0 or later (tested with 1.9.0)
 - **OS**: Linux, macOS, or Windows (with WSL for best experience)
+
+### Infrastructure (for examples and integration tests)
+
+- **Kubernetes**: v1.31.0 (tested)
+- **kubectl**: v1.27+
+- **Minikube**: v1.30+
+- **Helm**: v3.12+
 
 ### Breaking Changes
 
@@ -179,8 +186,9 @@ This is the initial production-ready release of e5s, a lightweight Go library fo
 
 **Compatibility:**
 - Go 1.25.3+ required
-- SPIRE 1.8.0+ required (tested with 1.8.x, 1.9.x, 1.10.x)
+- SPIRE 1.8.0+ required (tested with 1.9.0)
 - Linux, macOS, Windows (WSL)
+- Infrastructure (examples): Kubernetes v1.31.0, kubectl v1.27+, Minikube v1.30+, Helm v3.12+
 
 **Release Assets:**
 - Source code archives

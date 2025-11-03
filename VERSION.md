@@ -176,9 +176,18 @@ Once v1.0.0 is released:
 
 ### SPIRE Version Compatibility
 
-- Minimum SPIRE version: 1.8.0
-- Recommended: Latest stable SPIRE release
-- We test against: SPIRE 1.8.x, 1.9.x, 1.10.x
+- Tested with SPIRE: 1.9.0
+- Minimum supported: 1.8.0+
+- Recommended: 1.9.0 or later
+- We test against: SPIRE 1.8.x, 1.9.x
+
+### Infrastructure Compatibility (for examples and integration tests)
+
+- **Kubernetes**: v1.31.0 (tested)
+- **kubectl**: v1.27+ (minimum)
+- **Minikube**: v1.30+ (minimum)
+- **Helm**: v3.12+ (minimum)
+- **SPIRE Helm Chart**: spiffe/spire 0.27.0 (tested)
 
 ## Questions?
 

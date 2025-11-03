@@ -78,11 +78,18 @@ Types:
 
 ### Prerequisites
 
+**Core Development:**
 - Go 1.25.3 or later
-- SPIRE (for integration tests)
 - golangci-lint
 - gosec
 - govulncheck
+
+**Integration Testing (optional):**
+- SPIRE 1.9.0 or later
+- Kubernetes v1.31.0 (or compatible)
+- kubectl v1.27+
+- Minikube v1.30+ (for local testing)
+- Helm v3.12+
 
 ### Local Development
 
