@@ -1,23 +1,21 @@
-# Testing Pre-Release: Internal Development Guide
+# Testing Pre-Release
 
-**Target Audience**: Internal developers testing e5s library changes before publishing to GitHub.
+**Target Audience**: Internal developers.
 
 **Purpose**: Test local e5s code changes in a realistic environment before releasing to end users.
 
 **Time Required**:
-- **Manual Setup**: ~20 minutes (step-by-step)
-
-If you prefer step-by-step control or need to understand the process:
+- **Manual Setup**: ~20 minutes
 
 ---
 
 ## When to Use This Guide
 
-Use this guide when you:
+When you:
 - Are developing new features for the e5s library
 - Need to test changes before creating a release
 - Want to validate bug fixes in a real environment
-- Are testing the tutorial steps before publishing
+- Are testing the tutorial steps before release
 
 ---
 
@@ -28,7 +26,7 @@ Use this guide when you:
    - SPIRE Server and Agent installed via Helm
    - Server and client workloads registered
 
-   The setup uses Helm to install SPIRE infrastructure. This guide deploys test applications using kubectl directly without using Helm.
+  The setup uses Helm to install SPIRE infrastructure. This guide deploys test applications using kubectl directly without using Helm.
 
 2. **Required Tools**:
    - **Docker** - For building container images
@@ -257,23 +255,29 @@ client:
 
 ## Step 6: Build Test Binaries
 
-Build your test applications:
+Build test applications.
+These builds will use LOCAL e5s code (due to replace directive)
+From test-demo directory:
+
+Build server:
 
 ```bash
-# From your test-demo directory
-# These builds will use your LOCAL e5s code (due to replace directive)
-
-# Build server
 go build -o bin/server ./server
+```
 
-# Build client
+Build client:
+
+```bash
 go build -o bin/client ./client
+```
 
-# Verify the binaries were created
+Verify the binaries were created:
+
+```bash
 ls -lh bin/
 ```
 
-Every time you modify e5s library code, you need to rebuild these binaries to see the changes.
+Every time e5s library code is modified, rebuild these binaries to see the changes.
 
 ---
 
@@ -807,7 +811,7 @@ This demonstrates **zero-trust mTLS security**:
 | mTLS Handshake | ✅ Successful | ❌ Cannot initiate |
 | Server Communication | ✅ Allowed | ❌ Blocked |
 
-**Key Insights:**
+**Notes:**
 
 1. **Registration Required**: Even with socket access, workloads must be registered in SPIRE to get identities
 2. **Control Plane Authorization**: SPIRE control plane enforces which workloads can obtain identities
@@ -827,24 +831,35 @@ kubectl delete job e5s-client e5s-unregistered-client
 
 ### Check Pod Status
 
-```bash
-# List all pods
+List all pods
+
+```bash 
 kubectl get pods
+```
 
 # Describe server pod for details
+
+```bash
 kubectl describe pod -l app=e5s-server
+```
 
 # Check if SPIRE socket is mounted
+
+```bash
 kubectl exec -l app=e5s-server -- ls -la /spire/agent-socket/
 ```
 
 ### View Server Logs
 
-```bash
-# Follow server logs in real-time
+Follow server logs in real-time
+
+```bash 
 kubectl logs -l app=e5s-server -f
+```
 
 # View last 100 lines
+
+```bash
 kubectl logs -l app=e5s-server --tail=100
 ```
 
@@ -885,8 +900,10 @@ kubectl run -it test-client --rm --restart=Never \
   }
 }
 '
+```
+Inside the pod, run:
 
-# Inside the pod, run:
+```bash
 /app/client
 ```
 
@@ -918,63 +935,88 @@ kubectl logs -l app=e5s-client
 
 If you modify `pkg/spire/`:
 
+1. Rebuild binaries
+
 ```bash
-# 1. Rebuild binaries
 CGO_ENABLED=0 go build -o bin/server ./server
 CGO_ENABLED=0 go build -o bin/client ./client
+```
 
 # 2. Point to Minikube's Docker and clean old images
-eval $(minikube docker-env)
-docker rmi e5s-server:dev e5s-client:dev 2>/dev/null || true
 
-# 3. Rebuild Docker images
+```bash
+eval $(minikube docker-env)
+```
+
+```bash
+docker rmi e5s-server:dev e5s-client:dev 2>/dev/null || true
+```
+
+3. Rebuild Docker images
+
+```bash
 docker build -t e5s-server:dev -f - . <<'EOF'
 FROM alpine:latest
 WORKDIR /app
 COPY bin/server .
 ENTRYPOINT ["/app/server"]
 EOF
+```
 
+```bash
 docker build -t e5s-client:dev -f - . <<'EOF'
 FROM alpine:latest
 WORKDIR /app
 COPY bin/client .
 ENTRYPOINT ["/app/client"]
 EOF
+```
 
-# 4. Force pods to use new images
+4. Force pods to use new images
+
+```bash
 kubectl delete pods -l app=e5s-server
+```
+
+```bash
 kubectl wait --for=condition=ready pod -l app=e5s-server --timeout=60s
+```
 
 # 5. Watch SPIRE logs while testing
-kubectl logs -n spire -l app.kubernetes.io/name=server -c spire-server --follow
 
-# 6. Test certificate rotation
-# SVIDs rotate every ~30 minutes - server should handle automatically
+```bash
+kubectl logs -n spire -l app.kubernetes.io/name=server -c spire-server --follow
 ```
+
+6. Test certificate rotation
+SVIDs rotate every ~30 minutes - server should handle automatically
 
 ### Testing TLS Config Changes
 
 If you modify `pkg/spiffehttp/`:
 
+1. Rebuild and redeploy (see Step 9 workflow)
+
+2. Use port-forward to inspect TLS from local machine
+
 ```bash
-# 1. Rebuild and redeploy (see Step 9 workflow)
-
-# 2. Use port-forward to inspect TLS from local machine
 kubectl port-forward svc/e5s-server 8443:8443
-
-# 3. In another terminal, inspect TLS handshake
-openssl s_client -connect localhost:8443 -showcerts
-
-# 4. Verify TLS 1.3 is enforced
-# 5. Verify client certificate is required (should fail without client cert)
 ```
+
+3. In another terminal, inspect TLS handshake
+
+```bash
+openssl s_client -connect localhost:8443 -showcerts
+```
+
+4. Verify TLS 1.3 is enforced
+5. Verify client certificate is required (should fail without client cert)
 
 ---
 
 ## Clean Up
 
-After testing, delete Kubernetes resources.
+After testing, delete Kubernetes resources:
 
 ```bash 
 kubectl delete deployment e5s-server
@@ -983,7 +1025,7 @@ kubectl delete job e5s-client
 kubectl delete configmap e5s-config
 ```
 
-Clean up test directory files.
+Clean up test directory files:
 
 ```bash
 cd test-demo
@@ -991,14 +1033,14 @@ rm -rf bin/
 rm -f k8s-*.yaml
 ```
 
-Remove entire test directory (Optional)
+Remove entire test directory: (Optional)
 
 ```bash
 cd ..
 rm -rf test-demo
 ```
 
-Clean up Docker images from Minikube
+Clean up Docker images from Minikube:
 
 ```bash
 eval $(minikube docker-env)
@@ -1061,7 +1103,7 @@ go run ./server/main.go
 
 **Issue: "import cycle detected"**
 
-This means you're importing test code into the library. Keep test code separate from library code.
+This means test code is imported into the library. Keep test code separate from library code.
 
 **For other issues**: See [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
 
@@ -1072,7 +1114,7 @@ This means you're importing test code into the library. Keep test code separate 
 - **End User Tutorial**: See [TUTORIAL.md](TUTORIAL.md) for the published library tutorial
 - **SPIRE Setup**: See [SPIRE_SETUP.md](SPIRE_SETUP.md) for infrastructure setup
 - **Troubleshooting**: See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for common issues
-- **Advanced Patterns**: See [ADVANCED.md](ADVANCED.md) for advanced usage
+- **Advanced Usage**: See [ADVANCED.md](ADVANCED.md) for advanced usage
 - **Library Docs**: See [main README](../../README.md)
 
 ---
@@ -1089,10 +1131,10 @@ You've successfully:
 - Learned how to iterate quickly on library changes using the Kubernetes workflow
 
 **Notes**:
-- The `replace` directive lets you test library changes locally before publishing
+- The `replace` directive lets you test library changes locally before release
 - SPIRE Workload API is only accessible inside Kubernetes pods, requiring containerized deployment
-- The Kubernetes workflow ensures you test in a realistic environment matching production use
-- **Helm** is used only for SPIRE infrastructure installation (prerequisite step)
-- **kubectl** is used directly to deploy and test your applications (no Helm charts needed)
+- Kubernetes is used to test in a realistic production environment
+- Helm is used only for SPIRE infrastructure installation (prerequisite step)
+- kubectl is used directly to deploy and test your applications (no Helm charts needed)
 
 **Next Step**: Once testing is complete, follow the release checklist above to release a new version.
