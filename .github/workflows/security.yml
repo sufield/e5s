@@ -40,7 +40,7 @@ jobs:
       # Dependency vulnerability scanning with SARIF output for GitHub Code Scanning
       - name: govulncheck
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
+          go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
           govulncheck -format=sarif -scan package ./... > govulncheck.sarif
         continue-on-error: true
 
