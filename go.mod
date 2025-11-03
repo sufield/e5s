@@ -9,6 +9,8 @@ require (
 
 require github.com/stretchr/testify v1.11.1 // indirect
 
+require github.com/go-chi/chi/v5 v5.2.3
+
 require (
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.2 // indirect
