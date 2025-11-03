@@ -8,15 +8,13 @@ Complete examples demonstrating how to build mTLS applications with e5s and SPIR
 
 Choose the example that matches your use case:
 
-### [📚 highlevel/](highlevel/) - Recommended Starting Point
+### [highlevel/](highlevel/) - Recommended Starting Point
 
 **For**: Application developers building mTLS services
 **API**: High-level, production-ready API
 **Complexity**: Simple - just `e5s.Run()` and `e5s.Get()`
 
-**Documentation**: **[View All Guides →](highlevel/TABLE_OF_CONTENTS.md)**
-
-### [🔧 middleware/](middleware/)
+### [middleware/](middleware/)
 
 **For**: Developers who need custom middleware integration
 **API**: Middleware-based API with Chi router
@@ -28,7 +26,7 @@ Demonstrates:
 - Manual identity extraction
 - Request context management
 
-### [⚙️ minikube-lowlevel/](minikube-lowlevel/)
+### [minikube-lowlevel/](minikube-lowlevel/)
 
 **For**: Platform engineers and operators
 **API**: Low-level SPIRE setup and infrastructure
@@ -62,7 +60,3 @@ examples/
 ├── middleware/              ← Custom middleware integration
 └── minikube-lowlevel/      ← SPIRE infrastructure setup
 ```
-
----
-
-**→ [View All Documentation](highlevel/TABLE_OF_CONTENTS.md)**

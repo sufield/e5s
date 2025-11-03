@@ -152,9 +152,9 @@ client:
   # expected_server_spiffe_id: "spiffe://example.org/server"
 ```
 
-**For advanced patterns** like environment variables, context timeouts, retry logic, and structured logging → See [examples/highlevel/ADVANCED.md](examples/highlevel/ADVANCED.md)
+**For advanced usage** like environment variables, context timeouts, retry logic, and structured logging → See [examples/highlevel/ADVANCED.md](examples/highlevel/ADVANCED.md)
 
-**For a production-ready example** → See [examples/highlevel/](examples/highlevel/) for a complete server with chi router, graceful shutdown, health checks, and structured logging.
+**For a production-ready example** → See [examples/highlevel/](examples/highlevel/) for a server with chi router, graceful shutdown, health checks, and structured logging.
 
 ### 2. Low-Level API
 
@@ -356,8 +356,6 @@ internal/config/        # Config file loading (not exported)
 The examples are separate modules (each has its own `go.mod`) so you can vendor/copy them without pulling extra dependencies into your service. The core library has minimal dependencies.
 
 ## Documentation
-
-📚 **[View All Documentation →](examples/highlevel/TABLE_OF_CONTENTS.md)**
 
 **Quick Links:**
 

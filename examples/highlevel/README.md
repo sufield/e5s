@@ -1,10 +1,8 @@
 # e5s High-Level API Documentation
 
-Complete guide to building mTLS applications with e5s and SPIRE.
+Guide to building mTLS applications with e5s and SPIRE.
 
 ---
-
-## Quick Navigation
 
 ### Getting Started
 
@@ -42,7 +40,7 @@ Complete guide to building mTLS applications with e5s and SPIRE.
 
 ## Documentation Paths
 
-### For End Users (Learning & Building)
+### For End Users
 
 ```
 TUTORIAL.md → README.md → ADVANCED.md
