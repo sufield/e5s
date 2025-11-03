@@ -18,6 +18,12 @@ A lightweight Go library for building mutual TLS services with SPIFFE identity v
     - High-level API (`e5s.go`): adds `yaml.v3`.
     - Examples add `chi` (see `go.mod` for details)
 
+## Documentation
+
+- **[API Reference](https://pkg.go.dev/github.com/sufield/e5s)** - Complete API documentation on pkg.go.dev
+- **[API Guide](docs/API.md)** - Detailed guide with examples and patterns
+- **[Quickstart](docs/QUICKSTART_LIBRARY.md)** - Get started in 5 minutes
+
 ## Quick Start
 
 ### Installation
