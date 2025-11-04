@@ -1,6 +1,25 @@
 # Falco Custom Rules for SPIRE mTLS Runtime Security Monitoring
 # ==============================================================
 #
+# ⚠️  DEPRECATION NOTICE ⚠️
+# -------------------------
+# This rules file is for BARE-METAL / DEVELOPMENT WORKSTATION installations only.
+#
+# For Kubernetes/Minikube deployments, use the Helm chart configuration:
+#   - Rules are defined in: examples/minikube-lowlevel/infra/values-falco.yaml
+#   - Enable with: ENABLE_FALCO=true helmfile -e dev apply
+#
+# The Helm chart uses a streamlined set of 5 critical rules optimized for
+# Kubernetes environments. This file contains the full 18-rule set for
+# bare-metal systemd installations.
+#
+# Documentation:
+#   - Helm deployment: examples/minikube-lowlevel/infra/README.md
+#   - Complete guide: security/FALCO_GUIDE.md
+#   - Troubleshooting: security/BARE_METAL_TROUBLESHOOTING.md
+#
+# -------------------------
+#
 # This file contains Falco rules specifically designed for monitoring
 # SPIRE-based mTLS applications at runtime. These rules detect:
 #
@@ -11,11 +30,14 @@
 # - Container escape attempts
 # - Privilege escalation
 #
-# Usage:
+# Usage (Bare-Metal Only):
 #   1. Install Falco: sudo apt install -y falco
 #   2. Copy this file: sudo cp security/falco_rules.yaml /etc/falco/falco_rules.local.yaml
 #   3. Restart Falco: sudo systemctl restart falco
 #   4. Monitor alerts: sudo journalctl -u falco -f
+#
+# Or use the automated setup script:
+#   sudo bash security/setup-falco.sh
 #
 # SPIRE-specific context:
 #   - SPIRE agent socket: /tmp/spire-agent/public/api.sock

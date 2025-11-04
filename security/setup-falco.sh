@@ -2,6 +2,20 @@
 # Falco Security Monitoring Setup for SPIRE mTLS
 # ===============================================
 #
+# ⚠️  DEPRECATION NOTICE ⚠️
+# -------------------------
+# This script is for BARE-METAL / DEVELOPMENT WORKSTATION installations only.
+#
+# For Kubernetes/Minikube deployments, use the recommended Helm-based approach:
+#   ENABLE_FALCO=true helmfile -e dev apply
+#
+# Documentation:
+#   - Helm deployment: examples/minikube-lowlevel/infra/README.md
+#   - Complete guide: security/FALCO_GUIDE.md
+#   - Troubleshooting: security/BARE_METAL_TROUBLESHOOTING.md
+#
+# -------------------------
+#
 # This script performs a complete installation and configuration of Falco
 # with custom SPIRE mTLS security rules.
 #
