@@ -1,197 +1,88 @@
-# Versioning
+# Version Information
 
-e5s follows [Semantic Versioning 2.0.0](https://semver.org/).
+## Current Release: v0.1.0
 
-## Version Format
+## Development Environment
 
-Versions are tagged in git using the format: `v<MAJOR>.<MINOR>.<PATCH>`
+Versions used for local development and testing:
 
-Examples:
-- `v0.1.0` - Initial pre-1.0 release
-- `v0.2.0` - New features added (pre-1.0)
-- `v0.2.1` - Bug fix release
-- `v1.0.0` - First stable release
-- `v1.1.0` - New features (backward compatible)
-- `v2.0.0` - Breaking changes
+| Component | Version | Notes |
+|-----------|---------|-------|
+| Go | 1.25.3 | Minimum required |
+| Minikube | v1.30+ | For local Kubernetes testing |
+| kubectl | v1.27+ | Kubernetes CLI |
+| Helm | v3.12+ | Package manager for Kubernetes |
+| SPIRE | 1.9.0 | Identity framework |
+| SPIRE Helm Chart | spiffe/spire 0.27.0 | Helm chart for SPIRE deployment |
+| Kubernetes | v1.31.0 | Minikube cluster version |
+| golangci-lint | Latest | Static analysis tool |
+| gosec | Latest | Security scanner |
+| govulncheck | Latest | Vulnerability scanner |
+| gitleaks | Latest | Secret scanner |
 
-## Semantic Versioning Rules
+## Production Environment
 
-Given a version number MAJOR.MINOR.PATCH:
+Versions tested and recommended for production deployments:
 
-- **MAJOR** version increments for incompatible API changes
-- **MINOR** version increments for backward-compatible functionality additions
-- **PATCH** version increments for backward-compatible bug fixes
+| Component | Version | Notes |
+|-----------|---------|-------|
+| Go | 1.25.3 | Minimum required |
+| SPIRE | 1.9.0+ | Minimum 1.8.0 |
+| SPIRE Helm Chart | spiffe/spire 0.27.0+ | For Kubernetes deployments |
+| Kubernetes | v1.31.0+ | Tested on v1.31.0 |
+| kubectl | v1.27+ | Kubernetes CLI |
+| Helm | v3.12+ | Package manager for Kubernetes |
 
-## Pre-1.0 Development (Current Phase)
+## Container Images
 
-During the 0.x.x phase:
-- The API is not yet stable
-- Minor version bumps (0.x.0) may include breaking changes
-- We'll clearly document any breaking changes in release notes
-- Aim for 1.0.0 when the API is stable and battle-tested
+| Image | Registry | Tag | Digest |
+|-------|----------|-----|--------|
+| e5s-demo-server | ghcr.io/sufield/e5s-demo-server | v0.1.0 | - |
+| e5s-demo-client | ghcr.io/sufield/e5s-demo-client | v0.1.0 | - |
+| Alpine (base image) | docker.io/library/alpine | 3.19 | sha256:6baf43584bcb78f2e5847d1de515f23499913ac9f12bdf834811a3145eb11ca1 |
 
-## Version Information in Binaries
-
-All released binaries include version information that can be viewed with the `--version` flag:
-
-```bash
-$ e5s-example-server --version
-e5s-example-server v0.1.0
-  commit: abc1234
-  built:  2024-01-15T10:30:00Z
-```
-
-This version information is automatically injected during the build process by GoReleaser using git tags and commit information.
-
-## Go Module Versioning
-
-For Go modules, versions follow the Go module versioning conventions:
-
-### Installing a Specific Version
+## Go Module
 
 ```bash
-# Latest version
-go get github.com/sufield/e5s@latest
-
-# Specific version
 go get github.com/sufield/e5s@v0.1.0
-
-# Specific commit (for development/testing)
-go get github.com/sufield/e5s@commit-hash
 ```
 
-### Version Constraints in go.mod
+## Release Artifacts
 
-```go
-require (
-    github.com/sufield/e5s v0.1.0
-)
+All release artifacts are available at: https://github.com/sufield/e5s/releases
+
+Each release includes:
+- Pre-built binaries (Linux/macOS, amd64/arm64)
+- Docker images (multi-arch)
+- Source code archives
+- SHA256 checksums
+- Cryptographic signatures (Cosign)
+
+## Verification
+
+### Verify Checksums
+```bash
+sha256sum -c e5s_0.1.0_SHA256SUMS
 ```
 
-## Release Process
-
-1. **Tag the release:**
-   ```bash
-   git tag -a v0.1.0 -m "Release v0.1.0"
-   git push origin v0.1.0
-   ```
-
-2. **Create GitHub Release:**
-   - Go to https://github.com/sufield/e5s/releases/new
-   - Select the tag
-   - Add release notes describing changes
-   - Publish the release
-
-3. **Automated Build:**
-   - GoReleaser automatically builds binaries for multiple platforms
-   - Docker images are built and pushed to GHCR
-   - Release artifacts are uploaded to GitHub Releases
-   - pkg.go.dev is automatically updated
+### Verify Signatures (Cosign)
+```bash
+cosign verify-blob \
+  --certificate e5s_0.1.0_SHA256SUMS.pem \
+  --signature e5s_0.1.0_SHA256SUMS.sig \
+  --certificate-identity-regexp="https://github.com/sufield/e5s/" \
+  --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
+  e5s_0.1.0_SHA256SUMS
+```
 
 ## Version History
 
-### v0.1.0 (Planned First Release)
+| Version | Release Date | Notes |
+|---------|--------------|-------|
+| v0.1.0 | 2025-11-03 | Initial release |
 
-Initial release of the e5s library featuring:
-- High-level API (e5s.Start, e5s.Client, e5s.Run)
-- Low-level API (pkg/spiffehttp, pkg/spire)
-- Automatic certificate rotation
-- SPIFFE ID verification
-- TLS 1.3 enforcement
-- Convention-over-configuration design
-- Comprehensive documentation
-- Example applications
-- Docker images for demos
-- Kubernetes/Helm support
+## Support
 
-## Deprecation Policy
-
-### During 0.x.x (Pre-1.0)
-
-- Breaking changes will be clearly documented in release notes
-- Deprecated features will be removed in the next minor version
-- Migration guides will be provided for significant changes
-
-### After 1.0.0
-
-- Deprecated features will be marked and documented
-- Deprecated features will remain for at least one major version
-- Clear migration paths will be provided
-- Breaking changes only in major version bumps
-
-## Checking Your Version
-
-### Library Version (Go Module)
-
-Check your `go.mod` file:
-```go
-require github.com/sufield/e5s v0.1.0
-```
-
-Or run:
-```bash
-go list -m github.com/sufield/e5s
-```
-
-### Binary Version
-
-Run the binary with `--version`:
-```bash
-e5s-example-server --version
-```
-
-### Docker Image Version
-
-Check the image tag:
-```bash
-docker images | grep e5s-demo-server
-```
-
-Or run the container:
-```bash
-docker run ghcr.io/sufield/e5s-demo-server:v0.1.0 --version
-```
-
-## Support Policy
-
-### Current Versions
-
-- Latest stable release (v0.x.x currently)
-- Previous minor version (for 30 days after new minor release)
-
-### Long-Term Support (After 1.0.0)
-
-Once v1.0.0 is released:
-- Latest major version: Full support
-- Previous major version: Security fixes for 6 months
-- Older versions: Community support only
-
-## Version Compatibility
-
-### Go Version Compatibility
-
-- Minimum Go version: 1.25.3
-- We test against: Go 1.25.3 and latest stable
-- We support: Current and previous Go minor versions
-
-### SPIRE Version Compatibility
-
-- Tested with SPIRE: 1.9.0
-- Minimum supported: 1.8.0+
-- Recommended: 1.9.0 or later
-- We test against: SPIRE 1.8.x, 1.9.x
-
-### Infrastructure Compatibility (for examples and integration tests)
-
-- **Kubernetes**: v1.31.0 (tested)
-- **kubectl**: v1.27+ (minimum)
-- **Minikube**: v1.30+ (minimum)
-- **Helm**: v3.12+ (minimum)
-- **SPIRE Helm Chart**: spiffe/spire 0.27.0 (tested)
-
-## Questions?
-
-For questions about versioning or compatibility:
-- Open an issue: https://github.com/sufield/e5s/issues
-- Check the changelog: https://github.com/sufield/e5s/releases
-- Read the migration guide: docs/MIGRATION.md
+- Bug Reports: https://github.com/sufield/e5s/issues
+- Documentation: https://pkg.go.dev/github.com/sufield/e5s
+- Release Notes: https://github.com/sufield/e5s/releases
