@@ -57,7 +57,7 @@ type ServerConfig struct {
 //
 // Example:
 //
-//	source, _ := spire.NewSource(ctx, spire.Config{})
+//	source, _ := spire.NewIdentitySource(ctx, spire.Config{})
 //	defer source.Close()
 //	x509Source := source.X509Source()
 //

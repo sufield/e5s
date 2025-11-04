@@ -195,7 +195,7 @@ func Start(configPath string, handler http.Handler) (shutdown func() error, err 
 	ctx := context.Background()
 
 	// Connect to SPIRE Workload API with timeout for initial fetch
-	source, err := spire.NewSource(ctx, spire.Config{
+	source, err := spire.NewIdentitySource(ctx, spire.Config{
 		WorkloadSocket:      cfg.SPIRE.WorkloadSocket,
 		InitialFetchTimeout: spireConfig.InitialFetchTimeout,
 	})
@@ -485,7 +485,7 @@ func Client(configPath string) (*http.Client, func() error, error) {
 	ctx := context.Background()
 
 	// Connect to SPIRE Workload API with timeout for initial fetch
-	source, err := spire.NewSource(ctx, spire.Config{
+	source, err := spire.NewIdentitySource(ctx, spire.Config{
 		WorkloadSocket:      cfg.SPIRE.WorkloadSocket,
 		InitialFetchTimeout: spireConfig.InitialFetchTimeout,
 	})

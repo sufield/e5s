@@ -116,7 +116,7 @@ func main() {
 	defer stop()
 
 	// Create SPIRE source
-	source, err := spire.NewSource(ctx, spire.Config{})
+	source, err := spire.NewIdentitySource(ctx, spire.Config{})
 	if err != nil {
 		log.Fatalf("Failed to create SPIRE source: %v", err)
 	}

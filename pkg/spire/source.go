@@ -11,7 +11,7 @@ import (
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
 )
 
-// Source provides SPIFFE X.509 identities from the SPIRE Workload API.
+// IdentitySource provides SPIFFE X.509 identities from the SPIRE Workload API.
 //
 // This source:
 //   - Connects to the SPIRE Agent's Workload API socket
@@ -36,7 +36,7 @@ import (
 // Thread-safety: All methods are safe for concurrent use.
 // Internal state (the underlying workloadapi.X509Source) is guarded by mu
 // and becomes nil after Close(); callers must handle "source is closed" errors.
-type Source struct {
+type IdentitySource struct {
 	mu     sync.RWMutex
 	source *workloadapi.X509Source
 	cancel context.CancelFunc // Cancels the context used to create the source
@@ -46,7 +46,7 @@ type Source struct {
 	closeErr  error
 }
 
-// Config configures the SPIRE cert source.
+// Config configures the SPIRE identity source.
 type Config struct {
 	// WorkloadSocket is the path to the SPIRE agent's Workload API socket.
 	//
@@ -71,7 +71,7 @@ type Config struct {
 	InitialFetchTimeout time.Duration
 }
 
-// NewSource creates a new SPIRE-backed certificate source.
+// NewIdentitySource creates a new SPIRE-backed identity source.
 //
 // This connects to the SPIRE Workload API and starts watching for certificate
 // and trust bundle updates. The connection remains active until Close() is called.
@@ -101,7 +101,7 @@ type Config struct {
 // InitialFetchTimeout (separate from ctx) bounds how long we wait for the
 // first SVID before returning an error. This prevents hanging forever if
 // SPIRE agent is unreachable.
-func NewSource(ctx context.Context, cfg Config) (*Source, error) {
+func NewIdentitySource(ctx context.Context, cfg Config) (*IdentitySource, error) {
 	if ctx == nil {
 		return nil, errors.New("context cannot be nil")
 	}
@@ -149,7 +149,7 @@ func NewSource(ctx context.Context, cfg Config) (*Source, error) {
 		// Success! buildCtx stays alive, controlled by parent ctx.
 		// The source's watchers will run until ctx is canceled or Close() is called.
 		// Store cancel so it can be called in Close()
-		return &Source{source: r.src, cancel: cancel}, nil
+		return &IdentitySource{source: r.src, cancel: cancel}, nil
 
 	case <-time.After(timeout):
 		cancel() // Stop trying to build the source
@@ -162,8 +162,8 @@ func NewSource(ctx context.Context, cfg Config) (*Source, error) {
 // The returned source implements both x509svid.Source and x509bundle.Source,
 // which can be passed directly to tlsconfig.MTLSServerConfig() and similar SDK functions.
 //
-// Returns nil if the source has been closed.
-func (s *Source) X509Source() *workloadapi.X509Source {
+// Returns nil if the identity source has been closed.
+func (s *IdentitySource) X509Source() *workloadapi.X509Source {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.source
@@ -174,7 +174,7 @@ func (s *Source) X509Source() *workloadapi.X509Source {
 // After Close returns, the underlying SDK source is closed and cannot be used.
 //
 // Idempotent: safe to call multiple times. Subsequent calls return the cached error.
-func (s *Source) Close() error {
+func (s *IdentitySource) Close() error {
 	s.closeOnce.Do(func() {
 		s.mu.Lock()
 		defer s.mu.Unlock()

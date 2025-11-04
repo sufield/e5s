@@ -87,28 +87,28 @@ func TestNormalizeToAddr(t *testing.T) {
 	}
 }
 
-// TestNewSource_NilContext verifies that NewSource rejects nil context.
-func TestNewSource_NilContext(t *testing.T) {
+// TestNewIdentitySource_NilContext verifies that NewIdentitySource rejects nil context.
+func TestNewIdentitySource_NilContext(t *testing.T) {
 	cfg := Config{
 		WorkloadSocket:      "/tmp/spire-agent/public/api.sock",
 		InitialFetchTimeout: 5 * time.Second,
 	}
 
 	//nolint:staticcheck // Intentionally passing nil to test error handling
-	src, err := NewSource(nil, cfg)
+	src, err := NewIdentitySource(nil, cfg)
 	if err == nil {
-		t.Fatal("NewSource with nil context should fail, got success")
+		t.Fatal("NewIdentitySource with nil context should fail, got success")
 	}
 	if src != nil {
-		t.Errorf("NewSource with nil context should return nil source, got %v", src)
+		t.Errorf("NewIdentitySource with nil context should return nil source, got %v", src)
 	}
 	if !strings.Contains(err.Error(), "context cannot be nil") {
 		t.Errorf("Expected error about nil context, got: %v", err)
 	}
 }
 
-// TestNewSource_DefaultTimeout verifies that zero timeout uses default.
-func TestNewSource_DefaultTimeout(t *testing.T) {
+// TestNewIdentitySource_DefaultTimeout verifies that zero timeout uses default.
+func TestNewIdentitySource_DefaultTimeout(t *testing.T) {
 	// This test verifies the timeout defaulting logic by using a canceled
 	// context to fail quickly, avoiding the need to wait 30 seconds.
 	// We're testing that the code path correctly sets timeout=30s when
@@ -123,24 +123,24 @@ func TestNewSource_DefaultTimeout(t *testing.T) {
 	}
 
 	start := time.Now()
-	_, err := NewSource(ctx, cfg)
+	_, err := NewIdentitySource(ctx, cfg)
 	elapsed := time.Since(start)
 
 	if err == nil {
-		t.Fatal("NewSource with canceled context should fail")
+		t.Fatal("NewIdentitySource with canceled context should fail")
 	}
 
 	// Should fail quickly (context already canceled)
 	if elapsed > 1*time.Second {
-		t.Errorf("NewSource with canceled context took too long: %v", elapsed)
+		t.Errorf("NewIdentitySource with canceled context took too long: %v", elapsed)
 	}
 
 	// The error should mention context cancellation or connection failure
 	t.Logf("Got expected error (verifies default timeout logic): %v", err)
 }
 
-// TestNewSource_CustomTimeout verifies that custom timeout is respected.
-func TestNewSource_CustomTimeout(t *testing.T) {
+// TestNewIdentitySource_CustomTimeout verifies that custom timeout is respected.
+func TestNewIdentitySource_CustomTimeout(t *testing.T) {
 	ctx := context.Background()
 	cfg := Config{
 		WorkloadSocket:      "unix:///nonexistent/socket/path/that/does/not/exist",
@@ -148,11 +148,11 @@ func TestNewSource_CustomTimeout(t *testing.T) {
 	}
 
 	start := time.Now()
-	_, err := NewSource(ctx, cfg)
+	_, err := NewIdentitySource(ctx, cfg)
 	elapsed := time.Since(start)
 
 	if err == nil {
-		t.Fatal("NewSource with nonexistent socket should fail")
+		t.Fatal("NewIdentitySource with nonexistent socket should fail")
 	}
 
 	// Verify timeout happened within reasonable bounds
@@ -172,9 +172,9 @@ func TestNewSource_CustomTimeout(t *testing.T) {
 	}
 }
 
-// TestNewSource_ContextCancellation verifies that canceling context
+// TestNewIdentitySource_ContextCancellation verifies that canceling context
 // is handled gracefully.
-func TestNewSource_ContextCancellation(t *testing.T) {
+func TestNewIdentitySource_ContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
@@ -183,9 +183,9 @@ func TestNewSource_ContextCancellation(t *testing.T) {
 		InitialFetchTimeout: 5 * time.Second,
 	}
 
-	_, err := NewSource(ctx, cfg)
+	_, err := NewIdentitySource(ctx, cfg)
 	if err == nil {
-		t.Fatal("NewSource with canceled context should fail")
+		t.Fatal("NewIdentitySource with canceled context should fail")
 	}
 
 	// Should fail quickly since context is already canceled
@@ -197,7 +197,7 @@ func TestNewSource_ContextCancellation(t *testing.T) {
 func TestSource_Close_Idempotency(t *testing.T) {
 	// Create a mock Source (without real SDK source since we can't connect)
 	// We test the Close() idempotency logic itself.
-	src := &Source{
+	src := &IdentitySource{
 		source: nil, // Simulate already closed or never initialized
 	}
 
@@ -222,7 +222,7 @@ func TestSource_Close_Idempotency(t *testing.T) {
 
 // TestSource_X509Source_AfterClose verifies that X509Source() returns nil after Close().
 func TestSource_X509Source_AfterClose(t *testing.T) {
-	src := &Source{
+	src := &IdentitySource{
 		source: nil, // Simulate closed state
 	}
 
@@ -240,7 +240,7 @@ func TestSource_X509Source_AfterClose(t *testing.T) {
 func TestSource_X509Source_BeforeClose(t *testing.T) {
 	// We can't test with a real X509Source without connecting to SPIRE,
 	// but we can verify the method doesn't panic and follows the contract.
-	src := &Source{
+	src := &IdentitySource{
 		source: nil, // No real source
 	}
 
@@ -251,9 +251,9 @@ func TestSource_X509Source_BeforeClose(t *testing.T) {
 	}
 }
 
-// TestNewSource_EmptySocketUsesEnvVar documents that empty socket triggers
+// TestNewIdentitySource_EmptySocketUsesEnvVar documents that empty socket triggers
 // SDK's auto-detection from SPIFFE_ENDPOINT_SOCKET environment variable.
-func TestNewSource_EmptySocketUsesEnvVar(t *testing.T) {
+func TestNewIdentitySource_EmptySocketUsesEnvVar(t *testing.T) {
 	// This test documents the behavior but can't fully test it without
 	// either a real SPIRE agent or mocking the SDK.
 	// We verify that empty socket doesn't panic and attempts to use SDK defaults.
@@ -266,7 +266,7 @@ func TestNewSource_EmptySocketUsesEnvVar(t *testing.T) {
 
 	// This will fail if SPIFFE_ENDPOINT_SOCKET is not set or agent isn't running,
 	// but it shouldn't panic
-	_, err := NewSource(ctx, cfg)
+	_, err := NewIdentitySource(ctx, cfg)
 
 	// We expect an error (no agent running in test environment)
 	if err == nil {
@@ -327,15 +327,15 @@ func TestConfig_Validation(t *testing.T) {
 	}
 }
 
-// TestNewSource_TimeoutMessage verifies timeout error message format.
-func TestNewSource_TimeoutMessage(t *testing.T) {
+// TestNewIdentitySource_TimeoutMessage verifies timeout error message format.
+func TestNewIdentitySource_TimeoutMessage(t *testing.T) {
 	ctx := context.Background()
 	cfg := Config{
 		WorkloadSocket:      "unix:///definitely/does/not/exist/nowhere",
 		InitialFetchTimeout: 50 * time.Millisecond,
 	}
 
-	_, err := NewSource(ctx, cfg)
+	_, err := NewIdentitySource(ctx, cfg)
 	if err == nil {
 		t.Fatal("Expected error with nonexistent socket")
 	}
