@@ -13,9 +13,11 @@ This guide explains how to use [Falco](https://falco.org) for runtime security m
 
 ## Prerequisites
 
-- Minikube (v1.30+)
-- kubectl (v1.27+)
-- Helm (v3.12+) or Helmfile
+See [VERSION.md](../VERSION.md) for all required component versions.
+
+- Minikube
+- kubectl
+- Helm or Helmfile
 - Kernel 6.8+ (for modern eBPF support)
 
 ## Quick Start
@@ -31,7 +33,7 @@ ENABLE_FALCO=true make minikube-up
 ```
 
 This automatically:
-- Deploys Falco 4.19.4 as a DaemonSet
+- Deploys Falco as a DaemonSet
 - Loads 5 custom SPIRE mTLS security rules
 - Uses modern eBPF driver (no kernel module)
 - Configures JSON output and structured logging

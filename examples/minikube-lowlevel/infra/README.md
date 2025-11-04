@@ -4,9 +4,11 @@ This directory contains the complete Helm/Minikube infrastructure setup for loca
 
 ## Prerequisites
 
-- Minikube (v1.30+)
-- kubectl (v1.27+)
-- Helm (v3.12+)
+See [VERSION.md](../../../VERSION.md) for all required component versions.
+
+- Minikube
+- kubectl
+- Helm
 - Helmfile (optional, will fallback to direct helm commands)
 - Docker (for Minikube driver)
 
