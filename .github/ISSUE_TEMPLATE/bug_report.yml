@@ -82,7 +82,7 @@ body:
     attributes:
       label: SPIRE Version
       description: Run `spire-server --version` or `spire-agent --version`.
-      placeholder: "v1.9.0"
+      placeholder: "v1.13.3"
     validations:
       required: false
 

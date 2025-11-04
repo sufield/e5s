@@ -15,7 +15,7 @@ spire-server:
   image:
     registry: ghcr.io
     repository: spiffe/spire-server
-    tag: 1.9.0
+    tag: 1.13.3
     pullPolicy: IfNotPresent
 
   # Production resource limits
@@ -95,7 +95,7 @@ spire-agent:
   image:
     registry: ghcr.io
     repository: spiffe/spire-agent
-    tag: 1.9.0
+    tag: 1.13.3
     pullPolicy: IfNotPresent
 
   # Production resource limits

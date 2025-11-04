@@ -85,7 +85,7 @@ Types:
 - govulncheck
 
 **Integration Testing (optional):**
-- SPIRE 1.9.0 or later
+- SPIRE 1.13.3 or later
 - Kubernetes v1.31.0 (or compatible)
 - kubectl v1.27+
 - Minikube v1.30+ (for local testing)

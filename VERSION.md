@@ -13,7 +13,8 @@ Versions used for local development and testing:
 | kubectl | v1.27+ | Kubernetes CLI |
 | Helm | v3.12+ | Package manager for Kubernetes |
 | Helmfile | v0.150.0+ | Optional, for orchestrating Helm releases |
-| SPIRE | 1.9.0 | Identity framework |
+| go-spiffe SDK | v2.6.0 | SPIFFE client library for Go |
+| SPIRE | 1.13.3 | Identity framework |
 | SPIRE Helm Chart | spiffe/spire 0.27.0 | Helm chart for SPIRE deployment |
 | Falco | 4.19.4 | Optional runtime security monitoring |
 | Falco Helm Chart | falcosecurity/falco 4.19.4 | Runtime security via Helm |
@@ -30,7 +31,8 @@ Versions tested and recommended for production deployments:
 | Component | Version | Notes |
 |-----------|---------|-------|
 | Go | 1.25.3 | Minimum required |
-| SPIRE | 1.9.0+ | Minimum 1.8.0 |
+| go-spiffe SDK | v2.6.0 | SPIFFE client library for Go |
+| SPIRE | 1.13.3+ | Minimum 1.9.0 |
 | SPIRE Helm Chart | spiffe/spire 0.27.0+ | For Kubernetes deployments |
 | Falco | 4.19.4+ | Optional runtime security monitoring |
 | Falco Helm Chart | falcosecurity/falco 4.19.4+ | Enable with ENABLE_FALCO=true |
