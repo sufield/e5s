@@ -54,10 +54,10 @@ When you:
    Verify you're in the right place
 
    ```bash
-   ls -la e5s.go pkg/ examples/
+   ls -la e5s.go spiffehttp/ spire/ examples/
    ```
 
-   Should show the e5s library source code
+   Should show the e5s library source code with public packages
 
 ---
 
@@ -933,7 +933,7 @@ kubectl logs -l app=e5s-client
 
 ### Testing SPIRE Integration Changes
 
-If you modify `pkg/spire/`:
+If you modify `spire/`:
 
 1. Rebuild binaries
 
@@ -993,7 +993,7 @@ SVIDs rotate every ~30 minutes - server should handle automatically
 
 ### Testing TLS Config Changes
 
-If you modify `pkg/spiffehttp/`:
+If you modify `spiffehttp/`:
 
 1. Rebuild and redeploy (see Step 9 workflow)
 
