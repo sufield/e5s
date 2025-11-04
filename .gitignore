@@ -39,13 +39,11 @@ codeql-results.sarif
 codeql-db/
 
 # Dev infrastructure secrets (DO NOT COMMIT)
-infra/dev/minikube/values-minikube-secrets.yaml
-infra/dev/minikube/values-minikube-secrets.enc.yaml
 *-secrets.yaml
 *.enc.yaml
 
 # Helm/Kubernetes artifacts
-infra/dev/minikube/charts/
+examples/minikube-lowlevel/infra/charts/
 *.tgz
 helmfile.lock
 

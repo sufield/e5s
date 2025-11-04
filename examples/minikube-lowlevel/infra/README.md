@@ -142,16 +142,17 @@ For more details, see [security/README.md](../../../security/) and [security/FAL
 ## Directory Structure
 
 ```
-infra/dev/minikube/
+examples/minikube-lowlevel/infra/
 ├── helmfile.yaml                  # Helmfile orchestration
 ├── values-minikube.yaml           # Dev-hardened values
-├── values-minikube-secrets.yaml   # Secrets template (generated)
+├── values-minikube-secrets.yaml.template  # Secrets template
+├── values-minikube-secrets.yaml   # Generated secrets (gitignored)
 ├── values-falco.yaml              # Falco security monitoring config (optional)
-├── scripts/
-│   ├── cluster-up.sh              # Start cluster and deploy SPIRE
-│   ├── cluster-down.sh            # Stop/cleanup cluster
-│   └── wait-ready.sh              # Wait for deployments
-└── charts/                        # Downloaded Helm charts (cache)
+├── charts/                        # Downloaded Helm charts (cache)
+└── ../scripts/
+    ├── cluster-up.sh              # Start cluster and deploy SPIRE
+    ├── cluster-down.sh            # Stop/cleanup cluster
+    └── wait-ready.sh              # Wait for deployments
 ```
 
 ## Configuration
