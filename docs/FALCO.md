@@ -1,22 +1,18 @@
-# Security Tools and Documentation
-
-This directory contains security tools, rules, and documentation for the e5s mTLS library.
-
 ## Library Security Implementation
 
 The mTLS security enforcement is implemented in **[`pkg/spiffehttp`](../pkg/spiffehttp/)** with SPIFFE identity verification, TLS 1.3 enforcement, and peer authentication. See the [library quickstart](../docs/QUICKSTART_LIBRARY.md) for usage examples.
 
 ## Contents
 
-### 📋 Falco Runtime Security Monitoring
+### Falco Runtime Security Monitoring
 
-- **[setup-falco.sh](setup-falco.sh)** - **Main installation script** - Run this to install everything
+- **[setup-falco.sh](setup-falco.sh)** - Main installation script - Run this to install everything
 - **[FALCO_GUIDE.md](FALCO_GUIDE.md)** - Comprehensive guide for Falco integration
 - **[falco_rules.yaml](falco_rules.yaml)** - 18 custom Falco rules for SPIRE mTLS monitoring
 - **[test-falco.sh](test-falco.sh)** - Test Falco rules by triggering sample alerts
 - **[SOLUTION.md](SOLUTION.md)** - Technical details of implementation
 
-### 🛡️ Security Layers
+### Security Layers
 
 This project implements defense-in-depth with multiple security layers:
 
@@ -365,12 +361,7 @@ Instead, report via GitHub Security Advisories: https://github.com/sufield/e5s/s
 - SPIFFE Slack: https://slack.spiffe.io
 - #golang-security on Gophers Slack
 
-## License
-
-Security tools and rules in this directory are licensed under Apache 2.0, same as the main project.
-
 ---
 
 **Last Updated**: 2025-11-03
-**Maintainer**: Security Team
 **Contact**: https://github.com/sufield/e5s/security
