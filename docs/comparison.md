@@ -182,15 +182,19 @@ package main
 
 import (
     "context"
-    "crypto/tls"
     "fmt"
+    "io"
     "log"
     "net/http"
+    "time"
 
     "github.com/spiffe/go-spiffe/v2/spiffeid"
     "github.com/spiffe/go-spiffe/v2/spiffetls/tlsconfig"
     "github.com/spiffe/go-spiffe/v2/workloadapi"
 )
+
+// Workload API socket path
+const socketPath = "unix:///tmp/agent.sock"
 
 func main() {
     if err := run(context.Background()); err != nil {
@@ -199,39 +203,42 @@ func main() {
 }
 
 func run(ctx context.Context) error {
-    // Create X509Source
-    source, err := workloadapi.NewX509Source(ctx)
+    ctx, cancel := context.WithCancel(ctx)
+    defer cancel()
+
+    // Set up a `/` resource handler
+    http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+        log.Println("Request received")
+        _, _ = io.WriteString(w, "Success!!!")
+    })
+
+    // Create a `workloadapi.X509Source`, it will connect to Workload API using provided socket.
+    // If socket path is not defined using `workloadapi.SourceOption`, value from environment variable `SPIFFE_ENDPOINT_SOCKET` is used.
+    source, err := workloadapi.NewX509Source(ctx, workloadapi.WithClientOptions(workloadapi.WithAddr(socketPath)))
     if err != nil {
         return fmt.Errorf("unable to create X509Source: %w", err)
     }
     defer source.Close()
 
-    // Define allowed client SPIFFE ID
+    // Allowed SPIFFE ID
     clientID := spiffeid.RequireFromString("spiffe://example.org/client")
 
-    // Create mTLS server config
-    tlsConfig := tlsconfig.MTLSServerConfig(
-        source,
-        source,
-        tlsconfig.AuthorizeID(clientID),
-    )
-    tlsConfig.MinVersion = tls.VersionTLS13
-
-    // Setup HTTP handler
-    http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-        fmt.Fprintln(w, "Hello from mTLS server!")
-    })
-
-    // Start HTTPS server
+    // Create a `tls.Config` to allow mTLS connections, and verify that presented certificate has SPIFFE ID `spiffe://example.org/client`
+    tlsConfig := tlsconfig.MTLSServerConfig(source, source, tlsconfig.AuthorizeID(clientID))
     server := &http.Server{
-        Addr:      ":8443",
-        TLSConfig: tlsConfig,
+        Addr:              ":8443",
+        TLSConfig:         tlsConfig,
+        ReadHeaderTimeout: time.Second * 10,
     }
 
-    log.Println("Server listening on :8443")
-    return server.ListenAndServeTLS("", "")
+    if err := server.ListenAndServeTLS("", ""); err != nil {
+        return fmt.Errorf("failed to serve: %w", err)
+    }
+    return nil
 }
 ```
+
+**Lines of code: ~57**
 
 ### Using e5s Library
 
@@ -240,6 +247,7 @@ package main
 
 import (
     "context"
+    "io"
     "log"
     "net/http"
 
@@ -253,9 +261,10 @@ func main() {
 }
 
 func run(ctx context.Context) error {
-    // Setup HTTP handler
+    // Set up a `/` resource handler
     http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-        fmt.Fprintln(w, "Hello from mTLS server!")
+        log.Println("Request received")
+        _, _ = io.WriteString(w, "Success!!!")
     })
 
     // Start mTLS server from config
@@ -263,16 +272,40 @@ func run(ctx context.Context) error {
 }
 ```
 
+**Lines of code: ~24 (Go) + 7 (YAML) = 31 total**
+
 **server-config.yaml:**
 ```yaml
 spire:
-  workload_socket: "unix:///tmp/spire-agent/public/api.sock"
+  workload_socket: "unix:///tmp/agent.sock"
   initial_fetch_timeout: "30s"
 
 server:
   listen_addr: ":8443"
   allowed_client_spiffe_id: "spiffe://example.org/client"
 ```
+
+### Key Differences Highlighted
+
+**What go-spiffe SDK requires explicitly:**
+1. Context cancellation management (`ctx, cancel := context.WithCancel(ctx)`)
+2. Explicit X509Source creation with socket path configuration
+3. Manual source lifecycle management (`defer source.Close()`)
+4. SPIFFE ID parsing (`spiffeid.RequireFromString()`)
+5. TLS config construction (`tlsconfig.MTLSServerConfig()`)
+6. HTTP server setup with TLS config injection
+7. ReadHeaderTimeout security setting (good practice, but manual)
+
+**What e5s handles automatically:**
+1. ✅ Context management (internal)
+2. ✅ X509Source creation (from config)
+3. ✅ Source lifecycle management (automatic cleanup)
+4. ✅ SPIFFE ID validation (from config with error messages)
+5. ✅ TLS config with TLS 1.3 enforcement
+6. ✅ HTTP server setup with security defaults
+7. ✅ ReadHeaderTimeout (10s default)
+
+**Result:** 57 lines → 31 lines (**46% reduction** in code)
 
 ---
 
