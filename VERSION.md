@@ -12,8 +12,11 @@ Versions used for local development and testing:
 | Minikube | v1.30+ | For local Kubernetes testing |
 | kubectl | v1.27+ | Kubernetes CLI |
 | Helm | v3.12+ | Package manager for Kubernetes |
+| Helmfile | v0.150.0+ | Optional, for orchestrating Helm releases |
 | SPIRE | 1.9.0 | Identity framework |
 | SPIRE Helm Chart | spiffe/spire 0.27.0 | Helm chart for SPIRE deployment |
+| Falco | 4.19.4 | Optional runtime security monitoring |
+| Falco Helm Chart | falcosecurity/falco 4.19.4 | Runtime security via Helm |
 | Kubernetes | v1.31.0 | Minikube cluster version |
 | golangci-lint | Latest | Static analysis tool |
 | gosec | Latest | Security scanner |
@@ -29,9 +32,12 @@ Versions tested and recommended for production deployments:
 | Go | 1.25.3 | Minimum required |
 | SPIRE | 1.9.0+ | Minimum 1.8.0 |
 | SPIRE Helm Chart | spiffe/spire 0.27.0+ | For Kubernetes deployments |
+| Falco | 4.19.4+ | Optional runtime security monitoring |
+| Falco Helm Chart | falcosecurity/falco 4.19.4+ | Enable with ENABLE_FALCO=true |
 | Kubernetes | v1.31.0+ | Tested on v1.31.0 |
 | kubectl | v1.27+ | Kubernetes CLI |
 | Helm | v3.12+ | Package manager for Kubernetes |
+| Helmfile | v0.150.0+ | Optional, for orchestrating Helm releases |
 
 ## Container Images
 
