@@ -9,8 +9,9 @@ on:
     types: [published]
 
 permissions:
-  contents: write  # Required for uploading release assets
-  packages: write  # Required for publishing to GHCR
+  contents: write   # Required for uploading release assets
+  packages: write   # Required for publishing to GHCR
+  id-token: write   # Required for keyless signing with Cosign/Sigstore
 
 jobs:
   goreleaser:
@@ -52,6 +53,9 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@d13028333d784fcc802b67ec924bcebe75aa0a5f # v3.8.0
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6.4.0

@@ -159,6 +159,22 @@ checksum:
   name_template: "{{ .ProjectName }}_{{ .Version }}_SHA256SUMS"
   algorithm: sha256
 
+# Sign release artifacts using Cosign (keyless signing via Sigstore/Fulcio)
+# Provides cryptographic verification of release artifacts for supply chain security
+# Improves OpenSSF Scorecard Signed-Releases score
+signs:
+  - cmd: cosign
+    artifacts: checksum
+    signature: "${artifact}.sig"
+    certificate: "${artifact}.pem"
+    args:
+      - "sign-blob"
+      - "--yes"
+      - "--output-signature=${signature}"
+      - "--output-certificate=${certificate}"
+      - "${artifact}"
+    output: true
+
 changelog:
   use: github
   sort: asc
@@ -234,10 +250,30 @@ release:
 
     ### Verification
 
-    Verify downloads using the provided SHA256 checksums:
+    **SHA256 Checksums:**
     ```bash
     sha256sum -c {{ .ProjectName }}_{{ .Version }}_SHA256SUMS
     ```
+
+    **Cryptographic Signatures (Cosign):**
+
+    This release is cryptographically signed using Cosign with keyless signing (Sigstore/Fulcio).
+    Verify the checksum file signature:
+
+    ```bash
+    # Install Cosign
+    go install github.com/sigstore/cosign/cmd/cosign@latest
+
+    # Verify the checksum file
+    cosign verify-blob \
+      --certificate {{ .ProjectName }}_{{ .Version }}_SHA256SUMS.pem \
+      --signature {{ .ProjectName }}_{{ .Version }}_SHA256SUMS.sig \
+      --certificate-identity-regexp="https://github.com/{{.Env.GITHUB_REPOSITORY}}/" \
+      --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
+      {{ .ProjectName }}_{{ .Version }}_SHA256SUMS
+    ```
+
+    The signature files (`.sig` and `.pem`) are included in the release assets for supply chain verification.
 
     ### Support
 
