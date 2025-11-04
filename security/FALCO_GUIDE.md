@@ -11,6 +11,18 @@ This guide explains how to use [Falco](https://falco.org) for runtime security m
 - **Zero Trust Validation**: Verifies mTLS applications behave as expected
 - **Compliance**: Provides audit trails for security certifications
 
+## Deployment Options
+
+**For Kubernetes (Recommended):**
+- Use Helm chart deployment with automatic integration
+- See [Kubernetes Deployment](#kubernetes-deployment-recommended) section below
+- Pre-configured with SPIRE-specific rules in `examples/minikube-lowlevel/infra/values-falco.yaml`
+
+**For Bare Metal / Development:**
+- Use manual installation script
+- See [Manual Installation](#manual-installation-bare-metal) section below
+- Requires systemd and sudo access
+
 ## Prerequisites
 
 - **OS**: Ubuntu 24.04 (Noble Numbat) with kernel 6.8+
@@ -20,19 +32,43 @@ This guide explains how to use [Falco](https://falco.org) for runtime security m
 
 ## Quick Start
 
-### 1. Install Falco
+Choose your deployment method:
 
-Run the automated installation script:
+### Option A: Kubernetes with Helm (Recommended)
+
+Deploy Falco alongside SPIRE in Minikube:
 
 ```bash
-sudo bash security/install-falco.sh
+# Deploy SPIRE + Falco together
+ENABLE_FALCO=true helmfile -e dev apply
+
+# Or if using make
+ENABLE_FALCO=true make minikube-up
+```
+
+This automatically:
+- Deploys Falco 4.19.4 as a DaemonSet
+- Loads custom SPIRE mTLS security rules
+- Uses modern eBPF driver (no kernel module)
+- Configures JSON output and logging
+
+See [Kubernetes Deployment](#kubernetes-deployment-recommended) for details.
+
+### Option B: Manual Installation (Bare Metal)
+
+For non-Kubernetes environments:
+
+```bash
+sudo bash security/setup-falco.sh
 ```
 
 This will:
 - Install Falco 0.38+ with eBPF driver
-- Apply custom SPIRE mTLS rules
+- Apply custom SPIRE mTLS rules from `falco_rules.yaml`
 - Configure JSON output and logging
-- Start the Falco service
+- Start the Falco systemd service
+
+See [Manual Installation](#manual-installation-bare-metal) for details.
 
 ### 2. Deploy SPIRE Infrastructure
 
@@ -224,23 +260,105 @@ falco-runtime-check:
         fi
 ```
 
-### Kubernetes Deployment
+### Kubernetes Deployment (Recommended)
 
-For production Kubernetes clusters, deploy Falco as a DaemonSet:
+#### Option 1: Integrated Deployment (Helmfile)
+
+Deploy Falco automatically with SPIRE infrastructure:
+
+```bash
+cd examples/minikube-lowlevel/infra
+
+# Deploy with Falco enabled
+ENABLE_FALCO=true helmfile -e dev apply
+```
+
+This uses the pre-configured `values-falco.yaml` which includes:
+- Modern eBPF driver (no kernel modules)
+- 5 custom SPIRE mTLS security rules
+- JSON output for structured logging
+- Resource limits for Minikube (100m CPU, 256Mi memory)
+- Automatic integration with SPIRE components
+
+**View alerts:**
+```bash
+kubectl logs -n falco -l app.kubernetes.io/name=falco -f
+```
+
+**Disable Falco:**
+```bash
+# Default behavior (Falco not deployed)
+helmfile -e dev apply
+```
+
+See `examples/minikube-lowlevel/infra/README.md` for complete documentation.
+
+#### Option 2: Standalone Deployment (Manual Helm)
+
+For deploying Falco separately or in production clusters:
 
 ```bash
 # Add Falco Helm repository
 helm repo add falcosecurity https://falcosecurity.github.io/charts
 helm repo update
 
-# Install Falco with custom rules
+# Install Falco with custom SPIRE rules
 helm install falco falcosecurity/falco \
   --namespace falco --create-namespace \
-  --set driver.kind=ebpf \
+  --set driver.kind=modern_ebpf \
   --set tty=true \
   --set falco.jsonOutput=true \
-  --set-file customRules.rules=security/falco_rules.yaml
+  --set-file customRules.rules-spire.yaml=security/falco_rules.yaml
+
+# View alerts
+kubectl logs -n falco -l app.kubernetes.io/name=falco -f
 ```
+
+**Using our values file:**
+```bash
+helm install falco falcosecurity/falco \
+  --namespace falco --create-namespace \
+  --values examples/minikube-lowlevel/infra/values-falco.yaml
+```
+
+### Manual Installation (Bare Metal)
+
+For non-Kubernetes environments (development workstations, bare-metal servers):
+
+**Automated setup:**
+```bash
+sudo bash security/setup-falco.sh
+```
+
+**Manual steps:**
+
+1. **Install Falco:**
+   ```bash
+   curl -s https://falco.org/repo/falcosecurity-packages.asc | \
+     sudo gpg --dearmor -o /usr/share/keyrings/falco-archive-keyring.gpg
+   echo "deb [signed-by=/usr/share/keyrings/falco-archive-keyring.gpg] https://download.falco.org/packages/deb stable main" | \
+     sudo tee /etc/apt/sources.list.d/falcosecurity.list
+   sudo apt update
+   sudo apt install -y falco
+   ```
+
+2. **Install custom rules:**
+   ```bash
+   sudo cp security/falco_rules.yaml /etc/falco/falco_rules.local.yaml
+   ```
+
+3. **Configure Falco:**
+   ```bash
+   sudo nano /etc/falco/falco.yaml
+   # Set: json_output: true
+   # Set: file_output.enabled: true
+   ```
+
+4. **Start service:**
+   ```bash
+   sudo systemctl enable falco
+   sudo systemctl start falco
+   ```
 
 ## Alert Integrations
 
