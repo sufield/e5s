@@ -13,9 +13,6 @@ updates:
       time: "03:00"
     open-pull-requests-limit: 5
     target-branch: "main"
-    labels:
-      - "dependencies"
-      - "go"
     commit-message:
       prefix: "deps"
       include: "scope"
@@ -37,9 +34,6 @@ updates:
       time: "03:00"
     open-pull-requests-limit: 5
     target-branch: "main"
-    labels:
-      - "dependencies"
-      - "github-actions"
     commit-message:
       prefix: "ci"
       include: "scope"
