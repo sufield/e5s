@@ -67,7 +67,7 @@ linters-settings:
   #       list-mode: lax
   #       deny:
   #         - pkg: "crypto/tls"
-  #           desc: "Use internal/adapters/outbound/spire TLS config"
+  #           desc: "Use pkg/spire TLS config"
 
   gocritic:
     enabled-tags: [diagnostic, style, performance, experimental]

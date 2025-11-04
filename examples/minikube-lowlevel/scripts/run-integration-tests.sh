@@ -6,7 +6,7 @@
 #   NS              - Kubernetes namespace (default: spire-system)
 #   SOCKET_DIR      - Socket directory on node (default: /tmp/spire-agent/public)
 #   SOCKET_FILE     - Socket filename (default: api.sock)
-#   PKG             - Package to test (default: ./internal/adapters/outbound/spire)
+#   PKG             - Package to test (default: ./pkg/spire)
 #   TESTBIN         - Test binary path (default: /tmp/spire-integration.test)
 #   TAGS            - Build tags (default: integration)
 #   KEEP            - Keep pod for faster iteration (default: false)
@@ -18,7 +18,7 @@ set -Eeuo pipefail
 NS="${NS:-spire-system}"
 SOCKET_DIR="${SOCKET_DIR:-/tmp/spire-agent/public}"
 SOCKET_FILE="${SOCKET_FILE:-api.sock}"
-PKG="${PKG:-./internal/adapters/outbound/spire}"
+PKG="${PKG:-./pkg/spire}"
 TESTBIN="${TESTBIN:-/tmp/spire-integration.test}"
 TAGS="${TAGS:-integration}"
 KEEP="${KEEP:-false}"
