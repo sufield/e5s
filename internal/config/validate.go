@@ -44,8 +44,8 @@ func validateSPIREConfig(cfg *FileConfig) (SPIREConfig, error) {
 	if strings.TrimSpace(cfg.SPIRE.WorkloadSocket) == "" {
 		return SPIREConfig{}, errors.New("spire.workload_socket must be set")
 	}
-	timeoutStr := strings.TrimSpace(cfg.SPIRE.InitialFetchTimeout)
 	timeout := DefaultInitialFetchTimeout
+	timeoutStr := strings.TrimSpace(cfg.SPIRE.InitialFetchTimeout)
 	if timeoutStr != "" {
 		var err error
 		if timeout, err = time.ParseDuration(timeoutStr); err != nil {
