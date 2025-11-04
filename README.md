@@ -5,6 +5,29 @@
 
 A lightweight Go library for building mutual TLS services with SPIFFE identity verification and automatic certificate rotation based on go-spiffe SDK.
 
+## What Problem Does This Solve?
+
+e5s solves the challenges of implementing secure, identity-based mutual TLS (mTLS) in distributed systems. It simplifies 
+
+- SPIFFE-based authentication
+- Automates certificate rotation without downtime
+- Enforces peer ID verification
+- Minimizes manual certificate management
+
+Ideal for microservices in zero-trust environments. It reduces security risks from expired certs or weak auth, while offering high-level APIs for ease and low-level controls for customization.
+
+## Why Not Use go-spiffe SDK Directly?
+
+Using e5s over the go-spiffe SDK directly offers these advantages for developers building mTLS services:
+
+- **Simpler Abstraction**: The high-level API (e.g., `e5s.Run()`) handles configuration, SPIRE connections, certificate rotation, and verification with minimal code—often one line—versus manual SDK setup and boilerplate.
+- **Config-Driven**: YAML-based config (e5s.yaml) streamlines setup for servers/clients, including timeouts and trust domains, without custom coding.
+- **Built-in Features**: Automatic zero-downtime rotation, policy-based SPIFFE ID verification, TLS 1.3 enforcement, graceful shutdown, health checks, structured logging and thread-safety are ready out-of-the-box.
+- **Low-Level Flexibility**: Direct access to pkg/spiffehttp and pkg/spire for customization, minimizing dependencies (core uses stdlib only).
+- **Ease of Adoption**: Comprehensive docs, quickstarts, and examples reduce integration time compared to raw SDK usage.
+
+Use go-spiffe directly only if you need non-HTTP services or completely custom workflows.
+
 ## Features
 
 - **Simple High-Level API** - Config-driven with `e5s.Start()` and `e5s.Client()`
