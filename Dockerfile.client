@@ -1,7 +1,7 @@
 # Multi-stage Dockerfile for e5s example client
 # Builds a minimal container image for demonstrating mTLS with SPIRE
 
-FROM alpine:3.19
+FROM alpine@sha256:6baf43584bcb78f2e5847d1de515f23499913ac9f12bdf834811a3145eb11ca1
 LABEL org.opencontainers.image.source="https://github.com/sufield/e5s"
 LABEL org.opencontainers.image.description="e5s mTLS client example - SPIRE/SPIFFE-based zero-trust authentication"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
