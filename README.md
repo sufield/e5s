@@ -423,6 +423,26 @@ make example-minikube-client
 make sec-all
 ```
 
+## Security
+
+e5s implements defense-in-depth security with multiple layers:
+
+- **Static Analysis**: gosec, golangci-lint, govulncheck, gitleaks
+- **Container Security**: Pinned digests, non-root users, minimal images
+- **mTLS Enforcement**: TLS 1.3, SPIFFE identity verification, certificate rotation
+- **Runtime Monitoring**: Optional Falco integration for threat detection
+- **Supply Chain**: Signed releases with Cosign/Sigstore
+
+**For detailed security information:**
+- [Security Tools & Documentation](security/) - Comprehensive security guide
+- [Report Security Issues](https://github.com/sufield/e5s/security/advisories/new) - Private vulnerability disclosure
+- [Security Policy](.github/SECURITY.md) - Vulnerability disclosure policy
+
+**Run security scans:**
+```bash
+make sec-all  # Run all security checks
+```
+
 ## License
 
 MIT License - See [LICENSE](LICENSE) file for details.

@@ -157,7 +157,7 @@ tail -f /var/log/falco.log | jq 'select(.priority == "Critical")'
 
 ## Security Scanning Results
 
-### Current Status (2025-10-19)
+### Current Status (2025-11-03)
 
 | Tool | Status | Issues | Notes |
 |------|--------|--------|-------|
@@ -167,8 +167,8 @@ tail -f /var/log/falco.log | jq 'select(.priority == "Critical")'
 | **Trivy** | ℹ️ N/A | - | Run on container images |
 | **Falco** | ℹ️ Runtime | - | Monitors deployed apps |
 
-**Last security audit**: 2025-10-19
-**Next audit due**: 2026-01-19 (quarterly)
+**Last security audit**: 2025-11-03
+**Next audit due**: 2026-02-03 (quarterly)
 
 ### Running Security Scans
 
@@ -317,7 +317,7 @@ This project follows security standards for:
 
 **DO NOT open public GitHub issues for security vulnerabilities.**
 
-Instead, email: security@pocket.network (if available) or create a private security advisory.
+Instead, report via GitHub Security Advisories: https://github.com/sufield/e5s/security/advisories/new
 
 ### Adding Falco Rules
 
@@ -371,6 +371,6 @@ Security tools and rules in this directory are licensed under Apache 2.0, same a
 
 ---
 
-**Last Updated**: 2025-10-19
+**Last Updated**: 2025-11-03
 **Maintainer**: Security Team
-**Contact**: security@pocket.network
+**Contact**: https://github.com/sufield/e5s/security
