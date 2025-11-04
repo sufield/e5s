@@ -157,12 +157,6 @@ func NewSource(ctx context.Context, cfg Config) (*Source, error) {
 	}
 }
 
-// Close releases all resources (connections, watchers, goroutines).
-//
-// Closes the X509Source and releases all resources (connections, watchers, goroutines).
-// After Close returns, the underlying SDK source is closed and cannot be used.
-//
-// Idempotent: safe to call multiple times. Subsequent calls return the cached error.
 // X509Source returns the underlying SDK X509Source for use with SDK TLS helpers.
 //
 // The returned source implements both x509svid.Source and x509bundle.Source,
@@ -175,6 +169,11 @@ func (s *Source) X509Source() *workloadapi.X509Source {
 	return s.source
 }
 
+// Close releases all resources (connections, watchers, goroutines).
+//
+// After Close returns, the underlying SDK source is closed and cannot be used.
+//
+// Idempotent: safe to call multiple times. Subsequent calls return the cached error.
 func (s *Source) Close() error {
 	s.closeOnce.Do(func() {
 		s.mu.Lock()
