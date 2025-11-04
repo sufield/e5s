@@ -34,7 +34,7 @@ make minikube-delete
 
 ```bash
 # Start infrastructure
-cd infra/dev/minikube/scripts
+cd examples/minikube-lowlevel/scripts
 ./cluster-up.sh start
 
 # Check status

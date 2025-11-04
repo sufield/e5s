@@ -1,5 +1,5 @@
 # Production values for SPIRE
-# DO NOT use for Minikube - use infra/dev/minikube/values-minikube.yaml instead
+# DO NOT use for Minikube - use examples/minikube-lowlevel/infra/values-minikube.yaml instead
 # Security: High, Resources: Production-sized, Service: ClusterIP
 
 global:
