@@ -61,6 +61,82 @@ make dev-build
 ./bin/cp-minikube down
 ```
 
+## Optional: Falco Runtime Security
+
+Falco provides runtime security monitoring for SPIRE and mTLS applications. It detects threats by monitoring syscalls and container behavior.
+
+### Installing Falco
+
+```bash
+# Deploy SPIRE + Falco
+ENABLE_FALCO=true helmfile -e dev apply
+
+# Or using make (if configured)
+ENABLE_FALCO=true make minikube-up
+```
+
+### What Falco Monitors
+
+1. **SPIRE Socket Access**
+   - Unauthorized access to `/tmp/spire-agent/public/api.sock`
+   - Permission modifications on SPIRE directories
+
+2. **mTLS Server Behavior**
+   - Unexpected port bindings (should be 8443)
+   - Outbound connections from server containers
+   - Shell spawning in security-sensitive containers
+
+3. **Certificate Security**
+   - Unauthorized .crt/.pem/.key file modifications
+   - TLS handshake anomalies
+
+4. **Container Escape Detection**
+   - /proc manipulation attempts
+   - Privileged container warnings
+   - CAP_SYS_ADMIN usage
+
+### Viewing Falco Alerts
+
+```bash
+# Real-time alerts
+kubectl logs -n falco -l app.kubernetes.io/name=falco -f
+
+# Filter by priority
+kubectl logs -n falco -l app.kubernetes.io/name=falco | grep CRITICAL
+
+# Export alerts to file
+kubectl logs -n falco -l app.kubernetes.io/name=falco > falco-alerts.log
+```
+
+### Custom Rules
+
+Falco is pre-configured with SPIRE-specific rules in `values-falco.yaml`:
+
+- `Unauthorized SPIRE Socket Access` (CRITICAL)
+- `mTLS Server Wrong Port Binding` (WARNING)
+- `Suspicious Certificate File Modification` (CRITICAL)
+- `Shell Spawned in mTLS Container` (WARNING)
+- `SPIRE Directory Permission Modification` (CRITICAL)
+
+### Disabling Falco
+
+```bash
+# Deploy without Falco (default)
+helmfile -e dev apply
+
+# Or explicitly disable
+ENABLE_FALCO=false helmfile -e dev apply
+```
+
+### Resource Usage
+
+Falco adds minimal overhead:
+- CPU: 100m request, 500m limit
+- Memory: 256Mi request, 512Mi limit
+- Driver: modern_ebpf (no kernel module required)
+
+For more details, see [security/README.md](../../../security/) and [security/FALCO_GUIDE.md](../../../security/FALCO_GUIDE.md).
+
 ## Directory Structure
 
 ```
@@ -68,6 +144,7 @@ infra/dev/minikube/
 ├── helmfile.yaml                  # Helmfile orchestration
 ├── values-minikube.yaml           # Dev-hardened values
 ├── values-minikube-secrets.yaml   # Secrets template (generated)
+├── values-falco.yaml              # Falco security monitoring config (optional)
 ├── scripts/
 │   ├── cluster-up.sh              # Start cluster and deploy SPIRE
 │   ├── cluster-down.sh            # Stop/cleanup cluster

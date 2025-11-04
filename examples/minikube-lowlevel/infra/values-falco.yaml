@@ -1,0 +1,154 @@
+# Falco configuration for e5s SPIRE mTLS monitoring
+# Runtime security monitoring for SPIRE-based applications
+#
+# This configuration includes custom rules for:
+# - SPIRE socket access monitoring
+# - mTLS server behavior detection
+# - Container security enforcement
+
+# Driver configuration
+# Use modern eBPF driver for better performance
+driver:
+  kind: modern_ebpf
+  enabled: true
+
+# Falco engine configuration
+falco:
+  # Rule matching configuration
+  rules_file:
+    - /etc/falco/falco_rules.yaml
+    - /etc/falco/falco_rules.local.yaml
+    - /etc/falco/rules.d
+
+  # JSON output for structured logging
+  json_output: true
+  json_include_output_property: true
+  json_include_tags_property: true
+
+  # Logging configuration
+  log_stderr: true
+  log_syslog: false
+  log_level: info
+
+  # Performance tuning
+  priority: warning  # Only WARNING and higher by default
+  buffered_outputs: true
+
+  # Output channels
+  file_output:
+    enabled: true
+    filename: /var/log/falco/events.log
+    keep_alive: false
+
+  # Alert throttling to prevent spam
+  outputs:
+    rate: 1
+    max_burst: 1000
+
+# Resource limits for Minikube
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# Custom rules configuration
+customRules:
+  # SPIRE-specific security rules
+  rules-spire.yaml: |-
+    # SPIRE Socket Access Monitoring
+    - rule: Unauthorized SPIRE Socket Access
+      desc: Detect unauthorized access to SPIRE Workload API socket
+      condition: >
+        (open_read or open_write) and
+        fd.name startswith "/tmp/spire-agent/public/api.sock" and
+        not proc.name in (spire-agent, spire-server)
+      output: >
+        Unauthorized process accessing SPIRE socket
+        (user=%user.name process=%proc.name socket=%fd.name command=%proc.cmdline)
+      priority: CRITICAL
+      tags: [spire, socket, unauthorized_access]
+
+    # mTLS Server Port Monitoring
+    - rule: mTLS Server Wrong Port Binding
+      desc: Detect mTLS server binding to unexpected ports
+      condition: >
+        (evt.type=listen) and
+        container and
+        (proc.name contains "mtls" or proc.name contains "server") and
+        not fd.sport in (8443, 8080)
+      output: >
+        mTLS server binding to unexpected port
+        (port=%fd.sport process=%proc.name container=%container.name)
+      priority: WARNING
+      tags: [mtls, port, misconfiguration]
+
+    # Certificate File Access
+    - rule: Suspicious Certificate File Modification
+      desc: Detect modifications to TLS certificate files
+      condition: >
+        (open_write or modify) and
+        (fd.name endswith ".crt" or fd.name endswith ".pem" or fd.name endswith ".key") and
+        not proc.name in (spire-agent, spire-server, kubelet)
+      output: >
+        Suspicious modification of certificate file
+        (file=%fd.name process=%proc.name user=%user.name)
+      priority: CRITICAL
+      tags: [tls, certificates, tampering]
+
+    # Shell Spawning in mTLS Containers
+    - rule: Shell Spawned in mTLS Container
+      desc: Detect shell spawning in mTLS server/client containers
+      condition: >
+        spawned_process and
+        container and
+        (container.name contains "mtls" or container.name contains "spire") and
+        proc.name in (sh, bash, dash, ash, zsh)
+      output: >
+        Shell spawned in security-sensitive container
+        (container=%container.name shell=%proc.name user=%user.name cmdline=%proc.cmdline)
+      priority: WARNING
+      tags: [container, shell, suspicious_activity]
+
+    # SPIRE Directory Permission Changes
+    - rule: SPIRE Directory Permission Modification
+      desc: Detect permission changes on SPIRE directories
+      condition: >
+        (evt.type=chmod or evt.type=fchmod) and
+        (fd.name startswith "/tmp/spire-agent" or fd.name startswith "/var/run/spire")
+      output: >
+        Permission modification on SPIRE directory
+        (path=%fd.name mode=%evt.arg.mode process=%proc.name)
+      priority: CRITICAL
+      tags: [spire, permissions, tampering]
+
+# Tolerations for daemonset deployment
+tolerations:
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/control-plane
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/master
+
+# Service account
+serviceAccount:
+  create: true
+  name: falco
+
+# Enable all event sources
+collectors:
+  enabled: true
+  docker:
+    enabled: false  # Not needed for containerd
+  containerd:
+    enabled: true
+    socket: /run/containerd/containerd.sock
+  kubernetes:
+    enabled: true
+
+# Falco UI/Dashboard (optional)
+falcosidekick:
+  enabled: false  # Can enable for alerting integrations
+  webui:
+    enabled: false  # Can enable for web dashboard

@@ -1,6 +1,9 @@
 # Helmfile for SPIRE dev environment on Minikube
 # This orchestrates SPIRE server and agent deployment
 # Usage: helmfile -e dev apply
+#
+# Optional components (set environment variables to enable):
+# - Falco: ENABLE_FALCO=true helmfile -e dev apply
 
 ---
 environments:
@@ -13,6 +16,8 @@ environments:
 repositories:
   - name: spiffe
     url: https://spiffe.github.io/helm-charts-hardened/
+  - name: falcosecurity
+    url: https://falcosecurity.github.io/charts
 
 releases:
   # SPIRE (combined server + agent)
@@ -26,3 +31,17 @@ releases:
       - values-minikube-secrets.yaml
     wait: true
     timeout: 300
+
+  # Falco (optional runtime security monitoring)
+  # Enable with: ENABLE_FALCO=true helmfile -e dev apply
+  - name: falco
+    namespace: falco
+    createNamespace: true
+    chart: falcosecurity/falco
+    version: 4.19.4
+    condition: enableFalco
+    values:
+      - values-falco.yaml
+    wait: true
+    timeout: 300
+    installed: {{ env "ENABLE_FALCO" | default "false" }}
