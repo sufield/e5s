@@ -16,8 +16,8 @@ import (
 	"time"
 
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
-	"github.com/sufield/e5s/pkg/spiffehttp"
-	"github.com/sufield/e5s/pkg/spire"
+	"github.com/sufield/e5s/spiffehttp"
+	"github.com/sufield/e5s/spire"
 )
 
 // authMiddleware is a basic example that extracts peer identity and attaches

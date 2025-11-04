@@ -391,7 +391,7 @@ func authMiddleware(next http.Handler) http.Handler {
 Provides ready-to-use middleware utilities:
 
 ```go
-import "github.com/sufield/e5s/pkg/spiffehttp"
+import "github.com/sufield/e5s/spiffehttp"
 
 func handler(w http.ResponseWriter, r *http.Request) {
     peer, ok := spiffehttp.PeerFromRequest(r)
@@ -530,7 +530,7 @@ package main
 
 import (
     "github.com/sufield/e5s"
-    "github.com/sufield/e5s/pkg/spiffehttp"
+    "github.com/sufield/e5s/spiffehttp"
 )
 
 func main() {

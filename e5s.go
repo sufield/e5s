@@ -47,8 +47,8 @@ import (
 	"time"
 
 	"github.com/sufield/e5s/internal/config"
-	"github.com/sufield/e5s/pkg/spiffehttp"
-	"github.com/sufield/e5s/pkg/spire"
+	"github.com/sufield/e5s/spiffehttp"
+	"github.com/sufield/e5s/spire"
 )
 
 // getConfigPath returns the config file path using intelligent defaults:

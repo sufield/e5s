@@ -208,8 +208,8 @@ import (
     "syscall"
     "time"
 
-    "github.com/sufield/e5s/pkg/spiffehttp"
-    "github.com/sufield/e5s/pkg/spire"
+    "github.com/sufield/e5s/spiffehttp"
+    "github.com/sufield/e5s/spire"
 )
 
 func main() {
@@ -291,8 +291,8 @@ import (
     "os"
     "time"
 
-    "github.com/sufield/e5s/pkg/spiffehttp"
-    "github.com/sufield/e5s/pkg/spire"
+    "github.com/sufield/e5s/spiffehttp"
+    "github.com/sufield/e5s/spire"
 )
 
 func main() {

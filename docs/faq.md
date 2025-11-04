@@ -170,7 +170,7 @@ e5s inherits this zero-downtime rotation from go-spiffe SDK.
 Yes! Use the `spiffehttp.PeerFromRequest()` function to extract authenticated peer information and implement custom logic:
 
 ```go
-import "github.com/sufield/e5s/pkg/spiffehttp"
+import "github.com/sufield/e5s/spiffehttp"
 
 func handler(w http.ResponseWriter, r *http.Request) {
     peer, ok := spiffehttp.PeerFromRequest(r)
@@ -346,7 +346,7 @@ agent:
 For e5s applications, add logging to see peer information:
 
 ```go
-import "github.com/sufield/e5s/pkg/spiffehttp"
+import "github.com/sufield/e5s/spiffehttp"
 
 func handler(w http.ResponseWriter, r *http.Request) {
     peer, ok := spiffehttp.PeerFromRequest(r)

@@ -105,7 +105,7 @@ HTTP server and client with SPIFFE mTLS support.
 - `NewClientTLSConfig()` - Create client TLS config with server verification
 - `PeerFromContext()` - Extract peer info from request context
 
-**Documentation:** https://pkg.go.dev/github.com/sufield/e5s/pkg/spiffehttp
+**Documentation:** https://pkg.go.dev/github.com/sufield/e5s/spiffehttp
 
 #### pkg/spire
 
@@ -118,7 +118,7 @@ SPIRE Workload API integration.
 **Key Functions:**
 - `NewSource()` - Connect to SPIRE Workload API and fetch identities
 
-**Documentation:** https://pkg.go.dev/github.com/sufield/e5s/pkg/spire
+**Documentation:** https://pkg.go.dev/github.com/sufield/e5s/spire
 
 ## Configuration
 
