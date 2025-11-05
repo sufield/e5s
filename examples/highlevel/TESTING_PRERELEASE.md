@@ -131,9 +131,12 @@ Create `server/main.go`:
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -171,8 +174,25 @@ func main() {
 	})
 
 	log.Println("Server configured, initializing mTLS with SPIRE...")
-	// Run mTLS server (uses local e5s code)
-	e5s.Run(r)
+	// Start mTLS server with explicit config path (uses local e5s code)
+	shutdown, err := e5s.Start("e5s.yaml", r)
+	if err != nil {
+		log.Fatalf("❌ Failed to start server: %v", err)
+	}
+	defer func() {
+		if err := shutdown(); err != nil {
+			log.Printf("Error during shutdown: %v", err)
+		}
+	}()
+
+	log.Println("Server running - press Ctrl+C to stop")
+
+	// Wait for interrupt signal for graceful shutdown
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	<-ctx.Done()
+
+	log.Println("Shutting down gracefully...")
 }
 ```
 
@@ -191,24 +211,53 @@ import (
 	"log"
 	"os"
 
+	"gopkg.in/yaml.v3"
 	"github.com/sufield/e5s"
 )
+
+// AppConfig represents the client application configuration
+// In a real application, you would define your own config structure
+type AppConfig struct {
+	ServerURL string `yaml:"server_url"`
+}
 
 func main() {
 	log.Println("Starting e5s mTLS client...")
 
-	// Get server URL from environment variable, default to localhost
-	// This allows the client to work both locally and in Kubernetes
+	// Load application-specific configuration
+	// This demonstrates the real-world pattern: your app manages its own config
+	cfg, err := loadAppConfig("client-config.yaml")
+	if err != nil {
+		log.Fatalf("❌ Failed to load app config: %v", err)
+	}
+
+	// Allow SERVER_URL environment variable to override config
+	// This is common for Kubernetes deployments
 	serverURL := os.Getenv("SERVER_URL")
 	if serverURL == "" {
-		serverURL = "https://localhost:8443/time"
+		serverURL = cfg.ServerURL
+	}
+	if serverURL == "" {
+		log.Fatalf("❌ server_url not set in config and SERVER_URL environment variable not set")
 	}
 
 	log.Printf("→ Requesting server time from: %s", serverURL)
 	log.Println("→ Initializing SPIRE client and fetching SPIFFE identity...")
 
-	// Perform mTLS GET request (uses local e5s code)
-	resp, err := e5s.Get(serverURL)
+	// Create mTLS client using e5s library (uses local e5s code via replace directive)
+	// e5s.Client() handles SPIRE connection, mTLS setup, and certificate rotation
+	client, shutdown, err := e5s.Client("e5s.yaml")
+	if err != nil {
+		log.Fatalf("❌ Failed to initialize client: %v", err)
+	}
+	defer func() {
+		if err := shutdown(); err != nil {
+			log.Printf("Error during shutdown: %v", err)
+		}
+	}()
+
+	// Perform mTLS GET request
+	resp, err := client.Get(serverURL)
 	if err != nil {
 		log.Fatalf("❌ Request failed: %v", err)
 	}
@@ -221,17 +270,64 @@ func main() {
 	log.Printf("← Server response: %s", string(body))
 	fmt.Print(string(body))
 }
+
+// loadAppConfig loads the application-specific configuration
+// This demonstrates the real-world pattern: applications manage their own config files
+func loadAppConfig(path string) (*AppConfig, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	var cfg AppConfig
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("failed to parse config: %w", err)
+	}
+
+	return &cfg, nil
+}
 ```
 
-We include environment variable support from the start because we'll deploy to Kubernetes where the client needs to connect to a service name (e.g., `https://e5s-server:8443/time`) instead of localhost.
+**Real-World Approach:**
+
+This demonstrates the recommended approach for production applications:
+
+1. **Application Config** (`client-config.yaml`) - Your app manages its own configuration including server URLs, timeouts, etc.
+2. **e5s Config** (`e5s.yaml`) - SPIRE/mTLS configuration managed by the e5s library
+3. **Environment Overrides** - Allow environment variables to override config values for deployment flexibility
+
+This separation of concerns is standard practice:
+- Your application code handles business logic and application-specific config
+- The e5s library handles SPIRE integration and mTLS complexity
 
 ---
 
-## Step 5: Create Configuration File
+## Step 5: Create Configuration Files
 
-Create `e5s.yaml` in the test-demo directory:
+The test application uses **two separate config files** to demonstrate the real-world use:
+1. `client-config.yaml` - Application-specific configuration (managed by your app)
+2. `e5s.yaml` - SPIRE/mTLS configuration (managed by e5s library)
 
-```yaml
+### Create Application Configuration
+
+Create `client-config.yaml` with your application-specific settings:
+
+```bash
+cat > client-config.yaml <<'EOF'
+# Application-specific configuration
+# This is YOUR application's config - not part of e5s library
+server_url: "https://localhost:8443/time"
+EOF
+```
+
+This file contains settings specific to your application (like server URLs, timeouts, etc.).
+
+### Create e5s Library Configuration
+
+Create `e5s.yaml` with SPIRE/mTLS settings:
+
+```bash
+cat > e5s.yaml <<'EOF'
 spire:
   # Path to SPIRE Agent's Workload API socket
   workload_socket: unix:///tmp/spire-agent/public/api.sock
@@ -242,13 +338,48 @@ spire:
 
 server:
   listen_addr: ":8443"
-  # Accept any client in this trust domain
-  allowed_client_trust_domain: "example.org"
+  # Only accept the specific registered client SPIFFE ID
+  # This demonstrates zero-trust: even if SPIRE issues other identities,
+  # the server only accepts the explicitly authorized client
+  allowed_client_spiffe_id: "spiffe://example.org/ns/default/sa/default"
 
 client:
   # Connect to any server in this trust domain
   expected_server_trust_domain: "example.org"
+EOF
 ```
+
+This file contains SPIRE and mTLS settings used by the e5s library.
+
+### Verify Configuration Files
+
+Check that both files were created:
+
+```bash
+ls -la *.yaml
+```
+
+You should see:
+```
+client-config.yaml  # Your application's config
+e5s.yaml           # e5s library config
+```
+
+### Add YAML Dependency
+
+The client application needs a YAML parser to read `client-config.yaml`:
+
+```bash
+go get gopkg.in/yaml.v3
+```
+
+**Why two config files?**
+
+This demonstrates the **real-world separation of concerns**:
+- **Your application** manages its own configuration (`client-config.yaml`)
+- **The e5s library** manages SPIRE/mTLS configuration (`e5s.yaml`)
+- Each component is responsible for its own settings
+- No need to access internal library APIs
 
 ---
 
@@ -284,10 +415,10 @@ Every time e5s library code is modified, rebuild these binaries to see the chang
 
 **Why Kubernetes?** The SPIRE Workload API socket is only accessible inside Kubernetes pods, not from your local machine. You must deploy your test applications to Kubernetes.
 
-Create a ConfigMap for e5s.yaml with the correct socket path for Kubernetes:
+Create ConfigMaps for both application and e5s configuration:
 
 ```bash
-cat > k8s-e5s-config.yaml <<'EOF'
+cat > k8s-configs.yaml <<'EOF'
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -305,18 +436,38 @@ data:
 
     server:
       listen_addr: ":8443"
-      allowed_client_trust_domain: "example.org"
+      # Only accept the specific registered client SPIFFE ID
+      # This demonstrates zero-trust: even if SPIRE auto-registers other service accounts,
+      # the server only accepts the explicitly authorized client identity
+      allowed_client_spiffe_id: "spiffe://example.org/ns/default/sa/default"
 
     client:
       expected_server_trust_domain: "example.org"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: client-config
+  namespace: default
+data:
+  client-config.yaml: |
+    # Application-specific configuration
+    # Server URL for Kubernetes service discovery
+    server_url: "https://e5s-server:8443/time"
 EOF
 ```
 
-Create k8s ConfigMap containing e5s configuration that gets mounted into server and client pods.
+Apply the configuration:
 
 ```bash
-kubectl apply -f k8s-e5s-config.yaml
+kubectl apply -f k8s-configs.yaml
 ```
+
+**Configuration Pattern:**
+- `e5s-config` ConfigMap - SPIRE/mTLS configuration (managed by e5s library)
+- `client-config` ConfigMap - Application-specific configuration (managed by your app)
+- Both get mounted into the client pod
+- No hardcoded values - all configuration comes from files
 
 ---
 
@@ -449,27 +600,36 @@ spec:
       - name: client
         image: e5s-client:dev
         imagePullPolicy: Never
-        env:
-        - name: SERVER_URL
-          value: "https://e5s-server:8443/time"
         command: ["/app/client"]
         volumeMounts:
         - name: spire-agent-socket
           mountPath: /spire/agent-socket
           readOnly: true
-        - name: config
+        - name: e5s-config
           mountPath: /app/e5s.yaml
           subPath: e5s.yaml
+        - name: client-config
+          mountPath: /app/client-config.yaml
+          subPath: client-config.yaml
       volumes:
       - name: spire-agent-socket
         csi:
           driver: "csi.spiffe.io"
           readOnly: true
-      - name: config
+      - name: e5s-config
         configMap:
           name: e5s-config
+      - name: client-config
+        configMap:
+          name: client-config
 EOF
 ```
+
+**Configuration-Driven:**
+- Client reads server URL from `client-config.yaml` (no hardcoded values)
+- SPIRE/mTLS config comes from `e5s.yaml`
+- Environment variables can override config if needed (optional, not required)
+- All configuration is explicit and visible in ConfigMaps
 
 Run the test client:
 
@@ -497,6 +657,10 @@ kubectl logs -l app=e5s-client
 2025/01/15 10:15:24 ✓ Received response: HTTP 200 OK
 2025/01/15 10:15:24 ← Server response: Server time: 2025-01-15T10:15:24Z
 Server time: 2025-01-15T10:15:24Z
+```
+
+```
+kubectl logs -l app=e5s-server
 ```
 
 **Expected server logs**:
@@ -647,20 +811,182 @@ This confirms your local e5s code properly implements zero-trust mTLS with SPIRE
 
 ---
 
-## Step 11: Zero-Trust Security Demonstration
+## Step 11: Discovering SPIFFE IDs for Configuration
 
-This section demonstrates that **only workloads with SPIRE identities can communicate**. We'll test both scenarios:
-1. ✅ **Authenticated client** (has SPIRE identity) - succeeds
-2. ❌ **Unregistered client** (no SPIRE identity) - fails
+Before configuring zero-trust authorization, you need to know **what SPIFFE IDs your workloads are actually using**. This section shows you how to discover these identities.
 
-### Create Unregistered Client Job
+### Understanding SPIFFE ID Patterns
 
-An unregistered client is one that:
+The SPIRE CSI driver automatically creates SPIFFE IDs following this pattern:
+
+```
+spiffe://{trust-domain}/ns/{namespace}/sa/{serviceaccount}
+```
+
+**Components:**
+- `spiffe://` - SPIFFE URI scheme (always)
+- `example.org` - Trust domain (configured in SPIRE)
+- `ns/default` - Kubernetes namespace
+- `sa/default` - Kubernetes service account name
+
+**Example:** If your pod uses service account `my-client` in namespace `production`:
+```
+spiffe://example.org/ns/production/sa/my-client
+```
+
+### Method 1: Check Server Logs (Easiest)
+
+The e5s server logs show the SPIFFE ID of every authenticated client:
+
+```bash
+kubectl logs -l app=e5s-server --tail=20 | grep "Authenticated"
+```
+
+**Example output:**
+```
+2025/11/05 18:26:39 ✓ Authenticated request from: spiffe://example.org/ns/default/sa/default
+```
+
+This tells you exactly what SPIFFE ID your client is presenting.
+
+### Method 2: Query SPIRE Registration Entries
+
+List all SPIFFE IDs that SPIRE has registered:
+
+```bash
+kubectl exec -n spire spire-server-0 -c spire-server -- spire-server entry show
+```
+
+**Example output:**
+```
+Entry ID         : minikube-cluster.7d3be6ed-190a-4cc9-9325-b851804cc00a
+SPIFFE ID        : spiffe://example.org/ns/default/sa/default
+Parent ID        : spiffe://example.org/spire/agent/k8s_psat/minikube-cluster/...
+Selector         : k8s:pod-uid:007fa962-5ac0-4397-b4cc-96bd9b025874
+Hint             : default
+```
+
+This shows:
+- What SPIFFE IDs exist
+- Which selectors (namespace, service account, pod labels) map to which IDs
+- Auto-registered entries (from CSI driver) vs manually registered entries
+
+### Method 3: Check Your Pod's Service Account
+
+Find out what service account your pod is using:
+
+```bash
+kubectl get pod -l app=e5s-client -o jsonpath='{.spec.serviceAccountName}'
+```
+
+**Example output:**
+```
+default
+```
+
+Then construct the SPIFFE ID using the pattern:
+```
+spiffe://example.org/ns/default/sa/default
+           └─────┬─────┘    └─┬──┘    └─┬──┘
+           trust domain  namespace  service account
+```
+
+### Practical Example: Finding Your Client's SPIFFE ID
+
+Let's say you have a client pod with label `app=my-api-client`:
+
+**Step 1:** Check what service account it uses:
+```bash
+kubectl get pod -l app=my-api-client -o jsonpath='{.spec.serviceAccountName}'
+# Output: api-client-sa
+```
+
+**Step 2:** Check what namespace it's in:
+```bash
+kubectl get pod -l app=my-api-client -o jsonpath='{.items[0].metadata.namespace}'
+# Output: production
+```
+
+**Step 3:** Check your SPIRE trust domain:
+```bash
+kubectl exec -n spire spire-server-0 -c spire-server -- spire-server entry show | grep "SPIFFE ID" | head -1
+# Output: SPIFFE ID        : spiffe://example.org/...
+```
+
+**Step 4:** Construct the SPIFFE ID:
+```
+spiffe://example.org/ns/production/sa/api-client-sa
+```
+
+**Step 5:** Verify by checking server logs after the client connects:
+```bash
+kubectl logs -l app=your-server | grep "Authenticated"
+# Should show: spiffe://example.org/ns/production/sa/api-client-sa
+```
+
+### Using SPIFFE IDs in Configuration
+
+Once you know the SPIFFE ID, configure your server to allow only that specific identity:
+
+**For exact identity matching (recommended for production):**
+```yaml
+server:
+  listen_addr: ":8443"
+  # Only allow this specific client identity
+  allowed_client_spiffe_id: "spiffe://example.org/ns/default/sa/default"
+```
+
+**For trust domain matching (less secure, useful for development):**
+```yaml
+server:
+  listen_addr: ":8443"
+  # Allow ANY identity in this trust domain
+  allowed_client_trust_domain: "example.org"
+```
+
+### Why This Matters
+
+❌ **Wrong approach:** Guessing the SPIFFE ID or using trust domain matching in production
+
+✅ **Right approach:** Discover actual SPIFFE IDs using observability, then configure explicit authorization
+
+**Key principle:** Your configuration should match **reality** (what identities are actually being used), not assumptions.
+
+---
+
+## Step 12: Zero-Trust Security Demonstration
+
+This section demonstrates **zero-trust authorization at the application layer**. Even though SPIRE's CSI driver auto-registers all service accounts in the namespace, your **application enforces explicit authorization**.
+
+**What's happening:**
+- ✅ SPIRE CSI driver auto-creates identities for all service accounts: `spiffe://example.org/ns/{namespace}/sa/{serviceaccount}`
+- ✅ Both the registered and unregistered clients can obtain SPIFFE identities from SPIRE
+- 🔒 **But the server only accepts ONE specific identity**: `spiffe://example.org/ns/default/sa/default`
+- ❌ Any other identity (like `unregistered-client`) is **rejected at the application level**
+
+This is **defense in depth**: SPIRE provides the identity infrastructure, your application enforces the authorization policy.
+
+We'll test both scenarios:
+1. ✅ **Authorized client** (`serviceAccountName: default`) - allowed by server
+2. ❌ **Unauthorized client** (`serviceAccountName: unregistered-client`) - rejected by server
+
+### Create Unauthorized Client Job
+
+An unauthorized client is one that:
 - **HAS access to the SPIRE Workload API socket** (same infrastructure access)
-- **NOT registered in SPIRE control plane** (no workload registration entry)
-- Cannot obtain a SPIFFE identity (SPIRE refuses to issue one)
-- Cannot perform mTLS handshake
-- Will be rejected even though it uses the e5s library and has socket access
+- **DOES obtain a SPIFFE identity from SPIRE** (CSI driver auto-registers it)
+- **Uses a different service account** (`unregistered-client` vs `default`)
+- Gets identity: `spiffe://example.org/ns/default/sa/unregistered-client`
+- **Is REJECTED by the server** because it's not in the allowed list
+- Demonstrates application-level authorization enforcement
+
+First, create a service account that is NOT registered with SPIRE:
+
+```bash
+kubectl create serviceaccount unregistered-client -n default
+```
+
+Then create the unregistered client job using that service account:
 
 ```bash
 cat > k8s-unregistered-client-job.yaml <<'EOF'
@@ -676,41 +1002,47 @@ spec:
       labels:
         app: e5s-unregistered-client
     spec:
-      serviceAccountName: default
+      serviceAccountName: unregistered-client
       restartPolicy: Never
       containers:
       - name: client
         image: e5s-client:dev
         imagePullPolicy: Never
-        env:
-        - name: SERVER_URL
-          value: "https://e5s-server:8443/time"
         command: ["/app/client"]
         volumeMounts:
         - name: spire-agent-socket
           mountPath: /spire/agent-socket
           readOnly: true
-        - name: config
+        - name: e5s-config
           mountPath: /app/e5s.yaml
           subPath: e5s.yaml
+        - name: client-config
+          mountPath: /app/client-config.yaml
+          subPath: client-config.yaml
       volumes:
       - name: spire-agent-socket
         csi:
           driver: "csi.spiffe.io"
           readOnly: true
-      - name: config
+      - name: e5s-config
         configMap:
           name: e5s-config
+      - name: client-config
+        configMap:
+          name: client-config
 EOF
 ```
 
-**Difference**: This client has the SPIRE socket mounted and can communicate with the SPIRE Agent, but it's not registered in the SPIRE control plane. SPIRE will refuse to issue it a SPIFFE identity.
+**Difference**: This client uses `serviceAccountName: unregistered-client` which has **no SPIRE registration entry**. The authenticated client uses `serviceAccountName: default` which **is registered** with SPIRE. Even though both have socket access, only the registered one will get a SPIFFE identity.
 
 ### Run Both Tests
 
 ```bash
+# Create service account for unregistered client (if not already created)
+kubectl create serviceaccount unregistered-client -n default 2>/dev/null || true
+
 # Clean up any previous jobs
-kubectl delete job e5s-client e5s-unregistered-client 2>/dev/null
+kubectl delete job e5s-client e5s-unregistered-client 2>/dev/null || true
 sleep 2
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -773,50 +1105,51 @@ Server Logs:
 6. Client received and printed the response
 7. **All communication steps are visible in the logs with timestamps**
 
-**Test 2: Unregistered Client (FAILURE)** ❌
+**Test 2: Unauthorized Client (FAILURE)** ❌
 
 ```
 Client Logs:
-2025/01/15 10:20:45 Starting e5s mTLS client...
-2025/01/15 10:20:45 → Requesting server time from: https://e5s-server:8443/time
-2025/01/15 10:20:45 → Initializing SPIRE client and fetching SPIFFE identity...
-2025/01/15 10:21:15 ❌ Request failed: error fetching X.509 SVID: initial_fetch_timeout expired
+2025/11/05 18:22:36 Starting e5s mTLS client...
+2025/11/05 18:22:36 → Requesting server time from: https://e5s-server:8443/time
+2025/11/05 18:22:36 → Initializing SPIRE client and fetching SPIFFE identity...
+2025/11/05 18:22:37 ❌ Request failed: Get "https://e5s-server:8443/time": remote error: tls: bad certificate
 
 Server Logs:
-(no logs - server never received request)
+2025/11/05 18:22:37 ❌ Unauthorized request from 10.244.0.12:34567
 ```
 
 **What happened:**
-1. Client attempted to initialize e5s library
-2. Client tried to request server time
-3. Client connected to SPIRE Workload API socket successfully
-4. Client requested a SPIFFE identity from SPIRE
-5. **SPIRE refused** - this workload has no registration entry in the control plane
-6. Client waited for identity for 30 seconds (default initial_fetch_timeout)
-7. Client timed out and failed with error
-8. **Client failed during startup** - never obtained certificate, never sent HTTP request
-9. Server never receives the time request
-10. **Zero-trust enforced: no communication without valid identity**
+1. Client connected to SPIRE Workload API socket successfully
+2. **SPIRE auto-registered the service account** via CSI driver
+3. Client obtained SPIFFE identity: `spiffe://example.org/ns/default/sa/unregistered-client`
+4. Client initiated mTLS connection to server with valid certificate
+5. **Server verified the certificate but rejected the identity** - not in allowed list
+6. Server expects: `spiffe://example.org/ns/default/sa/default`
+7. Server got: `spiffe://example.org/ns/default/sa/unregistered-client`
+8. **Server rejected the connection during TLS handshake**
+9. Client received "bad certificate" error
+10. **Zero-trust enforced: valid SPIFFE identity is not enough - explicit authorization required**
 
 ### Security Analysis
 
-This demonstrates **zero-trust mTLS security**:
+This demonstrates **application-layer zero-trust authorization**:
 
-| Component | Authenticated Client | Unregistered Client |
-|-----------|---------------------|---------------------|
+| Component | Authorized Client | Unauthorized Client |
+|-----------|-------------------|---------------------|
 | SPIRE Socket | ✅ Mounted via CSI | ✅ Mounted via CSI |
-| SPIRE Registration | ✅ Registered | ❌ Not registered |
-| SPIFFE Identity | ✅ Obtained | ❌ SPIRE refused |
-| mTLS Handshake | ✅ Successful | ❌ Cannot initiate |
-| Server Communication | ✅ Allowed | ❌ Blocked |
+| SPIRE Auto-Registration | ✅ Auto-registered | ✅ Auto-registered |
+| SPIFFE Identity | ✅ `...sa/default` | ✅ `...sa/unregistered-client` |
+| mTLS Certificate | ✅ Valid cert | ✅ Valid cert |
+| Server Authorization | ✅ In allowed list | ❌ **NOT in allowed list** |
+| Server Communication | ✅ Allowed | ❌ **Rejected** |
 
-**Notes:**
+**Security Principles:**
 
-1. **Registration Required**: Even with socket access, workloads must be registered in SPIRE to get identities
-2. **Control Plane Authorization**: SPIRE control plane enforces which workloads can obtain identities
-3. **No Bypass**: Both clients have identical infrastructure access and code, but only registered clients work
-4. **Defense in Depth**: Network access + code + configuration isn't enough - explicit registration required
-5. **Zero-Trust**: Trust is based on cryptographic identity issued by SPIRE, not infrastructure access
+1. **Defense in Depth**: SPIRE provides identity, your application enforces authorization
+2. **Explicit Authorization**: Having a valid SPIFFE identity is NOT enough - server explicitly allows specific identities
+3. **Application Control**: Even though SPIRE auto-registers workloads, the application decides who can communicate
+4. **No Implicit Trust**: Network access + valid certificate + same namespace ≠ authorization
+5. **Zero-Trust**: Trust is based on explicit allow-lists, not infrastructure or identity provider alone
 
 ### Clean Up Test Jobs
 
@@ -915,11 +1248,11 @@ Inside the pod, run:
 If you modify `internal/config/`:
 
 ```bash
-# 1. Update k8s-e5s-config.yaml with new config
-vim k8s-e5s-config.yaml
+# 1. Update k8s-configs.yaml with new config
+vim k8s-configs.yaml
 
 # 2. Apply updated ConfigMap
-kubectl apply -f k8s-e5s-config.yaml
+kubectl apply -f k8s-configs.yaml
 
 # 3. Restart deployments to pick up new config
 kubectl rollout restart deployment/e5s-server
@@ -1017,11 +1350,12 @@ openssl s_client -connect localhost:8443 -showcerts
 
 After testing, delete Kubernetes resources:
 
-```bash 
+```bash
 kubectl delete deployment e5s-server
 kubectl delete service e5s-server
-kubectl delete job e5s-client
-kubectl delete configmap e5s-config
+kubectl delete job e5s-client e5s-unregistered-client
+kubectl delete configmap e5s-config client-config
+kubectl delete serviceaccount unregistered-client
 ```
 
 Clean up test directory files:

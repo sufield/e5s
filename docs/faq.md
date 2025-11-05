@@ -146,6 +146,96 @@ helmfile -e dev apply     # Uses values-dev.yaml
 helmfile -e prod apply    # Uses values-prod.yaml
 ```
 
+### Why does the server use `:8443` but the client uses `localhost:8443`?
+
+This is the **correct and standard pattern** for server/client configuration. They serve different purposes:
+
+**Server `listen_addr: ":8443"`**
+
+The server uses **`:8443`** which means "listen on ALL network interfaces":
+- `localhost` (127.0.0.1) for local connections
+- External IPs (e.g., 192.168.1.100) for remote connections
+- Container IPs in Kubernetes
+- Any other network interface on the machine
+
+This is called a "bind address" - it specifies where the server accepts connections from.
+
+**Example:**
+```yaml
+server:
+  listen_addr: ":8443"  # Listen on all interfaces, port 8443
+```
+
+**Why this is correct for servers:**
+- ✅ Allows local testing (`localhost` connections work)
+- ✅ Allows production deployment (external connections work)
+- ✅ Works in Kubernetes (pod-to-pod connections work)
+- ✅ Flexible - no changes needed between environments
+
+**Client `server_url: "https://localhost:8443/time"`**
+
+The client uses a full URL specifying:
+1. **Protocol** - `https://` (TLS encrypted)
+2. **Hostname** - `localhost` (where to connect)
+3. **Port** - `8443` (which port)
+4. **Path** - `/time` (which endpoint to request)
+
+**Example:**
+```yaml
+client:
+  server_url: "https://localhost:8443/time"  # For local development
+```
+
+In production/Kubernetes, override with environment variable:
+```yaml
+# k8s deployment
+env:
+- name: SERVER_URL
+  value: "https://e5s-server:8443/time"  # Kubernetes service name
+```
+
+**Visual Comparison:**
+
+```
+Local Development (same machine):
+┌─────────────────────────────────┐
+│  Server                         │
+│  listen_addr: ":8443"           │
+│  (Listens on all interfaces)    │
+│         ↑                       │
+│         │ connects via loopback │
+│         │                       │
+│  Client                         │
+│  server_url:                    │
+│  "https://localhost:8443/time"  │
+└─────────────────────────────────┘
+
+Kubernetes (separate pods):
+┌────────────────┐         ┌────────────────┐
+│  Client Pod    │─────────│  Server Pod    │
+│                │ network │                │
+│  server_url:   │         │  listen_addr:  │
+│  https://e5s-  │         │  ":8443"       │
+│  server:8443   │         │  (all ifaces)  │
+│  (via env var) │         │                │
+└────────────────┘         └────────────────┘
+```
+
+**What if server used `localhost:8443`?**
+
+If the server configured `listen_addr: "localhost:8443"`, it would **only** listen on the loopback interface:
+- ✅ Local clients could connect
+- ❌ Kubernetes pods could NOT connect
+- ❌ Other machines could NOT connect
+- ❌ Production deployments would fail
+
+**Summary:**
+- **Server `:8443`** = "I'm available to everyone on all network interfaces"
+- **Client `localhost:8443`** = "Connect to the local machine for testing"
+- **Client `e5s-server:8443`** (prod) = "Connect to the e5s-server service in Kubernetes"
+
+This pattern allows the same server configuration to work in both development and production, while clients specify exactly where to connect based on their environment.
+
 ---
 
 ## Security

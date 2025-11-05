@@ -23,6 +23,10 @@ server:
   allowed_client_trust_domain: "example.org"
 
 client:
+  # Server URL to connect to
+  # Example: "https://localhost:8443/time" or "https://e5s-server:8443/api"
+  server_url: "https://localhost:8443/time"
+
   # Server authentication policy (exactly one of these should be set)
 
   # Option 1: Require this exact server SPIFFE ID

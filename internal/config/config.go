@@ -22,6 +22,9 @@ type ServerSection struct {
 
 // ClientSection contains client-specific configuration.
 type ClientSection struct {
+	// ServerURL is the URL of the server to connect to.
+	// Example: "https://localhost:8443/time" or "https://e5s-server:8443/api"
+	ServerURL                 string `yaml:"server_url"`
 	ExpectedServerSPIFFEID    string `yaml:"expected_server_spiffe_id"`
 	ExpectedServerTrustDomain string `yaml:"expected_server_trust_domain"`
 }

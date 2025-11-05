@@ -265,6 +265,7 @@ func TestValidateClient(t *testing.T) {
 					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
 				Client: struct {
+					ServerURL                 string `yaml:"server_url"`
 					ExpectedServerSPIFFEID    string `yaml:"expected_server_spiffe_id"`
 					ExpectedServerTrustDomain string `yaml:"expected_server_trust_domain"`
 				}{
@@ -283,6 +284,7 @@ func TestValidateClient(t *testing.T) {
 					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
 				Client: struct {
+					ServerURL                 string `yaml:"server_url"`
 					ExpectedServerSPIFFEID    string `yaml:"expected_server_spiffe_id"`
 					ExpectedServerTrustDomain string `yaml:"expected_server_trust_domain"`
 				}{
@@ -295,6 +297,7 @@ func TestValidateClient(t *testing.T) {
 			name: "missing workload socket",
 			cfg: FileConfig{
 				Client: struct {
+					ServerURL                 string `yaml:"server_url"`
 					ExpectedServerSPIFFEID    string `yaml:"expected_server_spiffe_id"`
 					ExpectedServerTrustDomain string `yaml:"expected_server_trust_domain"`
 				}{
@@ -327,6 +330,7 @@ func TestValidateClient(t *testing.T) {
 					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
 				Client: struct {
+					ServerURL                 string `yaml:"server_url"`
 					ExpectedServerSPIFFEID    string `yaml:"expected_server_spiffe_id"`
 					ExpectedServerTrustDomain string `yaml:"expected_server_trust_domain"`
 				}{
@@ -347,6 +351,7 @@ func TestValidateClient(t *testing.T) {
 					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
 				Client: struct {
+					ServerURL                 string `yaml:"server_url"`
 					ExpectedServerSPIFFEID    string `yaml:"expected_server_spiffe_id"`
 					ExpectedServerTrustDomain string `yaml:"expected_server_trust_domain"`
 				}{
@@ -366,6 +371,7 @@ func TestValidateClient(t *testing.T) {
 					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
 				Client: struct {
+					ServerURL                 string `yaml:"server_url"`
 					ExpectedServerSPIFFEID    string `yaml:"expected_server_spiffe_id"`
 					ExpectedServerTrustDomain string `yaml:"expected_server_trust_domain"`
 				}{
@@ -385,6 +391,7 @@ func TestValidateClient(t *testing.T) {
 					WorkloadSocket: "  /run/spire/sockets/agent.sock  ",
 				},
 				Client: struct {
+					ServerURL                 string `yaml:"server_url"`
 					ExpectedServerSPIFFEID    string `yaml:"expected_server_spiffe_id"`
 					ExpectedServerTrustDomain string `yaml:"expected_server_trust_domain"`
 				}{
@@ -403,6 +410,7 @@ func TestValidateClient(t *testing.T) {
 					WorkloadSocket: "  /run/spire/sockets/agent.sock  ",
 				},
 				Client: struct {
+					ServerURL                 string `yaml:"server_url"`
 					ExpectedServerSPIFFEID    string `yaml:"expected_server_spiffe_id"`
 					ExpectedServerTrustDomain string `yaml:"expected_server_trust_domain"`
 				}{
