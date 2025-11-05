@@ -4,8 +4,7 @@
 
 **Purpose**: Test local e5s code changes in a realistic environment before releasing to end users.
 
-**Time Required**:
-- **Manual Setup**: ~20 minutes
+**Time Required**: ~20 minutes
 
 ---
 
