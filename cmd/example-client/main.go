@@ -30,8 +30,12 @@ func main() {
 		os.Exit(0)
 	}
 
+	os.Exit(run(*configPath))
+}
+
+func run(configPath string) int {
 	log.Printf("Starting e5s mTLS client (version %s)...", version)
-	log.Printf("Using config: %s", *configPath)
+	log.Printf("Using config: %s", configPath)
 
 	// Get server URL from environment variable, default to localhost
 	// This allows the client to work both locally and in Kubernetes
@@ -45,9 +49,10 @@ func main() {
 
 	// Create mTLS client with explicit config path
 	// This allows the binary to own the default, not the library
-	client, shutdown, err := e5s.Client(*configPath)
+	client, shutdown, err := e5s.Client(configPath)
 	if err != nil {
-		log.Fatalf("❌ Failed to initialize client: %v", err)
+		log.Printf("❌ Failed to initialize client: %v", err)
+		return 1
 	}
 	defer func() {
 		if err := shutdown(); err != nil {
@@ -59,7 +64,7 @@ func main() {
 	resp, err := client.Get(serverURL)
 	if err != nil {
 		log.Printf("❌ Request failed: %v", err)
-		os.Exit(1)
+		return 1
 	}
 	defer resp.Body.Close()
 
@@ -69,4 +74,6 @@ func main() {
 	body, _ := io.ReadAll(resp.Body)
 	log.Printf("← Server response: %s", string(body))
 	fmt.Print(string(body))
+
+	return 0
 }
