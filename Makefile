@@ -1,6 +1,8 @@
 .PHONY: test test-verbose test-race test-coverage test-coverage-html test-short \
-	clean help examples \
+	clean help examples build \
 	example-highlevel-server example-highlevel-client example-minikube-server example-minikube-client \
+	lint lint-fix fmt fmt-check vet tidy verify \
+	ci ci-local \
 	sec-deps sec-lint sec-secrets sec-test sec-all sec-install-tools
 
 # Use bash with strict error handling
@@ -14,6 +16,18 @@ SHELL := /bin/bash
 REQUIRED_TOOLS=go
 TOOLS_SEC=govulncheck gosec gitleaks
 
+# ============================================================================
+# Quick Reference
+# ============================================================================
+# Common workflows:
+#   make ci          - Run all CI checks locally before pushing
+#   make lint        - Quick lint check (what CI runs)
+#   make test        - Run tests quickly
+#   make build       - Build example binaries
+#   make fmt         - Format code
+#   make help        - Show all available targets
+# ============================================================================
+
 ## help: Show this help message
 help:
 	@echo "e5s - SPIFFE/SPIRE mTLS Library"
@@ -21,36 +35,112 @@ help:
 	@echo "Available targets:"
 	@sed -n 's/^##//p' ${MAKEFILE_LIST} | column -t -s ':' | sed -e 's/^/ /'
 
+# ============================================================================
+# Build Targets
+# ============================================================================
+
+## build: Build example binaries (server and client)
+build:
+	@echo "Building example binaries..."
+	@mkdir -p bin
+	@go build -o bin/example-server ./cmd/example-server
+	@go build -o bin/example-client ./cmd/example-client
+	@echo "✓ Binaries: bin/example-server, bin/example-client"
+
+# ============================================================================
+# Code Quality Targets (match CI)
+# ============================================================================
+
+## lint: Run golangci-lint (same as CI)
+lint:
+	@echo "Running golangci-lint..."
+	@golangci-lint run --timeout=5m
+	@echo "✓ Lint passed"
+
+## lint-fix: Run golangci-lint with auto-fix
+lint-fix:
+	@echo "Running golangci-lint with auto-fix..."
+	@golangci-lint run --fix --timeout=5m
+	@echo "✓ Lint fixes applied"
+
+## fmt: Format all Go code
+fmt:
+	@echo "Formatting code..."
+	@gofmt -w -s .
+	@echo "✓ Code formatted"
+
+## fmt-check: Check if code is formatted
+fmt-check:
+	@echo "Checking code formatting..."
+	@if [ -n "$$(gofmt -l .)" ]; then \
+		echo "::error::Code is not formatted. Run 'make fmt'"; \
+		gofmt -l .; \
+		exit 1; \
+	fi
+	@echo "✓ Code is properly formatted"
+
+## vet: Run go vet
+vet:
+	@echo "Running go vet..."
+	@go vet ./...
+	@echo "✓ Vet passed"
+
+## tidy: Tidy go modules
+tidy:
+	@echo "Tidying go modules..."
+	@go mod tidy
+	@echo "✓ Modules tidied"
+
+## verify: Verify go modules
+verify:
+	@echo "Verifying go modules..."
+	@go mod verify
+	@echo "✓ Modules verified"
+
+## ci-local: Run all checks that CI runs (local version)
+ci-local: tidy verify lint vet test-race
+	@echo ""
+	@echo "======================================"
+	@echo "✓ All CI checks passed locally!"
+	@echo "======================================"
+
+## ci: Alias for ci-local
+ci: ci-local
+
+# ============================================================================
+# Test Targets
+# ============================================================================
+
 ## test: Run all tests
 test:
 	@echo "Running library tests..."
-	@go test ./pkg/...
+	@go test ./...
 
 ## test-verbose: Run tests with verbose output
 test-verbose:
 	@echo "Running tests (verbose)..."
-	@go test -v ./pkg/...
+	@go test -v ./...
 
 ## test-race: Run tests with race detector
 test-race:
 	@echo "Running tests with race detector..."
-	@go test -race ./pkg/...
+	@go test -race ./...
 
 ## test-short: Run tests in short mode
 test-short:
 	@echo "Running tests in short mode..."
-	@go test -short ./pkg/...
+	@go test -short ./...
 
 ## test-coverage: Run tests with coverage report
 test-coverage:
 	@echo "Running tests with coverage..."
-	@go test -coverprofile=coverage.out ./pkg/...
+	@go test -coverprofile=coverage.out ./...
 	@go tool cover -func=coverage.out
 
 ## test-coverage-html: Generate HTML coverage report
 test-coverage-html:
 	@echo "Generating HTML coverage report..."
-	@go test -coverprofile=coverage.out ./pkg/...
+	@go test -coverprofile=coverage.out ./...
 	@go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report: coverage.html"
 
@@ -118,9 +208,9 @@ sec-deps:
 ## sec-lint: Run security-focused static analysis
 sec-lint:
 	@echo "Running security analysis..."
-	@go vet ./pkg/...
+	@go vet ./...
 	@echo ""
-	@gosec ./pkg/...
+	@gosec ./...
 	@echo "✓ Security lint complete"
 
 ## sec-secrets: Scan for secrets and credentials
@@ -132,7 +222,7 @@ sec-secrets:
 ## sec-test: Run tests with race detector and coverage
 sec-test:
 	@echo "Running security tests..."
-	@go test -race -covermode=atomic -coverprofile=coverage.out ./pkg/...
+	@go test -race -covermode=atomic -coverprofile=coverage.out ./...
 	@echo ""
 	@echo "Coverage summary:"
 	@go tool cover -func=coverage.out | tail -1

@@ -1,6 +1,6 @@
 # SPIRE Infrastructure Setup
 
-This guide shows how to set up SPIRE infrastructure in Minikube for local development and testing.
+This guide covers how to set up SPIRE infrastructure in Minikube for local development and testing.
 
 **Time Required**: ~15 minutes
 

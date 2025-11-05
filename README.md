@@ -213,7 +213,7 @@ client:
   # expected_server_spiffe_id: "spiffe://example.org/server"
 ```
 
-**Note:** In your application, create separate config files (`e5s.dev.yaml`, `e5s.staging.yaml`, `e5s.prod.yaml`) with environment-specific values for socket paths, trust domains, and timeouts. These files are part of your application codebase, not the e5s library.
+In your application, create separate config files (`e5s.dev.yaml`, `e5s.staging.yaml`, `e5s.prod.yaml`) with environment-specific values for socket paths, trust domains, and timeouts. These files are part of your application codebase, not the e5s library.
 
 **For advanced usage** like environment variables, context timeouts, retry logic, and structured logging → See [examples/highlevel/ADVANCED.md](examples/highlevel/ADVANCED.md)
 
@@ -429,29 +429,53 @@ The examples are separate modules (each has its own `go.mod`) so you can vendor/
 
 ## Development
 
+### Quick Start
+
 ```bash
-# Run tests
-make test
+# Run all CI checks locally before pushing
+make ci
 
-# Run tests with coverage
-make test-coverage
+# Individual checks
+make lint          # Run golangci-lint (what CI runs)
+make vet           # Run go vet
+make fmt           # Format code
+make test          # Run tests
+make build         # Build example binaries
+```
 
-# Build all examples (creates 4 binaries in bin/)
-make examples
-# Builds:
-#   bin/highlevel-server    - High-level API example with chi
-#   bin/highlevel-client    - High-level API client
-#   bin/minikube-server     - Low-level API example
-#   bin/minikube-client     - Low-level API client
+### Common Tasks
 
-# Build specific examples
+```bash
+# Testing
+make test                  # Run tests quickly
+make test-race             # Run with race detector (recommended before push)
+make test-coverage         # Generate coverage report
+make test-coverage-html    # Open coverage in browser
+
+# Code Quality
+make lint                  # Lint code (matches CI)
+make lint-fix              # Auto-fix linting issues
+make fmt                   # Format all code
+make fmt-check             # Check if code is formatted
+make vet                   # Run go vet
+make tidy                  # Tidy go modules
+make verify                # Verify go modules
+
+# Building
+make build                 # Build cmd/example-server and cmd/example-client
+make examples              # Build all examples (4 binaries)
 make example-highlevel-server   # Application developer example
 make example-highlevel-client
 make example-minikube-server    # Platform/infra example
 make example-minikube-client
 
-# Run security checks
-make sec-all
+# Security
+make sec-all               # Run all security checks
+make sec-deps              # Check for vulnerabilities
+make sec-lint              # Security-focused static analysis
+
+# All available targets
+make help
 ```
 
 ## Security
@@ -480,7 +504,21 @@ MIT License - See [LICENSE](LICENSE) file for details.
 
 ## Contributing
 
-Contributions welcome! Please ensure:
-- Tests pass: `make test`
+Contributions welcome! Please ensure all CI checks pass locally before submitting:
+
+```bash
+# Run all checks (recommended before every commit)
+make ci
+
+# This runs:
+#   - go mod tidy & verify
+#   - golangci-lint
+#   - go vet
+#   - go test -race
+```
+
+Or run checks individually:
+- Tests pass: `make test-race`
+- Linting passes: `make lint`
+- Code is formatted: `make fmt`
 - Security checks pass: `make sec-all`
-- Examples build: `make examples`

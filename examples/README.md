@@ -1,6 +1,6 @@
 # e5s Examples
 
-Complete examples demonstrating how to build mTLS applications with e5s and SPIRE.
+Examples demonstrating how to build mTLS applications with e5s and SPIRE.
 
 ---
 
@@ -37,26 +37,3 @@ Demonstrates:
 - Manual workload registration
 - Infrastructure automation
 - Kubernetes-native deployments
-
----
-
-## Which Example Should I Use?
-
-| Your Goal | Use This Example |
-|-----------|------------------|
-| Build mTLS applications | [highlevel/](highlevel/) → [Start Here](highlevel/TABLE_OF_CONTENTS.md) |
-| Custom middleware | [middleware/](middleware/) |
-| SPIRE infrastructure | [minikube-lowlevel/](minikube-lowlevel/) |
-
----
-
-## Example Structure
-
-```
-examples/
-├── README.md                ← You are here
-├── highlevel/               ← Start here (recommended)
-│   └── TABLE_OF_CONTENTS.md   ← Complete documentation index
-├── middleware/              ← Custom middleware integration
-└── minikube-lowlevel/      ← SPIRE infrastructure setup
-```
