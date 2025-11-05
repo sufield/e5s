@@ -58,7 +58,8 @@ func main() {
 	// Perform mTLS GET request
 	resp, err := client.Get(serverURL)
 	if err != nil {
-		log.Fatalf("❌ Request failed: %v", err)
+		log.Printf("❌ Request failed: %v", err)
+		os.Exit(1)
 	}
 	defer resp.Body.Close()
 
