@@ -8,8 +8,10 @@ spire:
 
 server:
   listen_addr: ":8443"
-  # Accept any client in this trust domain
-  allowed_client_trust_domain: "example.org"
+  # Only accept the specific registered client SPIFFE ID
+  # This demonstrates zero-trust: even if SPIRE issues other identities,
+  # the server only accepts the explicitly authorized client
+  allowed_client_spiffe_id: "spiffe://example.org/ns/default/sa/default"
 
 client:
   # Connect to any server in this trust domain

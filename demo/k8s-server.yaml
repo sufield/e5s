@@ -1,23 +1,23 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ .Values.server.name }}
-  namespace: {{ .Values.namespace }}
+  name: e5s-server
+  namespace: default
 spec:
-  replicas: {{ .Values.server.replicas }}
+  replicas: 1
   selector:
     matchLabels:
-      app: {{ .Values.server.name }}
+      app: e5s-server
   template:
     metadata:
       labels:
-        app: {{ .Values.server.name }}
+        app: e5s-server
     spec:
-      serviceAccountName: {{ .Values.serviceAccountName }}
+      serviceAccountName: default
       containers:
       - name: server
-        image: {{ .Values.server.image.repository }}:{{ .Values.server.image.tag }}
-        imagePullPolicy: {{ .Values.server.image.pullPolicy }}
+        image: e5s-server:dev
+        imagePullPolicy: Never  # Use local image from Minikube
         volumeMounts:
         - name: spire-agent-socket
           mountPath: /spire/agent-socket
@@ -32,4 +32,17 @@ spec:
           readOnly: true
       - name: config
         configMap:
-          name: {{ .Values.config.name }}
+          name: e5s-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: e5s-server
+  namespace: default
+spec:
+  selector:
+    app: e5s-server
+  ports:
+  - protocol: TCP
+    port: 8443
+    targetPort: 8443
