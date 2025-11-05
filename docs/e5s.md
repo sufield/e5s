@@ -29,7 +29,7 @@ It eliminates cryptographic complexity, enforces zero-trust by default, and brid
 ## **Differentiators**
 
 * **Zero manual crypto** — 100% automated mTLS lifecycle.
-* **Config-driven design** — one file (`e5s.yaml`) defines policy.
+* **Config-driven design** — simple YAML config (`e5s.dev.yaml`, `e5s.prod.yaml`) defines policy per environment.
 * **Developer-centric** — drop-in simplicity; no security expertise required.
 * **SPIFFE-native** — standards-based interoperability (SPIRE, Envoy, Istio).
 * **Production-grade** — automatic rotation, policy enforcement, TLS 1.3 minimum.

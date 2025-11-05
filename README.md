@@ -21,7 +21,7 @@ Ideal for microservices in zero-trust environments. It reduces security risks fr
 Using e5s over the go-spiffe SDK directly offers these advantages for developers building mTLS services:
 
 - **Simpler Abstraction**: The high-level API (e.g., `e5s.Run()`) handles configuration, SPIRE connections, certificate rotation, and verification with minimal code—often one line—versus manual SDK setup and boilerplate.
-- **Config-Driven**: YAML-based config (e5s.yaml) streamlines setup for servers/clients, including timeouts and trust domains, without custom coding.
+- **Config-Driven**: YAML-based config (`e5s.dev.yaml` for dev, `e5s.prod.yaml` for prod) streamlines setup for servers/clients, including timeouts and trust domains, without custom coding.
 - **Built-in Features**: Automatic zero-downtime rotation, policy-based SPIFFE ID verification, TLS 1.3 enforcement, graceful shutdown, health checks, structured logging and thread-safety are ready out-of-the-box.
 - **Low-Level Flexibility**: Direct access to pkg/spiffehttp and pkg/spire for customization, minimizing dependencies (core uses stdlib only).
 - **Ease of Adoption**: Comprehensive docs, quickstarts, and examples reduce integration time compared to raw SDK usage.
@@ -68,7 +68,7 @@ We provide a **high-level** and a **low-level** APIs because they serve differen
 **Goal:** Make identity-based mTLS work with one line of code
 
 - Handles configuration, SPIRE connection, certificate rotation, and verification internally
-- Reads `e5s.yaml` → starts server/client automatically
+- Reads `e5s.dev.yaml` (default) or specify via `-config` flag or `E5S_CONFIG` env var
 - Ideal when you just want secure communication without caring how certificates or trust domains are wired
 - Example use: web apps, microservices, APIs
 
@@ -99,7 +99,7 @@ We provide a **high-level** and a **low-level** APIs because they serve differen
 
 #### Recommended for Most Users
 
-Zero-configuration approach - just create an `e5s.yaml` file and call `e5s.Run()`.
+Simple configuration approach - create `e5s.dev.yaml` for development, `e5s.prod.yaml` for production, and call `e5s.Run()`.
 
 **Example Server:**
 
@@ -154,7 +154,36 @@ func main() {
 }
 ```
 
-**Config File (e5s.yaml):**
+**Config File:**
+
+The e5s library requires explicit configuration and never assumes a default environment.
+
+**Config files live in YOUR application codebase, not in the e5s library.**
+
+Copy the example config from `examples/highlevel/e5s.yaml` to your project and customize it:
+
+```bash
+# In your application directory
+cp path/to/e5s/examples/highlevel/e5s.yaml ./e5s.yaml
+# Edit for your environment (e5s.dev.yaml, e5s.prod.yaml, etc.)
+```
+
+Then provide the config path explicitly:
+
+1. **Explicit path** (recommended):
+   ```go
+   shutdown, err := e5s.Start("e5s.prod.yaml", handler)
+   ```
+
+2. **Via E5S_CONFIG environment variable**:
+   ```bash
+   export E5S_CONFIG=/etc/myapp/e5s.prod.yaml
+   ```
+   ```go
+   shutdown, err := e5s.StartServer(handler)  // Uses E5S_CONFIG
+   ```
+
+**Example config structure:**
 
 ```yaml
 spire:
@@ -183,6 +212,8 @@ client:
   # Or require a specific server SPIFFE ID
   # expected_server_spiffe_id: "spiffe://example.org/server"
 ```
+
+**Note:** In your application, create separate config files (`e5s.dev.yaml`, `e5s.staging.yaml`, `e5s.prod.yaml`) with environment-specific values for socket paths, trust domains, and timeouts. These files are part of your application codebase, not the e5s library.
 
 **For advanced usage** like environment variables, context timeouts, retry logic, and structured logging → See [examples/highlevel/ADVANCED.md](examples/highlevel/ADVANCED.md)
 

@@ -124,7 +124,7 @@ SPIRE Workload API integration.
 
 ### Server Configuration
 
-**File:** `e5s.yaml`
+**File:** `e5s.dev.yaml` (development) or `e5s.prod.yaml` (production)
 
 ```yaml
 spire:
@@ -153,7 +153,7 @@ server:
 
 ### Client Configuration
 
-**File:** `e5s.yaml`
+**File:** `e5s.dev.yaml` (development) or `e5s.prod.yaml` (production)
 
 ```yaml
 spire:
@@ -213,7 +213,7 @@ func main() {
 Full control over configuration and lifecycle:
 
 ```go
-shutdown, err := e5s.Start("e5s.yaml", myHandler)
+shutdown, err := e5s.Start("e5s.dev.yaml", myHandler)
 if err != nil {
     log.Fatal(err)
 }
@@ -232,7 +232,7 @@ if err := shutdown(); err != nil {
 ### 3. HTTP Client with mTLS
 
 ```go
-client, shutdown, err := e5s.Client("e5s.yaml")
+client, shutdown, err := e5s.Client("e5s.dev.yaml")
 if err != nil {
     log.Fatal(err)
 }
@@ -269,7 +269,7 @@ resp, err := e5s.Post(
 All functions return detailed errors with context:
 
 ```go
-shutdown, err := e5s.Start("e5s.yaml", handler)
+shutdown, err := e5s.Start("e5s.dev.yaml", handler)
 if err != nil {
     // Error will include context: config loading, SPIRE connection, server startup
     log.Fatalf("Failed to start server: %v", err)

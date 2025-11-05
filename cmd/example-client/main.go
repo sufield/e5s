@@ -19,6 +19,8 @@ var (
 
 func main() {
 	versionFlag := flag.Bool("version", false, "Print version information and exit")
+	// Default to example config for demonstration
+	configPath := flag.String("config", "examples/highlevel/e5s.yaml", "Path to e5s config file")
 	flag.Parse()
 
 	if *versionFlag {
@@ -29,6 +31,7 @@ func main() {
 	}
 
 	log.Printf("Starting e5s mTLS client (version %s)...", version)
+	log.Printf("Using config: %s", *configPath)
 
 	// Get server URL from environment variable, default to localhost
 	// This allows the client to work both locally and in Kubernetes
@@ -40,8 +43,20 @@ func main() {
 	log.Printf("→ Requesting server time from: %s", serverURL)
 	log.Println("→ Initializing SPIRE client and fetching SPIFFE identity...")
 
-	// Perform mTLS GET request (uses local e5s code)
-	resp, err := e5s.Get(serverURL)
+	// Create mTLS client with explicit config path
+	// This allows the binary to own the default, not the library
+	client, shutdown, err := e5s.Client(*configPath)
+	if err != nil {
+		log.Fatalf("❌ Failed to initialize client: %v", err)
+	}
+	defer func() {
+		if err := shutdown(); err != nil {
+			log.Printf("Error during shutdown: %v", err)
+		}
+	}()
+
+	// Perform mTLS GET request
+	resp, err := client.Get(serverURL)
 	if err != nil {
 		log.Fatalf("❌ Request failed: %v", err)
 	}

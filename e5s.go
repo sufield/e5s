@@ -51,33 +51,35 @@ import (
 	"github.com/sufield/e5s/spire"
 )
 
-// getConfigPath returns the config file path using intelligent defaults:
-//  1. Check E5S_CONFIG environment variable
-//  2. Fall back to "e5s.yaml" in current directory
+// resolveConfigPath returns the config file path from E5S_CONFIG environment variable.
 //
-// This allows zero-configuration usage in most cases while supporting
-// environment-specific overrides in production.
-func getConfigPath() string {
+// This function is used by the convenience helpers (StartServer, NewClient, Get).
+// It returns an error if E5S_CONFIG is not set, ensuring the library never
+// silently assumes a default environment.
+//
+// For explicit control, use Start(configPath, handler) or Client(configPath) directly.
+func resolveConfigPath() (string, error) {
 	if path := os.Getenv("E5S_CONFIG"); path != "" {
-		return path
+		return path, nil
 	}
-	return "e5s.yaml"
+	return "", fmt.Errorf("E5S_CONFIG environment variable not set; either set E5S_CONFIG or call Start()/Client() with an explicit config path")
 }
 
-// Run starts an mTLS server with zero configuration required.
+// Run starts an mTLS server using E5S_CONFIG and handles signals.
 //
-// This is the simplest way to run an mTLS server. It automatically handles:
-//   - Config file discovery (E5S_CONFIG env var or e5s.yaml)
+// This convenience function automatically handles:
+//   - Reading config from E5S_CONFIG environment variable
 //   - SPIRE connection and mTLS setup
 //   - Signal handling (SIGINT/SIGTERM)
 //   - Graceful shutdown
 //
 // The server will run until interrupted (Ctrl+C or kill signal).
+// If E5S_CONFIG is not set, the function will log a fatal error and exit.
 //
 // For more control over signal handling, use StartServer() instead.
-// For explicit config paths, use Start() instead.
+// For explicit config paths, use Start() instead (recommended for production).
 //
-// Configuration (e5s.yaml or path from E5S_CONFIG):
+// Configuration (path from E5S_CONFIG):
 //
 //	spire:
 //	  workload_socket: unix:///tmp/spire-agent/public/api.sock
@@ -88,6 +90,9 @@ func getConfigPath() string {
 // Usage:
 //
 //	func main() {
+//	    // Must set E5S_CONFIG
+//	    os.Setenv("E5S_CONFIG", "e5s.prod.yaml")
+//
 //	    r := chi.NewRouter()
 //	    r.Get("/hello", func(w http.ResponseWriter, req *http.Request) {
 //	        id, ok := e5s.PeerID(req)
@@ -302,17 +307,15 @@ func Start(configPath string, handler http.Handler) (shutdown func() error, err 
 	return shutdownFunc, nil
 }
 
-// StartServer starts a production-grade mTLS server with intelligent defaults.
+// StartServer starts a production-grade mTLS server using E5S_CONFIG.
 //
-// This is the recommended API for most users. It automatically:
-//   - Checks E5S_CONFIG environment variable for config file path
-//   - Falls back to "e5s.yaml" in current directory
-//   - Loads configuration and connects to SPIRE
-//   - Starts mTLS server with automatic certificate rotation
+// This is a convenience wrapper that reads the config path from E5S_CONFIG
+// environment variable. If E5S_CONFIG is not set, it returns an error.
 //
 // For explicit config file paths, use Start(configPath, handler) instead.
+// This is the recommended approach for production deployments.
 //
-// Configuration (e5s.yaml or path from E5S_CONFIG):
+// Configuration (path from E5S_CONFIG):
 //
 //	spire:
 //	  workload_socket: unix:///tmp/spire-agent/public/api.sock
@@ -322,6 +325,8 @@ func Start(configPath string, handler http.Handler) (shutdown func() error, err 
 //
 // Usage:
 //
+//	// Set E5S_CONFIG before calling
+//	os.Setenv("E5S_CONFIG", "e5s.prod.yaml")
 //	shutdown, err := e5s.StartServer(myHandler)
 //	if err != nil {
 //	    log.Fatal(err)
@@ -330,20 +335,22 @@ func Start(configPath string, handler http.Handler) (shutdown func() error, err 
 //
 // See Start() documentation for full details on server behavior and configuration.
 func StartServer(handler http.Handler) (shutdown func() error, err error) {
-	return Start(getConfigPath(), handler)
+	path, err := resolveConfigPath()
+	if err != nil {
+		return nil, err
+	}
+	return Start(path, handler)
 }
 
-// NewClient returns an HTTP client configured for mTLS with intelligent defaults.
+// NewClient returns an HTTP client configured for mTLS using E5S_CONFIG.
 //
-// This is the recommended API for most users. It automatically:
-//   - Checks E5S_CONFIG environment variable for config file path
-//   - Falls back to "e5s.yaml" in current directory
-//   - Loads configuration and connects to SPIRE
-//   - Configures mTLS client with automatic certificate rotation
+// This is a convenience wrapper that reads the config path from E5S_CONFIG
+// environment variable. If E5S_CONFIG is not set, it returns an error.
 //
 // For explicit config file paths, use Client(configPath) instead.
+// This is the recommended approach for production deployments.
 //
-// Configuration (e5s.yaml or path from E5S_CONFIG):
+// Configuration (path from E5S_CONFIG):
 //
 //	spire:
 //	  workload_socket: unix:///tmp/spire-agent/public/api.sock
@@ -352,6 +359,8 @@ func StartServer(handler http.Handler) (shutdown func() error, err error) {
 //
 // Usage:
 //
+//	// Set E5S_CONFIG before calling
+//	os.Setenv("E5S_CONFIG", "e5s.prod.yaml")
 //	client, shutdown, err := e5s.NewClient()
 //	if err != nil {
 //	    log.Fatal(err)
@@ -362,7 +371,11 @@ func StartServer(handler http.Handler) (shutdown func() error, err error) {
 //
 // See Client() documentation for full details on client behavior and configuration.
 func NewClient() (*http.Client, func() error, error) {
-	return Client(getConfigPath())
+	path, err := resolveConfigPath()
+	if err != nil {
+		return nil, nil, err
+	}
+	return Client(path)
 }
 
 // PeerInfo extracts the authenticated caller's full identity from a request.
@@ -556,18 +569,20 @@ func (b *bodyCloser) Close() error {
 	return err
 }
 
-// Get performs an mTLS GET request with zero configuration required.
+// Get performs an mTLS GET request using E5S_CONFIG.
 //
-// This is the simplest way to make an mTLS request. It automatically:
-//   - Discovers config file (E5S_CONFIG env var or e5s.yaml)
+// This is a convenience function that automatically:
+//   - Reads config from E5S_CONFIG environment variable
 //   - Creates mTLS client with SPIRE connection
 //   - Performs the GET request
 //   - Ties cleanup to response body closure
 //
+// If E5S_CONFIG is not set, it returns an error.
+//
 // Shutdown is automatically handled when you close the response body.
 // This ensures proper resource cleanup without requiring explicit shutdown calls.
 //
-// Configuration (e5s.yaml or path from E5S_CONFIG):
+// Configuration (path from E5S_CONFIG):
 //
 //	spire:
 //	  workload_socket: unix:///tmp/spire-agent/public/api.sock
@@ -577,6 +592,9 @@ func (b *bodyCloser) Close() error {
 // Usage:
 //
 //	func main() {
+//	    // Must set E5S_CONFIG
+//	    os.Setenv("E5S_CONFIG", "e5s.prod.yaml")
+//
 //	    resp, err := e5s.Get("https://api.example.com:8443/data")
 //	    if err != nil {
 //	        log.Fatal(err)
@@ -588,7 +606,7 @@ func (b *bodyCloser) Close() error {
 //	}
 //
 // For making multiple requests with the same client, use NewClient() instead.
-// For explicit config paths, use Client() instead.
+// For explicit config paths, use Client() instead (recommended for production).
 //
 // Returns:
 //   - response: HTTP response with wrapped body that handles cleanup

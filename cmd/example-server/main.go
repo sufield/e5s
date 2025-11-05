@@ -1,11 +1,14 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -21,6 +24,8 @@ var (
 
 func main() {
 	versionFlag := flag.Bool("version", false, "Print version information and exit")
+	// Default to example config for demonstration
+	configPath := flag.String("config", "examples/highlevel/e5s.yaml", "Path to e5s config file")
 	flag.Parse()
 
 	if *versionFlag {
@@ -31,6 +36,7 @@ func main() {
 	}
 
 	log.Printf("Starting e5s mTLS server (version %s)...", version)
+	log.Printf("Using config: %s", *configPath)
 
 	// Create HTTP router
 	r := chi.NewRouter()
@@ -64,6 +70,25 @@ func main() {
 	})
 
 	log.Println("Server configured, initializing mTLS with SPIRE...")
-	// Run mTLS server (uses local e5s code)
-	e5s.Run(r)
+
+	// Start mTLS server with explicit config path
+	// This allows the binary to own the default, not the library
+	shutdown, err := e5s.Start(*configPath, r)
+	if err != nil {
+		log.Fatalf("Failed to start server: %v", err)
+	}
+	defer func() {
+		if err := shutdown(); err != nil {
+			log.Printf("Error during shutdown: %v", err)
+		}
+	}()
+
+	log.Println("Server running - press Ctrl+C to stop")
+
+	// Wait for interrupt signal for graceful shutdown
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	<-ctx.Done()
+
+	log.Println("Shutting down gracefully...")
 }

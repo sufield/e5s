@@ -42,6 +42,11 @@ codeql-db/
 *-secrets.yaml
 *.enc.yaml
 
+# User config files (these belong in application codebases, not library)
+# Users may create these locally for testing
+/e5s.yaml
+/e5s.*.yaml
+
 # Helm/Kubernetes artifacts
 examples/minikube-lowlevel/infra/charts/
 *.tgz
