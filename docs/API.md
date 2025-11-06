@@ -116,7 +116,7 @@ SPIRE Workload API integration.
 - `Config` - SPIRE connection configuration
 
 **Key Functions:**
-- `NewSource()` - Connect to SPIRE Workload API and fetch identities
+- `NewIdentitySource()` - Connect to SPIRE Workload API and fetch identities
 
 **Documentation:** https://pkg.go.dev/github.com/sufield/e5s/spire
 

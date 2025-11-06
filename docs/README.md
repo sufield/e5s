@@ -45,7 +45,7 @@ Provider-agnostic primitives for building mTLS connections with SPIFFE identity:
 
 SPIRE Workload API client:
 
-- `NewSource()` - Connect to SPIRE Agent
+- `NewIdentitySource()` - Connect to SPIRE Agent
 - `X509Source()` - Access underlying SDK source
 - Automatic certificate rotation
 - Trust bundle updates

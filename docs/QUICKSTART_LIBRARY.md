@@ -34,7 +34,7 @@ func main() {
     ctx := context.Background()
 
     // Create SPIRE certificate source
-    source, err := spire.NewSource(ctx, spire.Config{})
+    source, err := spire.NewIdentitySource(ctx, spire.Config{})
     if err != nil {
         log.Fatal(err)
     }
@@ -94,7 +94,7 @@ func main() {
     ctx := context.Background()
 
     // Create SPIRE certificate source
-    source, err := spire.NewSource(ctx, spire.Config{})
+    source, err := spire.NewIdentitySource(ctx, spire.Config{})
     if err != nil {
         log.Fatal(err)
     }
@@ -236,7 +236,7 @@ The `spire.Source` auto-detects the SPIRE Workload API socket in this order:
 Explicit configuration:
 
 ```go
-source, err := spire.NewSource(ctx, spire.Config{
+source, err := spire.NewIdentitySource(ctx, spire.Config{
     WorkloadSocket: "unix:///custom/path/to/agent.sock",
 })
 ```
@@ -244,7 +244,7 @@ source, err := spire.NewSource(ctx, spire.Config{
 TCP endpoints are also supported for remote SPIRE agents:
 
 ```go
-source, err := spire.NewSource(ctx, spire.Config{
+source, err := spire.NewIdentitySource(ctx, spire.Config{
     WorkloadSocket: "tcp://spire-agent.example.org:8081",
 })
 ```
@@ -261,7 +261,7 @@ All types are safe for concurrent use. You can share a single `spire.Source` acr
 
 ```go
 // Create once per process
-source, err := spire.NewSource(ctx, spire.Config{})
+source, err := spire.NewIdentitySource(ctx, spire.Config{})
 if err != nil {
     log.Fatal(err)
 }
@@ -275,7 +275,7 @@ clientTLS, _ := spiffehttp.NewClientTLSConfig(ctx, x509Source, x509Source, ...)
 defer source.Close()
 ```
 
-**Important:** The `context` passed to `NewSource` / `NewServerTLSConfig` / `NewClientTLSConfig` is only used for initial validation. To actually shut down the source, you **must** call `source.Close()`. Canceling the context does NOT stop background rotation.
+**Important:** The `context` passed to `NewIdentitySource` / `NewServerTLSConfig` / `NewClientTLSConfig` is only used for initial validation. To actually shut down the source, you **must** call `source.Close()`. Canceling the context does NOT stop background rotation.
 
 ## Complete Example
 

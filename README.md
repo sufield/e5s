@@ -26,7 +26,7 @@ Using e5s over the go-spiffe SDK directly offers these advantages for developers
 - **Low-Level Flexibility**: Direct access to pkg/spiffehttp and pkg/spire for customization, minimizing dependencies (core uses stdlib only).
 - **Ease of Adoption**: Comprehensive docs, quickstarts, and examples reduce integration time compared to raw SDK usage.
 
-Use go-spiffe directly only if you need non-HTTP services or completely custom workflows.
+Use go-spiffe directly only if you need non-HTTP services or custom workflows.
 
 ## Features
 
@@ -80,7 +80,7 @@ We provide a **high-level** and a **low-level** APIs because they serve differen
 **Goal:** Allow full control over mTLS internals
 
 - Lets you build custom TLS configs and integrate with the go-spiffe SDK directly
-- Exposes `spiffehttp.NewServerTLSConfig` and `spire.NewSource`
+- Exposes `spiffehttp.NewServerTLSConfig` and `spire.NewIdentitySource`
 - Ideal for customizing certificate rotation intervals, trust domain logic, or integrating into non-HTTP systems
 
 **Benefits:** Extensible for advanced use cases, can plug in custom identity providers, useful for testing/debugging or building frameworks
@@ -206,6 +206,9 @@ server:
   # allowed_client_spiffe_id: "spiffe://example.org/client"
 
 client:
+  # Server URL to connect to
+  server_url: "https://localhost:8443"
+
   # Allow any server in this trust domain
   expected_server_trust_domain: "example.org"
 
@@ -249,7 +252,7 @@ func main() {
     defer stop()
 
     // Create SPIRE certificate source
-    source, err := spire.NewSource(ctx, spire.Config{})
+    source, err := spire.NewIdentitySource(ctx, spire.Config{})
     if err != nil {
         log.Fatal(err)
     }
@@ -330,7 +333,7 @@ func main() {
     ctx := context.Background()
 
     // Create SPIRE certificate source
-    source, err := spire.NewSource(ctx, spire.Config{})
+    source, err := spire.NewIdentitySource(ctx, spire.Config{})
     if err != nil {
         log.Fatal(err)
     }
