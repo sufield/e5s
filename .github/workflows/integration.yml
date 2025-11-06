@@ -124,8 +124,9 @@ jobs:
           ./bin/spire-server entry show
 
       - name: Run Integration Tests
+        # Unset the socket so tests use their own test SPIRE instance where applicable
         env:
-          SPIFFE_ENDPOINT_SOCKET: unix:///tmp/spire-agent/public/api.sock
+          SPIFFE_ENDPOINT_SOCKET: ""
         run: |
           go test -v -tags=integration -timeout=5m -coverprofile=coverage-integration.txt ./...
 

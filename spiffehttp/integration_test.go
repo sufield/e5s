@@ -15,6 +15,23 @@ import (
 	"github.com/sufield/e5s/spire"
 )
 
+// helper: fetch SVID and assert leaf certificate has URI SANs
+func requireSVIDHasURI(t *testing.T, x509src spire.X509Source) {
+	t.Helper()
+	svid, err := x509src.GetX509SVID()
+	if err != nil {
+		t.Fatalf("failed to get SVID: %v", err)
+	}
+	if len(svid.Certificates) == 0 {
+		t.Fatalf("SVID has no certificates")
+	}
+	leaf := svid.Certificates[0]
+	t.Logf("leaf cert URIs: %v", leaf.URIs)
+	if len(leaf.URIs) == 0 {
+		t.Fatalf("SVID leaf certificate contains no URI SANs. Ensure SPIRE registration issues SPIFFE URI SANs. svid.ID=%s", svid.ID)
+	}
+}
+
 // TestIntegration_ServerClientHandshake tests that NewServerTLSConfig and
 // NewClientTLSConfig can successfully handshake using real SPIRE sources.
 //
@@ -49,6 +66,8 @@ func TestIntegration_ServerClientHandshake(t *testing.T) {
 	if x509src == nil {
 		t.Fatal("X509Source returned nil")
 	}
+
+	requireSVIDHasURI(t, x509src)
 
 	// Create server TLS config
 	serverTLS, err := spiffehttp.NewServerTLSConfig(ctx, x509src, x509src, spiffehttp.ServerConfig{
@@ -142,6 +161,8 @@ func TestIntegration_SpecificIDAuthorization(t *testing.T) {
 
 	x509src := src.X509Source()
 
+	requireSVIDHasURI(t, x509src)
+
 	// Get our own SPIFFE ID
 	svid, err := x509src.GetX509SVID()
 	if err != nil {
@@ -215,6 +236,8 @@ func TestIntegration_PeerContext(t *testing.T) {
 	defer src.Close()
 
 	x509src := src.X509Source()
+
+	requireSVIDHasURI(t, x509src)
 
 	serverTLS, err := spiffehttp.NewServerTLSConfig(ctx, x509src, x509src, spiffehttp.ServerConfig{
 		AllowedClientTrustDomain: "example.org",
