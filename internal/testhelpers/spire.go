@@ -7,9 +7,11 @@ package testhelpers
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -149,6 +151,17 @@ func SPIREAvailable() bool {
 	return serverErr == nil && agentErr == nil
 }
 
+// getFreePort finds an available TCP port on localhost.
+func getFreePort() (int, error) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return 0, err
+	}
+	port := listener.Addr().(*net.TCPAddr).Port
+	listener.Close()
+	return port, nil
+}
+
 // startServer starts the SPIRE server in the background.
 func (st *SPIRETest) startServer() {
 	st.t.Helper()
@@ -158,9 +171,11 @@ func (st *SPIRETest) startServer() {
 		st.t.Fatalf("Failed to create server dir: %v", err)
 	}
 
-	// Use a high port number to avoid conflicts with common services
-	// Port 18081 is unlikely to be in use and high enough to avoid privileged ports
-	serverPort := 18081
+	// Find an available port for the SPIRE server
+	serverPort, err := getFreePort()
+	if err != nil {
+		st.t.Fatalf("Failed to find free port: %v", err)
+	}
 
 	// Write minimal server configuration
 	serverConfPath := filepath.Join(serverDir, "server.conf")
@@ -270,13 +285,46 @@ plugins {
 		st.t.Fatalf("Failed to write agent config: %v", err)
 	}
 
-	// Start agent
+	// Generate join token from server
+	serverBin := os.Getenv("SPIRE_SERVER")
+	if serverBin == "" {
+		serverBin = "spire-server"
+	}
+
+	agentID := fmt.Sprintf("spiffe://%s/spire/agent/join_token/test-agent", st.TrustDomain)
+	tokenCmd := exec.Command(serverBin, "token", "generate",
+		"-spiffeID", agentID,
+		"-socketPath", filepath.Join(st.TempDir, "server/data/api.sock"))
+
+	tokenOutput, err := tokenCmd.CombinedOutput()
+	if err != nil {
+		st.t.Fatalf("Failed to generate join token: %v\nOutput: %s", err, tokenOutput)
+	}
+
+	// Parse token from output (format: "Token: <token>")
+	var joinToken string
+	for _, line := range strings.Split(string(tokenOutput), "\n") {
+		if strings.HasPrefix(line, "Token:") {
+			joinToken = strings.TrimSpace(strings.TrimPrefix(line, "Token:"))
+			break
+		}
+	}
+	if joinToken == "" {
+		st.t.Fatalf("Failed to parse join token from output: %s", tokenOutput)
+	}
+
+	st.t.Logf("Generated join token for agent")
+
+	// Start agent with join token
 	agentBin := os.Getenv("SPIRE_AGENT")
 	if agentBin == "" {
 		agentBin = "spire-agent"
 	}
 
-	st.agentCmd = exec.Command(agentBin, "run", "-config", agentConfPath, "-socketPath", st.SocketPath)
+	st.agentCmd = exec.Command(agentBin, "run",
+		"-config", agentConfPath,
+		"-socketPath", st.SocketPath,
+		"-joinToken", joinToken)
 	st.agentCmd.Stdout = os.Stdout
 	st.agentCmd.Stderr = os.Stderr
 
