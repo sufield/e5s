@@ -81,7 +81,8 @@ func validateAuto(cfg *config.FileConfig, path string) error {
 		cfg.Client.ExpectedServerTrustDomain != "" ||
 		cfg.Client.ServerURL != ""
 
-	if hasServer && hasClient {
+	switch {
+	case hasServer && hasClient:
 		fmt.Printf("✓ Configuration appears to contain both server and client sections\n")
 		fmt.Println("\nValidating server configuration:")
 		if err := validateServer(cfg, path); err != nil {
@@ -89,13 +90,13 @@ func validateAuto(cfg *config.FileConfig, path string) error {
 		}
 		fmt.Println("\nValidating client configuration:")
 		return validateClient(cfg, path)
-	} else if hasServer {
+	case hasServer:
 		fmt.Println("✓ Detected server configuration")
 		return validateServer(cfg, path)
-	} else if hasClient {
+	case hasClient:
 		fmt.Println("✓ Detected client configuration")
 		return validateClient(cfg, path)
-	} else {
+	default:
 		return fmt.Errorf("configuration contains neither server nor client settings")
 	}
 }

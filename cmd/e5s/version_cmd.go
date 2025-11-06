@@ -198,10 +198,23 @@ func getTLSVersionName(version uint16) string {
 }
 
 func getToolVersion(command []string) (string, error) {
+	// Validate command is in allowed list for security
+	allowedCommands := map[string]bool{
+		"go":       true,
+		"docker":   true,
+		"kubectl":  true,
+		"helm":     true,
+		"minikube": true,
+	}
+
+	if len(command) == 0 || !allowedCommands[command[0]] {
+		return "", fmt.Errorf("unsupported command: %v", command)
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
+	cmd := exec.CommandContext(ctx, command[0], command[1:]...) // #nosec G204 - command validated against allowlist
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", err
@@ -211,19 +224,20 @@ func getToolVersion(command []string) (string, error) {
 	result := strings.TrimSpace(string(output))
 
 	// Extract version for different tools
-	if strings.Contains(command[0], "go") {
+	switch {
+	case strings.Contains(command[0], "go"):
 		// "go version go1.21.0 linux/amd64" -> "go1.21.0"
 		parts := strings.Fields(result)
 		if len(parts) >= 3 {
 			return parts[2], nil
 		}
-	} else if strings.Contains(command[0], "kubectl") {
+	case strings.Contains(command[0], "kubectl"):
 		// "Client Version: v1.28.0" -> "v1.28.0"
 		result = strings.TrimPrefix(result, "Client Version: ")
-	} else if strings.Contains(command[0], "minikube") {
+	case strings.Contains(command[0], "minikube"):
 		// "minikube version: v1.30.1" -> "v1.30.1"
 		result = strings.TrimPrefix(result, "minikube version: ")
-	} else if strings.Contains(command[0], "helm") {
+	case strings.Contains(command[0], "helm"):
 		// "v3.12.0+g123abc" -> "v3.12.0"
 		if idx := strings.Index(result, "+"); idx > 0 {
 			result = result[:idx]

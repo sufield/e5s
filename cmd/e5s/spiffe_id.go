@@ -47,7 +47,7 @@ EXAMPLES:
 	switch idType {
 	case "k8s", "kubernetes":
 		if fs.NArg() != 4 {
-			return fmt.Errorf("k8s type requires: <trust-domain> <namespace> <service-account>")
+			return fmt.Errorf("k8s type requires <trust-domain> <namespace> <service-account>")
 		}
 		namespace := fs.Arg(2)
 		serviceAccount := fs.Arg(3)
@@ -56,7 +56,7 @@ EXAMPLES:
 
 	case "custom":
 		if fs.NArg() < 3 {
-			return fmt.Errorf("custom type requires: <trust-domain> <path-component>...")
+			return fmt.Errorf("custom type requires <trust-domain> <path-component>")
 		}
 		pathComponents := fs.Args()[2:]
 		path := strings.Join(pathComponents, "/")
