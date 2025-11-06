@@ -119,7 +119,6 @@ func ExampleClient() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer cleanup()
 
 	// Use the client for mTLS requests
 	resp, err := client.Get("https://secure-service:8443/api")
@@ -127,7 +126,8 @@ func ExampleClient() {
 		cleanup() // Clean up before exiting
 		log.Fatal(err)
 	}
-	defer resp.Body.Close()
+	resp.Body.Close()
+	cleanup()
 
 	// Process response...
 	fmt.Printf("Status: %d\n", resp.StatusCode)

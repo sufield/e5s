@@ -24,7 +24,6 @@ func ExampleNewServerTLSConfig() {
 	if err != nil {
 		log.Fatalf("Unable to create X509Source: %v", err)
 	}
-	defer source.Close()
 
 	// Create server TLS config that accepts any client in same trust domain
 	tlsConfig, err := spiffehttp.NewServerTLSConfig(
@@ -37,6 +36,7 @@ func ExampleNewServerTLSConfig() {
 		source.Close() // Clean up before exiting
 		log.Fatalf("Unable to create TLS config: %v", err)
 	}
+	defer source.Close()
 
 	// Use the TLS config in an HTTP server
 	server := &http.Server{
@@ -57,7 +57,6 @@ func ExampleNewServerTLSConfig_specificClient() {
 	if err != nil {
 		log.Fatalf("Unable to create X509Source: %v", err)
 	}
-	defer source.Close()
 
 	// Only accept connections from specific client SPIFFE ID
 	tlsConfig, err := spiffehttp.NewServerTLSConfig(
@@ -72,6 +71,7 @@ func ExampleNewServerTLSConfig_specificClient() {
 		source.Close() // Clean up before exiting
 		log.Fatalf("Unable to create TLS config: %v", err)
 	}
+	defer source.Close()
 
 	server := &http.Server{
 		Addr:      ":8443",
@@ -89,7 +89,6 @@ func ExampleNewServerTLSConfig_trustDomain() {
 	if err != nil {
 		log.Fatalf("Unable to create X509Source: %v", err)
 	}
-	defer source.Close()
 
 	// Accept any client from partner trust domain
 	tlsConfig, err := spiffehttp.NewServerTLSConfig(
@@ -104,6 +103,7 @@ func ExampleNewServerTLSConfig_trustDomain() {
 		source.Close() // Clean up before exiting
 		log.Fatalf("Unable to create TLS config: %v", err)
 	}
+	defer source.Close()
 
 	server := &http.Server{
 		Addr:      ":8443",
@@ -124,7 +124,6 @@ func ExampleNewClientTLSConfig() {
 	if err != nil {
 		log.Fatalf("Unable to create X509Source: %v", err)
 	}
-	defer source.Close()
 
 	// Create client TLS config that verifies any server in trust domain
 	tlsConfig, err := spiffehttp.NewClientTLSConfig(
@@ -136,6 +135,7 @@ func ExampleNewClientTLSConfig() {
 		},
 	)
 	if err != nil {
+		source.Close() // Clean up before exiting
 		log.Fatalf("Unable to create TLS config: %v", err)
 	}
 
@@ -152,6 +152,7 @@ func ExampleNewClientTLSConfig() {
 		log.Fatalf("Request failed: %v", err)
 	}
 	resp.Body.Close()
+	source.Close()
 }
 
 // ExampleNewClientTLSConfig_specificServer demonstrates verifying
@@ -163,7 +164,6 @@ func ExampleNewClientTLSConfig_specificServer() {
 	if err != nil {
 		log.Fatalf("Unable to create X509Source: %v", err)
 	}
-	defer source.Close()
 
 	// Only connect to servers with specific SPIFFE ID
 	tlsConfig, err := spiffehttp.NewClientTLSConfig(
@@ -178,6 +178,7 @@ func ExampleNewClientTLSConfig_specificServer() {
 		source.Close() // Clean up before exiting
 		log.Fatalf("Unable to create TLS config: %v", err)
 	}
+	defer source.Close()
 
 	client := &http.Client{
 		Transport: &http.Transport{
@@ -280,7 +281,6 @@ func Example_tlsVersionCheck() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer source.Close()
 
 	tlsConfig, err := spiffehttp.NewServerTLSConfig(
 		ctx, source, source,
@@ -290,6 +290,7 @@ func Example_tlsVersionCheck() {
 		source.Close() // Clean up before exiting
 		log.Fatal(err)
 	}
+	defer source.Close()
 
 	// Verify TLS 1.3 is enforced
 	if tlsConfig.MinVersion == tls.VersionTLS13 {

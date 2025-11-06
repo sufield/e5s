@@ -151,7 +151,7 @@ func (st *SPIRETest) startServer() {
 	st.t.Helper()
 
 	serverDir := filepath.Join(st.TempDir, "server")
-	if err := os.MkdirAll(serverDir, 0755); err != nil {
+	if err := os.MkdirAll(serverDir, 0o755); err != nil {
 		st.t.Fatalf("Failed to create server dir: %v", err)
 	}
 
@@ -183,7 +183,7 @@ plugins {
 }
 `, st.TrustDomain, serverDir, serverDir)
 
-	if err := os.WriteFile(serverConfPath, []byte(serverConf), 0644); err != nil {
+	if err := os.WriteFile(serverConfPath, []byte(serverConf), 0o600); err != nil {
 		st.t.Fatalf("Failed to write server config: %v", err)
 	}
 
@@ -208,8 +208,12 @@ plugins {
 	st.t.Cleanup(func() {
 		if st.serverCmd != nil && st.serverCmd.Process != nil {
 			st.t.Logf("Stopping SPIRE server (PID %d)", st.serverPID)
-			st.serverCmd.Process.Kill()
-			st.serverCmd.Wait()
+			if err := st.serverCmd.Process.Kill(); err != nil {
+				st.t.Logf("Warning: failed to kill server process: %v", err)
+			}
+			if err := st.serverCmd.Wait(); err != nil {
+				st.t.Logf("Warning: server process wait returned: %v", err)
+			}
 		}
 	})
 
@@ -222,7 +226,7 @@ func (st *SPIRETest) startAgent() {
 	st.t.Helper()
 
 	agentDir := filepath.Join(st.TempDir, "agent")
-	if err := os.MkdirAll(agentDir, 0755); err != nil {
+	if err := os.MkdirAll(agentDir, 0o755); err != nil {
 		st.t.Fatalf("Failed to create agent dir: %v", err)
 	}
 
@@ -251,7 +255,7 @@ plugins {
 }
 `, agentDir, st.TrustDomain)
 
-	if err := os.WriteFile(agentConfPath, []byte(agentConf), 0644); err != nil {
+	if err := os.WriteFile(agentConfPath, []byte(agentConf), 0o600); err != nil {
 		st.t.Fatalf("Failed to write agent config: %v", err)
 	}
 
@@ -276,8 +280,12 @@ plugins {
 	st.t.Cleanup(func() {
 		if st.agentCmd != nil && st.agentCmd.Process != nil {
 			st.t.Logf("Stopping SPIRE agent (PID %d)", st.agentPID)
-			st.agentCmd.Process.Kill()
-			st.agentCmd.Wait()
+			if err := st.agentCmd.Process.Kill(); err != nil {
+				st.t.Logf("Warning: failed to kill agent process: %v", err)
+			}
+			if err := st.agentCmd.Wait(); err != nil {
+				st.t.Logf("Warning: agent process wait returned: %v", err)
+			}
 		}
 	})
 
