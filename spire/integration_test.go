@@ -64,8 +64,9 @@ func TestIntegration_NewIdentitySource_RealSPIRE(t *testing.T) {
 	}
 
 	// Verify SVID has correct trust domain
-	if svid.ID.TrustDomain().Name() != st.TrustDomain {
-		t.Errorf("SVID trust domain = %s, want %s", svid.ID.TrustDomain().Name(), st.TrustDomain)
+	expectedTrustDomain := "example.org"
+	if svid.ID.TrustDomain().Name() != expectedTrustDomain {
+		t.Errorf("SVID trust domain = %s, want %s", svid.ID.TrustDomain().Name(), expectedTrustDomain)
 	}
 
 	// Verify SVID has certificates
