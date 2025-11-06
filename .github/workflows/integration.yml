@@ -105,6 +105,24 @@ jobs:
           # Wait for agent socket
           timeout 30 bash -c 'until [ -S /tmp/spire-agent/public/api.sock ]; do sleep 1; done'
 
+      - name: Create Workload Registration
+        run: |
+          cd spire-1.13.0
+
+          # Wait for agent to be fully ready
+          sleep 3
+
+          # Create workload entry for CI tests (matches any process)
+          ./bin/spire-server entry create \
+            -spiffeID spiffe://example.org/test-workload \
+            -parentID spiffe://example.org/agent/ci-agent \
+            -selector unix:uid:$(id -u)
+
+          echo "Workload registration created"
+
+          # Verify registration
+          ./bin/spire-server entry show
+
       - name: Run Integration Tests
         env:
           SPIFFE_ENDPOINT_SOCKET: unix:///tmp/spire-agent/public/api.sock
