@@ -34,6 +34,7 @@ func ExampleNewServerTLSConfig() {
 		spiffehttp.ServerConfig{},
 	)
 	if err != nil {
+		source.Close() // Clean up before exiting
 		log.Fatalf("Unable to create TLS config: %v", err)
 	}
 
@@ -44,7 +45,7 @@ func ExampleNewServerTLSConfig() {
 	}
 
 	log.Printf("Server listening on %s", server.Addr)
-	// server.ListenAndServeTLS("", "")  // Empty strings: certs come from tlsConfig
+	_ = server // Use in production: server.ListenAndServeTLS("", "")
 }
 
 // ExampleNewServerTLSConfig_specificClient demonstrates restricting server
@@ -68,6 +69,7 @@ func ExampleNewServerTLSConfig_specificClient() {
 		},
 	)
 	if err != nil {
+		source.Close() // Clean up before exiting
 		log.Fatalf("Unable to create TLS config: %v", err)
 	}
 
@@ -99,6 +101,7 @@ func ExampleNewServerTLSConfig_trustDomain() {
 		},
 	)
 	if err != nil {
+		source.Close() // Clean up before exiting
 		log.Fatalf("Unable to create TLS config: %v", err)
 	}
 
@@ -145,9 +148,10 @@ func ExampleNewClientTLSConfig() {
 
 	resp, err := client.Get("https://server.example.org:8443")
 	if err != nil {
+		source.Close() // Clean up before exiting
 		log.Fatalf("Request failed: %v", err)
 	}
-	defer resp.Body.Close()
+	resp.Body.Close()
 }
 
 // ExampleNewClientTLSConfig_specificServer demonstrates verifying
@@ -171,6 +175,7 @@ func ExampleNewClientTLSConfig_specificServer() {
 		},
 	)
 	if err != nil {
+		source.Close() // Clean up before exiting
 		log.Fatalf("Unable to create TLS config: %v", err)
 	}
 
@@ -282,6 +287,7 @@ func Example_tlsVersionCheck() {
 		spiffehttp.ServerConfig{},
 	)
 	if err != nil {
+		source.Close() // Clean up before exiting
 		log.Fatal(err)
 	}
 

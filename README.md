@@ -60,11 +60,12 @@ go get github.com/sufield/e5s@latest
 
 ## Two Ways to Use e5s
 
-We provide a **high-level** and a **low-level** APIs because they serve different developer roles and abstraction levels:
+A **high-level** and a **low-level** APIs are provided because they serve different developer roles and abstraction levels:
 
 ### High-Level API (`e5s.Start`, `e5s.Client`)
 
 **For:** Application developers
+**Use Case:** Secure HTTP services quickly
 **Goal:** Make identity-based mTLS work with one line of code
 
 - Handles configuration, SPIRE connection, certificate rotation, and verification internally
@@ -72,28 +73,23 @@ We provide a **high-level** and a **low-level** APIs because they serve differen
 - Ideal when you just want secure communication without caring how certificates or trust domains are wired
 - Example use: web apps, microservices, APIs
 
+`examples/highlevel/`** - Start here for application development (production behavior, minimal code)
+
 **Benefits:** Zero boilerplate, hard to misuse, easy to run locally and in production with the same config
 
 ### Low-Level API (`pkg/spiffehttp`, `pkg/spire`)
 
-**For:** Infrastructure/platform teams
+**For:** Platform/Infra Engineer
+**Use Case:** Build custom SPIRE integrations or non-HTTP services
 **Goal:** Allow full control over mTLS internals
 
-- Lets you build custom TLS configs and integrate with the go-spiffe SDK directly
+- Build custom TLS configs and integrate with the go-spiffe SDK directly
 - Exposes `spiffehttp.NewServerTLSConfig` and `spire.NewIdentitySource`
 - Ideal for customizing certificate rotation intervals, trust domain logic, or integrating into non-HTTP systems
 
 **Benefits:** Extensible for advanced use cases, can plug in custom identity providers, useful for testing/debugging or building frameworks
 
-### Which example should I look at?
-
-| Developer Type | API | Use Case |
-|----------------|-----|----------|
-| **Application Developer** | High-Level (`e5s.Start`) | Secure HTTP services quickly |
-| **Platform/Infra Engineer** | Low-Level (`pkg/spiffehttp`, `pkg/spire`) | Build custom SPIRE integrations or non-HTTP services |
-
-- **`examples/highlevel/`** - Start here for application development (production behavior, minimal code)
-- **`examples/minikube-lowlevel/`** - Platform/infrastructure example (full SPIRE + mTLS stack in Kubernetes)
+**`examples/minikube-lowlevel/`** - Platform/infrastructure example (full SPIRE + mTLS stack in Kubernetes)
 
 ### 1. High-Level API
 
@@ -422,8 +418,6 @@ internal/config/        # Config file loading (not exported)
 The examples are separate modules (each has its own `go.mod`) so you can vendor/copy them without pulling extra dependencies into your service. The core library has minimal dependencies.
 
 ## Documentation
-
-**Quick Links:**
 
 - **[Tutorial](examples/highlevel/TUTORIAL.md)** - Build your first mTLS app (start here!)
 - **[Quick Start: Testing](examples/highlevel/QUICK_START_PRERELEASE.md)** - ⚡ For library developers (3 commands)

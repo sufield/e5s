@@ -58,6 +58,8 @@ func ExampleStart() {
 	}()
 
 	// ... do other work ...
+	// Server continues running until shutdown() is called
+	log.Println("Server is running")
 }
 
 // ExamplePeerID demonstrates extracting the authenticated client's
@@ -122,6 +124,7 @@ func ExampleClient() {
 	// Use the client for mTLS requests
 	resp, err := client.Get("https://secure-service:8443/api")
 	if err != nil {
+		cleanup() // Clean up before exiting
 		log.Fatal(err)
 	}
 	defer resp.Body.Close()
