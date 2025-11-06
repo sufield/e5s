@@ -75,6 +75,10 @@ jobs:
         run: |
           cd spire-1.13.0
 
+          # Generate join token from server
+          JOIN_TOKEN=$(./bin/spire-server token generate -spiffeID spiffe://example.org/agent/ci-agent 2>&1 | grep "Token:" | awk '{print $2}')
+          echo "Generated join token for agent"
+
           # Configure agent
           cat > conf/agent/agent.conf <<EOF
           agent {
@@ -92,10 +96,11 @@ jobs:
           }
           EOF
 
-          # Start agent in background
-          mkdir -p /tmp/spire-agent/public
+          # Start agent in background with join token
+          mkdir -p /tmp/spire-agent/public /tmp/spire-agent/data
           ./bin/spire-agent run -config conf/agent/agent.conf \
-            -socketPath /tmp/spire-agent/public/api.sock &
+            -socketPath /tmp/spire-agent/public/api.sock \
+            -joinToken "${JOIN_TOKEN}" &
 
           # Wait for agent socket
           timeout 30 bash -c 'until [ -S /tmp/spire-agent/public/api.sock ]; do sleep 1; done'
@@ -111,6 +116,7 @@ jobs:
         if: always()
         continue-on-error: true  # Don't fail workflow if codecov upload fails
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage-integration.txt
           flags: integration
           name: integration-coverage
