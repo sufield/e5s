@@ -19,60 +19,37 @@ This covers advanced examples and configurations for production use of the e5s l
 
 ## Levels of Control
 
-The e5s library provides three levels of API based on how much control you need:
+The e5s library provides two levels of API based on how much control you need:
 
-### Level 1: Zero Configuration (`e5s.Run`)
+### Level 1: Simple Server (`e5s.Serve`)
 
-**Use when:** You want the absolute simplest API with zero boilerplate.
-
-```go
-func main() {
-    r := chi.NewRouter()
-    r.Get("/hello", handleHello)
-    e5s.Run(r)  // Handles everything
-}
-```
-
-**What it handles:**
-- Config file discovery (E5S_CONFIG or e5s.yaml)
-- Signal handling (SIGINT/SIGTERM)
-- Graceful shutdown
-- Error logging
-
-### Level 2: Manual Signal Handling (`e5s.StartServer`)
-
-**Use when:** You need custom signal handling or shutdown logic.
+**Use when:** You want the simplest API with automatic signal handling.
 
 ```go
 func main() {
-    ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-    defer stop()
+    // Set config path
+    os.Setenv("E5S_CONFIG", "e5s.yaml")
 
     r := chi.NewRouter()
     r.Get("/hello", handleHello)
 
-    shutdown, err := e5s.StartServer(r)
-    if err != nil {
+    // Serve handles everything
+    if err := e5s.Serve(r); err != nil {
         log.Fatal(err)
     }
-    defer shutdown()
-
-    log.Println("Server running")
-    <-ctx.Done()
-    log.Println("Shutting down...")
 }
 ```
 
 **What it handles:**
-- Config file discovery (E5S_CONFIG or e5s.yaml)
+- Config file discovery (E5S_CONFIG)
 - SPIRE connection and mTLS
+- Signal handling (SIGINT/SIGTERM)
+- Graceful shutdown
 
 **You control:**
-- Signal setup and handling
-- Shutdown timing and logging
-- Error handling
+- Error handling (via returned error)
 
-### Level 3: Explicit Config Path (`e5s.Start`)
+### Level 2: Explicit Config Path (`e5s.Start`)
 
 **Use when:** You need to specify an exact config file path.
 
@@ -130,37 +107,7 @@ func main() {
 - Making the request
 - Cleanup (tied to body close)
 
-#### Level 2: Manual Client Management (`e5s.NewClient`)
-
-**Use when:** Making multiple requests with the same client.
-
-```go
-func main() {
-    client, shutdown, err := e5s.NewClient()
-    if err != nil {
-        log.Fatal(err)
-    }
-    defer shutdown()
-
-    // Make multiple requests
-    resp1, _ := client.Get("https://api.example.com:8443/data")
-    defer resp1.Body.Close()
-
-    resp2, _ := client.Get("https://api.example.com:8443/more")
-    defer resp2.Body.Close()
-}
-```
-
-**What it handles:**
-- Config file discovery (E5S_CONFIG or e5s.yaml)
-- Client creation
-
-**You control:**
-- Request lifecycle
-- When to shutdown
-- Error handling per request
-
-#### Level 3: Explicit Config Path (`e5s.Client`)
+#### Level 2: Explicit Config Path (`e5s.Client`)
 
 **Use when:** You need a specific config file path.
 
@@ -190,7 +137,7 @@ func main() {
 
 ## Manual Signal Handling
 
-When you need more control over shutdown behavior, use `e5s.StartServer()` or `e5s.Start()` instead of `e5s.Run()`.
+When you need more control over shutdown behavior, use `e5s.Start()` instead of `e5s.Serve()`.
 
 ### Custom Shutdown Timeout
 
@@ -202,7 +149,7 @@ func main() {
     r := chi.NewRouter()
     r.Get("/hello", handleHello)
 
-    shutdown, err := e5s.StartServer(r)
+    shutdown, err := e5s.Start("e5s.yaml", r)
     if err != nil {
         log.Fatal(err)
     }
@@ -243,7 +190,7 @@ func main() {
     r := chi.NewRouter()
     r.Get("/hello", handleHello)
 
-    shutdown, err := e5s.StartServer(r)
+    shutdown, err := e5s.Start("e5s.yaml", r)
     if err != nil {
         log.Fatal(err)
     }
@@ -269,7 +216,7 @@ func main() {
 
 ## Explicit Config Paths
 
-The tutorial examples use `e5s.StartServer()` and `e5s.NewClient()` which automatically discover the config file. For cases where you need to specify an explicit config file path, use `e5s.Start()` and `e5s.Client()` instead.
+For most use cases, use `e5s.Serve()` (server) or `e5s.Get()` (client) with E5S_CONFIG environment variable. When you need to specify an explicit config file path, use `e5s.Start()` and `e5s.Client()` instead.
 
 ### Server with Explicit Config Path
 

@@ -159,7 +159,7 @@ func main() {
         fmt.Fprintf(w, "Hello, %s!\n", id)
     })
 
-    shutdown, err := e5s.StartServer(r)
+    shutdown, err := e5s.Start(r)
     if err != nil {
         log.Fatal(err)
     }
@@ -196,7 +196,7 @@ import (
 )
 
 func main() {
-    client, shutdown, err := e5s.NewClient()
+    client, shutdown, err := e5s.Client()
     if err != nil {
         log.Fatal(err)
     }
@@ -233,7 +233,7 @@ All of this is handled internally by e5s:
 - SPIFFE ID verification
 - Shutdown sequencing
 
-You just use `e5s.StartServer()`, `e5s.NewClient()`, and `e5s.PeerID()`.
+You just use `e5s.Start()`, `e5s.Client()`, and `e5s.PeerID()`.
 
 ## Next Steps
 

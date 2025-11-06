@@ -421,7 +421,7 @@ for i := 0; i < 1000; i++ {
 **Right (reuse client):**
 ```go
 // DO THIS
-client, shutdown, err := e5s.NewClient()
+client, shutdown, err := e5s.Client()
 if err != nil {
     log.Fatal(err)
 }
@@ -479,13 +479,13 @@ If you're still stuck:
 
 ### 5. Not cleaning up resources
 - **Symptom**: Memory leaks
-- **Fix**: Always call the `shutdown()` function returned by `NewClient()` or `StartServer()`
+- **Fix**: Always call the `shutdown()` function returned by `Client()` or `Start()`
 
 ---
 
 ## Prevention Tips
 
-1. **Start simple**: Use the high-level API (`e5s.Get()`, `e5s.Run()`) until you need more control
+1. **Start simple**: Use the high-level API (`e5s.Get()`, `e5s.Serve()`) until you need more control
 2. **Test locally first**: Use the tutorial setup before moving to complex environments
 3. **Verify SPIRE first**: Ensure SPIRE is working before debugging e5s
 4. **Use trust domains initially**: Switch to specific SPIFFE IDs only after everything works

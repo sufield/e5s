@@ -65,19 +65,18 @@ func resolveConfigPath() (string, error) {
 	return "", fmt.Errorf("E5S_CONFIG environment variable not set; either set E5S_CONFIG or call Start()/Client() with an explicit config path")
 }
 
-// Run starts an mTLS server using E5S_CONFIG and handles signals.
+// Serve starts the mTLS server with the given handler, handles signals, and performs graceful shutdown.
 //
-// This convenience function automatically handles:
+// This is the recommended way to run an e5s server. It automatically handles:
 //   - Reading config from E5S_CONFIG environment variable
 //   - SPIRE connection and mTLS setup
 //   - Signal handling (SIGINT/SIGTERM)
 //   - Graceful shutdown
 //
 // The server will run until interrupted (Ctrl+C or kill signal).
-// If E5S_CONFIG is not set, the function will log a fatal error and exit.
+// Returns an error if startup or shutdown fails, allowing the caller to handle errors appropriately.
 //
-// For more control over signal handling, use StartServer() instead.
-// For explicit config paths, use Start() instead (recommended for production).
+// For explicit config paths or custom signal handling, use Start() instead.
 //
 // Configuration (path from E5S_CONFIG):
 //
@@ -102,32 +101,45 @@ func resolveConfigPath() (string, error) {
 //	        }
 //	        fmt.Fprintf(w, "Hello, %s!\n", id)
 //	    })
-//	    e5s.Run(r)
+//
+//	    if err := e5s.Serve(r); err != nil {
+//	        log.Fatal(err)
+//	    }
 //	}
 //
 // This function will block until the server receives SIGINT or SIGTERM.
-func Run(handler http.Handler) {
+func Serve(handler http.Handler) error {
 	// Create context that listens for interrupt signals
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
-	// Start server with intelligent config defaults
-	shutdown, err := StartServer(handler)
+	log.Println("Starting e5s mTLS server...")
+
+	// Resolve config path from E5S_CONFIG
+	path, err := resolveConfigPath()
 	if err != nil {
-		stop() // Clean up signal handler before exit
-		log.Fatalf("Failed to start server: %v", err)
+		return err
 	}
-	defer func() {
-		if err := shutdown(); err != nil {
-			log.Printf("Error during shutdown: %v", err)
-		}
-	}()
+
+	// Start server
+	shutdown, err := Start(path, handler)
+	if err != nil {
+		return fmt.Errorf("failed to start server: %w", err)
+	}
 
 	log.Println("Server running - press Ctrl+C to stop")
 
 	// Wait for interrupt signal for graceful shutdown
 	<-ctx.Done()
-	stop()
 	log.Println("Shutting down gracefully...")
+
+	// Perform graceful shutdown
+	if err := shutdown(); err != nil {
+		log.Printf("Error during shutdown: %v", err)
+		return err
+	}
+
+	return nil
 }
 
 // Start starts a production-grade mTLS server using SPIRE.
@@ -305,77 +317,6 @@ func Start(configPath string, handler http.Handler) (shutdown func() error, err 
 	}
 
 	return shutdownFunc, nil
-}
-
-// StartServer starts a production-grade mTLS server using E5S_CONFIG.
-//
-// This is a convenience wrapper that reads the config path from E5S_CONFIG
-// environment variable. If E5S_CONFIG is not set, it returns an error.
-//
-// For explicit config file paths, use Start(configPath, handler) instead.
-// This is the recommended approach for production deployments.
-//
-// Configuration (path from E5S_CONFIG):
-//
-//	spire:
-//	  workload_socket: unix:///tmp/spire-agent/public/api.sock
-//	server:
-//	  listen_addr: ":8443"
-//	  allowed_client_trust_domain: "example.org"
-//
-// Usage:
-//
-//	// Set E5S_CONFIG before calling
-//	os.Setenv("E5S_CONFIG", "e5s.prod.yaml")
-//	shutdown, err := e5s.StartServer(myHandler)
-//	if err != nil {
-//	    log.Fatal(err)
-//	}
-//	defer shutdown()
-//
-// See Start() documentation for full details on server behavior and configuration.
-func StartServer(handler http.Handler) (shutdown func() error, err error) {
-	path, err := resolveConfigPath()
-	if err != nil {
-		return nil, err
-	}
-	return Start(path, handler)
-}
-
-// NewClient returns an HTTP client configured for mTLS using E5S_CONFIG.
-//
-// This is a convenience wrapper that reads the config path from E5S_CONFIG
-// environment variable. If E5S_CONFIG is not set, it returns an error.
-//
-// For explicit config file paths, use Client(configPath) instead.
-// This is the recommended approach for production deployments.
-//
-// Configuration (path from E5S_CONFIG):
-//
-//	spire:
-//	  workload_socket: unix:///tmp/spire-agent/public/api.sock
-//	client:
-//	  expected_server_trust_domain: "example.org"
-//
-// Usage:
-//
-//	// Set E5S_CONFIG before calling
-//	os.Setenv("E5S_CONFIG", "e5s.prod.yaml")
-//	client, shutdown, err := e5s.NewClient()
-//	if err != nil {
-//	    log.Fatal(err)
-//	}
-//	defer shutdown()
-//
-//	resp, err := client.Get("https://secure-service:8443/api")
-//
-// See Client() documentation for full details on client behavior and configuration.
-func NewClient() (*http.Client, func() error, error) {
-	path, err := resolveConfigPath()
-	if err != nil {
-		return nil, nil, err
-	}
-	return Client(path)
 }
 
 // PeerInfo extracts the authenticated caller's full identity from a request.
@@ -569,13 +510,14 @@ func (b *bodyCloser) Close() error {
 	return err
 }
 
-// Get performs an mTLS GET request using E5S_CONFIG.
+// Get performs a one-off mTLS GET request, handling the full request lifecycle.
 //
-// This is a convenience function that automatically:
-//   - Reads config from E5S_CONFIG environment variable
-//   - Creates mTLS client with SPIRE connection
-//   - Performs the GET request
-//   - Ties cleanup to response body closure
+// This high-level function automatically handles:
+//   - Config loading from E5S_CONFIG environment variable
+//   - SPIRE client creation and identity fetching
+//   - Making the mTLS GET request
+//   - Automatic cleanup when response body is closed
+//   - Logging for debugging and observability
 //
 // If E5S_CONFIG is not set, it returns an error.
 //
@@ -592,30 +534,37 @@ func (b *bodyCloser) Close() error {
 // Usage:
 //
 //	func main() {
-//	    // Must set E5S_CONFIG
-//	    os.Setenv("E5S_CONFIG", "e5s.prod.yaml")
+//	    os.Setenv("E5S_CONFIG", "e5s.yaml")
 //
 //	    resp, err := e5s.Get("https://api.example.com:8443/data")
 //	    if err != nil {
 //	        log.Fatal(err)
 //	    }
-//	    defer resp.Body.Close()  // This also triggers cleanup
+//	    defer resp.Body.Close()  // Triggers automatic cleanup
 //
 //	    body, _ := io.ReadAll(resp.Body)
-//	    fmt.Println(string(body))
+//	    fmt.Print(string(body))
 //	}
 //
-// For making multiple requests with the same client, use NewClient() instead.
-// For explicit config paths, use Client() instead (recommended for production).
+// For making multiple requests with the same client, use Client() instead.
 //
 // Returns:
 //   - response: HTTP response with wrapped body that handles cleanup
 //   - error: if config loading, SPIRE connection, or request fails
 func Get(url string) (*http.Response, error) {
-	// Create client with intelligent defaults
-	client, shutdown, err := NewClient()
+	log.Printf("→ Requesting from: %s", url)
+	log.Println("→ Initializing SPIRE client and fetching SPIFFE identity...")
+
+	// Resolve config path from E5S_CONFIG
+	path, err := resolveConfigPath()
 	if err != nil {
 		return nil, err
+	}
+
+	// Create mTLS client
+	client, shutdown, err := Client(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize client: %w", err)
 	}
 
 	// Perform GET request
@@ -624,8 +573,10 @@ func Get(url string) (*http.Response, error) {
 		if shutdownErr := shutdown(); shutdownErr != nil {
 			log.Printf("Error during shutdown: %v", shutdownErr)
 		}
-		return nil, err
+		return nil, fmt.Errorf("request failed: %w", err)
 	}
+
+	log.Printf("✓ Received response: HTTP %d %s", resp.StatusCode, resp.Status)
 
 	// Wrap response body to trigger cleanup on close
 	resp.Body = &bodyCloser{

@@ -1,0 +1,4 @@
+# Application-specific configuration for the example client
+# This demonstrates the separation between app config and library config
+
+server_url: "https://localhost:8443/time"

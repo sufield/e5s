@@ -7,8 +7,9 @@ import (
 	"log"
 	"os"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/sufield/e5s"
-	"github.com/sufield/e5s/internal/config"
 )
 
 // Version information (set via ldflags during build)
@@ -18,10 +19,19 @@ var (
 	date    = "unknown"
 )
 
+// AppConfig represents the client application configuration.
+// This demonstrates the real-world pattern: applications manage their own config,
+// separate from the e5s library config.
+type AppConfig struct {
+	ServerURL string `yaml:"server_url"`
+}
+
 func main() {
 	versionFlag := flag.Bool("version", false, "Print version information and exit")
-	// Default to example config for demonstration
-	configPath := flag.String("config", "examples/highlevel/e5s.yaml", "Path to e5s config file")
+	// Application config (server URL, etc.)
+	appConfigPath := flag.String("app-config", "examples/highlevel/client-config.yaml", "Path to app config file")
+	// e5s library config (SPIRE socket, trust domain, etc.)
+	e5sConfigPath := flag.String("e5s-config", "examples/highlevel/e5s.yaml", "Path to e5s config file")
 	flag.Parse()
 
 	if *versionFlag {
@@ -31,56 +41,42 @@ func main() {
 		os.Exit(0)
 	}
 
-	os.Exit(run(*configPath))
+	log.Printf("e5s mTLS client (version %s)", version)
+	log.Printf("App config: %s", *appConfigPath)
+	log.Printf("e5s config: %s", *e5sConfigPath)
+
+	os.Exit(run(*appConfigPath, *e5sConfigPath))
 }
 
-func run(configPath string) int {
-	log.Printf("Starting e5s mTLS client (version %s)...", version)
-	log.Printf("Using config: %s", configPath)
-
-	// Load config to get server URL
-	cfg, err := config.Load(configPath)
+func run(appConfigPath, e5sConfigPath string) int {
+	// Load application-specific configuration
+	appCfg, err := loadAppConfig(appConfigPath)
 	if err != nil {
-		log.Printf("❌ Failed to load config: %v", err)
+		log.Printf("❌ Failed to load app config: %v", err)
 		return 1
 	}
 
-	// Get server URL from environment variable, or fall back to config
-	// This allows the client to work both locally and in Kubernetes
+	// Allow SERVER_URL environment variable to override config
+	// This is useful for Kubernetes deployments
 	serverURL := os.Getenv("SERVER_URL")
 	if serverURL == "" {
-		serverURL = cfg.Client.ServerURL
+		serverURL = appCfg.ServerURL
 	}
 	if serverURL == "" {
 		log.Printf("❌ server_url not set in config and SERVER_URL environment variable not set")
 		return 1
 	}
 
-	log.Printf("→ Requesting server time from: %s", serverURL)
-	log.Println("→ Initializing SPIRE client and fetching SPIFFE identity...")
+	// Set E5S_CONFIG for the library to use
+	os.Setenv("E5S_CONFIG", e5sConfigPath)
 
-	// Create mTLS client with explicit config path
-	// This allows the binary to own the default, not the library
-	client, shutdown, err := e5s.Client(configPath)
+	// Perform mTLS GET using high-level API
+	// e5s.Get() handles client creation, SPIRE connection, and cleanup
+	resp, err := e5s.Get(serverURL)
 	if err != nil {
-		log.Printf("❌ Failed to initialize client: %v", err)
-		return 1
-	}
-	defer func() {
-		if err := shutdown(); err != nil {
-			log.Printf("Error during shutdown: %v", err)
-		}
-	}()
-
-	// Perform mTLS GET request
-	resp, err := client.Get(serverURL)
-	if err != nil {
-		log.Printf("❌ Request failed: %v", err)
-		return 1
+		log.Fatal(err)
 	}
 	defer resp.Body.Close()
-
-	log.Printf("✓ Received response: HTTP %d %s", resp.StatusCode, resp.Status)
 
 	// Read and print response
 	body, _ := io.ReadAll(resp.Body)
@@ -88,4 +84,20 @@ func run(configPath string) int {
 	fmt.Print(string(body))
 
 	return 0
+}
+
+// loadAppConfig loads the application-specific configuration.
+// This demonstrates the real-world pattern: applications manage their own config files.
+func loadAppConfig(path string) (*AppConfig, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	var cfg AppConfig
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("failed to parse config: %w", err)
+	}
+
+	return &cfg, nil
 }

@@ -131,12 +131,10 @@ Create `server/main.go`:
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"net/http"
-	"os/signal"
-	"syscall"
+	"os"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -144,7 +142,8 @@ import (
 )
 
 func main() {
-	log.Println("Starting e5s mTLS server...")
+	// Set config path for e5s to use
+	os.Setenv("E5S_CONFIG", "e5s.yaml")
 
 	// Create HTTP router
 	r := chi.NewRouter()
@@ -173,26 +172,10 @@ func main() {
 		fmt.Fprintf(w, "%s\n", response)
 	})
 
-	log.Println("Server configured, initializing mTLS with SPIRE...")
-	// Start mTLS server with explicit config path (uses local e5s code)
-	shutdown, err := e5s.Start("e5s.yaml", r)
-	if err != nil {
-		log.Fatalf("❌ Failed to start server: %v", err)
+	// Serve handles SPIRE connection, mTLS setup, signal handling, and graceful shutdown
+	if err := e5s.Serve(r); err != nil {
+		log.Fatal(err)
 	}
-	defer func() {
-		if err := shutdown(); err != nil {
-			log.Printf("Error during shutdown: %v", err)
-		}
-	}()
-
-	log.Println("Server running - press Ctrl+C to stop")
-
-	// Wait for interrupt signal for graceful shutdown
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-	<-ctx.Done()
-
-	log.Println("Shutting down gracefully...")
 }
 ```
 
@@ -241,29 +224,16 @@ func main() {
 		log.Fatalf("❌ server_url not set in config and SERVER_URL environment variable not set")
 	}
 
-	log.Printf("→ Requesting server time from: %s", serverURL)
-	log.Println("→ Initializing SPIRE client and fetching SPIFFE identity...")
+	// Set E5S_CONFIG for the library to use
+	os.Setenv("E5S_CONFIG", "e5s.yaml")
 
-	// Create mTLS client using e5s library (uses local e5s code via replace directive)
-	// e5s.Client() handles SPIRE connection, mTLS setup, and certificate rotation
-	client, shutdown, err := e5s.Client("e5s.yaml")
+	// Perform mTLS GET using high-level API
+	// e5s.Get() handles client creation, SPIRE connection, and cleanup
+	resp, err := e5s.Get(serverURL)
 	if err != nil {
-		log.Fatalf("❌ Failed to initialize client: %v", err)
-	}
-	defer func() {
-		if err := shutdown(); err != nil {
-			log.Printf("Error during shutdown: %v", err)
-		}
-	}()
-
-	// Perform mTLS GET request
-	resp, err := client.Get(serverURL)
-	if err != nil {
-		log.Fatalf("❌ Request failed: %v", err)
+		log.Fatal(err)
 	}
 	defer resp.Body.Close()
-
-	log.Printf("✓ Received response: HTTP %d %s", resp.StatusCode, resp.Status)
 
 	// Read and print response
 	body, _ := io.ReadAll(resp.Body)

@@ -106,21 +106,23 @@ func main() {
 		fmt.Fprintf(w, "Hello, %s!\n", id)
 	})
 
-	// Run mTLS server (handles config, SPIRE connection, and graceful shutdown)
-	e5s.Run(r)
+	// Serve handles config, SPIRE connection, signal handling, and graceful shutdown
+	if err := e5s.Serve(r); err != nil {
+		log.Fatal(err)
+	}
 }
 ```
 
 **What this code does:**
 - Creates a chi router with two endpoints: `/healthz` and `/hello`
 - The `/hello` endpoint extracts the client's SPIFFE ID using `e5s.PeerID()`
-- Calls `e5s.Run(r)` which handles everything:
+- Calls `e5s.Serve(r)` which handles everything:
   - Config file discovery (e5s.yaml or E5S_CONFIG)
   - SPIRE connection and mTLS setup
   - Signal handling (Ctrl+C)
   - Graceful shutdown
 
-**That's it!** Zero boilerplate - just define your routes and call `e5s.Run()`.
+**That's it!** Zero boilerplate - just define your routes and call `e5s.Serve()`.
 
 **For more control** over signal handling, config paths, or logging, see [ADVANCED.md](ADVANCED.md).
 
@@ -613,4 +615,4 @@ The e5s library handles all the complexity:
 - mTLS handshake setup
 - SPIFFE ID verification
 
-You just write `e5s.Run()`, `e5s.Get()`, and `e5s.PeerID()` - the library does the rest!
+You just write `e5s.Serve()`, `e5s.Get()`, and `e5s.PeerID()` - the library does the rest!
