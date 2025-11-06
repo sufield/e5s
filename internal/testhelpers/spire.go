@@ -286,7 +286,8 @@ plugins {
 	}
 
 	// Wait for the server private API socket to appear (avoid race between server start and token CLI)
-	apiSock := filepath.Join(st.TempDir, "server", "private", "api.sock")
+	// The socket is at <data_dir>/private/api.sock, where data_dir is <tempDir>/server/data
+	apiSock := filepath.Join(st.TempDir, "server", "data", "private", "api.sock")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
