@@ -26,106 +26,21 @@ jobs:
           go-version: '1.25.3'
           cache: true
 
-      - name: Download SPIRE binaries
+      - name: Download and setup SPIRE binaries
         run: |
+          # Download SPIRE
           wget https://github.com/spiffe/spire/releases/download/v1.13.0/spire-1.13.0-linux-amd64-musl.tar.gz
           tar xzf spire-1.13.0-linux-amd64-musl.tar.gz
 
-      - name: Start SPIRE Server
-        run: |
-          cd spire-1.13.0
+          # Make binaries available via environment variables for testhelpers
+          echo "SPIRE_SERVER=$PWD/spire-1.13.0/bin/spire-server" >> $GITHUB_ENV
+          echo "SPIRE_AGENT=$PWD/spire-1.13.0/bin/spire-agent" >> $GITHUB_ENV
 
-          # Create server config
-          mkdir -p conf/server
-          cat > conf/server/server.conf <<EOF
-          server {
-              bind_address = "0.0.0.0"
-              bind_port = "8081"
-              trust_domain = "example.org"
-              data_dir = "/tmp/spire-server/data"
-              log_level = "DEBUG"
-          }
-
-          plugins {
-              DataStore "sql" {
-                  plugin_data {
-                      database_type = "sqlite3"
-                      connection_string = "/tmp/spire-server/data/datastore.sqlite3"
-                  }
-              }
-
-              KeyManager "memory" {
-                  plugin_data {}
-              }
-
-              NodeAttestor "join_token" {
-                  plugin_data {}
-              }
-          }
-          EOF
-
-          # Start server in background
-          mkdir -p /tmp/spire-server/data
-          ./bin/spire-server run -config conf/server/server.conf &
-
-          # Wait for server to be ready
-          timeout 30 bash -c 'until ./bin/spire-server healthcheck 2>/dev/null; do sleep 1; done'
-
-      - name: Start SPIRE Agent
-        run: |
-          cd spire-1.13.0
-
-          # Generate join token from server
-          JOIN_TOKEN=$(./bin/spire-server token generate -spiffeID spiffe://example.org/agent/ci-agent 2>&1 | grep "Token:" | awk '{print $2}')
-          echo "Generated join token for agent"
-
-          # Configure agent
-          cat > conf/agent/agent.conf <<EOF
-          agent {
-              data_dir = "/tmp/spire-agent/data"
-              log_level = "DEBUG"
-              trust_domain = "example.org"
-              server_address = "127.0.0.1"
-              server_port = "8081"
-              insecure_bootstrap = true
-          }
-          plugins {
-              KeyManager "memory" { plugin_data {} }
-              NodeAttestor "join_token" { plugin_data {} }
-              WorkloadAttestor "unix" { plugin_data {} }
-          }
-          EOF
-
-          # Start agent in background with join token
-          mkdir -p /tmp/spire-agent/public /tmp/spire-agent/data
-          ./bin/spire-agent run -config conf/agent/agent.conf \
-            -socketPath /tmp/spire-agent/public/api.sock \
-            -joinToken "${JOIN_TOKEN}" &
-
-          # Wait for agent socket
-          timeout 30 bash -c 'until [ -S /tmp/spire-agent/public/api.sock ]; do sleep 1; done'
-
-      - name: Create Workload Registration
-        run: |
-          cd spire-1.13.0
-
-          # Wait for agent to be fully ready
-          sleep 3
-
-          # Create workload entry for CI tests (matches any process)
-          ./bin/spire-server entry create \
-            -spiffeID spiffe://example.org/test-workload \
-            -parentID spiffe://example.org/agent/ci-agent \
-            -selector unix:uid:$(id -u)
-
-          echo "Workload registration created"
-
-          # Verify registration
-          ./bin/spire-server entry show
+          echo "SPIRE binaries available at:"
+          echo "  Server: $PWD/spire-1.13.0/bin/spire-server"
+          echo "  Agent: $PWD/spire-1.13.0/bin/spire-agent"
 
       - name: Run Integration Tests
-        env:
-          SPIFFE_ENDPOINT_SOCKET: unix:///tmp/spire-agent/public/api.sock
         run: |
           go test -v -tags=integration -timeout=5m -coverprofile=coverage-integration.txt ./...
 

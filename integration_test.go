@@ -8,12 +8,29 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/sufield/e5s"
+	"github.com/sufield/e5s/internal/testhelpers"
 	"github.com/sufield/e5s/spiffehttp"
 )
+
+// getOrSetupSPIRE returns a socket path to use for testing.
+// If SPIFFE_ENDPOINT_SOCKET is set, it uses the existing SPIRE agent.
+// Otherwise, it starts a new SPIRE server and agent for the test.
+func getOrSetupSPIRE(t *testing.T) string {
+	socketPath := os.Getenv("SPIFFE_ENDPOINT_SOCKET")
+	if socketPath != "" {
+		t.Logf("Using existing SPIRE agent from environment: %s", socketPath)
+		return socketPath
+	}
+
+	// No existing SPIRE, start our own
+	st := testhelpers.SetupSPIRE(t)
+	return "unix://" + st.SocketPath
+}
 
 // TestE2E_Start_Client_PeerID tests the high-level e5s API end-to-end.
 //
@@ -25,11 +42,28 @@ import (
 //
 // Requires: SPIRE server and agent running with workload registration
 func TestE2E_Start_Client_PeerID(t *testing.T) {
-	const cfgPath = "testdata/e5s.integration.yaml"
+	// Get or setup SPIRE infrastructure
+	socketPath := getOrSetupSPIRE(t)
 
-	// Verify config file exists
-	if _, err := os.Stat(cfgPath); err != nil {
-		t.Fatalf("missing integration config %s: %v", cfgPath, err)
+	// Create temporary config file with dynamic socket path
+	tempDir := t.TempDir()
+	cfgPath := filepath.Join(tempDir, "e5s-test.yaml")
+
+	configContent := fmt.Sprintf(`spire:
+  workload_socket: "%s"
+  initial_fetch_timeout: "30s"
+
+server:
+  listen_addr: ":18443"
+  allowed_client_trust_domain: "example.org"
+
+client:
+  server_url: "https://localhost:18443/api"
+  expected_server_trust_domain: "example.org"
+`, socketPath)
+
+	if err := os.WriteFile(cfgPath, []byte(configContent), 0600); err != nil {
+		t.Fatalf("failed to create test config: %v", err)
 	}
 
 	// Handler inspects the authenticated SPIFFE ID
@@ -134,7 +168,29 @@ func TestE2E_Serve(t *testing.T) {
 // This test verifies that Get() can make requests using configuration
 // from environment variables.
 func TestE2E_Get(t *testing.T) {
-	const cfgPath = "testdata/e5s.integration.yaml"
+	// Get or setup SPIRE infrastructure
+	socketPath := getOrSetupSPIRE(t)
+
+	// Create temporary config file
+	tempDir := t.TempDir()
+	cfgPath := filepath.Join(tempDir, "e5s-test.yaml")
+
+	configContent := fmt.Sprintf(`spire:
+  workload_socket: "%s"
+  initial_fetch_timeout: "30s"
+
+server:
+  listen_addr: ":18443"
+  allowed_client_trust_domain: "example.org"
+
+client:
+  server_url: "https://localhost:18443/api"
+  expected_server_trust_domain: "example.org"
+`, socketPath)
+
+	if err := os.WriteFile(cfgPath, []byte(configContent), 0600); err != nil {
+		t.Fatalf("failed to create test config: %v", err)
+	}
 
 	// Set environment variable for Get to use
 	t.Setenv("E5S_CONFIG", cfgPath)

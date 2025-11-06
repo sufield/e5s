@@ -11,9 +11,25 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sufield/e5s/internal/testhelpers"
 	"github.com/sufield/e5s/spiffehttp"
 	"github.com/sufield/e5s/spire"
 )
+
+// getOrSetupSPIRE returns a socket path to use for testing.
+// If SPIFFE_ENDPOINT_SOCKET is set, it uses the existing SPIRE agent.
+// Otherwise, it starts a new SPIRE server and agent for the test.
+func getOrSetupSPIRE(t *testing.T) string {
+	socketPath := os.Getenv("SPIFFE_ENDPOINT_SOCKET")
+	if socketPath != "" {
+		t.Logf("Using existing SPIRE agent from environment: %s", socketPath)
+		return socketPath
+	}
+
+	// No existing SPIRE, start our own
+	st := testhelpers.SetupSPIRE(t)
+	return "unix://" + st.SocketPath
+}
 
 // TestIntegration_ServerClientHandshake tests that NewServerTLSConfig and
 // NewClientTLSConfig can successfully handshake using real SPIRE sources.
@@ -24,11 +40,8 @@ import (
 // - PeerFromRequest extracts peer identity correctly
 // - Trust domain-based authorization works
 func TestIntegration_ServerClientHandshake(t *testing.T) {
-	// Use the same socket and trust domain as your SPIRE test env
-	workloadSocket := os.Getenv("SPIFFE_ENDPOINT_SOCKET")
-	if workloadSocket == "" {
-		workloadSocket = "unix:///tmp/spire-agent/public/api.sock"
-	}
+	// Get or setup SPIRE infrastructure
+	workloadSocket := getOrSetupSPIRE(t)
 	const trustDomain = "example.org"
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -122,10 +135,7 @@ func TestIntegration_ServerClientHandshake(t *testing.T) {
 // TestIntegration_SpecificIDAuthorization tests that exact SPIFFE ID matching
 // works correctly with real SPIRE.
 func TestIntegration_SpecificIDAuthorization(t *testing.T) {
-	workloadSocket := os.Getenv("SPIFFE_ENDPOINT_SOCKET")
-	if workloadSocket == "" {
-		workloadSocket = "unix:///tmp/spire-agent/public/api.sock"
-	}
+	workloadSocket := getOrSetupSPIRE(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -197,10 +207,7 @@ func TestIntegration_SpecificIDAuthorization(t *testing.T) {
 
 // TestIntegration_PeerContext tests WithPeer and PeerFromContext.
 func TestIntegration_PeerContext(t *testing.T) {
-	workloadSocket := os.Getenv("SPIFFE_ENDPOINT_SOCKET")
-	if workloadSocket == "" {
-		workloadSocket = "unix:///tmp/spire-agent/public/api.sock"
-	}
+	workloadSocket := getOrSetupSPIRE(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
