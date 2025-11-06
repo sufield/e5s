@@ -1,0 +1,14 @@
+spire:
+  workload_socket: "unix:///tmp/spire-agent/public/api.sock"
+  initial_fetch_timeout: "30s"
+
+server:
+  listen_addr: ":18443"
+  # This SPIFFE ID / trust domain must match what your test SPIRE setup issues.
+  # The CI workflow creates entries with trust domain "example.org"
+  allowed_client_trust_domain: "example.org"
+
+client:
+  # This should be the URL where the test server will listen.
+  server_url: "https://localhost:18443/api"
+  expected_server_trust_domain: "example.org"
