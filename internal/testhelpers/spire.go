@@ -52,6 +52,9 @@ type SPIRETest struct {
 	// AgentPID is the PID of the SPIRE agent process.
 	agentPID int
 
+	// serverPort is the port the SPIRE server is listening on.
+	serverPort int
+
 	// ServerCmd is the server process handle (for cleanup).
 	serverCmd *exec.Cmd
 
@@ -155,11 +158,15 @@ func (st *SPIRETest) startServer() {
 		st.t.Fatalf("Failed to create server dir: %v", err)
 	}
 
+	// Use a high port number to avoid conflicts with common services
+	// Port 18081 is unlikely to be in use and high enough to avoid privileged ports
+	serverPort := 18081
+
 	// Write minimal server configuration
 	serverConfPath := filepath.Join(serverDir, "server.conf")
 	serverConf := fmt.Sprintf(`server {
     bind_address = "127.0.0.1"
-    bind_port = "0"  # Random available port
+    bind_port = "%d"
     trust_domain = "%s"
     data_dir = "%s/data"
     log_level = "DEBUG"
@@ -181,7 +188,10 @@ plugins {
         plugin_data {}
     }
 }
-`, st.TrustDomain, serverDir, serverDir)
+`, serverPort, st.TrustDomain, serverDir, serverDir)
+
+	// Store server port for agent to use
+	st.serverPort = serverPort
 
 	if err := os.WriteFile(serverConfPath, []byte(serverConf), 0o600); err != nil {
 		st.t.Fatalf("Failed to write server config: %v", err)
@@ -237,7 +247,8 @@ func (st *SPIRETest) startAgent() {
     log_level = "DEBUG"
     trust_domain = "%s"
     server_address = "127.0.0.1"
-    server_port = "8081"
+    server_port = "%d"
+    insecure_bootstrap = true
 }
 
 plugins {
@@ -253,7 +264,7 @@ plugins {
         plugin_data {}
     }
 }
-`, agentDir, st.TrustDomain)
+`, agentDir, st.TrustDomain, st.serverPort)
 
 	if err := os.WriteFile(agentConfPath, []byte(agentConf), 0o600); err != nil {
 		st.t.Fatalf("Failed to write agent config: %v", err)
