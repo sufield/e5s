@@ -285,7 +285,27 @@ plugins {
 		st.t.Fatalf("Failed to write agent config: %v", err)
 	}
 
-	// Generate join token from server
+	// Wait for the server private API socket to appear (avoid race between server start and token CLI)
+	apiSock := filepath.Join(st.TempDir, "server", "private", "api.sock")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	tick := time.NewTicker(200 * time.Millisecond)
+	defer tick.Stop()
+
+	for {
+		if _, err := os.Stat(apiSock); err == nil {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			st.t.Fatalf("Server API socket did not appear: %s", apiSock)
+		case <-tick.C:
+			// loop until socket appears or timeout
+		}
+	}
+
+	// Generate join token from server using the actual private API socket
 	serverBin := os.Getenv("SPIRE_SERVER")
 	if serverBin == "" {
 		serverBin = "spire-server"
@@ -294,7 +314,7 @@ plugins {
 	agentID := fmt.Sprintf("spiffe://%s/spire/agent/join_token/test-agent", st.TrustDomain)
 	tokenCmd := exec.Command(serverBin, "token", "generate",
 		"-spiffeID", agentID,
-		"-socketPath", filepath.Join(st.TempDir, "server", "data", "api.sock"))
+		"-socketPath", apiSock)
 
 	tokenOutput, err := tokenCmd.CombinedOutput()
 	if err != nil {
