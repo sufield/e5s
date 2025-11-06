@@ -294,7 +294,7 @@ plugins {
 	agentID := fmt.Sprintf("spiffe://%s/spire/agent/join_token/test-agent", st.TrustDomain)
 	tokenCmd := exec.Command(serverBin, "token", "generate",
 		"-spiffeID", agentID,
-		"-socketPath", filepath.Join(st.TempDir, "server/data/api.sock"))
+		"-socketPath", filepath.Join(st.TempDir, "server", "data", "api.sock"))
 
 	tokenOutput, err := tokenCmd.CombinedOutput()
 	if err != nil {
