@@ -15,7 +15,7 @@ import (
 	"github.com/sufield/e5s/spire"
 )
 
-// helper: fetch SVID and assert leaf certificate has URI SANs
+// requireSVIDHasURI fetches SVID and asserts leaf certificate has URI SANs
 func requireSVIDHasURI(t *testing.T, x509src spire.X509Source) {
 	t.Helper()
 	svid, err := x509src.GetX509SVID()
