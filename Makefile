@@ -1,9 +1,10 @@
 .PHONY: test test-verbose test-race test-coverage test-coverage-html test-short \
-	clean help examples build \
+	clean help examples build build-cli build-all \
 	example-highlevel-server example-highlevel-client example-minikube-server example-minikube-client \
 	lint lint-fix fmt fmt-check vet tidy verify \
 	ci ci-local \
-	sec-deps sec-lint sec-secrets sec-test sec-all sec-install-tools
+	sec-deps sec-lint sec-secrets sec-test sec-all sec-install-tools \
+	release-check release-build
 
 # Use bash with strict error handling
 SHELL := /bin/bash
@@ -20,12 +21,14 @@ TOOLS_SEC=govulncheck gosec gitleaks
 # Quick Reference
 # ============================================================================
 # Common workflows:
-#   make ci          - Run all CI checks locally before pushing
-#   make lint        - Quick lint check (what CI runs)
-#   make test        - Run tests quickly
-#   make build       - Build example binaries
-#   make fmt         - Format code
-#   make help        - Show all available targets
+#   make ci              - Run all CI checks locally before pushing
+#   make release-check   - Run all pre-release checks (CI + security + build)
+#   make lint            - Quick lint check (what CI runs)
+#   make test            - Run tests quickly
+#   make build           - Build example binaries
+#   make build-cli       - Build e5s CLI tool
+#   make fmt             - Format code
+#   make help            - Show all available targets
 # ============================================================================
 
 ## help: Show this help message
@@ -46,6 +49,18 @@ build:
 	@go build -o bin/example-server ./cmd/example-server
 	@go build -o bin/example-client ./cmd/example-client
 	@echo "✓ Binaries: bin/example-server, bin/example-client"
+
+## build-cli: Build e5s CLI tool
+build-cli:
+	@echo "Building e5s CLI..."
+	@mkdir -p bin
+	@go build -o bin/e5s ./cmd/e5s
+	@echo "✓ Binary: bin/e5s"
+
+## build-all: Build all binaries (examples + CLI)
+build-all: build build-cli examples
+	@echo ""
+	@echo "✓ All binaries built successfully"
 
 # ============================================================================
 # Code Quality Targets (match CI)
@@ -150,6 +165,7 @@ clean:
 	@rm -f coverage.out coverage.html
 	@rm -f gosec.sarif gitleaks.sarif
 	@if [ -d bin/ ]; then rm -rf bin/ && echo "  Removed bin/"; fi
+	@if [ -d dist/ ]; then rm -rf dist/ && echo "  Removed dist/"; fi
 	@echo "Clean complete"
 
 ## example-highlevel-server: Build highlevel example mTLS server (high-level API)
@@ -234,3 +250,61 @@ sec-all: sec-deps sec-lint sec-secrets sec-test
 	@echo "======================================"
 	@echo "✓ All security checks passed!"
 	@echo "======================================"
+
+# ============================================================================
+# Release Targets
+# ============================================================================
+
+## release-check: Run all pre-release checks
+release-check: tidy verify lint vet test-race sec-all build-all
+	@echo ""
+	@echo "======================================"
+	@echo "✓ All automated checks passed!"
+	@echo "======================================"
+	@echo ""
+	@echo "Manual pre-release checklist:"
+	@echo ""
+	@echo "Documentation:"
+	@echo "  [ ] Updated CHANGELOG.md with version and changes"
+	@echo "  [ ] Updated README.md if public API changed"
+	@echo "  [ ] Updated TUTORIAL.md for new features"
+	@echo "  [ ] Reviewed all documentation for accuracy"
+	@echo ""
+	@echo "Testing:"
+	@echo "  [ ] Tested examples in Kubernetes/Minikube"
+	@echo "  [ ] Verified SPIRE integration works"
+	@echo "  [ ] Ran through TESTING_PRERELEASE.md workflow"
+	@echo ""
+	@echo "Code Review:"
+	@echo "  [ ] Reviewed all public API changes"
+	@echo "  [ ] Verified backward compatibility"
+	@echo "  [ ] Checked for breaking changes"
+	@echo ""
+	@echo "Release:"
+	@echo "  [ ] Updated version in relevant files"
+	@echo "  [ ] Tagged release: git tag vX.Y.Z"
+	@echo "  [ ] Pushed tag: git push origin vX.Y.Z"
+	@echo ""
+	@echo "Post-release verification:"
+	@echo "  [ ] Test: go install github.com/sufield/e5s/cmd/e5s@latest"
+	@echo "  [ ] Verify examples work with released version"
+	@echo "  [ ] Check GitHub release page"
+	@echo ""
+
+## release-build: Build release binaries for all platforms
+release-build:
+	@echo "Building release binaries..."
+	@mkdir -p dist
+	@echo "Building e5s CLI for Linux/amd64..."
+	@GOOS=linux GOARCH=amd64 go build -o dist/e5s-linux-amd64 ./cmd/e5s
+	@echo "Building e5s CLI for Linux/arm64..."
+	@GOOS=linux GOARCH=arm64 go build -o dist/e5s-linux-arm64 ./cmd/e5s
+	@echo "Building e5s CLI for macOS/amd64..."
+	@GOOS=darwin GOARCH=amd64 go build -o dist/e5s-darwin-amd64 ./cmd/e5s
+	@echo "Building e5s CLI for macOS/arm64..."
+	@GOOS=darwin GOARCH=arm64 go build -o dist/e5s-darwin-arm64 ./cmd/e5s
+	@echo "Building e5s CLI for Windows/amd64..."
+	@GOOS=windows GOARCH=amd64 go build -o dist/e5s-windows-amd64.exe ./cmd/e5s
+	@echo ""
+	@echo "✓ Release binaries built in dist/"
+	@ls -lh dist/

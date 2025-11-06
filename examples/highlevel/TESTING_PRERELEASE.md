@@ -36,7 +36,7 @@ When you:
   Verify tools are installed
 
    ```bash 
-   docker --version
+   docker version
    minikube version
    kubectl version --client
    helm version
@@ -45,7 +45,6 @@ When you:
 3. **Go** - Programming language (1.25.3 or higher)
    ```bash
    go version
-   # Should output: go version go1.25.3 or higher
    ```
 
 4. **Local e5s Code**: You should be in the e5s project directory
@@ -164,6 +163,7 @@ func main() {
 			return
 		}
 		log.Printf("✓ Authenticated request from: %s", id)
+    log.Printf("--------------Nov 6, 2025------(server main.go running...)")
 
 		// Get current server time
 		serverTime := time.Now().Format(time.RFC3339)
@@ -205,10 +205,11 @@ type AppConfig struct {
 }
 
 func main() {
+  log.Printf("--------------Nov 6, 2025------(client main.go running...)")
 	log.Println("Starting e5s mTLS client...")
 
 	// Load application-specific configuration
-	// This demonstrates the real-world pattern: your app manages its own config
+	// This demonstrates the real-world use: your app manages its own config
 	cfg, err := loadAppConfig("client-config.yaml")
 	if err != nil {
 		log.Fatalf("❌ Failed to load app config: %v", err)
@@ -274,10 +275,6 @@ This separation of concerns is standard practice:
 
 ## Step 5: Create Configuration Files
 
-The test application uses **two separate config files** to demonstrate the real-world use:
-1. `client-config.yaml` - Application-specific configuration (managed by your app)
-2. `e5s.yaml` - SPIRE/mTLS configuration (managed by e5s library)
-
 ### Create Application Configuration
 
 Create `client-config.yaml` with your application-specific settings:
@@ -293,6 +290,23 @@ EOF
 This file contains settings specific to your application (like server URLs, timeouts, etc.).
 
 ### Create e5s Library Configuration
+
+> **📝 Note about SPIFFE IDs:** The configuration below includes hardcoded SPIFFE IDs for simplicity in this initial setup. In production, you should **discover** SPIFFE IDs using the e5s CLI tool to avoid typos:
+>
+> ```bash
+> # Build the CLI tool
+> go build -o bin/e5s ./cmd/e5s
+>
+> # Discover SPIFFE ID from running pod
+> ./bin/e5s discover pod e5s-client
+> # Output: spiffe://example.org/ns/default/sa/default
+>
+> # Or construct SPIFFE ID from known values
+> ./bin/e5s spiffe-id k8s example.org default default
+> # Output: spiffe://example.org/ns/default/sa/default
+> ```
+>
+> See **Step 11: Discovering SPIFFE IDs** for complete instructions on using the CLI tool.
 
 Create `e5s.yaml` with SPIRE/mTLS settings:
 
@@ -343,20 +357,11 @@ The client application needs a YAML parser to read `client-config.yaml`:
 go get gopkg.in/yaml.v3
 ```
 
-**Why two config files?**
-
-This demonstrates the **real-world separation of concerns**:
-- **Your application** manages its own configuration (`client-config.yaml`)
-- **The e5s library** manages SPIRE/mTLS configuration (`e5s.yaml`)
-- Each component is responsible for its own settings
-- No need to access internal library APIs
-
 ---
 
 ## Step 6: Build Test Binaries
 
-Build test applications.
-These builds will use LOCAL e5s code (due to replace directive)
+Build test applications. These builds will use LOCAL e5s code (due to replace directive)
 From test-demo directory:
 
 Build server:
@@ -384,6 +389,17 @@ Every time e5s library code is modified, rebuild these binaries to see the chang
 ## Step 7: Create Kubernetes Configuration
 
 **Why Kubernetes?** The SPIRE Workload API socket is only accessible inside Kubernetes pods, not from your local machine. You must deploy your test applications to Kubernetes.
+
+> **💡 Quick Reference - Finding SPIFFE IDs:**
+>
+> Before configuring `allowed_client_spiffe_id` below, you can discover the actual SPIFFE ID:
+>
+> ```bash
+> # After deploying the client (see Step 8), discover its SPIFFE ID:
+> ./bin/e5s discover pod e5s-client
+> ```
+>
+> For now, we'll use the default service account's SPIFFE ID. See **Step 11** for complete SPIFFE ID discovery instructions.
 
 Create ConfigMaps for both application and e5s configuration:
 
@@ -433,11 +449,7 @@ Apply the configuration:
 kubectl apply -f k8s-configs.yaml
 ```
 
-**Configuration Pattern:**
-- `e5s-config` ConfigMap - SPIRE/mTLS configuration (managed by e5s library)
-- `client-config` ConfigMap - Application-specific configuration (managed by your app)
-- Both get mounted into the client pod
-- No hardcoded values - all configuration comes from files
+Both `e5s-config` ConfigMap and `client-config` ConfigMap get mounted into the client pod.
 
 ---
 
@@ -783,11 +795,11 @@ This confirms your local e5s code properly implements zero-trust mTLS with SPIRE
 
 ## Step 11: Discovering SPIFFE IDs for Configuration
 
-Before configuring zero-trust authorization, you need to know **what SPIFFE IDs your workloads are actually using**. This section shows you how to discover these identities.
+**Why this matters:** For zero-trust security, you need to configure the exact SPIFFE ID that your client presents. This section shows you how to discover actual SPIFFE IDs from running workloads.
 
-### Understanding SPIFFE ID Patterns
+### Understanding SPIFFE ID Format
 
-The SPIRE CSI driver automatically creates SPIFFE IDs following this pattern:
+The SPIRE CSI driver automatically creates SPIFFE IDs following this format:
 
 ```
 spiffe://{trust-domain}/ns/{namespace}/sa/{serviceaccount}
@@ -804,7 +816,100 @@ spiffe://{trust-domain}/ns/{namespace}/sa/{serviceaccount}
 spiffe://example.org/ns/production/sa/my-client
 ```
 
-### Method 1: Check Server Logs (Easiest)
+---
+
+### Method 1: Use the e5s CLI Tool ⭐ RECOMMENDED
+
+The e5s CLI tool prevents manual errors by automatically discovering and constructing SPIFFE IDs.
+
+**Quick Start:**
+
+Build the CLI tool (one time)
+
+```bash 
+go build -o bin/e5s ./cmd/e5s
+```
+
+Discover SPIFFE ID from running pod
+
+```bash
+./bin/e5s discover pod e5s-client
+```
+
+Output: spiffe://example.org/ns/default/sa/default
+
+Use in configuration. Copy the output and paste into your e5s.yaml:
+
+```bash
+allowed_client_spiffe_id: "spiffe://example.org/ns/default/sa/default"
+```
+
+**All Discovery Methods:**
+
+**Discover from pod name:**
+```bash
+./bin/e5s discover pod e5s-client
+```
+
+Output: spiffe://example.org/ns/default/sa/default
+
+**Discover from label selector:**
+
+```bash
+./bin/e5s discover label app=e5s-client
+```
+
+Output: spiffe://example.org/ns/default/sa/default
+
+**Discover from deployment:**
+```bash
+./bin/e5s discover deployment e5s-client
+```
+
+Output: spiffe://example.org/ns/default/sa/default
+
+**Use in scripts to automatically configure server:**
+
+Discover the client's actual SPIFFE ID
+
+```bash
+CLIENT_ID=$(./bin/e5s discover pod e5s-client)
+
+# Update server config with the discovered ID
+cat > k8s-configs.yaml <<EOF
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: e5s-config
+data:
+  e5s.yaml: |
+    spire:
+      workload_socket: unix:///spire/agent-socket/spire-agent.sock
+    server:
+      listen_addr: ":8443"
+      allowed_client_spiffe_id: "$CLIENT_ID"
+EOF
+```
+
+Apply the configuration
+
+```bash
+kubectl apply -f k8s-configs.yaml
+```
+
+**Construct SPIFFE IDs manually:**
+
+If you know the namespace and service account
+
+Output: spiffe://example.org/ns/default/sa/api-client
+
+```bash
+./bin/e5s spiffe-id k8s example.org default api-client
+```
+
+This prevents manual typos when constructing SPIFFE IDs.
+
+### Method 2: Check Server Logs
 
 The e5s server logs show the SPIFFE ID of every authenticated client:
 
@@ -813,13 +918,14 @@ kubectl logs -l app=e5s-server --tail=20 | grep "Authenticated"
 ```
 
 **Example output:**
+
 ```
 2025/11/05 18:26:39 ✓ Authenticated request from: spiffe://example.org/ns/default/sa/default
 ```
 
-This tells you exactly what SPIFFE ID your client is presenting.
+This shows you what SPIFFE ID your client is presenting.
 
-### Method 2: Query SPIRE Registration Entries
+### Method 3: Query SPIRE Registration Entries
 
 List all SPIFFE IDs that SPIRE has registered:
 
@@ -828,6 +934,7 @@ kubectl exec -n spire spire-server-0 -c spire-server -- spire-server entry show
 ```
 
 **Example output:**
+
 ```
 Entry ID         : minikube-cluster.7d3be6ed-190a-4cc9-9325-b851804cc00a
 SPIFFE ID        : spiffe://example.org/ns/default/sa/default
@@ -841,7 +948,7 @@ This shows:
 - Which selectors (namespace, service account, pod labels) map to which IDs
 - Auto-registered entries (from CSI driver) vs manually registered entries
 
-### Method 3: Check Your Pod's Service Account
+### Method 4: Check Your Pod's Service Account
 
 Find out what service account your pod is using:
 
@@ -850,6 +957,7 @@ kubectl get pod -l app=e5s-client -o jsonpath='{.spec.serviceAccountName}'
 ```
 
 **Example output:**
+
 ```
 default
 ```
@@ -863,42 +971,52 @@ spiffe://example.org/ns/default/sa/default
 
 ### Practical Example: Finding Your Client's SPIFFE ID
 
-Let's say you have a client pod with label `app=my-api-client`:
+Consider a client pod with label `app=my-api-client`:
 
 **Step 1:** Check what service account it uses:
+
 ```bash
 kubectl get pod -l app=my-api-client -o jsonpath='{.spec.serviceAccountName}'
-# Output: api-client-sa
 ```
+
+Output: api-client-sa
 
 **Step 2:** Check what namespace it's in:
+
 ```bash
 kubectl get pod -l app=my-api-client -o jsonpath='{.items[0].metadata.namespace}'
-# Output: production
 ```
+
+Output: production
 
 **Step 3:** Check your SPIRE trust domain:
+
 ```bash
 kubectl exec -n spire spire-server-0 -c spire-server -- spire-server entry show | grep "SPIFFE ID" | head -1
-# Output: SPIFFE ID        : spiffe://example.org/...
 ```
 
+Output: SPIFFE ID        : spiffe://example.org/...
+
 **Step 4:** Construct the SPIFFE ID:
+
 ```
 spiffe://example.org/ns/production/sa/api-client-sa
 ```
 
 **Step 5:** Verify by checking server logs after the client connects:
+
 ```bash
 kubectl logs -l app=your-server | grep "Authenticated"
-# Should show: spiffe://example.org/ns/production/sa/api-client-sa
 ```
+
+Should show: spiffe://example.org/ns/production/sa/api-client-sa
 
 ### Using SPIFFE IDs in Configuration
 
 Once you know the SPIFFE ID, configure your server to allow only that specific identity:
 
 **For exact identity matching (recommended for production):**
+
 ```yaml
 server:
   listen_addr: ":8443"
@@ -907,6 +1025,7 @@ server:
 ```
 
 **For trust domain matching (less secure, useful for development):**
+
 ```yaml
 server:
   listen_addr: ":8443"
@@ -920,23 +1039,25 @@ server:
 
 ✅ **Right approach:** Discover actual SPIFFE IDs using observability, then configure explicit authorization
 
-**Key principle:** Your configuration should match **reality** (what identities are actually being used), not assumptions.
+**principle:** Your configuration should match reality (what identities are actually being used), not assumptions.
 
 ---
 
 ## Step 12: Zero-Trust Security Demonstration
 
-This section demonstrates **zero-trust authorization at the application layer**. Even though SPIRE's CSI driver auto-registers all service accounts in the namespace, your **application enforces explicit authorization**.
+This section demonstrates zero-trust authorization at the application layer. Even though SPIRE's CSI driver auto-registers all service accounts in the namespace, your application enforces explicit authorization.
 
 **What's happening:**
+
 - ✅ SPIRE CSI driver auto-creates identities for all service accounts: `spiffe://example.org/ns/{namespace}/sa/{serviceaccount}`
 - ✅ Both the registered and unregistered clients can obtain SPIFFE identities from SPIRE
-- 🔒 **But the server only accepts ONE specific identity**: `spiffe://example.org/ns/default/sa/default`
-- ❌ Any other identity (like `unregistered-client`) is **rejected at the application level**
+- 🔒 But the server only accepts ONE specific identity: `spiffe://example.org/ns/default/sa/default`
+- ❌ Any other identity (like `unregistered-client`) is rejected at the application level
 
-This is **defense in depth**: SPIRE provides the identity infrastructure, your application enforces the authorization policy.
+This is defense in depth: SPIRE provides the identity infrastructure, your application enforces the authorization policy.
 
 We'll test both scenarios:
+
 1. ✅ **Authorized client** (`serviceAccountName: default`) - allowed by server
 2. ❌ **Unauthorized client** (`serviceAccountName: unregistered-client`) - rejected by server
 
@@ -1003,7 +1124,7 @@ spec:
 EOF
 ```
 
-**Difference**: This client uses `serviceAccountName: unregistered-client` which has **no SPIRE registration entry**. The authenticated client uses `serviceAccountName: default` which **is registered** with SPIRE. Even though both have socket access, only the registered one will get a SPIFFE identity.
+**Difference**: This client uses `serviceAccountName: unregistered-client` which has no SPIRE registration entry. The authenticated client uses `serviceAccountName: default` which is registered with SPIRE. Even though both have socket access, only the registered one will get a SPIFFE identity.
 
 ### Run Both Tests
 
@@ -1067,6 +1188,7 @@ Server Logs:
 ```
 
 **What happened:**
+
 1. Client connected to SPIRE Workload API via CSI volume
 2. SPIRE issued a SPIFFE identity: `spiffe://example.org/ns/default/sa/default`
 3. Client sent `GET /time` request using mTLS
@@ -1089,6 +1211,7 @@ Server Logs:
 ```
 
 **What happened:**
+
 1. Client connected to SPIRE Workload API socket successfully
 2. **SPIRE auto-registered the service account** via CSI driver
 3. Client obtained SPIFFE identity: `spiffe://example.org/ns/default/sa/unregistered-client`
@@ -1102,7 +1225,7 @@ Server Logs:
 
 ### Security Analysis
 
-This demonstrates **application-layer zero-trust authorization**:
+This demonstrates application-layer zero-trust authorization:
 
 | Component | Authorized Client | Unauthorized Client |
 |-----------|-------------------|---------------------|
@@ -1110,8 +1233,8 @@ This demonstrates **application-layer zero-trust authorization**:
 | SPIRE Auto-Registration | ✅ Auto-registered | ✅ Auto-registered |
 | SPIFFE Identity | ✅ `...sa/default` | ✅ `...sa/unregistered-client` |
 | mTLS Certificate | ✅ Valid cert | ✅ Valid cert |
-| Server Authorization | ✅ In allowed list | ❌ **NOT in allowed list** |
-| Server Communication | ✅ Allowed | ❌ **Rejected** |
+| Server Authorization | ✅ In allowed list | ❌ NOT in allowed list |
+| Server Communication | ✅ Allowed | ❌ Rejected |
 
 **Security Principles:**
 
