@@ -310,7 +310,7 @@ if ok {
 ### TLS Configuration
 
 The library enforces secure defaults:
-- **TLS 1.3** minimum (TLS 1.2 allowed with secure ciphers)
+- **TLS 1.3 only** (TLS 1.2 and below are NOT allowed)
 - **Mutual TLS** required (both parties present certificates)
 - **Automatic certificate rotation** (zero downtime)
 - **SPIFFE ID verification** per configuration

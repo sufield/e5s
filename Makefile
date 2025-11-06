@@ -4,7 +4,7 @@
 	lint lint-fix fmt fmt-check vet tidy verify \
 	ci ci-local \
 	sec-deps sec-lint sec-secrets sec-test sec-all sec-install-tools \
-	release-check release-build
+	release-check release-build env-versions
 
 # Use bash with strict error handling
 SHELL := /bin/bash
@@ -166,6 +166,7 @@ clean:
 	@rm -f gosec.sarif gitleaks.sarif
 	@if [ -d bin/ ]; then rm -rf bin/ && echo "  Removed bin/"; fi
 	@if [ -d dist/ ]; then rm -rf dist/ && echo "  Removed dist/"; fi
+	@if [ -d artifacts/ ]; then rm -rf artifacts/ && echo "  Removed artifacts/"; fi
 	@echo "Clean complete"
 
 ## example-highlevel-server: Build highlevel example mTLS server (high-level API)
@@ -308,3 +309,11 @@ release-build:
 	@echo ""
 	@echo "✓ Release binaries built in dist/"
 	@ls -lh dist/
+
+## env-versions: Capture current environment versions
+env-versions:
+	@echo "Capturing environment versions..."
+	@E5S_VERSION=$(version) bash scripts/env-versions.sh dev artifacts
+	@echo ""
+	@echo "Environment version info saved to artifacts/env-versions-dev.txt"
+	@echo "Use this information to update VERSIONS.md and CHANGELOG.md"

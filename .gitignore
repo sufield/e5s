@@ -66,3 +66,4 @@ client
 server
 identityserver-example
 examples/middleware/middleware
+artifacts/
