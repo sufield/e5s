@@ -57,6 +57,9 @@ type SPIRETest struct {
 	// serverPort is the port the SPIRE server is listening on.
 	serverPort int
 
+	// adminAPISocket is the path to the SPIRE server admin API socket.
+	adminAPISocket string
+
 	// ServerCmd is the server process handle (for cleanup).
 	serverCmd *exec.Cmd
 
@@ -179,12 +182,14 @@ func (st *SPIRETest) startServer() {
 
 	// Write minimal server configuration
 	serverConfPath := filepath.Join(serverDir, "server.conf")
+	apiSockPath := filepath.Join(serverDir, "data", "private", "api.sock")
 	serverConf := fmt.Sprintf(`server {
     bind_address = "127.0.0.1"
     bind_port = "%d"
     trust_domain = "%s"
     data_dir = "%s/data"
     log_level = "DEBUG"
+    socket_path = "%s"
 }
 
 plugins {
@@ -203,10 +208,11 @@ plugins {
         plugin_data {}
     }
 }
-`, serverPort, st.TrustDomain, serverDir, serverDir)
+`, serverPort, st.TrustDomain, serverDir, apiSockPath, serverDir)
 
-	// Store server port for agent to use
+	// Store server port and admin API socket for agent and entry creation
 	st.serverPort = serverPort
+	st.adminAPISocket = apiSockPath
 
 	if err := os.WriteFile(serverConfPath, []byte(serverConf), 0o600); err != nil {
 		st.t.Fatalf("Failed to write server config: %v", err)
@@ -287,20 +293,35 @@ plugins {
 
 	// Wait for the server private API socket to appear (avoid race between server start and token CLI)
 	// The socket is at <data_dir>/private/api.sock, where data_dir is <tempDir>/server/data
-	apiSock := filepath.Join(st.TempDir, "server", "data", "private", "api.sock")
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	tick := time.NewTicker(200 * time.Millisecond)
 	defer tick.Stop()
 
+	logTicker := time.NewTicker(5 * time.Second)
+	defer logTicker.Stop()
+
 	for {
-		if _, err := os.Stat(apiSock); err == nil {
+		if _, err := os.Stat(st.adminAPISocket); err == nil {
+			st.t.Log("Server API socket appeared")
 			break
 		}
 		select {
 		case <-ctx.Done():
-			st.t.Fatalf("Server API socket did not appear: %s", apiSock)
+			// Check if server process is still running
+			if st.serverCmd != nil && st.serverCmd.Process != nil {
+				if err := st.serverCmd.Process.Signal(os.Signal(nil)); err != nil {
+					st.t.Fatalf("Server API socket did not appear: %s (server process has exited)", st.adminAPISocket)
+				} else {
+					st.t.Fatalf("Server API socket did not appear: %s (server process still running but no socket)", st.adminAPISocket)
+				}
+			} else {
+				st.t.Fatalf("Server API socket did not appear: %s (server process not available)", st.adminAPISocket)
+			}
+		case <-logTicker.C:
+			// Periodic progress logging
+			st.t.Logf("Still waiting for server API socket: %s", st.adminAPISocket)
 		case <-tick.C:
 			// loop until socket appears or timeout
 		}
@@ -312,10 +333,10 @@ plugins {
 		serverBin = "spire-server"
 	}
 
-	agentID := fmt.Sprintf("spiffe://%s/spire/agent/join_token/test-agent", st.TrustDomain)
+	agentID := fmt.Sprintf("spiffe://%s/test-agent", st.TrustDomain)
 	tokenCmd := exec.Command(serverBin, "token", "generate",
 		"-spiffeID", agentID,
-		"-socketPath", apiSock)
+		"-socketPath", st.adminAPISocket)
 
 	tokenOutput, err := tokenCmd.CombinedOutput()
 	if err != nil {
@@ -383,10 +404,25 @@ func (st *SPIRETest) waitForAgent() {
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
+	logTicker := time.NewTicker(5 * time.Second)
+	defer logTicker.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
-			st.t.Fatal("Timed out waiting for SPIRE agent to become ready")
+			// Check if agent process is still running
+			if st.agentCmd != nil && st.agentCmd.Process != nil {
+				if err := st.agentCmd.Process.Signal(os.Signal(nil)); err != nil {
+					st.t.Fatalf("Timed out waiting for SPIRE agent to become ready: %s (agent process has exited)", st.SocketPath)
+				} else {
+					st.t.Fatalf("Timed out waiting for SPIRE agent to become ready: %s (agent process still running but no socket)", st.SocketPath)
+				}
+			} else {
+				st.t.Fatalf("Timed out waiting for SPIRE agent to become ready: %s (agent process not available)", st.SocketPath)
+			}
+		case <-logTicker.C:
+			// Periodic progress logging
+			st.t.Logf("Still waiting for SPIRE agent socket: %s", st.SocketPath)
 		case <-ticker.C:
 			// Check if socket exists
 			if _, err := os.Stat(st.SocketPath); err == nil {
@@ -416,8 +452,9 @@ func (st *SPIRETest) createWorkloadEntry() {
 	// Create entry via spire-server CLI
 	cmd := exec.Command(serverBin, "entry", "create",
 		"-spiffeID", spiffeID,
-		"-parentID", fmt.Sprintf("spiffe://%s/spire/agent/join_token/test", st.TrustDomain),
+		"-parentID", fmt.Sprintf("spiffe://%s/test-agent", st.TrustDomain),
 		"-selector", fmt.Sprintf("unix:uid:%d", os.Getuid()),
+		"-socketPath", st.adminAPISocket,
 	)
 
 	if output, err := cmd.CombinedOutput(); err != nil {
