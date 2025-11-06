@@ -35,12 +35,14 @@ func main() {
 	log.Printf("e5s mTLS server (version %s)", version)
 	log.Printf("Using config: %s", *configPath)
 
+	// example-start:server-setup
 	// Set config path for e5s.Serve to use
 	// This allows the binary to own the default, not the library
 	os.Setenv("E5S_CONFIG", *configPath)
 
 	// Create HTTP router
 	r := chi.NewRouter()
+	// example-end:server-setup
 
 	// Health check endpoint
 	r.Get("/healthz", func(w http.ResponseWriter, req *http.Request) {
@@ -50,6 +52,7 @@ func main() {
 		}
 	})
 
+	// example-start:authenticated-endpoint
 	// Authenticated endpoint that returns server time
 	r.Get("/time", func(w http.ResponseWriter, req *http.Request) {
 		// Extract peer identity from mTLS connection
@@ -69,9 +72,12 @@ func main() {
 			log.Printf("❌ write error: %v", err)
 		}
 	})
+	// example-end:authenticated-endpoint
 
+	// example-start:server-start
 	// Serve handles startup, signal handling, and graceful shutdown
 	if err := e5s.Serve(r); err != nil {
 		log.Fatal(err)
 	}
+	// example-end:server-start
 }

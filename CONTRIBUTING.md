@@ -184,6 +184,231 @@ See [SECURITY.md](.github/SECURITY.md) for more information.
 - Update docs/ for significant features
 - Include code examples in documentation where helpful
 
+## Testable Examples
+
+**Important:** This project follows Go best practices for maintainable examples as described in https://go.dev/blog/example.
+
+### How Examples Work
+
+All example code lives in the repository and is **compiled in CI** to ensure it stays valid:
+
+- **cmd/example-server/** - High-level API server example
+- **cmd/example-client/** - High-level API client example
+- **examples/middleware/** - Custom middleware patterns example
+
+### Keeping Examples and Docs in Sync
+
+When you change public APIs or add new features:
+
+#### 1. Update Example Code First
+
+Example code is the source of truth. Update the actual working examples:
+
+```bash
+# Edit the example file
+vim cmd/example-server/main.go
+
+# Verify it compiles
+make build-examples
+
+# Verify it still works (if possible)
+go run ./cmd/example-server
+```
+
+#### 2. Use Example Markers
+
+Mark important code sections with example markers so docs can reference them:
+
+```go
+// example-start:feature-name
+func ImportantFeature() {
+    // Your code here
+}
+// example-end:feature-name
+```
+
+**Existing markers:**
+- `cmd/example-server/main.go`:
+  - `server-setup` - Basic server configuration (lines 38-45)
+  - `authenticated-endpoint` - Handler with peer identity extraction (lines 55-75)
+  - `server-start` - Starting the server with e5s.Serve() (lines 77-82)
+
+- `cmd/example-client/main.go`:
+  - `client-config` - Client configuration setup (lines 70-73)
+  - `client-request` - Making an mTLS request (lines 75-88)
+
+- `examples/middleware/main.go`:
+  - `auth-middleware` - Authentication middleware pattern (lines 31-45)
+
+#### 3. Reference Examples in Documentation
+
+Instead of copying code into docs, **reference the actual example files**:
+
+```markdown
+## Example Server
+
+See [cmd/example-server/main.go](cmd/example-server/main.go) for a complete working example.
+
+The key sections are marked with `example-start`/`example-end` comments:
+- Server setup: lines 38-45 (marker: `server-setup`)
+- Authenticated endpoint: lines 55-75 (marker: `authenticated-endpoint`)
+```
+
+**Benefits of this approach:**
+- Docs always reference real, tested code
+- Changes to examples automatically  propagate
+- CI catches when examples break
+- Users see actual working patterns
+
+### CI Verification
+
+CI automatically builds all examples on every push:
+
+```bash
+# What CI runs (you can run this locally too)
+make build-examples
+```
+
+This ensures:
+- All example code compiles
+- No broken imports or syntax errors
+- Examples stay valid as APIs evolve
+
+**Location:** `.github/workflows/security.yml` contains the "Build examples" step
+
+### When to Update Examples
+
+Update examples when you:
+- Add new public APIs
+- Change existing behavior that affects usage
+- Add demonstrable new features
+- Fix bugs that change how code should be written
+
+### Example Update Checklist
+
+When updating examples:
+
+- [ ] Update the actual example code in `cmd/` or `examples/`
+- [ ] Verify it compiles: `make build-examples`
+- [ ] Add or update example markers if needed
+- [ ] Update line number references in documentation
+- [ ] Test the example still works correctly (if possible)
+- [ ] Update any related documentation that references the example
+
+## Godoc Examples
+
+**In addition to the runnable example programs above**, this project uses **Godoc examples** (`Example*()` functions in `*_test.go` files) to provide API documentation that appears on [pkg.go.dev](https://pkg.go.dev).
+
+### What Are Godoc Examples?
+
+Godoc examples are special test functions that serve as **executable documentation**. They:
+- Live in `example_test.go` files alongside regular tests
+- Appear automatically in package documentation on pkg.go.dev
+- Are compiled (and optionally executed) by `go test`
+- Follow Go's official example naming conventions
+
+See the [Go blog post on examples](https://go.dev/blog/example) for full details.
+
+### Where Godoc Examples Live
+
+```
+example_test.go              # High-level API examples (e5s package)
+spiffehttp/example_test.go   # Low-level mTLS API examples
+spire/example_test.go        # SPIRE adapter examples
+```
+
+### Example Naming Conventions
+
+```go
+func ExampleServe()              // Documents the Serve function
+func ExampleServe_withConfig()   // Second example for Serve function
+func ExamplePeerID()             // Documents the PeerID function
+func Example_authorization()     // Package-level example demonstrating authorization
+```
+
+**Naming rules:**
+- `ExampleFoo()` - Documents function/type `Foo`
+- `ExampleFoo_suffix()` - Additional examples for `Foo` (suffix describes the scenario)
+- `Example()` - Documents the package as a whole
+- `Example_suffix()` - Package-level examples (suffix describes the use case)
+
+### Godoc Examples vs Example Programs
+
+**Godoc Examples** (`example_test.go`):
+- **Purpose**: API documentation on pkg.go.dev
+- **Audience**: Developers learning the API
+- **Scope**: Individual functions/types
+- **Location**: `*_test.go` files
+- **Tested**: Compiled by `go test` (run if they have `// Output:` comments)
+
+**Example Programs** (`cmd/example-*`, `examples/*`):
+- **Purpose**: Complete, runnable applications
+- **Audience**: Developers building similar systems
+- **Scope**: Full workflows and integration patterns
+- **Location**: Separate `main` packages
+- **Tested**: Built by CI (`make build-examples`)
+
+**Use both**: Godoc examples for API docs, example programs for real-world patterns.
+
+### Writing Godoc Examples
+
+Most Godoc examples in this project **compile but don't execute** because they require SPIRE infrastructure:
+
+```go
+// ExampleServe demonstrates starting an mTLS server.
+//
+// This example requires a running SPIRE agent and e5s.yaml configuration file.
+func ExampleServe() {
+    http.HandleFunc("/api", func(w http.ResponseWriter, r *http.Request) {
+        id, ok := e5s.PeerID(r)
+        if !ok {
+            http.Error(w, "unauthorized", http.StatusUnauthorized)
+            return
+        }
+        fmt.Fprintf(w, "Hello, %s!\n", id)
+    })
+
+    if err := e5s.Serve(http.DefaultServeMux); err != nil {
+        log.Fatal(err)
+    }
+    // No "// Output:" comment, so this compiles but doesn't execute
+}
+```
+
+**No `// Output:` comment** means the example compiles but doesn't run. This is appropriate for:
+- Code requiring external infrastructure (SPIRE, databases, etc.)
+- Network operations
+- Server startup code
+
+### When to Update Godoc Examples
+
+Update Godoc examples when you:
+- **Add new exported functions or types** - Every public API should have at least one example
+- **Change function signatures** - Update examples to match new parameters
+- **Add new common use cases** - Add `ExampleFoo_newUseCase()` examples
+- **Deprecate APIs** - Update examples to show the replacement API
+
+### CI Testing
+
+Godoc examples are automatically tested in CI:
+- `go test ./...` compiles all examples (catches API breakage)
+- Examples without `// Output:` are compile-only (appropriate for SPIRE-dependent code)
+- Examples with `// Output:` are executed and output is verified
+
+CI already runs `go test ./...` which verifies all Godoc examples compile correctly.
+
+### Godoc Example Checklist
+
+When adding or updating Godoc examples:
+
+- [ ] Add example to appropriate `*_test.go` file
+- [ ] Follow naming convention (`ExampleFoo` or `ExampleFoo_suffix`)
+- [ ] Add clear godoc comment explaining what the example demonstrates
+- [ ] Note if example requires SPIRE infrastructure
+- [ ] Omit `// Output:` comment (since examples require SPIRE)
+- [ ] Verify it compiles: `go test -run=^Example ./...`
+- [ ] Check formatting: `gofmt -s -w .`
+
 ## License
 
 By contributing, you agree that your contributions will be licensed under the Apache License 2.0.

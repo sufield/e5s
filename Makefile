@@ -25,8 +25,9 @@ TOOLS_SEC=govulncheck gosec gitleaks
 #   make release-check   - Run all pre-release checks (CI + security + build)
 #   make lint            - Quick lint check (what CI runs)
 #   make test            - Run tests quickly
-#   make build           - Build example binaries
+#   make build           - Build example binaries (cmd/example-server, cmd/example-client)
 #   make build-cli       - Build e5s CLI tool
+#   make build-examples  - Build all example code (ensures examples compile)
 #   make fmt             - Format code
 #   make help            - Show all available targets
 # ============================================================================
@@ -57,8 +58,16 @@ build-cli:
 	@go build -o bin/e5s ./cmd/e5s
 	@echo "✓ Binary: bin/e5s"
 
+## build-examples: Build all example code (ensures examples compile)
+build-examples:
+	@echo "Building examples..."
+	@mkdir -p bin
+	@echo "  Building middleware example..."
+	@cd examples/middleware && go build -o ../../bin/example-middleware .
+	@echo "✓ Examples built: bin/example-middleware"
+
 ## build-all: Build all binaries (examples + CLI)
-build-all: build build-cli examples
+build-all: build build-cli build-examples
 	@echo ""
 	@echo "✓ All binaries built successfully"
 
@@ -169,36 +178,9 @@ clean:
 	@if [ -d artifacts/ ]; then rm -rf artifacts/ && echo "  Removed artifacts/"; fi
 	@echo "Clean complete"
 
-## example-highlevel-server: Build highlevel example mTLS server (high-level API)
-example-highlevel-server:
-	@echo "Building highlevel example server..."
-	@mkdir -p bin
-	@cd examples/highlevel && go build -o ../../bin/highlevel-server ./cmd/server
-	@echo "Binary: bin/highlevel-server"
-
-## example-highlevel-client: Build highlevel example mTLS client (high-level API)
-example-highlevel-client:
-	@echo "Building highlevel example client..."
-	@mkdir -p bin
-	@cd examples/highlevel && go build -o ../../bin/highlevel-client ./cmd/client
-	@echo "Binary: bin/highlevel-client"
-
-## example-minikube-server: Build minikube-lowlevel example mTLS server (low-level API)
-example-minikube-server:
-	@echo "Building minikube-lowlevel example server..."
-	@mkdir -p bin
-	@cd examples/minikube-lowlevel && go build -o ../../bin/minikube-server ./cmd/server
-	@echo "Binary: bin/minikube-server"
-
-## example-minikube-client: Build minikube-lowlevel example mTLS client (low-level API)
-example-minikube-client:
-	@echo "Building minikube-lowlevel example client..."
-	@mkdir -p bin
-	@cd examples/minikube-lowlevel && go build -o ../../bin/minikube-client ./cmd/client
-	@echo "Binary: bin/minikube-client"
-
-## examples: Build all examples
-examples: example-highlevel-server example-highlevel-client example-minikube-server example-minikube-client
+## examples: Build all examples (alias for build + build-examples)
+examples: build build-examples
+	@echo "✓ All example code built successfully"
 
 # ============================================================================
 # Security Targets
@@ -256,7 +238,7 @@ sec-all: sec-deps sec-lint sec-secrets sec-test
 # Release Targets
 # ============================================================================
 
-## release-check: Run all pre-release checks
+## release-check: Run all pre-release checks (includes example builds)
 release-check: tidy verify lint vet test-race sec-all build-all
 	@echo ""
 	@echo "======================================"

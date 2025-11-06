@@ -99,6 +99,17 @@ jobs:
           go tool cover -func=coverage.out | tail -1 >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
 
+      # Build all examples to ensure they compile (prevents documentation drift)
+      - name: Build examples
+        run: |
+          echo "Building cmd examples..."
+          go build -o /tmp/example-server ./cmd/example-server
+          go build -o /tmp/example-client ./cmd/example-client
+          go build -o /tmp/e5s ./cmd/e5s
+          echo "Building examples/middleware..."
+          cd examples/middleware && go build -o /tmp/example-middleware .
+          echo "✓ All examples built successfully"
+
       # Check if SARIF files exist before uploading
       - name: Check govulncheck SARIF
         id: check_govulncheck

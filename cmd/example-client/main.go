@@ -67,9 +67,12 @@ func run(appConfigPath, e5sConfigPath string) int {
 		return 1
 	}
 
+	// example-start:client-config
 	// Set E5S_CONFIG for the library to use
 	os.Setenv("E5S_CONFIG", e5sConfigPath)
+	// example-end:client-config
 
+	// example-start:client-request
 	// Perform mTLS GET using high-level API
 	// e5s.Get() handles client creation, SPIRE connection, and cleanup
 	resp, err := e5s.Get(serverURL)
@@ -82,6 +85,7 @@ func run(appConfigPath, e5sConfigPath string) int {
 	body, _ := io.ReadAll(resp.Body)
 	log.Printf("← Server response: %s", string(body))
 	fmt.Print(string(body))
+	// example-end:client-request
 
 	return 0
 }
