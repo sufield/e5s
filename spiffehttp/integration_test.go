@@ -5,8 +5,8 @@ package spiffehttp_test
 
 import (
 	"context"
+	"net"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
@@ -84,8 +84,8 @@ func TestIntegration_ServerClientHandshake(t *testing.T) {
 	// Track peer info extracted in handler
 	var seenPeer spiffehttp.Peer
 
-	// Create test server with mTLS
-	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// Create handler
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		peer, ok := spiffehttp.PeerFromRequest(r)
 		if !ok {
 			http.Error(w, "unauthorized: no peer identity", http.StatusUnauthorized)
@@ -94,12 +94,33 @@ func TestIntegration_ServerClientHandshake(t *testing.T) {
 		seenPeer = peer
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("authenticated"))
-	}))
-	srv.TLS = serverTLS
-	srv.StartTLS()
-	defer srv.Close()
+	})
 
-	t.Logf("Test server listening at: %s", srv.URL)
+	// Create a real HTTP server with our TLS config (not httptest which generates its own certs)
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to create listener: %v", err)
+	}
+	defer listener.Close()
+
+	server := &http.Server{
+		Handler:   handler,
+		TLSConfig: serverTLS,
+	}
+
+	// Start server in background
+	go func() {
+		if err := server.ServeTLS(listener, "", ""); err != nil && err != http.ErrServerClosed {
+			t.Logf("server error: %v", err)
+		}
+	}()
+	defer server.Close()
+
+	serverURL := "https://" + listener.Addr().String()
+	t.Logf("Test server listening at: %s", serverURL)
+
+	// Give server time to start
+	time.Sleep(100 * time.Millisecond)
 
 	// Create client with mTLS config
 	client := &http.Client{
@@ -110,7 +131,7 @@ func TestIntegration_ServerClientHandshake(t *testing.T) {
 	}
 
 	// Make request
-	resp, err := client.Get(srv.URL)
+	resp, err := client.Get(serverURL)
 	if err != nil {
 		t.Fatalf("client request failed: %v", err)
 	}
@@ -176,13 +197,29 @@ func TestIntegration_SpecificIDAuthorization(t *testing.T) {
 		t.Fatalf("NewClientTLSConfig failed: %v", err)
 	}
 
-	// Create server
-	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	srv.TLS = serverTLS
-	srv.StartTLS()
-	defer srv.Close()
+	// Create server with real TLS config
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to create listener: %v", err)
+	}
+	defer listener.Close()
+
+	server := &http.Server{
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}),
+		TLSConfig: serverTLS,
+	}
+
+	go func() {
+		if err := server.ServeTLS(listener, "", ""); err != nil && err != http.ErrServerClosed {
+			t.Logf("server error: %v", err)
+		}
+	}()
+	defer server.Close()
+
+	serverURL := "https://" + listener.Addr().String()
+	time.Sleep(100 * time.Millisecond)
 
 	// Make request - should succeed because IDs match
 	client := &http.Client{
@@ -192,7 +229,7 @@ func TestIntegration_SpecificIDAuthorization(t *testing.T) {
 		Timeout: 10 * time.Second,
 	}
 
-	resp, err := client.Get(srv.URL)
+	resp, err := client.Get(serverURL)
 	if err != nil {
 		t.Fatalf("request failed (IDs should match): %v", err)
 	}
@@ -263,10 +300,27 @@ func TestIntegration_PeerContext(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	srv := httptest.NewUnstartedServer(middleware(handler))
-	srv.TLS = serverTLS
-	srv.StartTLS()
-	defer srv.Close()
+	// Create server with real TLS config
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to create listener: %v", err)
+	}
+	defer listener.Close()
+
+	server := &http.Server{
+		Handler:   middleware(handler),
+		TLSConfig: serverTLS,
+	}
+
+	go func() {
+		if err := server.ServeTLS(listener, "", ""); err != nil && err != http.ErrServerClosed {
+			t.Logf("server error: %v", err)
+		}
+	}()
+	defer server.Close()
+
+	serverURL := "https://" + listener.Addr().String()
+	time.Sleep(100 * time.Millisecond)
 
 	client := &http.Client{
 		Transport: &http.Transport{
@@ -275,7 +329,7 @@ func TestIntegration_PeerContext(t *testing.T) {
 		Timeout: 10 * time.Second,
 	}
 
-	resp, err := client.Get(srv.URL)
+	resp, err := client.Get(serverURL)
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
