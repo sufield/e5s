@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/sufield/e5s"
+	"github.com/sufield/e5s/spiffehttp"
 )
 
 // TestE2E_Start_Client_PeerID tests the high-level e5s API end-to-end.
@@ -33,7 +34,7 @@ func TestE2E_Start_Client_PeerID(t *testing.T) {
 
 	// Handler inspects the authenticated SPIFFE ID
 	var seenID string
-	var seenPeerInfo e5s.Peer
+	var seenPeerInfo spiffehttp.Peer
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Test PeerID extraction
