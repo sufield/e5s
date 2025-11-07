@@ -50,15 +50,16 @@ builds:
     flags:
       - -trimpath
 
-  # Build cp-minikube utility for local Kubernetes testing
-  - id: cp-minikube
-    main: ./cmd/cp-minikube
-    binary: cp-minikube
+  # e5s CLI tool for SPIFFE ID management and config validation
+  - id: e5s-cli
+    main: ./cmd/e5s
+    binary: e5s
     env:
       - CGO_ENABLED=0
     goos:
       - linux
       - darwin
+      - windows
     goarch:
       - amd64
       - arm64
@@ -215,7 +216,7 @@ release:
   header: |
     ## e5s {{ .Tag }} - SPIRE mTLS Library Release
 
-    This release includes the e5s library, utilities, and ready-to-run Docker images for demonstrations.
+    This release includes the e5s library, CLI tool, utilities, Docker images, and Helm chart for demonstrations.
 
     ### Installation
 
@@ -224,17 +225,38 @@ release:
     go get github.com/sufield/e5s@{{ .Tag }}
     ```
 
+    **For CLI tool (SPIFFE ID management and config validation):**
+    ```bash
+    # Download pre-built binaries from release assets
+    # Or install from source:
+    go install github.com/sufield/e5s/cmd/e5s@{{ .Tag }}
+
+    # Usage examples:
+    e5s spiffe-id k8s example.org default api-client
+    e5s discover pod my-pod
+    e5s validate e5s.yaml
+    ```
+
     **For trying examples (Docker images):**
     ```bash
     # Pull pre-built images
     docker pull ghcr.io/sufield/e5s-demo-server:{{ .Tag }}
     docker pull ghcr.io/sufield/e5s-demo-client:{{ .Tag }}
+    ```
 
-    # Or use in Kubernetes/Helm - see documentation
+    **For Kubernetes deployments (Helm chart):**
+    ```bash
+    # Clone the repository and install the chart
+    git clone https://github.com/sufield/e5s.git
+    cd e5s
+    git checkout {{ .Tag }}
+    helm install e5s-demo ./chart/e5s-demo \
+      --set server.image.tag={{ .Tag }} \
+      --set client.image.tag={{ .Tag }}
     ```
 
     **For utilities (download pre-built binaries below):**
-    - **cp-minikube**: Kubernetes configuration utility for local testing
+    - **e5s**: CLI for SPIFFE ID management and configuration validation
 
     See the [documentation](https://github.com/sufield/e5s/tree/{{ .Tag }}/docs) for usage examples.
   footer: |

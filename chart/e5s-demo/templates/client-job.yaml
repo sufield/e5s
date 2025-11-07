@@ -1,0 +1,39 @@
+{{- if and .Values.client.enabled .Values.client.job.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "e5s-demo.fullname" . }}-client
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "e5s-demo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: client
+spec:
+  backoffLimit: {{ .Values.client.job.backoffLimit }}
+  template:
+    metadata:
+      labels:
+        {{- include "e5s-demo.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: client
+    spec:
+      serviceAccountName: default
+      restartPolicy: Never
+      containers:
+      - name: client
+        image: "{{ .Values.client.image.repository }}:{{ .Values.client.image.tag }}"
+        imagePullPolicy: {{ .Values.client.image.pullPolicy }}
+        volumeMounts:
+        - name: spire-agent-socket
+          mountPath: /spire/agent-socket
+          readOnly: true
+        - name: config
+          mountPath: /app/e5s.yaml
+          subPath: e5s.yaml
+      volumes:
+      - name: spire-agent-socket
+        csi:
+          driver: {{ .Values.spire.csiDriver | quote }}
+          readOnly: true
+      - name: config
+        configMap:
+          name: {{ include "e5s-demo.fullname" . }}-client-config
+{{- end }}

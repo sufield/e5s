@@ -2,7 +2,7 @@
 
 ## Overview
 
-e5s provides **two APIs** for SPIFFE/SPIRE-based mutual TLS, serving different developer needs:
+e5s provides **two APIs** for SPIFFE/SPIRE-based mutual TLS for different developer needs:
 
 ### High-Level API (`e5s.Start`, `e5s.Client`)
 
@@ -29,6 +29,7 @@ Provider-agnostic primitives for building mTLS connections with SPIFFE identity:
 - `PeerFromRequest()` - Extract authenticated peer identity from requests
 - `PeerFromContext()` - Retrieve peer from request context
 - `WithPeer()` - Attach peer to context
+
 ### `pkg/spire` - SPIRE Adapter
 
 SPIRE Workload API client:
@@ -38,6 +39,12 @@ SPIRE Workload API client:
 - Automatic certificate rotation
 - Trust bundle updates
 - Thread-safe, share across servers/clients
+
+## Deployment Guides
+
+- [**Helm Chart Deployment**](HELM_DEPLOYMENT.md) - Deploy demos using Helm with production-ready images
+- [**Integration Testing**](INTEGRATION_TESTING.md) - Test SPIRE integrations locally
+- [**Falco Security Monitoring**](FALCO.md) - Runtime security monitoring for SPIRE workloads
 
 ## Architecture
 

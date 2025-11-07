@@ -1,0 +1,61 @@
+# Default values for e5s-demo
+# This chart deploys the e5s demo server and client using images built by GoReleaser
+
+# Server configuration
+server:
+  enabled: true
+  image:
+    repository: ghcr.io/sufield/e5s-demo-server
+    tag: latest
+    pullPolicy: IfNotPresent
+
+  replicas: 1
+
+  service:
+    type: ClusterIP
+    port: 8443
+
+  # e5s configuration for the server
+  config:
+    spire:
+      workload_socket: "unix:///spire/agent-socket/spire-agent.sock"
+    server:
+      listen_addr: ":8443"
+      allowed_client_trust_domain: "example.org"
+
+# Client configuration
+client:
+  enabled: true
+  image:
+    repository: ghcr.io/sufield/e5s-demo-client
+    tag: latest
+    pullPolicy: IfNotPresent
+
+  # Run as a Kubernetes Job
+  job:
+    # Set to false to disable client job
+    enabled: true
+    # Number of times to retry on failure
+    backoffLimit: 3
+
+  # e5s configuration for the client
+  config:
+    spire:
+      workload_socket: "unix:///spire/agent-socket/spire-agent.sock"
+    client:
+      server_url: "https://e5s-server:8443"
+      expected_server_trust_domain: "example.org"
+
+# SPIRE integration
+# Assumes SPIRE is installed via Helmfile in spire-system namespace
+spire:
+  # CSI driver for SPIFFE Workload API socket
+  csiDriver: "csi.spiffe.io"
+
+# Common labels applied to all resources
+commonLabels:
+  app.kubernetes.io/name: e5s-demo
+  app.kubernetes.io/part-of: e5s
+
+# Namespace to deploy into
+namespace: default

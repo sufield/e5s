@@ -1,0 +1,46 @@
+{{- if .Values.server.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "e5s-demo.fullname" . }}-server
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "e5s-demo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: server
+spec:
+  replicas: {{ .Values.server.replicas }}
+  selector:
+    matchLabels:
+      {{- include "e5s-demo.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: server
+  template:
+    metadata:
+      labels:
+        {{- include "e5s-demo.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: server
+    spec:
+      serviceAccountName: default
+      containers:
+      - name: server
+        image: "{{ .Values.server.image.repository }}:{{ .Values.server.image.tag }}"
+        imagePullPolicy: {{ .Values.server.image.pullPolicy }}
+        ports:
+        - name: https
+          containerPort: 8443
+          protocol: TCP
+        volumeMounts:
+        - name: spire-agent-socket
+          mountPath: /spire/agent-socket
+          readOnly: true
+        - name: config
+          mountPath: /app/e5s.yaml
+          subPath: e5s.yaml
+      volumes:
+      - name: spire-agent-socket
+        csi:
+          driver: {{ .Values.spire.csiDriver | quote }}
+          readOnly: true
+      - name: config
+        configMap:
+          name: {{ include "e5s-demo.fullname" . }}-server-config
+{{- end }}

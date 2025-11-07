@@ -1,0 +1,16 @@
+apiVersion: v2
+name: e5s-demo
+description: Demo Helm chart for e5s SPIFFE/SPIRE mTLS library
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - spiffe
+  - spire
+  - mtls
+  - zero-trust
+maintainers:
+  - name: sufield
+    url: https://github.com/sufield/e5s
+sources:
+  - https://github.com/sufield/e5s
