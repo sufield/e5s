@@ -8,7 +8,7 @@ This project is tested against the following tool and platform versions.
 
 ## Latest Verified Matrix
 
-- **e5s**: dev (unreleased)
+- **e5s**: 0.1.0
 - **Go**: go1.25.3
 - **go-spiffe SDK**: v2.6.0
 
@@ -16,7 +16,7 @@ This project is tested against the following tool and platform versions.
 
 - **Helm**: v3.18.6
 - **minikube** (for local dev): v1.37.0
-- **kubectl**: (version check failed - needs investigation)
+- **kubectl**: Client Version: v1.33.4
 
 ### SPIFFE / SPIRE
 
@@ -55,7 +55,7 @@ This project is tested against the following tool and platform versions.
 
 ### Go Version
 
-The project requires Go 1.21 or higher. This is enforced in `go.mod` and verified in CI.
+The project requires Go 1.25.3 or higher. This is enforced in `go.mod` and verified in CI.
 
 ### Kubernetes Version
 
@@ -63,7 +63,7 @@ The project is tested with Kubernetes 1.28+. The SPIRE CSI driver requires speci
 
 ### SPIRE Version
 
-SPIRE 1.8+ is required for:
+SPIRE 1.13 is required for:
 - Improved CSI driver support
 - Automatic workload registration
 - Enhanced security features
