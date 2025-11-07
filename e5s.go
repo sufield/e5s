@@ -67,20 +67,19 @@ func resolveConfigPath() (string, error) {
 }
 
 // newSPIRESource initializes the SPIRE identity source and returns:
-//   - source: the underlying identity source
 //   - x509Source: the X.509 source used for TLS
 //   - shutdown: an idempotent function that closes the source
 func newSPIRESource(
 	ctx context.Context,
 	workloadSocket string,
 	initialFetchTimeout time.Duration,
-) (source *spire.IdentitySource, x509Source *workloadapi.X509Source, shutdown func() error, err error) {
+) (x509Source *workloadapi.X509Source, shutdown func() error, err error) {
 	src, err := spire.NewIdentitySource(ctx, spire.Config{
 		WorkloadSocket:      workloadSocket,
 		InitialFetchTimeout: initialFetchTimeout,
 	})
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
 	x509 := src.X509Source()
@@ -94,7 +93,7 @@ func newSPIRESource(
 		return shutdownErr
 	}
 
-	return src, x509, shutdown, nil
+	return x509, shutdown, nil
 }
 
 // Serve starts the mTLS server with the given handler, handles signals, and performs graceful shutdown.
@@ -244,7 +243,7 @@ func Start(configPath string, handler http.Handler) (shutdown func() error, err 
 	ctx := context.Background()
 
 	// Centralized SPIRE setup
-	_, x509Source, identityShutdown, err := newSPIRESource(
+	x509Source, identityShutdown, err := newSPIRESource(
 		ctx,
 		cfg.SPIRE.WorkloadSocket,
 		spireConfig.InitialFetchTimeout,
@@ -465,7 +464,7 @@ func Client(configPath string) (*http.Client, func() error, error) {
 	ctx := context.Background()
 
 	// Centralized SPIRE setup
-	_, x509Source, identityShutdown, err := newSPIRESource(
+	x509Source, identityShutdown, err := newSPIRESource(
 		ctx,
 		cfg.SPIRE.WorkloadSocket,
 		spireConfig.InitialFetchTimeout,
