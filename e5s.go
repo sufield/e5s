@@ -96,6 +96,84 @@ func newSPIRESource(
 	return x509, shutdown, nil
 }
 
+// buildServer constructs the HTTP server and SPIRE identity source used by both Start and StartSingleThread.
+//
+// This internal helper factors out common setup logic to ensure both execution modes use
+// identical configuration, SPIRE wiring, and TLS setup.
+//
+// Returns:
+//   - srv: configured HTTP server ready to serve
+//   - identityShutdown: function to release SPIRE resources (idempotent)
+//   - err: if config loading, SPIRE connection, or TLS setup fails
+func buildServer(configPath string, handler http.Handler) (
+	srv *http.Server,
+	identityShutdown func() error,
+	err error,
+) {
+	// Load configuration
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Validate server configuration and get parsed authorization policy
+	spireConfig, authz, err := config.ValidateServer(&cfg)
+	if err != nil {
+		return nil, nil, fmt.Errorf("invalid server config: %w", err)
+	}
+
+	ctx := context.Background()
+
+	// Centralized SPIRE setup
+	x509Source, identityShutdown, err := newSPIRESource(
+		ctx,
+		cfg.SPIRE.WorkloadSocket,
+		spireConfig.InitialFetchTimeout,
+	)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create SPIRE source: %w", err)
+	}
+
+	// Build server TLS config with client verification
+	// Note: cfg.* fields are already validated in config.ValidateServer.
+	// spiffehttp still performs its own validation because it is a lower-level API.
+	tlsCfg, err := spiffehttp.NewServerTLSConfig(
+		ctx,
+		x509Source,
+		x509Source,
+		spiffehttp.ServerConfig{
+			AllowedClientID:          cfg.Server.AllowedClientSPIFFEID,
+			AllowedClientTrustDomain: cfg.Server.AllowedClientTrustDomain,
+		},
+	)
+	// Silence unused variable warning
+	_ = authz
+	if err != nil {
+		if shutdownErr := identityShutdown(); shutdownErr != nil {
+			return nil, nil, fmt.Errorf("failed to create server TLS config: %w (cleanup error: %v)", err, shutdownErr)
+		}
+		return nil, nil, fmt.Errorf("failed to create server TLS config: %w", err)
+	}
+
+	// Wrap handler to inject peer identity into request context
+	wrapped := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if peer, ok := spiffehttp.PeerFromRequest(r); ok {
+			r = r.WithContext(spiffehttp.WithPeer(r.Context(), peer))
+		}
+		handler.ServeHTTP(w, r)
+	})
+
+	// Create HTTP server with mTLS
+	srv = &http.Server{
+		Addr:              cfg.Server.ListenAddr,
+		Handler:           wrapped,
+		TLSConfig:         tlsCfg,
+		ReadHeaderTimeout: 10 * time.Second, // Prevent Slowloris attacks
+	}
+
+	return srv, identityShutdown, nil
+}
+
 // Serve starts the mTLS server with the given handler, handles signals, and performs graceful shutdown.
 //
 // This is the recommended way to run an e5s server. It automatically handles:
@@ -228,65 +306,9 @@ func Serve(handler http.Handler) error {
 //	}
 //	os.Exit(0)
 func Start(configPath string, handler http.Handler) (shutdown func() error, err error) {
-	// Load configuration
-	cfg, err := config.Load(configPath)
+	srv, identityShutdown, err := buildServer(configPath, handler)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load config: %w", err)
-	}
-
-	// Validate server configuration and get parsed authorization policy
-	spireConfig, authz, err := config.ValidateServer(&cfg)
-	if err != nil {
-		return nil, fmt.Errorf("invalid server config: %w", err)
-	}
-
-	ctx := context.Background()
-
-	// Centralized SPIRE setup
-	x509Source, identityShutdown, err := newSPIRESource(
-		ctx,
-		cfg.SPIRE.WorkloadSocket,
-		spireConfig.InitialFetchTimeout,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create SPIRE source: %w", err)
-	}
-
-	// Build server TLS config with client verification
-	// Note: cfg.* fields are already validated in config.ValidateServer.
-	// spiffehttp still performs its own validation because it is a lower-level API.
-	tlsCfg, err := spiffehttp.NewServerTLSConfig(
-		ctx,
-		x509Source,
-		x509Source,
-		spiffehttp.ServerConfig{
-			AllowedClientID:          cfg.Server.AllowedClientSPIFFEID,
-			AllowedClientTrustDomain: cfg.Server.AllowedClientTrustDomain,
-		},
-	)
-	// Silence unused variable warning
-	_ = authz
-	if err != nil {
-		if shutdownErr := identityShutdown(); shutdownErr != nil {
-			return nil, fmt.Errorf("failed to create server TLS config: %w (cleanup error: %v)", err, shutdownErr)
-		}
-		return nil, fmt.Errorf("failed to create server TLS config: %w", err)
-	}
-
-	// Wrap handler to inject peer identity into request context
-	wrapped := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if peer, ok := spiffehttp.PeerFromRequest(r); ok {
-			r = r.WithContext(spiffehttp.WithPeer(r.Context(), peer))
-		}
-		handler.ServeHTTP(w, r)
-	})
-
-	// Create HTTP server with mTLS
-	srv := &http.Server{
-		Addr:              cfg.Server.ListenAddr,
-		Handler:           wrapped,
-		TLSConfig:         tlsCfg,
-		ReadHeaderTimeout: 10 * time.Second, // Prevent Slowloris attacks
+		return nil, err
 	}
 
 	// Channel to capture server startup errors
@@ -342,6 +364,73 @@ func Start(configPath string, handler http.Handler) (shutdown func() error, err 
 	}
 
 	return shutdownFunc, nil
+}
+
+// StartSingleThread starts an mTLS server using SPIRE and blocks in the calling goroutine.
+//
+// This function provides a debug-friendly execution mode that uses the same configuration,
+// SPIRE integration, and TLS setup as Start(), but runs the HTTP server synchronously in
+// the current goroutine instead of spawning a background goroutine.
+//
+// go-spiffe behavior (including automatic certificate rotation) is unchanged; this mode
+// only removes the goroutine that e5s itself creates for the HTTP server.
+//
+// This is useful for:
+//   - Debugging with IDE step-through (predictable call stack)
+//   - Isolating concurrency issues (is it e5s threading or something else?)
+//   - Simplified testing scenarios
+//   - Learning the library internals
+//
+// Configuration is identical to Start() - same e5s.yaml format:
+//
+//	spire:
+//	  workload_socket: unix:///tmp/spire-agent/public/api.sock
+//	server:
+//	  listen_addr: ":8443"
+//	  allowed_client_trust_domain: "example.org"
+//
+// Differences from Start():
+//   - BLOCKS in the current goroutine (does not return until server stops)
+//   - Does NOT return a shutdown function (process lifetime management)
+//   - Automatic cleanup when the function returns
+//   - Server stops on context cancellation or fatal error
+//
+// Usage:
+//
+//	func main() {
+//	    handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+//	        id, ok := e5s.PeerID(r)
+//	        if !ok {
+//	            http.Error(w, "unauthorized", http.StatusUnauthorized)
+//	            return
+//	        }
+//	        fmt.Fprintf(w, "Hello %s\n", id)
+//	    })
+//
+//	    if err := e5s.StartSingleThread("e5s.yaml", handler); err != nil {
+//	        log.Fatal(err)
+//	    }
+//	}
+//
+// For production deployments with graceful shutdown, use Start() or Serve() instead.
+func StartSingleThread(configPath string, handler http.Handler) error {
+	srv, identityShutdown, err := buildServer(configPath, handler)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if shutdownErr := identityShutdown(); shutdownErr != nil {
+			log.Printf("Error closing SPIRE source: %v", shutdownErr)
+		}
+	}()
+
+	// Run server in the current goroutine (blocks here)
+	err = srv.ListenAndServeTLS("", "")
+	if err != nil && err != http.ErrServerClosed {
+		return fmt.Errorf("server exited with error: %w", err)
+	}
+
+	return nil
 }
 
 // PeerInfo extracts the authenticated caller's full identity from a request.
