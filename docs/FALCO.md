@@ -6,11 +6,9 @@ The mTLS security enforcement is implemented in **[`pkg/spiffehttp`](../pkg/spif
 
 ### Falco Runtime Security Monitoring
 
-- **[setup-falco.sh](setup-falco.sh)** - Main installation script - Run this to install everything
 - **[FALCO_GUIDE.md](FALCO_GUIDE.md)** - Comprehensive guide for Falco integration
-- **[falco_rules.yaml](falco_rules.yaml)** - 18 custom Falco rules for SPIRE mTLS monitoring
-- **[test-falco.sh](test-falco.sh)** - Test Falco rules by triggering sample alerts
-- **[SOLUTION.md](SOLUTION.md)** - Technical details of implementation
+
+> **Note**: Custom Falco rules and automation scripts for this project are planned for a future release. For now, follow the manual installation steps below or refer to the [official Falco documentation](https://falco.org/docs/).
 
 ### Security Layers
 
@@ -60,7 +58,7 @@ go install github.com/securego/gosec/v2/cmd/gosec@latest
 go install golang.org/x/vuln/cmd/govulncheck@latest
 
 # Install Falco (requires sudo)
-sudo bash security/setup-falco.sh
+# See: https://falco.org/docs/install-operate/installation/
 
 # Install Trivy (optional, for container scanning)
 # See: https://aquasecurity.github.io/trivy/latest/getting-started/installation/
@@ -123,16 +121,19 @@ Falco is a cloud-native runtime security tool that detects threats by monitoring
 
 ### Installation
 
-**One-command setup (recommended):**
+Follow the [official Falco installation guide](https://falco.org/docs/install-operate/installation/) for your platform.
+
+**Quick install on Ubuntu/Debian:**
 ```bash
-sudo bash security/setup-falco.sh
+curl -fsSL https://falco.org/repo/falcosecurity-packages.asc | \
+  sudo gpg --dearmor -o /usr/share/keyrings/falco-archive-keyring.gpg
+echo "deb [signed-by=/usr/share/keyrings/falco-archive-keyring.gpg] https://download.falco.org/packages/deb stable main" | \
+  sudo tee -a /etc/apt/sources.list.d/falcosecurity.list
+sudo apt-get update -y
+sudo apt-get install -y falco
 ```
 
-This automated script will:
-- Install Falco (if not already installed)
-- Configure JSON output and file logging
-- Install 18 custom SPIRE mTLS security rules
-- Test driver compatibility and start service
+> **Note**: Custom SPIRE mTLS security rules are planned for a future release. You can create your own rules following the [Falco rules documentation](https://falco.org/docs/rules/).
 
 ### Viewing Alerts
 
@@ -334,7 +335,7 @@ Instead, report via GitHub Security Advisories: https://github.com/sufield/e5s/s
    ```
 
 2. **Document the rule:**
-   - Add to `security/falco_rules.yaml`
+   - Create a custom rules file (e.g., `falco_rules.local.yaml`)
    - Include trigger example in comments
    - Explain expected vs. anomalous behavior
 

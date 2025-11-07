@@ -16,18 +16,6 @@ e5s provides **two APIs** for SPIFFE/SPIRE-based mutual TLS, serving different d
 - See [QUICKSTART_LIBRARY.md](QUICKSTART_LIBRARY.md) for API reference
 - See [../examples/minikube-lowlevel/](../examples/minikube-lowlevel/) for SPIRE cluster setup
 
-## Quick Start
-
-**New to e5s?** → Start with the [high-level API](../README.md#high-level-api-e5sstart-e5sclient) in the main README
-
-**Need full control?** → See [QUICKSTART_LIBRARY.md](QUICKSTART_LIBRARY.md) for low-level API usage
-
-## What's Here
-
-- **[QUICKSTART_LIBRARY.md](QUICKSTART_LIBRARY.md)** - Low-level API reference with code examples
-- **[../examples/highlevel/](../examples/highlevel/)** - High-level API example (application developers)
-- **[../examples/minikube-lowlevel/](../examples/minikube-lowlevel/)** - Low-level API example with full SPIRE cluster (platform teams)
-
 ## Public API
 
 The library exposes two packages:
@@ -57,15 +45,3 @@ This has:
 
 - **Core** (`pkg/spiffehttp`) - TLS configuration using go-spiffe SDK
 - **Adapter** (`pkg/spire`) - SPIRE Workload API client
-
-## Security
-
-See [../security/](../security/) for:
-- Supply chain security
-- Falco runtime monitoring
-- Security scanning tools
-
-## External Resources
-
-- [Main README](../README.md) - Project overview
-- [examples/minikube/](../examples/minikube/) - Production-like demo

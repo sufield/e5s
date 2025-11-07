@@ -328,7 +328,6 @@ const (
 #### e5s
 - External YAML configuration files
 - Change settings without recompiling
-- Environment variable overrides (via `IDP_MODE`)
 - Better for 12-factor apps and multi-environment deployments
 
 ```yaml
@@ -415,13 +414,7 @@ Requires mocking Workload API or running full SPIRE stack:
 ```
 
 #### e5s
-Supports in-memory testing mode:
-
-```bash
-IDP_MODE=inmem go test ./...
-```
-
-No SPIRE agent required for unit tests.
+Requires a running SPIRE agent for all tests. See `docs/INTEGRATION_TESTING.md` for setup instructions.
 
 ---
 

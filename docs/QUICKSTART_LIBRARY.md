@@ -12,8 +12,8 @@ go get github.com/sufield/e5s@latest
 
 The library has two main packages:
 
-- **`pkg/spiffehttp`** - Provider-agnostic mTLS primitives and policy
-- **`pkg/spire`** - SPIRE Workload API client
+- **`spiffehttp`** - Provider-agnostic mTLS primitives and policy
+- **`spire`** - SPIRE Workload API client
 
 ## Quick Example: mTLS Server
 
@@ -275,21 +275,4 @@ clientTLS, _ := spiffehttp.NewClientTLSConfig(ctx, x509Source, x509Source, ...)
 defer source.Close()
 ```
 
-**Important:** The `context` passed to `NewIdentitySource` / `NewServerTLSConfig` / `NewClientTLSConfig` is only used for initial validation. To actually shut down the source, you **must** call `source.Close()`. Canceling the context does NOT stop background rotation.
-
-## Complete Example
-
-See `examples/minikube/` for a full working example with:
-- Server and client applications
-- Minikube + SPIRE setup
-- Integration tests
-
-## Previous Architecture
-
-Earlier versions of this repository implemented a full hexagonal architecture with ports, adapters, domain models, and HTTP service infrastructure. That has been refactored into this focused library. Historical architecture documentation is preserved in `docs/explanation/` and `docs/reference/` for reference.
-
-## Next Steps
-
-- Read `examples/minikube/README.md` for a production-like setup
-- See `docs/reference/` for detailed API documentation
-- Check `security/` for supply chain and security tooling
+The `context` passed to `NewIdentitySource` / `NewServerTLSConfig` / `NewClientTLSConfig` is only used for initial validation. To actually shut down the source, you **must** call `source.Close()`. Canceling the context does NOT stop background rotation.

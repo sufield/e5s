@@ -24,7 +24,7 @@ The easiest way to run integration tests locally is using Docker Compose:
 
 ```bash
 # Start SPIRE infrastructure
-docker-compose -f docker-compose.test.yml up -d
+docker compose -f docker-compose.test.yml up -d
 
 # Wait for SPIRE to be ready (about 10 seconds)
 sleep 10
@@ -33,7 +33,7 @@ sleep 10
 go test -tags=integration -v ./...
 
 # Clean up
-docker-compose -f docker-compose.test.yml down
+docker compose -f docker-compose.test.yml down
 ```
 
 ### Running in CI
@@ -121,10 +121,10 @@ go test -tags=integration -v -short ./...
 - Slightly slower startup
 
 ```bash
-docker-compose -f docker-compose.test.yml up -d
+docker compose -f docker-compose.test.yml up -d
 export SPIFFE_ENDPOINT_SOCKET=unix:///var/run/spire/agent.sock
 go test -tags=integration -v ./...
-docker-compose -f docker-compose.test.yml down
+docker compose -f docker-compose.test.yml down
 ```
 
 ### Option 2: Local SPIRE Binaries
@@ -276,7 +276,7 @@ func TestIntegration_Feature(t *testing.T) {
 ls -la /tmp/spire-agent/public/api.sock
 
 # Check agent logs
-docker-compose -f docker-compose.test.yml logs spire-agent
+docker compose -f docker-compose.test.yml logs spire-agent
 
 # Increase test timeout
 go test -tags=integration -timeout=10m -v ./...
@@ -289,10 +289,10 @@ go test -tags=integration -timeout=10m -v ./...
 **Solutions:**
 ```bash
 # Check SPIRE services are running
-docker-compose -f docker-compose.test.yml ps
+docker compose -f docker-compose.test.yml ps
 
 # Verify network connectivity
-docker-compose -f docker-compose.test.yml exec spire-agent /opt/spire/bin/spire-agent healthcheck
+docker compose -f docker-compose.test.yml exec spire-agent /opt/spire/bin/spire-agent healthcheck
 
 # Check socket path
 export SPIFFE_ENDPOINT_SOCKET=unix:///tmp/spire-agent/public/api.sock
@@ -305,7 +305,7 @@ export SPIFFE_ENDPOINT_SOCKET=unix:///tmp/spire-agent/public/api.sock
 **Solutions:**
 ```bash
 # Restart SPIRE to get fresh certificates
-docker-compose -f docker-compose.test.yml restart
+docker compose -f docker-compose.test.yml restart
 
 # Or use shorter certificate TTLs in SPIRE config for testing
 ```

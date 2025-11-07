@@ -3,11 +3,9 @@
 # This sets up a minimal SPIRE server and agent for running integration tests.
 #
 # Usage:
-#   docker-compose -f docker-compose.test.yml up -d
+#   docker compose -f docker-compose.test.yml up -d
 #   go test -tags=integration -v ./...
-#   docker-compose -f docker-compose.test.yml down
-
-version: '3.8'
+#   docker compose -f docker-compose.test.yml down
 
 services:
   spire-server:

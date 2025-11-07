@@ -20,7 +20,7 @@ Yes. e5s enforces security best practices by default (TLS 1.3, mTLS, SPIFFE ID v
 
 ### Does e5s use Go's standard library HTTP features?
 
-**Yes, absolutely.** e5s uses Go's standard library `net/http` package for all HTTP functionality. It does not replace or reimplement HTTP.
+Yes, e5s uses Go's standard library `net/http` package for all HTTP functionality. It does not replace or reimplement HTTP.
 
 **For Clients:**
 - `e5s.Client()` returns a standard `*http.Client` type
@@ -32,7 +32,7 @@ Yes. e5s enforces security best practices by default (TLS 1.3, mTLS, SPIFFE ID v
 - You use standard `http.HandleFunc()` and `http.Handler` interface for routing
 - Handlers receive standard `http.ResponseWriter` and `*http.Request` parameters
 
-**What e5s actually does:**
+**What e5s does:**
 1. Connects to SPIRE Workload API to obtain X.509 certificates
 2. Creates a `tls.Config` with mTLS settings
 3. Injects that config into standard `http.Client` or `http.Server`
@@ -91,17 +91,7 @@ See [comparison.md](./comparison.md) for a detailed side-by-side comparison. In 
 
 ### Can I override configuration with environment variables?
 
-Yes, using the `IDP_MODE` environment variable for testing:
-
-```bash
-# Use in-memory identity provider (no SPIRE agent needed)
-IDP_MODE=inmem go run ./cmd/server
-
-# Use in-memory mode for tests
-IDP_MODE=inmem go test ./...
-```
-
-For production configuration, use YAML files which support different environments (dev, staging, prod).
+Configuration must be provided via YAML files. There is no environment variable override support. Use different YAML files for different environments (dev, staging, prod).
 
 ### What's the difference between `allowed_client_spiffe_id` and `allowed_client_trust_domain`?
 
@@ -161,12 +151,14 @@ The server uses **`:8443`** which means "listen on ALL network interfaces":
 This is called a "bind address" - it specifies where the server accepts connections from.
 
 **Example:**
+
 ```yaml
 server:
   listen_addr: ":8443"  # Listen on all interfaces, port 8443
 ```
 
 **Why this is correct for servers:**
+
 - ✅ Allows local testing (`localhost` connections work)
 - ✅ Allows production deployment (external connections work)
 - ✅ Works in Kubernetes (pod-to-pod connections work)
@@ -175,18 +167,21 @@ server:
 **Client `server_url: "https://localhost:8443/time"`**
 
 The client uses a full URL specifying:
+
 1. **Protocol** - `https://` (TLS encrypted)
 2. **Hostname** - `localhost` (where to connect)
 3. **Port** - `8443` (which port)
 4. **Path** - `/time` (which endpoint to request)
 
 **Example:**
+
 ```yaml
 client:
   server_url: "https://localhost:8443/time"  # For local development
 ```
 
 In production/Kubernetes, override with environment variable:
+
 ```yaml
 # k8s deployment
 env:
@@ -194,7 +189,7 @@ env:
   value: "https://e5s-server:8443/time"  # Kubernetes service name
 ```
 
-**Visual Comparison:**
+**Comparison:**
 
 ```
 Local Development (same machine):
@@ -294,28 +289,12 @@ No. e5s sets `ReadHeaderTimeout: 10 * time.Second` by default, which protects ag
 
 ## Testing
 
-### Can I test e5s-based services without running SPIRE?
-
-Yes! Use the in-memory identity provider:
-
-```bash
-IDP_MODE=inmem go test ./...
-IDP_MODE=inmem go run ./cmd/server
-```
-
-This creates mock SPIFFE identities without requiring a SPIRE agent, perfect for:
-- Unit tests
-- Local development
-- CI/CD pipelines
-- Quick prototyping
-
 ### How do I test client and server interaction?
 
 See the integration test examples:
 
-1. **Unit tests** - Use `IDP_MODE=inmem` to test without SPIRE
-2. **Integration tests** - Run full SPIRE stack in Kubernetes
-3. **Local testing** - Use scripts in `examples/minikube-lowlevel/`
+1. **Integration tests** - Run full SPIRE stack in Kubernetes (see `docs/INTEGRATION_TESTING.md`)
+2. **Local testing** - Use scripts in `examples/minikube-lowlevel/`
 
 Example integration test setup:
 ```bash
@@ -567,20 +546,7 @@ Yes! See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines. Key points:
 
 ---
 
-## Additional Resources
-
-- [Quickstart Guide](./QUICKSTART_LIBRARY.md) - Get started in 5 minutes
-- [API Reference](./API.md) - Complete API documentation
-- [Comparison Guide](./comparison.md) - e5s vs go-spiffe SDK
-- [Integration Tests](./integration-tests.md) - Testing with SPIRE
-- [Examples](../examples/) - Working code examples
-- [SPIRE Documentation](https://spiffe.io/docs/latest/spire/) - Official SPIRE docs
-- [go-spiffe SDK](https://pkg.go.dev/github.com/spiffe/go-spiffe/v2) - Underlying SDK
-
----
-
 ## Still Have Questions?
 
 - Open a [GitHub Discussion](https://github.com/sufield/e5s/discussions)
 - File an [issue](https://github.com/sufield/e5s/issues) if you found a bug
-- Check the [examples directory](../examples/) for working code
