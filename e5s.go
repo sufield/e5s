@@ -46,6 +46,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/spiffe/go-spiffe/v2/workloadapi"
 	"github.com/sufield/e5s/internal/config"
 	"github.com/sufield/e5s/spiffehttp"
 	"github.com/sufield/e5s/spire"
@@ -63,6 +64,37 @@ func resolveConfigPath() (string, error) {
 		return path, nil
 	}
 	return "", fmt.Errorf("E5S_CONFIG environment variable not set; either set E5S_CONFIG or call Start()/Client() with an explicit config path")
+}
+
+// newSPIRESource initializes the SPIRE identity source and returns:
+//   - source: the underlying identity source
+//   - x509Source: the X.509 source used for TLS
+//   - shutdown: an idempotent function that closes the source
+func newSPIRESource(
+	ctx context.Context,
+	workloadSocket string,
+	initialFetchTimeout time.Duration,
+) (source *spire.IdentitySource, x509Source *workloadapi.X509Source, shutdown func() error, err error) {
+	src, err := spire.NewIdentitySource(ctx, spire.Config{
+		WorkloadSocket:      workloadSocket,
+		InitialFetchTimeout: initialFetchTimeout,
+	})
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	x509 := src.X509Source()
+
+	var once sync.Once
+	var shutdownErr error
+	shutdown = func() error {
+		once.Do(func() {
+			shutdownErr = src.Close()
+		})
+		return shutdownErr
+	}
+
+	return src, x509, shutdown, nil
 }
 
 // Serve starts the mTLS server with the given handler, handles signals, and performs graceful shutdown.
@@ -211,25 +243,19 @@ func Start(configPath string, handler http.Handler) (shutdown func() error, err 
 
 	ctx := context.Background()
 
-	// Connect to SPIRE Workload API with timeout for initial fetch
-	source, err := spire.NewIdentitySource(ctx, spire.Config{
-		WorkloadSocket:      cfg.SPIRE.WorkloadSocket,
-		InitialFetchTimeout: spireConfig.InitialFetchTimeout,
-	})
+	// Centralized SPIRE setup
+	_, x509Source, identityShutdown, err := newSPIRESource(
+		ctx,
+		cfg.SPIRE.WorkloadSocket,
+		spireConfig.InitialFetchTimeout,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SPIRE source: %w", err)
 	}
 
-	// Get SDK X509Source for TLS config
-	x509Source := source.X509Source()
-
 	// Build server TLS config with client verification
-	// Note: We pass the pre-validated strings to spiffehttp (which will parse them again).
-	// This is acceptable because spiffehttp is a lower-level library that users can call
-	// directly, so it must handle its own validation. The benefit of our validation is:
-	// 1. Input trimming for robustness
-	// 2. Early error detection with clear messages
-	// 3. Parsed values available if needed (currently unused but available via authz)
+	// Note: cfg.* fields are already validated in config.ValidateServer.
+	// spiffehttp still performs its own validation because it is a lower-level API.
 	tlsCfg, err := spiffehttp.NewServerTLSConfig(
 		ctx,
 		x509Source,
@@ -242,8 +268,8 @@ func Start(configPath string, handler http.Handler) (shutdown func() error, err 
 	// Silence unused variable warning
 	_ = authz
 	if err != nil {
-		if closeErr := source.Close(); closeErr != nil {
-			return nil, fmt.Errorf("failed to create server TLS config: %w (cleanup error: %v)", err, closeErr)
+		if shutdownErr := identityShutdown(); shutdownErr != nil {
+			return nil, fmt.Errorf("failed to create server TLS config: %w (cleanup error: %v)", err, shutdownErr)
 		}
 		return nil, fmt.Errorf("failed to create server TLS config: %w", err)
 	}
@@ -281,8 +307,8 @@ func Start(configPath string, handler http.Handler) (shutdown func() error, err 
 	// This prevents returning success when bind fails immediately
 	select {
 	case err := <-errCh:
-		if closeErr := source.Close(); closeErr != nil {
-			return nil, fmt.Errorf("server startup failed: %w (cleanup error: %v)", err, closeErr)
+		if shutdownErr := identityShutdown(); shutdownErr != nil {
+			return nil, fmt.Errorf("server startup failed: %w (cleanup error: %v)", err, shutdownErr)
 		}
 		return nil, fmt.Errorf("server startup failed: %w", err)
 	case <-time.After(100 * time.Millisecond):
@@ -304,7 +330,7 @@ func Start(configPath string, handler http.Handler) (shutdown func() error, err 
 			err1 := srv.Shutdown(ctx)
 
 			// Release SPIRE resources
-			err2 := source.Close()
+			err2 := identityShutdown()
 
 			// Return first error encountered
 			if err1 != nil {
@@ -373,7 +399,7 @@ func PeerInfo(r *http.Request) (spiffehttp.Peer, bool) {
 //	    log.Printf("Request from %s", id)
 //	}
 func PeerID(r *http.Request) (string, bool) {
-	peer, ok := spiffehttp.PeerFromContext(r.Context())
+	peer, ok := PeerInfo(r)
 	if !ok {
 		return "", false
 	}
@@ -438,25 +464,19 @@ func Client(configPath string) (*http.Client, func() error, error) {
 
 	ctx := context.Background()
 
-	// Connect to SPIRE Workload API with timeout for initial fetch
-	source, err := spire.NewIdentitySource(ctx, spire.Config{
-		WorkloadSocket:      cfg.SPIRE.WorkloadSocket,
-		InitialFetchTimeout: spireConfig.InitialFetchTimeout,
-	})
+	// Centralized SPIRE setup
+	_, x509Source, identityShutdown, err := newSPIRESource(
+		ctx,
+		cfg.SPIRE.WorkloadSocket,
+		spireConfig.InitialFetchTimeout,
+	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create SPIRE source: %w", err)
 	}
 
-	// Get SDK X509Source for TLS config
-	x509Source := source.X509Source()
-
 	// Build client TLS config with server verification
-	// Note: We pass the pre-validated strings to spiffehttp (which will parse them again).
-	// This is acceptable because spiffehttp is a lower-level library that users can call
-	// directly, so it must handle its own validation. The benefit of our validation is:
-	// 1. Input trimming for robustness
-	// 2. Early error detection with clear messages
-	// 3. Parsed values available if needed (currently unused but available via authz)
+	// Note: cfg.* fields are already validated in config.ValidateClient.
+	// spiffehttp still performs its own validation because it is a lower-level API.
 	tlsCfg, err := spiffehttp.NewClientTLSConfig(
 		ctx,
 		x509Source,
@@ -469,8 +489,8 @@ func Client(configPath string) (*http.Client, func() error, error) {
 	// Silence unused variable warning
 	_ = authz
 	if err != nil {
-		if closeErr := source.Close(); closeErr != nil {
-			return nil, nil, fmt.Errorf("failed to create client TLS config: %w (cleanup error: %v)", err, closeErr)
+		if shutdownErr := identityShutdown(); shutdownErr != nil {
+			return nil, nil, fmt.Errorf("failed to create client TLS config: %w (cleanup error: %v)", err, shutdownErr)
 		}
 		return nil, nil, fmt.Errorf("failed to create client TLS config: %w", err)
 	}
@@ -482,19 +502,8 @@ func Client(configPath string) (*http.Client, func() error, error) {
 		},
 	}
 
-	// Ensure shutdown is only executed once
-	var shutdownOnce sync.Once
-	var shutdownErr error
-
-	// Return client and shutdown function
-	shutdownFunc := func() error {
-		shutdownOnce.Do(func() {
-			shutdownErr = source.Close()
-		})
-		return shutdownErr
-	}
-
-	return httpClient, shutdownFunc, nil
+	// identityShutdown is already idempotent, no need for additional sync.Once
+	return httpClient, identityShutdown, nil
 }
 
 // bodyCloser wraps an io.ReadCloser to call an additional cleanup function on Close.
