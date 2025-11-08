@@ -68,11 +68,11 @@ Create a test application that uses your local e5s code:
 cd /path/to/e5s  # Where your e5s code is located
 
 # Create a test directory
-mkdir -p test-demo
-cd test-demo
+mkdir -p demo
+cd demo
 
 # Initialize Go module
-go mod init test-demo
+go mod init demo
 ```
 
 ---
@@ -81,15 +81,21 @@ go mod init test-demo
 
 Use the Go `replace` directive to point to your local e5s code instead of the released version:
 
+Add replace directive to point to local e5s code. The '..' means parent directory (where e5s source code is)
+
 ```bash
-# Add replace directive to point to local e5s code
-# The '..' means parent directory (where e5s source code is)
 go mod edit -replace github.com/sufield/e5s=..
+```
 
-# Add chi router dependency
+Add chi router dependency
+
+```bash
 go get github.com/go-chi/chi/v5
+```
 
-# Add e5s to require section (will use local code due to replace directive)
+Add e5s to require section (will use local code due to replace directive)
+
+```bash
 go get github.com/sufield/e5s
 ```
 
@@ -114,7 +120,6 @@ require (
 replace github.com/sufield/e5s => ..
 ```
 
-**What this does**:
 - The `replace` directive tells Go to use the parent directory instead of downloading from GitHub
 - Any `import "github.com/sufield/e5s"` in your code will use your local e5s code
 - You can modify e5s code and immediately see changes in your test application
@@ -261,15 +266,13 @@ func loadAppConfig(path string) (*AppConfig, error) {
 
 **Real-World Approach:**
 
-This demonstrates the recommended approach for production applications:
+This approach is for production applications:
 
-1. **Application Config** (`client-config.yaml`) - Your app manages its own configuration including server URLs, timeouts, etc.
+1. **Application Config** (`client-config.yaml`) - Your app manages its own application-specific configuration including server URLs, timeouts, etc.
 2. **e5s Config** (`e5s.yaml`) - SPIRE/mTLS configuration managed by the e5s library
 3. **Environment Overrides** - Allow environment variables to override config values for deployment flexibility
 
-This separation of concerns is standard practice:
-- Your application code handles business logic and application-specific config
-- The e5s library handles SPIRE integration and mTLS complexity
+This separation of concerns is standard practice.
 
 ---
 
@@ -277,7 +280,7 @@ This separation of concerns is standard practice:
 
 ### Create Application Configuration
 
-Create `client-config.yaml` with your application-specific settings:
+Create `client-config.yaml`:
 
 ```bash
 cat > client-config.yaml <<'EOF'
@@ -291,7 +294,8 @@ This file contains settings specific to your application (like server URLs, time
 
 ### Create e5s Library Configuration
 
-> **📝 Note about SPIFFE IDs:** The configuration below includes hardcoded SPIFFE IDs for simplicity in this initial setup. In production, you should **discover** SPIFFE IDs using the e5s CLI tool to avoid typos:
+The configuration below includes hardcoded SPIFFE IDs for simplicity in this initial setup. In production, you should discover SPIFFE IDs using the e5s CLI tool to avoid typos:
+
 >
 > ```bash
 > # Build the CLI tool
@@ -306,9 +310,9 @@ This file contains settings specific to your application (like server URLs, time
 > # Output: spiffe://example.org/ns/default/sa/default
 > ```
 >
-> See **Step 11: Discovering SPIFFE IDs** for complete instructions on using the CLI tool.
+> See **Step 11: Discovering SPIFFE IDs** for instructions on using the CLI tool.
 
-Create `e5s.yaml` with SPIRE/mTLS settings:
+Create `e5s.yaml`:
 
 ```bash
 cat > e5s.yaml <<'EOF'
@@ -390,16 +394,7 @@ Every time e5s library code is modified, rebuild these binaries to see the chang
 
 **Why Kubernetes?** The SPIRE Workload API socket is only accessible inside Kubernetes pods, not from your local machine. You must deploy your test applications to Kubernetes.
 
-> **💡 Quick Reference - Finding SPIFFE IDs:**
->
-> Before configuring `allowed_client_spiffe_id` below, you can discover the actual SPIFFE ID:
->
-> ```bash
-> # After deploying the client (see Step 8), discover its SPIFFE ID:
-> ./bin/e5s discover pod e5s-client
-> ```
->
-> For now, we'll use the default service account's SPIFFE ID. See **Step 11** for complete SPIFFE ID discovery instructions.
+For now, we'll use the default service account's SPIFFE ID. See **Step 11** for SPIFFE ID discovery instructions.
 
 Create ConfigMaps for both application and e5s configuration:
 

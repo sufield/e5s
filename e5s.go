@@ -1,8 +1,10 @@
 // Package e5s provides a simple API for building production-grade mTLS services
 // with SPIFFE identity verification using SPIRE.
 //
-// This package wraps the lower-level pkg/identitytls and pkg/spire packages,
+// This package wraps the lower-level spiffehttp and spire packages,
 // providing a config-file-driven approach that requires minimal code.
+//
+// See docs/ARCHITECTURE.md for layering details.
 //
 // Quick Start:
 //

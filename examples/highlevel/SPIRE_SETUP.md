@@ -103,30 +103,43 @@ The modern SPIRE Helm chart installs both components together.
 
 If you've previously attempted to install SPIRE, clean up first:
 
-```bash
-# Clean up any previous installations (safe to run even if nothing exists)
+Clean up any previous installations (safe to run even if nothing exists)
+
+```bash 
 helm uninstall spire -n spire 2>/dev/null || true
 helm uninstall spire-server -n spire 2>/dev/null || true
 helm uninstall spire-agent -n spire 2>/dev/null || true
 helm uninstall spire-crds -n spire 2>/dev/null || true
+```
 
-# Delete namespace-scoped resources
+Delete namespace-scoped resources
+
+```bash
 kubectl delete namespace spire 2>/dev/null || true
+```
 
-# Delete cluster-scoped resources (these can cause conflicts)
+Delete cluster-scoped resources (these can cause conflicts)
+
+```bash
 kubectl delete clusterrole spire-agent spire-server spire-controller-manager 2>/dev/null || true
 kubectl delete clusterrolebinding spire-agent spire-server spire-controller-manager 2>/dev/null || true
 kubectl delete csidriver csi.spiffe.io 2>/dev/null || true
 kubectl delete validatingwebhookconfiguration spire-server 2>/dev/null || true
 kubectl delete mutatingwebhookconfiguration spire-controller-manager 2>/dev/null || true
+```
 
-# Delete CRDs (Custom Resource Definitions)
+Delete CRDs (Custom Resource Definitions)
+
+```bash
 kubectl delete crd clusterspiffeids.spire.spiffe.io 2>/dev/null || true
 kubectl delete crd clusterstaticentries.spire.spiffe.io 2>/dev/null || true
 kubectl delete crd clusterfederatedtrustdomains.spire.spiffe.io 2>/dev/null || true
 kubectl delete crd controllermanagerconfigs.spire.spiffe.io 2>/dev/null || true
+```
 
-# Wait for cleanup to complete
+Wait for cleanup to complete
+
+```bash
 sleep 5
 ```
 
