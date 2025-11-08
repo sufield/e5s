@@ -12,8 +12,8 @@ import (
 
 func versionCommand(args []string) error {
 	fs := flag.NewFlagSet("version", flag.ExitOnError)
-	mode := fs.String("mode", "runtime", "Mode: runtime, dev, prod")
 	verbose := fs.Bool("verbose", false, "Show detailed version information")
+	format := fs.String("format", "table", "Output format: table, plain")
 
 	fs.Usage = func() {
 		fmt.Println(`Show version information for e5s and dependencies
@@ -22,59 +22,35 @@ USAGE:
     e5s version [flags]
 
 FLAGS:
-    --mode string      Environment mode: runtime, dev, prod (default "runtime")
+    --format string    Output format: table, plain (default "table")
     --verbose          Show detailed version information including TLS settings
 
-MODES:
-    runtime    Show currently installed versions (default)
-    dev        Show required versions for development
-    prod       Show required versions for production deployment
+FORMATS:
+    table      Human-readable tables with borders (default)
+    plain      Plain text output for piping to other commands
 
 EXAMPLES:
     # Show e5s version
     e5s version
 
-    # Show all runtime versions
-    e5s version --mode runtime
-
-    # Show development requirements
-    e5s version --mode dev
-
-    # Show production requirements
-    e5s version --mode prod
-
     # Show detailed information including TLS config
-    e5s version --verbose`)
+    e5s version --verbose
+
+    # Output in plain format for piping
+    e5s version --format plain
+
+    # Extract specific version
+    e5s version --format plain | grep go=`)
 	}
 
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 
-	switch *mode {
-	case "runtime":
-		return showRuntimeVersions(*verbose)
-	case "dev":
-		return showDevRequirements(*verbose)
-	case "prod":
-		return showProdRequirements(*verbose)
-	default:
-		return fmt.Errorf("unknown mode: %s (use 'runtime', 'dev', or 'prod')", *mode)
-	}
+	return showRuntimeVersions(*verbose, *format)
 }
 
-func showRuntimeVersions(verbose bool) error {
-	fmt.Printf("e5s CLI %s (commit: %s, built: %s)\n\n", version, commit, date)
-
-	// TLS Configuration
-	fmt.Println("TLS Configuration:")
-	printTLSConfig()
-	fmt.Println()
-
-	// Detect and show runtime versions
-	fmt.Println("Runtime Environment:")
-	table := NewTableWriter([]string{"Component", "Version", "Status"})
-
+func showRuntimeVersions(verbose bool, format string) error {
 	tools := []struct {
 		name     string
 		command  []string
@@ -87,8 +63,15 @@ func showRuntimeVersions(verbose bool) error {
 		{"Minikube", []string{"minikube", "version", "--short"}, false},
 	}
 
-	for _, tool := range tools {
-		version, err := getToolVersion(tool.command)
+	// Collect tool versions
+	toolVersions := make([]struct {
+		name    string
+		version string
+		status  string
+	}, len(tools))
+
+	for i, tool := range tools {
+		ver, err := getToolVersion(tool.command)
 		status := "✓"
 		if err != nil {
 			if tool.required {
@@ -96,74 +79,43 @@ func showRuntimeVersions(verbose bool) error {
 			} else {
 				status = "○ Optional"
 			}
-			version = "not found"
+			ver = "not found"
 		}
-		table.AddRow([]string{tool.name, version, status})
+		toolVersions[i] = struct {
+			name    string
+			version string
+			status  string
+		}{tool.name, ver, status}
 	}
 
+	// Output based on format
+	if format == "plain" {
+		fmt.Printf("e5s_version=%s\n", version)
+		fmt.Printf("e5s_commit=%s\n", commit)
+		fmt.Printf("e5s_built=%s\n", date)
+		for _, tv := range toolVersions {
+			fmt.Printf("%s=%s\n", strings.ToLower(tv.name), tv.version)
+		}
+		return nil
+	}
+
+	// Table format (default)
+	fmt.Printf("e5s CLI %s (commit: %s, built: %s)\n\n", version, commit, date)
+
+	fmt.Println("TLS Configuration:")
+	printTLSConfig()
+	fmt.Println()
+
+	fmt.Println("Runtime Environment:")
+	table := NewTableWriter([]string{"Component", "Version", "Status"})
+	for _, tv := range toolVersions {
+		table.AddRow([]string{tv.name, tv.version, tv.status})
+	}
 	table.Print()
 
 	if verbose {
 		fmt.Println("\nDetailed Information:")
 		showDetailedInfo()
-	}
-
-	return nil
-}
-
-func showDevRequirements(verbose bool) error {
-	fmt.Printf("e5s Development Requirements\n\n")
-
-	fmt.Println("Required Tools:")
-	table := NewTableWriter([]string{"Tool", "Minimum Version", "Purpose"})
-	table.AddRow([]string{"Go", "1.21+", "Language runtime"})
-	table.AddRow([]string{"Docker", "20.10+", "Container images"})
-	table.AddRow([]string{"Minikube", "1.30+", "Local Kubernetes"})
-	table.AddRow([]string{"kubectl", "1.28+", "Kubernetes CLI"})
-	table.AddRow([]string{"Helm", "3.12+", "SPIRE installation"})
-	table.Print()
-
-	fmt.Println("\nTLS Configuration:")
-	printTLSConfig()
-
-	if verbose {
-		fmt.Println("\nDevelopment Workflow:")
-		fmt.Println("  1. Install SPIRE via Helmfile (see SPIRE_SETUP.md)")
-		fmt.Println("  2. Build test applications with local e5s code")
-		fmt.Println("  3. Test locally with go run or build binaries")
-		fmt.Println("  4. Deploy to Minikube for integration testing")
-	}
-
-	return nil
-}
-
-func showProdRequirements(verbose bool) error {
-	fmt.Printf("e5s Production Requirements\n\n")
-
-	fmt.Println("Required Components:")
-	table := NewTableWriter([]string{"Component", "Minimum Version", "Purpose"})
-	table.AddRow([]string{"Go", "1.21+", "Application runtime"})
-	table.AddRow([]string{"SPIRE Server", "1.8+", "Identity provider"})
-	table.AddRow([]string{"SPIRE Agent", "1.8+", "Workload API"})
-	table.AddRow([]string{"Kubernetes", "1.28+", "Container orchestration"})
-	table.AddRow([]string{"SPIRE CSI Driver", "0.2.6+", "Automatic registration"})
-	table.Print()
-
-	fmt.Println("\nTLS Configuration:")
-	printTLSConfig()
-
-	if verbose {
-		fmt.Println("\nProduction Deployment:")
-		fmt.Println("  1. Install SPIRE server in Kubernetes cluster")
-		fmt.Println("  2. Install SPIRE CSI driver for automatic workload registration")
-		fmt.Println("  3. Deploy e5s applications with proper ConfigMaps")
-		fmt.Println("  4. Configure allowed_client_spiffe_id for zero-trust")
-		fmt.Println("  5. Monitor SPIRE logs and certificate rotation")
-		fmt.Println("\nSecurity Best Practices:")
-		fmt.Println("  • Use specific SPIFFE IDs (not trust domain matching)")
-		fmt.Println("  • Validate configurations with: e5s validate config.yaml")
-		fmt.Println("  • Monitor certificate expiration and rotation")
-		fmt.Println("  • Use network policies for defense in depth")
 	}
 
 	return nil
