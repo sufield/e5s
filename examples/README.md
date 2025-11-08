@@ -12,7 +12,7 @@ Choose the example that matches your use case:
 
 **For**: Application developers building mTLS services
 **API**: High-level, production-ready API
-**Complexity**: Simple - just `e5s.Run()` and `e5s.Get()`
+**Complexity**: Simple - just `e5s.Start()` and `e5s.Client()`
 
 ### [middleware/](middleware/)
 

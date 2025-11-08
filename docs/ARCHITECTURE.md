@@ -124,7 +124,6 @@ This layer is maintained by the SPIFFE community and used as-is.
 - `e5s.Start()` - Start mTLS server (background goroutine)
 - `e5s.StartSingleThread()` - Start mTLS server (foreground, blocking)
 - `e5s.Client()` - Create mTLS HTTP client
-- `e5s.Serve()` - Serve mTLS with custom listener
 - `e5s.PeerInfo()` - Extract full peer from request
 - `e5s.PeerID()` - Extract SPIFFE ID from request
 

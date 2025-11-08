@@ -409,11 +409,13 @@ Alternatively, run SPIRE Agent locally:
 
 **Solution**: Reuse X509Source across requests:
 
-**Wrong (creates new source per request):**
+**Wrong (creates new client per request):**
 ```go
 // DON'T DO THIS
 for i := 0; i < 1000; i++ {
-    resp, err := e5s.Get(url)  // Creates new source each time!
+    client, cleanup, _ := e5s.Client("e5s.yaml")  // Creates new source each time!
+    resp, _ := client.Get(url)
+    cleanup()
     // ...
 }
 ```
@@ -421,11 +423,15 @@ for i := 0; i < 1000; i++ {
 **Right (reuse client):**
 ```go
 // DO THIS
-client, shutdown, err := e5s.Client()
+client, cleanup, err := e5s.Client("e5s.yaml")
 if err != nil {
     log.Fatal(err)
 }
-defer shutdown()
+defer func() {
+    if err := cleanup(); err != nil {
+        log.Printf("Cleanup error: %v", err)
+    }
+}()
 
 for i := 0; i < 1000; i++ {
     resp, err := client.Get(url)  // Reuses same source
@@ -485,7 +491,7 @@ If you're still stuck:
 
 ## Prevention Tips
 
-1. **Start simple**: Use the high-level API (`e5s.Get()`, `e5s.Serve()`) until you need more control
+1. **Start simple**: Use the high-level API (`e5s.Start()`, `e5s.Client()`) for most use cases
 2. **Test locally first**: Use the tutorial setup before moving to complex environments
 3. **Verify SPIRE first**: Ensure SPIRE is working before debugging e5s
 4. **Use trust domains initially**: Switch to specific SPIFFE IDs only after everything works

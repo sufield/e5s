@@ -78,13 +78,11 @@ Types:
 
 ### Prerequisites
 
-**Core Development:**
-- Go 1.25.3 or later
-- golangci-lint
-- gosec
-- govulncheck
+**Development:**
 
-**Integration Testing (optional):**
+See the COMPATIBILITY.md
+
+**Integration Testing:**
 
 See [docs/INTEGRATION_TESTING.md](docs/INTEGRATION_TESTING.md) for detailed setup instructions and version requirements.
 
@@ -228,7 +226,7 @@ func ImportantFeature() {
 - `cmd/example-server/main.go`:
   - `server-setup` - Basic server configuration (lines 38-45)
   - `authenticated-endpoint` - Handler with peer identity extraction (lines 55-75)
-  - `server-start` - Starting the server with e5s.Serve() (lines 77-82)
+  - `server-start` - Starting the server with e5s.Start() (lines 77-82)
 
 - `cmd/example-client/main.go`:
   - `client-config` - Client configuration setup (lines 70-73)
@@ -352,10 +350,10 @@ func Example_authorization()     // Package-level example demonstrating authoriz
 Most Godoc examples in this project **compile but don't execute** because they require SPIRE infrastructure:
 
 ```go
-// ExampleServe demonstrates starting an mTLS server.
+// ExampleStart demonstrates starting an mTLS server.
 //
 // This example requires a running SPIRE agent and e5s.yaml configuration file.
-func ExampleServe() {
+func ExampleStart() {
     http.HandleFunc("/api", func(w http.ResponseWriter, r *http.Request) {
         id, ok := e5s.PeerID(r)
         if !ok {
@@ -365,9 +363,16 @@ func ExampleServe() {
         fmt.Fprintf(w, "Hello, %s!\n", id)
     })
 
-    if err := e5s.Serve(http.DefaultServeMux); err != nil {
+    shutdown, err := e5s.Start("e5s.yaml", http.DefaultServeMux)
+    if err != nil {
         log.Fatal(err)
     }
+    defer shutdown()
+
+    // Wait for interrupt signal
+    sigChan := make(chan os.Signal, 1)
+    signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+    <-sigChan
     // No "// Output:" comment, so this compiles but doesn't execute
 }
 ```

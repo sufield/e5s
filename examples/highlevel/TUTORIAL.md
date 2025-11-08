@@ -14,20 +14,17 @@
 
 ## Prerequisites
 
-Before starting this tutorial, you must have:
-
-1. **SPIRE Infrastructure Running**: Follow [SPIRE_SETUP.md](SPIRE_SETUP.md) to set up SPIRE in Minikube (~15 minutes)
+1. **SPIRE Infrastructure Running**: [SPIRE_SETUP.md](SPIRE_SETUP.md) in Minikube is complete. (~15 minutes)
    - Minikube cluster running
    - SPIRE Server and Agent installed
    - Server and client workloads registered
 
-2. **Go** - Programming language (1.25 or higher)
+2. **Go**
    ```bash
    go version
-   # Should output: go version go1.25.0 or higher
    ```
 
-**If you haven't set up SPIRE yet**, stop here and follow [SPIRE_SETUP.md](SPIRE_SETUP.md) first. The examples in this tutorial require a running SPIRE infrastructure to obtain certificates.
+Should output: go version go1.25.0 or higher
 
 ---
 
@@ -45,11 +42,11 @@ Create a new directory for your application and install dependencies:
 
 ```bash
 # Create a directory for your application
-mkdir -p ~/mtls-demo
-cd ~/mtls-demo
+mkdir -p ~/demo
+cd ~/demo
 
 # Initialize Go module
-go mod init mtls-demo
+go mod init demo
 
 # Install e5s library
 go get github.com/sufield/e5s@latest
@@ -60,7 +57,7 @@ go get github.com/go-chi/chi/v5
 
 Your `go.mod` should look like:
 ```
-module mtls-demo
+module demo
 
 go 1.25
 
@@ -79,7 +76,11 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/sufield/e5s"
@@ -106,25 +107,36 @@ func main() {
 		fmt.Fprintf(w, "Hello, %s!\n", id)
 	})
 
-	// Serve handles config, SPIRE connection, signal handling, and graceful shutdown
-	if err := e5s.Serve(r); err != nil {
+	// Start server with automatic shutdown function
+	shutdown, err := e5s.Start("e5s.yaml", r)
+	if err != nil {
 		log.Fatal(err)
 	}
+	defer func() {
+		if err := shutdown(); err != nil {
+			log.Printf("Shutdown error: %v", err)
+		}
+	}()
+
+	// Wait for interrupt signal
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	<-sigChan
 }
 ```
 
 **What this code does:**
 - Creates a chi router with two endpoints: `/healthz` and `/hello`
 - The `/hello` endpoint extracts the client's SPIFFE ID using `e5s.PeerID()`
-- Calls `e5s.Serve(r)` which handles everything:
-  - Config file discovery (e5s.yaml or E5S_CONFIG)
-  - SPIRE connection and mTLS setup
-  - Signal handling (Ctrl+C)
-  - Graceful shutdown
+- Calls `e5s.Start("e5s.yaml", r)` which:
+  - Loads config from e5s.yaml
+  - Connects to SPIRE and sets up mTLS
+  - Returns a shutdown function for cleanup
+- Sets up signal handling to gracefully shutdown on Ctrl+C
 
-**That's it!** Zero boilerplate - just define your routes and call `e5s.Serve()`.
+Just define your routes, call `e5s.Start()`, and handle shutdown.
 
-**For more control** over signal handling, config paths, or logging, see [ADVANCED.md](ADVANCED.md).
+**For single-threaded debugging**, use `e5s.StartSingleThread()` which blocks instead of running in background. See [ADVANCED.md](ADVANCED.md).
 
 ### Create Client Application
 
@@ -142,12 +154,23 @@ import (
 )
 
 func main() {
-	// Perform mTLS GET request (handles config, client creation, and cleanup)
-	resp, err := e5s.Get("https://localhost:8443/hello")
+	// Create mTLS client
+	client, cleanup, err := e5s.Client("e5s.yaml")
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer resp.Body.Close()  // This also triggers cleanup automatically
+	defer func() {
+		if err := cleanup(); err != nil {
+			log.Printf("Cleanup error: %v", err)
+		}
+	}()
+
+	// Perform mTLS GET request
+	resp, err := client.Get("https://localhost:8443/hello")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer resp.Body.Close()
 
 	// Read and print response
 	body, _ := io.ReadAll(resp.Body)
@@ -156,16 +179,16 @@ func main() {
 ```
 
 **What this code does:**
-- Calls `e5s.Get()` which handles everything:
-  - Config file discovery (e5s.yaml or E5S_CONFIG)
-  - mTLS client creation
-  - Making the request
-  - Automatic cleanup when body is closed
-- Prints the response from the server
+- Calls `e5s.Client("e5s.yaml")` which:
+  - Loads config from e5s.yaml
+  - Creates an mTLS-enabled HTTP client
+  - Returns the client and a cleanup function
+- Uses the standard Go `http.Client` interface to make requests
+- Properly cleans up resources with the cleanup function
 
-**That's it!** Zero boilerplate - just call `e5s.Get()` and read the response.
+Create a client once, use it for multiple requests.
 
-**For advanced patterns** like multiple requests with the same client, explicit config paths, context timeouts, or custom headers, see [ADVANCED.md](ADVANCED.md).
+**For advanced patterns** like context timeouts, custom headers, or retry logic, see [ADVANCED.md](ADVANCED.md).
 
 ### Create Configuration File
 
@@ -292,7 +315,7 @@ spec:
 
 ## Step 3: Run Locally (Easier for Development)
 
-Instead of deploying to Kubernetes initially, let's run locally and connect to SPIRE in Minikube:
+Let's run locally and connect to SPIRE in Minikube:
 
 ### Port Forward SPIRE Agent Socket
 
@@ -369,7 +392,7 @@ SERVER_ADDR=https://localhost:8443 ./bin/client
 
 ## Step 5: Verify mTLS is Working
 
-Now let's verify that our mTLS setup is working correctly by testing both success and failure cases.
+Now let's verify mTLS setup by testing both success and failure cases.
 
 ---
 
@@ -403,7 +426,7 @@ This proves that:
 
 **Test: Unregistered Client Connection Blocked**
 
-This is the most important security test - it proves that SPIRE enforces identity-based access control. Let's try to connect with a client that is NOT registered with SPIRE.
+This proves that SPIRE enforces identity-based access control. Let's try to connect with a client that is NOT registered with SPIRE.
 
 **Create an unregistered client:**
 
@@ -423,9 +446,15 @@ import (
 func main() {
 	log.Println("Attempting to connect as unregistered workload...")
 
-	resp, err := e5s.Get("https://localhost:8443/hello")
+	client, cleanup, err := e5s.Client("e5s.yaml")
 	if err != nil {
 		log.Fatalf("Connection failed (expected): %v", err)
+	}
+	defer cleanup()
+
+	resp, err := client.Get("https://localhost:8443/hello")
+	if err != nil {
+		log.Fatalf("Request failed (expected): %v", err)
 	}
 	defer resp.Body.Close()
 
@@ -615,4 +644,4 @@ The e5s library handles all the complexity:
 - mTLS handshake setup
 - SPIFFE ID verification
 
-You just write `e5s.Serve()`, `e5s.Get()`, and `e5s.PeerID()` - the library does the rest!
+You just write `e5s.Start()`, `e5s.Client()`, and `e5s.PeerID()` - the library does the rest!

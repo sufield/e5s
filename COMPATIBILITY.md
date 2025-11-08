@@ -51,7 +51,7 @@ This project is tested against the following tool and platform versions.
 
 ---
 
-## Compatibility Notes
+## Notes
 
 ### Go Version
 

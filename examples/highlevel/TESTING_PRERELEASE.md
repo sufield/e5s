@@ -27,27 +27,7 @@ When you:
 
   The setup uses Helm to install SPIRE infrastructure. This guide deploys test applications using kubectl directly without using Helm.
 
-2. **Required Tools**:
-   - **Docker** - For building container images
-   - **Minikube** - For Kubernetes cluster (installed via SPIRE_SETUP.md)
-   - **kubectl** - For deploying applications (installed via SPIRE_SETUP.md)
-   - **Helm** - For SPIRE installation only (installed via SPIRE_SETUP.md)
-
-  Verify tools are installed
-
-   ```bash 
-   docker version
-   minikube version
-   kubectl version --client
-   helm version
-   ```
-
-3. **Go** - Programming language (1.25.3 or higher)
-   ```bash
-   go version
-   ```
-
-4. **Local e5s Code**: You should be in the e5s project directory
+2. **Local e5s Code**: You should be in the e5s project directory
 
    Verify you're in the right place
 
@@ -56,6 +36,23 @@ When you:
    ```
 
    Should show the e5s library source code with public packages
+
+3. **Build e5s CLI Tool**: Build the CLI tool for checking versions and managing configurations
+
+   ```bash
+   go build -o bin/e5s ./cmd/e5s
+   ```
+
+4. **Verify Required Tools**: Use the e5s CLI to check installed versions
+
+   ```bash
+   ./bin/e5s version
+   ```
+
+   Or output in plain format for scripting:
+   ```bash
+   ./bin/e5s version --format plain
+   ```
 
 ---
 
@@ -139,6 +136,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -177,10 +176,21 @@ func main() {
 		fmt.Fprintf(w, "%s\n", response)
 	})
 
-	// Serve handles SPIRE connection, mTLS setup, signal handling, and graceful shutdown
-	if err := e5s.Serve(r); err != nil {
+	// Start server in background
+	shutdown, err := e5s.Start("e5s.yaml", r)
+	if err != nil {
 		log.Fatal(err)
 	}
+	defer func() {
+		if err := shutdown(); err != nil {
+			log.Printf("Shutdown error: %v", err)
+		}
+	}()
+
+	// Wait for interrupt signal
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	<-sigChan
 }
 ```
 
@@ -230,12 +240,19 @@ func main() {
 		log.Fatalf("❌ server_url not set in config and SERVER_URL environment variable not set")
 	}
 
-	// Set E5S_CONFIG for the library to use
-	os.Setenv("E5S_CONFIG", "e5s.yaml")
+	// Create mTLS client
+	client, cleanup, err := e5s.Client("e5s.yaml")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func() {
+		if err := cleanup(); err != nil {
+			log.Printf("Cleanup error: %v", err)
+		}
+	}()
 
-	// Perform mTLS GET using high-level API
-	// e5s.Get() handles client creation, SPIRE connection, and cleanup
-	resp, err := e5s.Get(serverURL)
+	// Perform mTLS GET request
+	resp, err := client.Get(serverURL)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -73,17 +73,8 @@ The e5s library provides two levels of API:
 
 #### Client Functions
 
-- **`e5s.Get(url string) (*http.Response, error)`**
-  Convenience function for mTLS GET requests
-
-- **`e5s.Post(url, contentType string, body io.Reader) (*http.Response, error)`**
-  Convenience function for mTLS POST requests
-
 - **`e5s.Client(configPath string) (*http.Client, func() error, error)`**
   Create an HTTP client configured for mTLS with SPIRE
-
-- **`e5s.NewClient() (*http.Client, func() error, error)`**
-  Create an HTTP client using environment variables
 
 **Example:** See [QUICKSTART_LIBRARY.md](QUICKSTART_LIBRARY.md)
 
@@ -246,22 +237,6 @@ defer resp.Body.Close()
 
 body, _ := io.ReadAll(resp.Body)
 fmt.Println(string(body))
-```
-
-### 4. Convenience Client Functions
-
-For simple requests without managing client lifecycle:
-
-```go
-// GET request
-resp, err := e5s.Get("https://secure-service:8443/data")
-
-// POST request
-resp, err := e5s.Post(
-    "https://secure-service:8443/submit",
-    "application/json",
-    strings.NewReader(`{"key":"value"}`),
-)
 ```
 
 ## Error Handling

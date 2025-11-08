@@ -3,7 +3,7 @@
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/11425/badge)](https://www.bestpractices.dev/projects/11425)
 [![Go Report Card](https://goreportcard.com/badge/github.com/sufield/e5s)](https://goreportcard.com/report/github.com/sufield/e5s)
 
-A lightweight Go library for building mutual TLS services with SPIFFE identity verification and automatic certificate rotation based on go-spiffe SDK.
+A Go library for building mutual TLS services with SPIFFE identity verification and automatic certificate rotation based on go-spiffe SDK.
 
 ## What Problem Does This Solve?
 
@@ -138,12 +138,23 @@ import (
 )
 
 func main() {
-    // Perform mTLS GET request - handles everything automatically
-    resp, err := e5s.Get("https://localhost:8443/hello")
+    // Create mTLS HTTP client
+    client, cleanup, err := e5s.Client("e5s.yaml")
     if err != nil {
         log.Fatal(err)
     }
-    defer resp.Body.Close()  // Also triggers cleanup
+    defer func() {
+        if err := cleanup(); err != nil {
+            log.Printf("Cleanup error: %v", err)
+        }
+    }()
+
+    // Perform mTLS GET request
+    resp, err := client.Get("https://localhost:8443/hello")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer resp.Body.Close()
 
     body, _ := io.ReadAll(resp.Body)
     fmt.Println(string(body))
@@ -224,7 +235,7 @@ In your application, create separate config files (`e5s.dev.yaml`, `e5s.staging.
 
 Direct control over TLS configuration for custom scenarios.
 
-**Example: mTLS Server (Low-Level)**
+**Example: mTLS Server**
 
 ```go
 package main
@@ -308,7 +319,7 @@ func main() {
 }
 ```
 
-**Example: mTLS Client (Low-Level)**
+**Example: mTLS Client**
 
 ```go
 package main
@@ -422,11 +433,9 @@ The examples are separate modules (each has its own `go.mod`) so you can vendor/
 - **[Tutorial](examples/highlevel/TUTORIAL.md)** - Build your first mTLS app (start here!)
 - **[Quick Start: Testing](examples/highlevel/QUICK_START_PRERELEASE.md)** - ⚡ For library developers (3 commands)
 - **[Examples](examples/)** - High-level, middleware, and infrastructure examples
-- **[API Docs](docs/QUICKSTART_LIBRARY.md)** - Low-level API reference
+- **[API Docs](docs/API.md)** - Complete API reference
 
 ## Development
-
-### Quick Start
 
 ```bash
 # Run all CI checks locally before pushing
@@ -498,24 +507,3 @@ make sec-all  # Run all security checks
 ## License
 
 MIT License - See [LICENSE](LICENSE) file for details.
-
-## Contributing
-
-Contributions welcome! Please ensure all CI checks pass locally before submitting:
-
-```bash
-# Run all checks (recommended before every commit)
-make ci
-
-# This runs:
-#   - go mod tidy & verify
-#   - golangci-lint
-#   - go vet
-#   - go test -race
-```
-
-Or run checks individually:
-- Tests pass: `make test-race`
-- Linting passes: `make lint`
-- Code is formatted: `make fmt`
-- Security checks pass: `make sec-all`

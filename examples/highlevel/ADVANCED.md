@@ -19,125 +19,114 @@ This covers advanced examples and configurations for production use of the e5s l
 
 ## Levels of Control
 
-The e5s library provides two levels of API based on how much control you need:
+The e5s library provides two levels of server API based on how much control you need:
 
-### Level 1: Simple Server (`e5s.Serve`)
+### Level 1: Background Server (`e5s.Start`)
 
-**Use when:** You want the simplest API with automatic signal handling.
-
-```go
-func main() {
-    // Set config path
-    os.Setenv("E5S_CONFIG", "e5s.yaml")
-
-    r := chi.NewRouter()
-    r.Get("/hello", handleHello)
-
-    // Serve handles everything
-    if err := e5s.Serve(r); err != nil {
-        log.Fatal(err)
-    }
-}
-```
-
-**What it handles:**
-- Config file discovery (E5S_CONFIG)
-- SPIRE connection and mTLS
-- Signal handling (SIGINT/SIGTERM)
-- Graceful shutdown
-
-**You control:**
-- Error handling (via returned error)
-
-### Level 2: Explicit Config Path (`e5s.Start`)
-
-**Use when:** You need to specify an exact config file path.
+**Use when:** You want server running in background with manual signal handling.
 
 ```go
 func main() {
-    ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-    defer stop()
-
     r := chi.NewRouter()
     r.Get("/hello", handleHello)
 
-    shutdown, err := e5s.Start("/etc/app/production.yaml", r)
+    // Start server in background, get shutdown function
+    shutdown, err := e5s.Start("e5s.yaml", r)
     if err != nil {
         log.Fatal(err)
     }
-    defer shutdown()
+    defer func() {
+        if err := shutdown(); err != nil {
+            log.Printf("Shutdown error: %v", err)
+        }
+    }()
 
-    <-ctx.Done()
+    // Wait for interrupt signal
+    sigChan := make(chan os.Signal, 1)
+    signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+    <-sigChan
 }
 ```
 
 **What it handles:**
+- Config file loading
 - SPIRE connection and mTLS
+- Server runs in background goroutine
 
 **You control:**
-- Config file path
 - Signal setup and handling
 - Shutdown timing and logging
 - Error handling
 
-### Client Levels
+### Level 2: Single-Threaded Server (`e5s.StartSingleThread`)
 
-Similarly, the client API has three levels:
-
-#### Level 1: Zero Configuration (`e5s.Get`)
-
-**Use when:** Making a single request with minimal code.
+**Use when:** You want debugging with blocking server (no background goroutine).
 
 ```go
 func main() {
-    resp, err := e5s.Get("https://api.example.com:8443/data")
-    if err != nil {
+    r := chi.NewRouter()
+    r.Get("/hello", handleHello)
+
+    // Blocks until server exits or error
+    if err := e5s.StartSingleThread("e5s.yaml", r); err != nil {
         log.Fatal(err)
     }
-    defer resp.Body.Close()  // Also triggers cleanup
-
-    body, _ := io.ReadAll(resp.Body)
-    fmt.Println(string(body))
 }
 ```
 
 **What it handles:**
-- Config file discovery (E5S_CONFIG or e5s.yaml)
-- Client creation
-- Making the request
-- Cleanup (tied to body close)
+- Config file loading
+- SPIRE connection and mTLS
+- Server runs in foreground (blocks)
 
-#### Level 2: Explicit Config Path (`e5s.Client`)
+**You control:**
+- Error handling
 
-**Use when:** You need a specific config file path.
+### Client API
+
+The client API provides explicit control over the mTLS client lifecycle:
+
+#### `e5s.Client`
+
+**Use when:** Making one or more requests with explicit resource management.
 
 ```go
 func main() {
-    client, shutdown, err := e5s.Client("/etc/app/production.yaml")
+    // Create mTLS client with explicit config path
+    client, cleanup, err := e5s.Client("e5s.yaml")
     if err != nil {
         log.Fatal(err)
     }
-    defer shutdown()
+    defer func() {
+        if err := cleanup(); err != nil {
+            log.Printf("Cleanup error: %v", err)
+        }
+    }()
 
-    resp, _ := client.Get("https://api.example.com:8443/data")
-    defer resp.Body.Close()
+    // Make multiple requests with same client
+    resp1, _ := client.Get("https://api.example.com:8443/data")
+    defer resp1.Body.Close()
+
+    resp2, _ := client.Post("https://api.example.com:8443/update", "application/json", data)
+    defer resp2.Body.Close()
 }
 ```
 
 **What it handles:**
-- Client creation
+- Config file loading
+- mTLS client creation with SPIRE identities
 
 **You control:**
 - Config file path
 - Request lifecycle
-- Shutdown timing
+- Cleanup timing
 - Error handling
 
 ---
 
 ## Manual Signal Handling
 
-When you need more control over shutdown behavior, use `e5s.Start()` instead of `e5s.Serve()`.
+The `e5s.Start()` function gives you full control over signal handling and shutdown sequencing.
 
 ### Custom Shutdown Timeout
 
@@ -216,7 +205,7 @@ func main() {
 
 ## Explicit Config Paths
 
-For most use cases, use `e5s.Serve()` (server) or `e5s.Get()` (client) with E5S_CONFIG environment variable. When you need to specify an explicit config file path, use `e5s.Start()` and `e5s.Client()` instead.
+Both `e5s.Start()` and `e5s.Client()` require explicit config file paths. This ensures you always know which configuration is being used.
 
 ### Server with Explicit Config Path
 
@@ -315,7 +304,6 @@ Use environment variables to configure different behavior in different environme
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -328,9 +316,6 @@ import (
 )
 
 func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-
 	r := chi.NewRouter()
 
 	r.Get("/healthz", func(w http.ResponseWriter, req *http.Request) {
@@ -358,12 +343,19 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
-	defer shutdown()
+	defer func() {
+		if err := shutdown(); err != nil {
+			log.Printf("Shutdown error: %v", err)
+		}
+	}()
 
 	log.Println("Server running - press Ctrl+C to stop")
 
-	<-ctx.Done()
-	stop()
+	// Wait for interrupt signal
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	<-sigChan
+
 	log.Println("Shutting down gracefully...")
 }
 ```
@@ -408,11 +400,15 @@ func main() {
 	}
 
 	log.Printf("Creating mTLS client (config: %s)...", configFile)
-	client, shutdown, err := e5s.Client(configFile)
+	client, cleanup, err := e5s.Client(configFile)
 	if err != nil {
 		log.Fatalf("Failed to create client: %v", err)
 	}
-	defer shutdown()
+	defer func() {
+		if err := cleanup(); err != nil {
+			log.Printf("Cleanup error: %v", err)
+		}
+	}()
 
 	log.Println("Client created successfully")
 
@@ -494,11 +490,15 @@ func makeRequest(client *http.Client, url string) error {
 
 ```go
 func main() {
-	client, shutdown, err := e5s.Client("e5s.yaml")
+	client, cleanup, err := e5s.Client("e5s.yaml")
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer shutdown()
+	defer func() {
+		if err := cleanup(); err != nil {
+			log.Printf("Cleanup error: %v", err)
+		}
+	}()
 
 	// Quick health check (5 second timeout)
 	healthCtx, cancel1 := context.WithTimeout(context.Background(), 5*time.Second)
@@ -678,11 +678,15 @@ func (cb *CircuitBreaker) Call(fn func() error) error {
 
 // Usage
 func main() {
-	client, shutdown, err := e5s.Client("e5s.yaml")
+	client, cleanup, err := e5s.Client("e5s.yaml")
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer shutdown()
+	defer func() {
+		if err := cleanup(); err != nil {
+			log.Printf("Cleanup error: %v", err)
+		}
+	}()
 
 	cb := &CircuitBreaker{
 		threshold: 5,
@@ -944,11 +948,3 @@ func (m *Metrics) Handler() http.HandlerFunc {
 	}
 }
 ```
-
----
-
-## See Also
-
-- [TUTORIAL.md](TUTORIAL.md) - Getting started guide for beginners
-- [README.md](README.md) - High-level API overview
-- [../../docs/QUICKSTART_LIBRARY.md](../../docs/QUICKSTART_LIBRARY.md) - Low-level API usage
