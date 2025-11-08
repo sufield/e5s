@@ -6,6 +6,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -36,10 +38,6 @@ func main() {
 	log.Printf("Using config: %s", *configPath)
 
 	// example-start:server-setup
-	// Set config path for e5s.Serve to use
-	// This allows the binary to own the default, not the library
-	os.Setenv("E5S_CONFIG", *configPath)
-
 	// Create HTTP router
 	r := chi.NewRouter()
 	// example-end:server-setup
@@ -75,9 +73,24 @@ func main() {
 	// example-end:authenticated-endpoint
 
 	// example-start:server-start
-	// Serve handles startup, signal handling, and graceful shutdown
-	if err := e5s.Serve(r); err != nil {
+	// Start mTLS server
+	log.Println("Starting e5s mTLS server...")
+	shutdown, err := e5s.Start(*configPath, r)
+	if err != nil {
 		log.Fatal(err)
+	}
+
+	log.Println("Server running - press Ctrl+C to stop")
+
+	// Wait for interrupt signal
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	<-sigChan
+
+	log.Println("Shutting down gracefully...")
+	if err := shutdown(); err != nil {
+		log.Printf("Error during shutdown: %v", err)
+		os.Exit(1)
 	}
 	// example-end:server-start
 }
