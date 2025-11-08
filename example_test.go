@@ -132,4 +132,3 @@ func Example_authorizationByTrustDomain() {
 
 	_ = handler // Use in server
 }
-

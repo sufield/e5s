@@ -75,7 +75,11 @@ func run(appConfigPath, e5sConfigPath string) int {
 		log.Printf("❌ Failed to create client: %v", err)
 		return 1
 	}
-	defer shutdown()
+	defer func() {
+		if err := shutdown(); err != nil {
+			log.Printf("⚠️  Shutdown error: %v", err)
+		}
+	}()
 
 	// Perform mTLS GET request
 	log.Printf("→ Requesting from: %s", serverURL)
@@ -89,7 +93,11 @@ func run(appConfigPath, e5sConfigPath string) int {
 	log.Printf("✓ Received response: HTTP %d %s", resp.StatusCode, resp.Status)
 
 	// Read and print response
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Printf("❌ Failed to read response body: %v", err)
+		return 1
+	}
 	log.Printf("← Server response: %s", string(body))
 	fmt.Print(string(body))
 	// example-end:client-request
