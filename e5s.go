@@ -421,9 +421,8 @@ func StartSingleThread(configPath string, handler http.Handler) error {
 		return err
 	}
 	defer func() {
-		if shutdownErr := identityShutdown(); shutdownErr != nil {
-			log.Printf("Error closing SPIRE source: %v", shutdownErr)
-		}
+		// Best effort cleanup - ignore errors during shutdown
+		_ = identityShutdown()
 	}()
 
 	// Run server in the current goroutine (blocks here)
