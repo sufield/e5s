@@ -19,12 +19,10 @@
    - SPIRE Server and Agent installed
    - Server and client workloads registered
 
-2. **Go**
+2. **Verify Required Tools**
    ```bash
-   go version
+   make verify-tools
    ```
-
-Should output: go version go1.25.0 or higher
 
 ---
 

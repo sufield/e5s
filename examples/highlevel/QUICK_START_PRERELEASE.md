@@ -14,10 +14,7 @@
 
 2. **Verify tools are installed**
    ```bash
-   go version        # 1.25.3+
-   docker --version
-   minikube status
-   kubectl version
+   make verify-tools
    ```
 
 ---

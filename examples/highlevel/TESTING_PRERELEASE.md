@@ -43,15 +43,10 @@ When you:
    go build -o bin/e5s ./cmd/e5s
    ```
 
-4. **Verify Required Tools**: Use the e5s CLI to check installed versions
+4. **Verify Required Tools**: Check that all required tools are installed
 
    ```bash
-   ./bin/e5s version
-   ```
-
-   Or output in plain format for scripting:
-   ```bash
-   ./bin/e5s version --format plain
+   make verify-tools
    ```
 
 ---

@@ -12,38 +12,34 @@ Before starting, ensure you have these tools installed:
 
 ### Required Tools
 
-1. **Docker** - Container runtime
-   ```bash
-   docker --version
-   # Should output: Docker version 20.x or higher
-   ```
+Verify all required tools are installed:
 
-2. **Minikube** - Local Kubernetes cluster
-   ```bash
-   minikube version
-   # Should output: minikube version: v1.30.0 or higher
-   ```
-
-3. **kubectl** - Kubernetes CLI
-   ```bash
-   kubectl version --client
-   # Should output: Client Version: v1.27.0 or higher
-   ```
-
-4. **Helm** - Kubernetes package manager
-   ```bash
-   helm version
-   # Should output: version.BuildInfo{Version:"v3.12.0" or higher
-   ```
+```bash
+make verify-tools
+```
 
 ### Installing Prerequisites (if needed)
 
-**macOS**:
+**Ubuntu 24.04** (Automated):
 ```bash
-brew install docker minikube kubectl helm
+make install-tools
 ```
 
-**Ubuntu/Debian**:
+This will install:
+- Go 1.25.3
+- Docker (latest)
+- Minikube (latest)
+- kubectl (latest)
+- Helm (latest)
+
+After installation, logout/login or run `newgrp docker` for Docker group permissions.
+
+**macOS**:
+```bash
+brew install go docker minikube kubectl helm
+```
+
+**Ubuntu/Debian** (Manual):
 ```bash
 # Docker
 sudo apt-get update
