@@ -31,7 +31,13 @@ type ClientSection struct {
 
 // FileConfig represents the complete e5s configuration file structure.
 // This single config file is used by both server and client processes.
+//
+// The config format is versioned to support future evolution without breaking changes.
 type FileConfig struct {
+	// Version is the config file format version (optional, currently always 1)
+	// Future versions may add/change fields while maintaining backward compatibility.
+	Version int `yaml:"version,omitempty"`
+
 	SPIRE  SPIRESection  `yaml:"spire"`
 	Server ServerSection `yaml:"server"`
 	Client ClientSection `yaml:"client"`
