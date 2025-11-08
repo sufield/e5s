@@ -37,6 +37,13 @@ func main() {
 	log.Printf("e5s mTLS server (version %s)", version)
 	log.Printf("Using config: %s", *configPath)
 
+	// Check for debug mode
+	debugMode := os.Getenv("E5S_DEBUG_SINGLE_THREAD") != ""
+	if debugMode {
+		log.Println("⚠️  DEBUG MODE: Running in single-threaded mode")
+		log.Println("   This eliminates e5s's HTTP server goroutine for debugging")
+	}
+
 	// example-start:server-setup
 	// Create HTTP router
 	r := chi.NewRouter()
@@ -73,24 +80,32 @@ func main() {
 	// example-end:authenticated-endpoint
 
 	// example-start:server-start
-	// Start mTLS server
-	log.Println("Starting e5s mTLS server...")
-	shutdown, err := e5s.Start(*configPath, r)
-	if err != nil {
-		log.Fatal(err)
-	}
+	if debugMode {
+		// Debug mode: use StartSingleThread (blocks, no goroutines from e5s)
+		log.Println("Starting e5s mTLS server (single-threaded)...")
+		if err := e5s.StartSingleThread(*configPath, r); err != nil {
+			log.Fatal(err)
+		}
+	} else {
+		// Normal mode: use Start (spawns goroutine, returns immediately)
+		log.Println("Starting e5s mTLS server...")
+		shutdown, err := e5s.Start(*configPath, r)
+		if err != nil {
+			log.Fatal(err)
+		}
 
-	log.Println("Server running - press Ctrl+C to stop")
+		log.Println("Server running - press Ctrl+C to stop")
 
-	// Wait for interrupt signal
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-	<-sigChan
+		// Wait for interrupt signal
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+		<-sigChan
 
-	log.Println("Shutting down gracefully...")
-	if err := shutdown(); err != nil {
-		log.Printf("Error during shutdown: %v", err)
-		os.Exit(1)
+		log.Println("Shutting down gracefully...")
+		if err := shutdown(); err != nil {
+			log.Printf("Error during shutdown: %v", err)
+			os.Exit(1)
+		}
 	}
 	// example-end:server-start
 }
