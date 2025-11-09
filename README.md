@@ -169,11 +169,13 @@ The e5s library requires explicit configuration and never assumes a default envi
 
 Copy the example config from `examples/highlevel/e5s.yaml` to your project and customize it:
 
+In your application directory:
+
 ```bash
-# In your application directory
 cp path/to/e5s/examples/highlevel/e5s.yaml ./e5s.yaml
-# Edit for your environment (e5s.dev.yaml, e5s.prod.yaml, etc.)
 ```
+
+Then edit for your environment (e5s.dev.yaml, e5s.prod.yaml, etc.)
 
 Then provide the config path explicitly:
 
@@ -192,36 +194,9 @@ Then provide the config path explicitly:
 
 **Example config structure:**
 
-```yaml
-spire:
-  # Path to SPIRE Agent's Workload API socket
-  workload_socket: unix:///tmp/spire-agent/public/api.sock
+See the complete annotated config file: **[examples/highlevel/e5s.yaml](examples/highlevel/e5s.yaml)**
 
-  # (Optional) How long to wait for identity from SPIRE before failing startup
-  # Format: Go duration (e.g. "5s", "30s", "1m")
-  # Default: 30s if not specified
-  # Set higher in dev (agent may start slowly), lower in prod (fail fast)
-  initial_fetch_timeout: 30s
-
-server:
-  listen_addr: ":8443"
-
-  # Allow any client in this trust domain
-  allowed_client_trust_domain: "example.org"
-
-  # Or allow only a specific client SPIFFE ID
-  # allowed_client_spiffe_id: "spiffe://example.org/client"
-
-client:
-  # Server URL to connect to
-  server_url: "https://localhost:8443"
-
-  # Allow any server in this trust domain
-  expected_server_trust_domain: "example.org"
-
-  # Or require a specific server SPIFFE ID
-  # expected_server_spiffe_id: "spiffe://example.org/server"
-```
+This single file contains both server and client configuration with detailed comments explaining each option.
 
 In your application, create separate config files (`e5s.dev.yaml`, `e5s.staging.yaml`, `e5s.prod.yaml`) with environment-specific values for socket paths, trust domains, and timeouts. These files are part of your application codebase, not the e5s library.
 

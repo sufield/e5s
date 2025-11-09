@@ -1,23 +1,19 @@
 # API Documentation
 
-Complete API reference for the e5s SPIRE mTLS library.
-
-## Online API Documentation
-
-The complete API documentation with all package, function, and type details is available at:
+API reference for the e5s SPIRE mTLS library with all package, function, and type details is available at:
 
 **https://pkg.go.dev/github.com/sufield/e5s**
 
-This automatically-generated documentation includes:
-- All exported functions, types, and constants
+This generated documentation includes:
+- Exported functions, types, and constants
 - Function signatures and return values
-- Usage examples from code
+- Usage examples
 - Cross-referenced type definitions
 - Source code links
 
 ## Viewing Documentation Locally
 
-You can view the API documentation locally using the `go doc` command:
+Use the `go doc` command:
 
 ```bash
 # View package-level documentation
@@ -50,9 +46,7 @@ The e5s library provides two levels of API:
 
 ### 1. High-Level API (e5s package)
 
-**Intended for:** Application developers building mTLS services
-
-**Key Functions:**
+**For:** Application developers building mTLS services
 
 #### Server Functions
 
@@ -80,18 +74,18 @@ The e5s library provides two levels of API:
 
 ### 2. Low-Level API (pkg/* packages)
 
-**Intended for:** Library developers needing fine-grained control
+**For:** Library developers needing fine-grained control
 
 #### pkg/spiffehttp
 
-HTTP server and client with SPIFFE mTLS support.
+TLS configuration for HTTP mTLS using SPIFFE identities.
 
-**Key Types:**
+**Types:**
 - `ServerConfig` - Server authorization configuration
 - `ClientConfig` - Client server verification configuration
 - `Peer` - Authenticated peer information
 
-**Key Functions:**
+**Functions:**
 - `NewServerTLSConfig()` - Create server TLS config with client verification
 - `NewClientTLSConfig()` - Create client TLS config with server verification
 - `PeerFromContext()` - Extract peer info from request context
@@ -102,73 +96,47 @@ HTTP server and client with SPIFFE mTLS support.
 
 SPIRE Workload API integration.
 
-**Key Types:**
+**Types:**
 - `Source` - SPIRE X.509 certificate source with auto-rotation
 - `Config` - SPIRE connection configuration
 
-**Key Functions:**
+**Functions:**
 - `NewIdentitySource()` - Connect to SPIRE Workload API and fetch identities
 
 **Documentation:** https://pkg.go.dev/github.com/sufield/e5s/spire
 
 ## Configuration
 
-### Server Configuration
+### Configuration File
 
-**File:** `e5s.dev.yaml` (development) or `e5s.prod.yaml` (production)
+**Standard config file:** [examples/highlevel/e5s.yaml](../examples/highlevel/e5s.yaml)
 
-```yaml
-spire:
-  workload_socket: unix:///tmp/spire-agent/public/api.sock  # Path to SPIRE agent socket
-  initial_fetch_timeout: 30s  # Timeout for fetching initial identity
+This single annotated config file contains both server and client configuration sections with detailed comments.
 
-server:
-  listen_addr: ":8443"  # Address to listen on
+**Environment-specific files:** Create `e5s.dev.yaml`, `e5s.staging.yaml`, `e5s.prod.yaml` in your application with environment-specific values.
 
-  # Authorization: Choose ONE of the following:
+**Server configuration options:**
+- `spire.workload_socket` - Path to SPIRE agent socket
+- `spire.initial_fetch_timeout` - Timeout for fetching initial identity (default: 30s)
+- `server.listen_addr` - Address to listen on (e.g., `:8443`)
+- `server.allowed_client_spiffe_id` - Allow specific client SPIFFE ID
+- `server.allowed_client_trust_domain` - Allow any client in trust domain
 
-  # Option 1: Allow specific SPIFFE ID
-  allowed_client_spiffe_id: "spiffe://example.org/client"
-
-  # Option 2: Allow any ID from trust domain
-  allowed_client_trust_domain: "example.org"
-```
+**Client configuration options:**
+- `client.server_url` - Server URL to connect to
+- `client.expected_server_spiffe_id` - Require specific server SPIFFE ID
+- `client.expected_server_trust_domain` - Trust any server in domain
 
 **Environment Variables (for `StartServer` or `Run`):**
 
+- `E5S_CONFIG` - Path to config file (if not passed as parameter)
 - `SPIRE_WORKLOAD_SOCKET` - Path to SPIRE agent socket (default: `unix:///tmp/spire-agent/public/api.sock`)
 - `LISTEN_ADDR` - Server listen address (default: `:8443`)
 - `ALLOWED_CLIENT_SPIFFE_ID` - Specific client SPIFFE ID to allow
 - `ALLOWED_CLIENT_TRUST_DOMAIN` - Trust domain to allow (alternative to specific ID)
 - `INITIAL_FETCH_TIMEOUT` - Timeout for initial certificate fetch (default: `30s`)
 
-### Client Configuration
-
-**File:** `e5s.dev.yaml` (development) or `e5s.prod.yaml` (production)
-
-```yaml
-spire:
-  workload_socket: unix:///tmp/spire-agent/public/api.sock
-  initial_fetch_timeout: 30s
-
-client:
-  # Authorization: Choose ONE of the following:
-
-  # Option 1: Verify specific server SPIFFE ID
-  expected_server_spiffe_id: "spiffe://example.org/server"
-
-  # Option 2: Trust any server from trust domain
-  expected_server_trust_domain: "example.org"
-```
-
-**Environment Variables (for `NewClient`):**
-
-- `SPIRE_WORKLOAD_SOCKET` - Path to SPIRE agent socket
-- `EXPECTED_SERVER_SPIFFE_ID` - Expected server SPIFFE ID
-- `EXPECTED_SERVER_TRUST_DOMAIN` - Expected server trust domain
-- `INITIAL_FETCH_TIMEOUT` - Timeout for initial certificate fetch
-
-## Common Patterns
+## Common Usage
 
 ### 1. Convention-Over-Configuration Server
 

@@ -1,6 +1,6 @@
 # e5s Troubleshooting Guide
 
-This guide helps you diagnose and resolve issues with e5s, particularly focusing on debugging workflows and concurrency-related problems.
+This guide is useful to diagnose and resolve issues with e5s, focusing on debugging workflows and concurrency-related problems.
 
 ## Quick Start: Running Examples
 
@@ -73,9 +73,9 @@ Don't use `StartSingleThread()` for:
 - Testing actual concurrent behavior
 - Any scenario where you need goroutines
 
-### Important Limitation
+### Limitation
 
-**Debug mode does NOT eliminate ALL concurrency.** The go-spiffe SDK still runs background goroutines for:
+Debug mode does NOT eliminate ALL concurrency. The go-spiffe SDK still runs background goroutines for:
 - Certificate rotation
 - Workload API watching
 - TLS handshake processing
@@ -94,17 +94,17 @@ Follow this systematic approach:
 
 ```bash
 ./scripts/run-example-server.sh
-# Try to trigger the issue
 ```
 
-If you can't reproduce it reliably, it may be a concurrency bug.
+Try to trigger the issue. If you can't reproduce it reliably, it may be a concurrency bug.
 
 #### Step 2: Try Debug Mode
 
 ```bash
 ./scripts/run-example-server.sh --debug
-# Try to trigger the same issue
 ```
+
+Try to trigger the same issue
 
 **If the issue disappears in debug mode:**
 - Likely a concurrency bug in your handler code
@@ -117,8 +117,9 @@ If you can't reproduce it reliably, it may be a concurrency bug.
 
 #### Step 3: Run with Race Detector
 
+Debug mode + race detector
+
 ```bash
-# Debug mode + race detector
 E5S_DEBUG_SINGLE_THREAD=1 go run -race ./cmd/example-server
 
 # Or normal mode + race detector

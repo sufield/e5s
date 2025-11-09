@@ -17,41 +17,55 @@ annotation validation error: key "meta.helm.sh/release-namespace" must equal "sp
 
 **Solution**: Clean up all SPIRE resources including cluster-scoped resources and reinstall from scratch.
 
+Delete any existing Helm releases:
 ```bash
-# Delete any existing Helm releases
 helm uninstall spire -n spire 2>/dev/null || true
 helm uninstall spire-server -n spire 2>/dev/null || true
 helm uninstall spire-agent -n spire 2>/dev/null || true
 helm uninstall spire-crds -n spire 2>/dev/null || true
+```
 
-# Delete namespace-scoped resources
+Delete namespace-scoped resources:
+```bash
 kubectl delete namespace spire 2>/dev/null || true
+```
 
-# Delete cluster-scoped resources (ClusterRole, ClusterRoleBinding, CSIDriver, etc.)
+Delete cluster-scoped resources (ClusterRole, ClusterRoleBinding, CSIDriver, etc.):
+```bash
 kubectl delete clusterrole spire-agent spire-server spire-controller-manager 2>/dev/null || true
 kubectl delete clusterrolebinding spire-agent spire-server spire-controller-manager 2>/dev/null || true
 kubectl delete csidriver csi.spiffe.io 2>/dev/null || true
 kubectl delete validatingwebhookconfiguration spire-server 2>/dev/null || true
 kubectl delete mutatingwebhookconfiguration spire-controller-manager 2>/dev/null || true
+```
 
-# Delete CRDs (Custom Resource Definitions)
+Delete CRDs (Custom Resource Definitions):
+```bash
 kubectl delete crd clusterspiffeids.spire.spiffe.io 2>/dev/null || true
 kubectl delete crd clusterstaticentries.spire.spiffe.io 2>/dev/null || true
 kubectl delete crd clusterfederatedtrustdomains.spire.spiffe.io 2>/dev/null || true
 kubectl delete crd controllermanagerconfigs.spire.spiffe.io 2>/dev/null || true
+```
 
-# Wait for cleanup to complete
+Wait for cleanup to complete:
+```bash
 sleep 5
+```
 
-# Recreate the namespace
+Recreate the namespace:
+```bash
 kubectl create namespace spire
+```
 
-# Install SPIRE CRDs
+Install SPIRE CRDs:
+```bash
 helm install spire-crds spire-crds \
   --repo https://spiffe.github.io/helm-charts-hardened/ \
   --namespace spire
+```
 
-# Install SPIRE
+Install SPIRE:
+```bash
 helm install spire spire \
   --repo https://spiffe.github.io/helm-charts-hardened/ \
   --namespace spire \
@@ -61,12 +75,14 @@ helm install spire spire \
 
 **If namespace deletion hangs**, check for stuck resources:
 
+Check what's blocking namespace deletion:
 ```bash
-# Check what's blocking namespace deletion
 kubectl api-resources --verbs=list --namespaced -o name | \
   xargs -n 1 kubectl get --show-kind --ignore-not-found -n spire
+```
 
-# Force cleanup if needed
+Force cleanup if needed:
+```bash
 kubectl delete namespace spire --grace-period=0 --force
 ```
 
@@ -91,27 +107,29 @@ Warning  FailedScheduling  0/1 nodes are available: 1 node(s) didn't have free p
 
 **Solution 1: Restart Minikube (cleanest approach)**
 
+Delete and recreate Minikube cluster:
 ```bash
-# Delete and recreate Minikube cluster
 minikube delete
 minikube start --cpus=4 --memory=8192 --driver=docker
-
-# Then reinstall SPIRE from Step 2 in the tutorial
 ```
+
+Then reinstall SPIRE from Step 2 in the tutorial.
 
 **Solution 2: Disable hostPort (for development)**
 
-This requires creating a custom values file:
+This requires creating a custom values file.
 
+Create values file:
 ```bash
-# Create values file
 cat > spire-values.yaml <<EOF
 spire-agent:
   hostPorts:
     enabled: false
 EOF
+```
 
-# Uninstall and reinstall with custom values
+Uninstall and reinstall with custom values:
+```bash
 helm uninstall spire -n spire
 helm install spire spire \
   --repo https://spiffe.github.io/helm-charts-hardened/ \
@@ -143,14 +161,16 @@ ensure CRDs are installed first
 
 **Solution**: Install CRDs first using the `spire-crds` Helm chart, then install SPIRE.
 
+Install SPIRE CRDs:
 ```bash
-# Install SPIRE CRDs
 helm install spire-crds spire-crds \
   --repo https://spiffe.github.io/helm-charts-hardened/ \
   --namespace spire \
   --create-namespace
+```
 
-# Then install SPIRE (both server and agent)
+Then install SPIRE (both server and agent):
+```bash
 helm install spire spire \
   --repo https://spiffe.github.io/helm-charts-hardened/ \
   --namespace spire \
@@ -160,18 +180,22 @@ helm install spire spire \
 
 **If you already have a failed installation**, clean up first:
 
+Remove failed installation:
 ```bash
-# Remove failed installation
 helm uninstall spire -n spire
 helm uninstall spire-crds -n spire
+```
 
-# Install CRDs
+Install CRDs:
+```bash
 helm install spire-crds spire-crds \
   --repo https://spiffe.github.io/helm-charts-hardened/ \
   --namespace spire \
   --create-namespace
+```
 
-# Reinstall SPIRE
+Reinstall SPIRE:
+```bash
 helm install spire spire \
   --repo https://spiffe.github.io/helm-charts-hardened/ \
   --namespace spire \
@@ -187,14 +211,14 @@ helm install spire spire \
 
 **Solution**: Ensure the socket path is correct.
 
+Check where SPIRE Agent socket actually is:
 ```bash
-# Check where SPIRE Agent socket actually is
 kubectl exec -n spire \
   $(kubectl get pod -n spire -l app.kubernetes.io/name=agent -o jsonpath='{.items[0].metadata.name}') \
   -- ls -la /tmp/spire-agent/public/
-
-# Update e5s.yaml with correct path
 ```
+
+Update e5s.yaml with correct path.
 
 **Example config:**
 ```yaml
@@ -214,25 +238,27 @@ spire:
 
 **Solution 1: Verify SPIRE Agent is running**
 
+Check SPIRE Agent pod status:
 ```bash
-# Check SPIRE Agent pod status
 kubectl get pods -n spire -l app.kubernetes.io/name=agent
+```
 
-# Should show Running status
-# NAME                READY   STATUS    RESTARTS   AGE
-# spire-agent-xxxxx   1/1     Running   0          5m
+Should show Running status:
+```
+NAME                READY   STATUS    RESTARTS   AGE
+spire-agent-xxxxx   1/1     Running   0          5m
 ```
 
 **Solution 2: Verify workload registration**
 
+List all registration entries:
 ```bash
-# List all registration entries
 SERVER_POD=$(kubectl get pod -n spire -l app.kubernetes.io/name=server -o jsonpath='{.items[0].metadata.name}')
 kubectl exec -n spire $SERVER_POD -c spire-server -- \
   /opt/spire/bin/spire-server entry show
-
-# You should see entries for your server and client workloads
 ```
+
+You should see entries for your server and client workloads.
 
 **Solution 3: Increase timeout in e5s.yaml**
 
@@ -270,13 +296,14 @@ client:
 ```
 
 **Verify trust domain:**
+
+Check SPIRE Server trust domain:
 ```bash
-# Check SPIRE Server trust domain
 kubectl exec -n spire $SERVER_POD -c spire-server -- \
   /opt/spire/bin/spire-server show
-
-# Look for: Trust domain: example.org
 ```
+
+Look for: Trust domain: example.org
 
 ---
 
@@ -296,13 +323,13 @@ server:
 
 **Solution**: Ensure the client's SPIFFE ID is in the allowed trust domain:
 
+Check client's actual SPIFFE ID:
 ```bash
-# Check client's actual SPIFFE ID
 kubectl exec -n spire $SERVER_POD -c spire-server -- \
   /opt/spire/bin/spire-server entry show | grep -A 5 "client"
-
-# Update server config to match
 ```
+
+Update server config to match.
 
 **Scenario 2: Specific SPIFFE ID mismatch**
 
@@ -330,33 +357,42 @@ server:
 
 **Solution 1: Verify server is running**
 
+Check if server process is running:
 ```bash
-# Check if server process is running
 ps aux | grep server
+```
 
-# Check if server is listening on the port
+Check if server is listening on the port:
+```bash
 netstat -tuln | grep 8443
-# or
+```
+
+or:
+```bash
 ss -tuln | grep 8443
 ```
 
 **Solution 2: Check firewall rules**
 
+On Linux, check iptables:
 ```bash
-# On Linux, check iptables
 sudo iptables -L -n | grep 8443
+```
 
-# On macOS, check if firewall is blocking
+On macOS, check if firewall is blocking:
+```bash
 sudo pfctl -s rules | grep 8443
 ```
 
 **Solution 3: Verify DNS resolution (if using hostnames)**
 
+Test DNS resolution:
 ```bash
-# Test DNS resolution
 nslookup server.example.org
+```
 
-# Test connectivity
+Test connectivity:
+```bash
 ping server.example.org
 ```
 
@@ -368,8 +404,8 @@ ping server.example.org
 
 **Solution**: Use port forwarding to expose SPIRE Agent socket (see Tutorial Step 3):
 
+Port forward SPIRE Agent:
 ```bash
-# Port forward SPIRE Agent
 kubectl port-forward -n spire \
   $(kubectl get pod -n spire -l app.kubernetes.io/name=agent -o jsonpath='{.items[0].metadata.name}') \
   8081:8081
@@ -447,15 +483,19 @@ If you're still stuck:
 
 1. **Enable debug logging** (if available in future versions)
 2. **Check SPIRE logs**:
-   ```bash
-   # SPIRE Server logs
-   kubectl logs -n spire -l app.kubernetes.io/name=server -c spire-server
 
-   # SPIRE Agent logs
+   SPIRE Server logs:
+   ```bash
+   kubectl logs -n spire -l app.kubernetes.io/name=server -c spire-server
+   ```
+
+   SPIRE Agent logs:
+   ```bash
    kubectl logs -n spire -l app.kubernetes.io/name=agent
    ```
 
 3. **Verify SPIRE health**:
+
    ```bash
    kubectl exec -n spire $SERVER_POD -c spire-server -- \
      /opt/spire/bin/spire-server healthcheck

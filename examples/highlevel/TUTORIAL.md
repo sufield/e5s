@@ -317,8 +317,8 @@ Let's run locally and connect to SPIRE in Minikube:
 
 ### Port Forward SPIRE Agent Socket
 
+In a separate terminal, keep this running:
 ```bash
-# In a separate terminal, keep this running
 kubectl port-forward -n spire \
   $(kubectl get pod -n spire -l app.kubernetes.io/name=agent -o jsonpath='{.items[0].metadata.name}') \
   8081:8081
@@ -346,8 +346,8 @@ client:
 
 ### Create Symlink to Agent Socket
 
+Create symlink from local machine to forwarded socket:
 ```bash
-# Create symlink from local machine to forwarded socket
 ln -sf ~/.minikube/profiles/minikube/apiserver.sock /tmp/spire-agent.sock
 ```
 
@@ -493,10 +493,10 @@ This proves that:
 
 **Test: Traditional HTTP Client Blocked**
 
-Standard tools like curl also cannot connect because they don't have SPIFFE identities:
+Standard tools like curl also cannot connect because they don't have SPIFFE identities.
 
+This also fails because curl doesn't have a SPIFFE identity:
 ```bash
-# This also fails because curl doesn't have a SPIFFE identity
 curl -k https://localhost:8443/hello
 ```
 
@@ -513,10 +513,10 @@ This demonstrates that traditional HTTP clients cannot bypass SPIFFE-based mTLS 
 
 ### Check Certificate Details
 
-You can inspect the certificates using openssl:
+You can inspect the certificates using openssl.
 
+View server certificate:
 ```bash
-# View server certificate
 openssl s_client -connect localhost:8443 -showcerts
 ```
 
@@ -575,11 +575,9 @@ Now that you have mTLS working:
    ```
 
 2. **Observe Certificate Rotation**:
-   Certificates rotate automatically. Watch logs to see rotation happen:
-   ```bash
-   # Certificates typically rotate every hour
-   # Watch for new certificates being fetched
-   ```
+   Certificates rotate automatically. Watch logs to see rotation happen.
+
+   Certificates typically rotate every hour. Watch for new certificates being fetched.
 
 3. **Deploy to Kubernetes**:
    - Build container images for server and client
@@ -603,10 +601,10 @@ Now that you have mTLS working:
 
 When you're done testing:
 
-```bash
-# Stop local applications (Ctrl+C in each terminal)
+Stop local applications (Ctrl+C in each terminal).
 
-# Clean up your application binaries
+Clean up your application binaries:
+```bash
 cd ~/mtls-demo
 rm -rf bin/
 ```

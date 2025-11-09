@@ -1,7 +1,5 @@
 # e5s Documentation
 
-## Overview
-
 e5s provides **two APIs** for SPIFFE/SPIRE-based mutual TLS for different developer needs:
 
 ### High-Level API (`e5s.Start`, `e5s.Client`)

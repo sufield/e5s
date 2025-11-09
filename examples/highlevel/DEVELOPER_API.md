@@ -45,14 +45,19 @@ Both server and client support these environment variables:
 - `SERVER_ADDR` - Server URL for client (default: `https://localhost:8443`)
 
 Examples:
+
+Use a different config file:
 ```bash
-# Use a different config file
 E5S_CONFIG=/etc/e5s/prod.yaml ./bin/highlevel-server
+```
 
-# Connect to a remote server
+Connect to a remote server:
+```bash
 SERVER_ADDR=https://api.example.org:8443 ./bin/highlevel-client
+```
 
-# Combine both
+Combine both:
+```bash
 E5S_CONFIG=./custom.yaml SERVER_ADDR=https://remote:8443 ./bin/highlevel-client
 ```
 
@@ -107,12 +112,14 @@ The configuration in this directory demonstrates:
 
 The server provides health check endpoints for Kubernetes liveness/readiness probes:
 
+Liveness probe:
 ```bash
-# Liveness probe
 curl -k https://localhost:8443/healthz
 ok
+```
 
-# Readiness probe
+Readiness probe:
+```bash
 curl -k https://localhost:8443/healthz/ready
 ready
 ```

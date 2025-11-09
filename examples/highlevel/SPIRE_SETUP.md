@@ -40,20 +40,27 @@ brew install go docker minikube kubectl helm
 ```
 
 **Ubuntu/Debian** (Manual):
+
+Docker:
 ```bash
-# Docker
 sudo apt-get update
 sudo apt-get install docker.io
+```
 
-# Minikube
+Minikube:
+```bash
 curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
 sudo install minikube-linux-amd64 /usr/local/bin/minikube
+```
 
-# kubectl
+kubectl:
+```bash
 curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
 sudo install kubectl /usr/local/bin/kubectl
+```
 
-# Helm
+Helm:
+```bash
 curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 ```
 
@@ -64,10 +71,12 @@ curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 Start a local Kubernetes cluster with enough resources for SPIRE:
 
 ```bash
-# Start minikube with appropriate resources
 minikube start --cpus=4 --memory=8192 --driver=docker
+```
 
-# Verify cluster is running
+Verify cluster is running:
+
+```bash
 minikube status
 ```
 
@@ -99,23 +108,20 @@ The modern SPIRE Helm chart installs both components together.
 
 If you've previously attempted to install SPIRE, clean up first:
 
-Clean up any previous installations (safe to run even if nothing exists)
-
-```bash 
+Clean up any previous installations (safe to run even if nothing exists):
+```bash
 helm uninstall spire -n spire 2>/dev/null || true
 helm uninstall spire-server -n spire 2>/dev/null || true
 helm uninstall spire-agent -n spire 2>/dev/null || true
 helm uninstall spire-crds -n spire 2>/dev/null || true
 ```
 
-Delete namespace-scoped resources
-
+Delete namespace-scoped resources:
 ```bash
 kubectl delete namespace spire 2>/dev/null || true
 ```
 
-Delete cluster-scoped resources (these can cause conflicts)
-
+Delete cluster-scoped resources (these can cause conflicts):
 ```bash
 kubectl delete clusterrole spire-agent spire-server spire-controller-manager 2>/dev/null || true
 kubectl delete clusterrolebinding spire-agent spire-server spire-controller-manager 2>/dev/null || true
@@ -124,8 +130,7 @@ kubectl delete validatingwebhookconfiguration spire-server 2>/dev/null || true
 kubectl delete mutatingwebhookconfiguration spire-controller-manager 2>/dev/null || true
 ```
 
-Delete CRDs (Custom Resource Definitions)
-
+Delete CRDs (Custom Resource Definitions):
 ```bash
 kubectl delete crd clusterspiffeids.spire.spiffe.io 2>/dev/null || true
 kubectl delete crd clusterstaticentries.spire.spiffe.io 2>/dev/null || true
@@ -133,41 +138,56 @@ kubectl delete crd clusterfederatedtrustdomains.spire.spiffe.io 2>/dev/null || t
 kubectl delete crd controllermanagerconfigs.spire.spiffe.io 2>/dev/null || true
 ```
 
-Wait for cleanup to complete
-
+Wait for cleanup to complete:
 ```bash
 sleep 5
 ```
 
 ### Install SPIRE
 
+Add the SPIFFE Helm repository:
+
 ```bash
-# Add the SPIFFE Helm repository
 helm repo add spiffe https://spiffe.github.io/helm-charts-hardened/
 helm repo update
+```
 
-# Create namespace for SPIRE
+Create namespace for SPIRE:
+
+```bash
 kubectl create namespace spire
+```
 
-# Install SPIRE CRDs (Custom Resource Definitions) first
+Install SPIRE CRDs (Custom Resource Definitions) first:
+
+```bash
 helm install spire-crds spire-crds \
   --repo https://spiffe.github.io/helm-charts-hardened/ \
   --namespace spire
+```
 
-# Install SPIRE (both server and agent)
+Install SPIRE (both server and agent):
+
+```bash
 helm install spire spire \
   --repo https://spiffe.github.io/helm-charts-hardened/ \
   --namespace spire \
   --set global.spire.trustDomain=example.org \
   --set global.spire.clusterName=minikube-cluster
+```
 
-# Wait for SPIRE Server to be ready (this may take 1-2 minutes)
+Wait for SPIRE Server to be ready (this may take 1-2 minutes):
+
+```bash
 kubectl wait --for=condition=ready pod \
   -l app.kubernetes.io/name=server \
   -n spire \
   --timeout=120s
+```
 
-# Wait for SPIRE Agent to be ready
+Wait for SPIRE Agent to be ready:
+
+```bash
 kubectl wait --for=condition=ready pod \
   -l app.kubernetes.io/name=agent \
   -n spire \
@@ -206,11 +226,13 @@ SPIRE uses "registration entries" to map workload identities to SPIFFE IDs. Let'
 
 ### Register Server Workload
 
+Get SPIRE Server pod name:
 ```bash
-# Get SPIRE Server pod name
 SERVER_POD=$(kubectl get pod -n spire -l app.kubernetes.io/name=server -o jsonpath='{.items[0].metadata.name}')
+```
 
-# Create server registration entry
+Create server registration entry:
+```bash
 kubectl exec -n spire $SERVER_POD -c spire-server -- \
   /opt/spire/bin/spire-server entry create \
   -spiffeID spiffe://example.org/server \
@@ -235,8 +257,8 @@ Selector         : k8s:pod-label:app:e5s-server
 
 ### Register Client Workload
 
+Create client registration entry:
 ```bash
-# Create client registration entry
 kubectl exec -n spire $SERVER_POD -c spire-server -- \
   /opt/spire/bin/spire-server entry create \
   -spiffeID spiffe://example.org/client \
@@ -248,8 +270,8 @@ kubectl exec -n spire $SERVER_POD -c spire-server -- \
 
 ### Verify Registration Entries
 
+List all registration entries:
 ```bash
-# List all registration entries
 kubectl exec -n spire $SERVER_POD -c spire-server -- \
   /opt/spire/bin/spire-server entry show
 ```

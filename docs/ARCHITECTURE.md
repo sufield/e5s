@@ -56,12 +56,12 @@ e5s is organized in **5 layers**, from low-level primitives to high-level conven
 - TLS configuration helpers (`spiffetls/tlsconfig`)
 - SPIFFE ID types and validation (`spiffeid`)
 
-**Key Types**:
+**Types**:
 - `workloadapi.X509Source` - Source of X.509-SVIDs and trust bundles
 - `spiffeid.ID` - Strongly-typed SPIFFE ID
 - `tlsconfig.Authorizer` - TLS verification policy
 
-This layer is maintained by the SPIFFE community and used as-is.
+This layer is maintained by the SPIFFE community and used without any modifications.
 
 ### Layer 1: spire (identity source)
 
@@ -72,7 +72,7 @@ This layer is maintained by the SPIFFE community and used as-is.
 - Sensible defaults for SPIRE Workload API
 - Clear error messages for common issues
 
-**Key Types**:
+**Types**:
 - `spire.IdentitySource` - Managed X.509 source with cleanup
 
 **Depends on**: Layer 0 (go-spiffe)
@@ -93,7 +93,7 @@ This layer is maintained by the SPIFFE community and used as-is.
 - Peer identity extraction from request context
 - Authorization policy configuration
 
-**Key Types**:
+**Types**:
 - `spiffehttp.ServerConfig` - mTLS server verification policy
 - `spiffehttp.ClientConfig` - mTLS client verification policy
 - `spiffehttp.Peer` - Extracted peer identity
@@ -120,7 +120,7 @@ This layer is maintained by the SPIFFE community and used as-is.
 - Create clients with single function calls
 - Extract peer identity from requests
 
-**Key Functions**:
+**Functions**:
 - `e5s.Start()` - Start mTLS server (background goroutine)
 - `e5s.StartSingleThread()` - Start mTLS server (foreground, blocking)
 - `e5s.Client()` - Create mTLS HTTP client
@@ -187,7 +187,7 @@ spire  spiffehttp
 go-spiffe (external)
 ```
 
-**Key Property**: No cycles. Each layer only depends on layers below it.
+**Property**: No cycles. Each layer only depends on layers below it.
 
 ## Rationale
 

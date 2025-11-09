@@ -5,11 +5,12 @@
 ## Prerequisites (One-Time Setup)
 
 1. **SPIRE must be running in Minikube**
+
    If not already done:
    ```bash
    cd examples/highlevel
    ```
-   
+
    Follow [SPIRE_SETUP.md](SPIRE_SETUP.md) to set up SPIRE in Minikube (~15 minutes)
 
 2. **Verify tools are installed**
@@ -111,14 +112,19 @@ minikube status
 ```
 
 **Want to see logs?**
+
+Server logs:
 ```bash
-# Server logs
 kubectl logs -l app=e5s-server -f
+```
 
-# Client logs
+Client logs:
+```bash
 kubectl logs -l app=e5s-client
+```
 
-# SPIRE logs
+SPIRE logs:
+```bash
 kubectl logs -n spire -l app.kubernetes.io/name=server -c spire-server
 ```
 

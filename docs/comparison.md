@@ -285,7 +285,7 @@ server:
   allowed_client_spiffe_id: "spiffe://example.org/client"
 ```
 
-### Key Differences Highlighted
+### Differences
 
 **What go-spiffe SDK requires explicitly:**
 1. Context cancellation management (`ctx, cancel := context.WithCancel(ctx)`)
@@ -512,7 +512,7 @@ e5s adds minimal overhead:
 
 ---
 
-## Common Patterns
+## Common Usage
 
 ### Custom Middleware with e5s
 
@@ -590,10 +590,8 @@ You can even use both in the same application:
 
 ## Further Reading
 
-- [go-spiffe SDK Documentation](https://pkg.go.dev/github.com/spiffe/go-spiffe/v2)
 - [e5s API Reference](./API.md)
 - [e5s Quickstart](./QUICKSTART_LIBRARY.md)
-- [SPIRE Documentation](https://spiffe.io/docs/latest/spire/)
 - [Custom Middleware Examples](../examples/middleware/)
 
 ## Questions?

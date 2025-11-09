@@ -29,8 +29,7 @@ When you:
 
 2. **Local e5s Code**: You should be in the e5s project directory
 
-   Verify you're in the right place
-
+   Verify you're in the right place:
    ```bash
    ls -la e5s.go spiffehttp/ spire/ examples/
    ```
@@ -73,20 +72,17 @@ go mod init demo
 
 Use the Go `replace` directive to point to your local e5s code instead of the released version:
 
-Add replace directive to point to local e5s code. The '..' means parent directory (where e5s source code is)
-
+Add replace directive to point to local e5s code. The '..' means parent directory (where e5s source code is):
 ```bash
 go mod edit -replace github.com/sufield/e5s=..
 ```
 
-Add chi router dependency
-
+Add chi router dependency:
 ```bash
 go get github.com/go-chi/chi/v5
 ```
 
-Add e5s to require section (will use local code due to replace directive)
-
+Add e5s to require section (will use local code due to replace directive):
 ```bash
 go get github.com/sufield/e5s
 ```
@@ -381,13 +377,11 @@ Build test applications. These builds will use LOCAL e5s code (due to replace di
 From test-demo directory:
 
 Build server:
-
 ```bash
 go build -o bin/server ./server
 ```
 
 Build client:
-
 ```bash
 go build -o bin/client ./client
 ```
@@ -474,13 +468,11 @@ CGO_ENABLED=0 go build -o bin/client ./client
 ### Build Docker Images in Minikube
 
 Point Docker to Minikube's Docker daemon:
-
-```bash 
+```bash
 eval $(minikube docker-env)
 ```
 
 Build server image:
-
 ```bash
 docker build -t e5s-server:dev -f - . <<'EOF'
 FROM alpine:latest
@@ -491,7 +483,6 @@ EOF
 ```
 
 Build client image:
-
 ```bash
 docker build -t e5s-client:dev -f - . <<'EOF'
 FROM alpine:latest
@@ -556,14 +547,12 @@ spec:
 EOF
 ```
 
-Deploy the e5s server Deployment and Service to Kubernetes to run the server pod with SPIRE integration.
-
+Deploy the e5s server Deployment and Service to Kubernetes to run the server pod with SPIRE integration:
 ```bash
 kubectl apply -f k8s-server.yaml
 ```
 
-Wait for server to be ready
-
+Wait for server to be ready:
 ```bash
 kubectl wait --for=condition=ready pod -l app=e5s-server -n default --timeout=60s
 ```
@@ -621,20 +610,17 @@ EOF
 - All configuration is explicit and visible in ConfigMaps
 
 Run the test client:
-
-```
+```bash
 kubectl apply -f k8s-client-job.yaml
 ```
 
 Wait a few seconds:
-
-```
+```bash
 sleep 10
 ```
 
 Check logs:
-
-```
+```bash
 kubectl logs -l app=e5s-client
 ```
 
@@ -670,35 +656,30 @@ Now you can quickly test e5s library changes:
 
 ### Steps
 
-Make changes to e5s library code
-
+Make changes to e5s library code:
 ```bash
 cd ..  # Go to e5s project root
 vim e5s.go  # Edit any e5s files
 ```
 
-Return to test-demo and rebuild binaries
-
+Return to test-demo and rebuild binaries:
 ```bash
 cd test-demo
 CGO_ENABLED=0 go build -o bin/server ./server
 CGO_ENABLED=0 go build -o bin/client ./client
 ```
 
-Point to Minikube's Docker daemon
-
+Point to Minikube's Docker daemon:
 ```bash
 eval $(minikube docker-env)
 ```
 
-Remove old Docker images to force clean rebuild
-
+Remove old Docker images to force clean rebuild:
 ```bash
 docker rmi e5s-server:dev e5s-client:dev 2>/dev/null || true
 ```
 
-Rebuild Docker images with updated binaries
-
+Rebuild Docker images with updated binaries:
 ```bash
 docker build -t e5s-server:dev -f - . <<'EOF'
 FROM alpine:latest
@@ -717,15 +698,13 @@ ENTRYPOINT ["/app/client"]
 EOF
 ```
 
-Force server pods to restart with new image
-
+Force server pods to restart with new image:
 ```bash
 kubectl delete pods -l app=e5s-server
 kubectl wait --for=condition=ready pod -l app=e5s-server --timeout=60s
 ```
 
-Test with client using new image
-
+Test with client using new image:
 ```bash
 kubectl delete job e5s-client 2>/dev/null || true
 kubectl apply -f k8s-client-job.yaml
@@ -755,14 +734,12 @@ These steps test local e5s changes in a real Kubernetes environment before relea
 
 Check that your server and client are using proper mTLS with SPIRE identities:
 
-Check client logs - should show successful response
-
+Check client logs - should show successful response:
 ```bash
 kubectl logs -l app=e5s-client
 ```
 
-Check server logs - should show authenticated request
-
+Check server logs - should show authenticated request:
 ```bash
 kubectl logs -l app=e5s-server
 ```
@@ -831,14 +808,12 @@ The e5s CLI tool prevents manual errors by automatically discovering and constru
 
 **Quick Start:**
 
-Build the CLI tool (one time)
-
-```bash 
+Build the CLI tool (one time):
+```bash
 go build -o bin/e5s ./cmd/e5s
 ```
 
-Discover SPIFFE ID from running pod
-
+Discover SPIFFE ID from running pod:
 ```bash
 ./bin/e5s discover pod e5s-client
 ```
@@ -846,7 +821,6 @@ Discover SPIFFE ID from running pod
 Output: spiffe://example.org/ns/default/sa/default
 
 Use in configuration. Copy the output and paste into your e5s.yaml:
-
 ```bash
 allowed_client_spiffe_id: "spiffe://example.org/ns/default/sa/default"
 ```
@@ -877,12 +851,13 @@ Output: spiffe://example.org/ns/default/sa/default
 
 **Use in scripts to automatically configure server:**
 
-Discover the client's actual SPIFFE ID
-
+Discover the client's actual SPIFFE ID:
 ```bash
 CLIENT_ID=$(./bin/e5s discover pod e5s-client)
+```
 
-# Update server config with the discovered ID
+Update server config with the discovered ID:
+```bash
 cat > k8s-configs.yaml <<EOF
 apiVersion: v1
 kind: ConfigMap
@@ -898,21 +873,19 @@ data:
 EOF
 ```
 
-Apply the configuration
-
+Apply the configuration:
 ```bash
 kubectl apply -f k8s-configs.yaml
 ```
 
 **Construct SPIFFE IDs manually:**
 
-If you know the namespace and service account
-
-Output: spiffe://example.org/ns/default/sa/api-client
-
+If you know the namespace and service account:
 ```bash
 ./bin/e5s spiffe-id k8s example.org default api-client
 ```
+
+Output: spiffe://example.org/ns/default/sa/api-client
 
 This prevents manual typos when constructing SPIFFE IDs.
 
@@ -1263,34 +1236,29 @@ kubectl delete job e5s-client e5s-unregistered-client
 
 ### Check Pod Status
 
-List all pods
-
-```bash 
+List all pods:
+```bash
 kubectl get pods
 ```
 
-# Describe server pod for details
-
+Describe server pod for details:
 ```bash
 kubectl describe pod -l app=e5s-server
 ```
 
-# Check if SPIRE socket is mounted
-
+Check if SPIRE socket is mounted:
 ```bash
 kubectl exec -l app=e5s-server -- ls -la /spire/agent-socket/
 ```
 
 ### View Server Logs
 
-Follow server logs in real-time
-
-```bash 
+Follow server logs in real-time:
+```bash
 kubectl logs -l app=e5s-server -f
 ```
 
-# View last 100 lines
-
+View last 100 lines:
 ```bash
 kubectl logs -l app=e5s-server --tail=100
 ```
@@ -1334,7 +1302,6 @@ kubectl run -it test-client --rm --restart=Never \
 '
 ```
 Inside the pod, run:
-
 ```bash
 /app/client
 ```
@@ -1367,25 +1334,19 @@ kubectl logs -l app=e5s-client
 
 If you modify `spire/`:
 
-1. Rebuild binaries
-
+Rebuild binaries:
 ```bash
 CGO_ENABLED=0 go build -o bin/server ./server
 CGO_ENABLED=0 go build -o bin/client ./client
 ```
 
-# 2. Point to Minikube's Docker and clean old images
-
+Point to Minikube's Docker and clean old images:
 ```bash
 eval $(minikube docker-env)
-```
-
-```bash
 docker rmi e5s-server:dev e5s-client:dev 2>/dev/null || true
 ```
 
-3. Rebuild Docker images
-
+Rebuild Docker images:
 ```bash
 docker build -t e5s-server:dev -f - . <<'EOF'
 FROM alpine:latest
@@ -1404,45 +1365,38 @@ ENTRYPOINT ["/app/client"]
 EOF
 ```
 
-4. Force pods to use new images
-
+Force pods to use new images:
 ```bash
 kubectl delete pods -l app=e5s-server
-```
-
-```bash
 kubectl wait --for=condition=ready pod -l app=e5s-server --timeout=60s
 ```
 
-# 5. Watch SPIRE logs while testing
-
+Watch SPIRE logs while testing:
 ```bash
 kubectl logs -n spire -l app.kubernetes.io/name=server -c spire-server --follow
 ```
 
-6. Test certificate rotation
-SVIDs rotate every ~30 minutes - server should handle automatically
+Test certificate rotation. SVIDs rotate every ~30 minutes - server should handle automatically.
 
 ### Testing TLS Config Changes
 
 If you modify `spiffehttp/`:
 
-1. Rebuild and redeploy (see Step 9 workflow)
+Rebuild and redeploy (see Step 9 workflow).
 
-2. Use port-forward to inspect TLS from local machine
-
+Use port-forward to inspect TLS from local machine:
 ```bash
 kubectl port-forward svc/e5s-server 8443:8443
 ```
 
-3. In another terminal, inspect TLS handshake
-
+In another terminal, inspect TLS handshake:
 ```bash
 openssl s_client -connect localhost:8443 -showcerts
 ```
 
-4. Verify TLS 1.3 is enforced
-5. Verify client certificate is required (should fail without client cert)
+Verify TLS 1.3 is enforced.
+
+Verify client certificate is required (should fail without client cert).
 
 ---
 

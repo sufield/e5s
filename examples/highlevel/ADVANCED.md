@@ -361,11 +361,14 @@ func main() {
 ```
 
 **Usage:**
-```bash
-# Development
-E5S_CONFIG=./dev.yaml ./server
 
-# Production
+Development:
+```bash
+E5S_CONFIG=./dev.yaml ./server
+```
+
+Production:
+```bash
 E5S_CONFIG=/etc/e5s/prod.yaml ./server
 ```
 
@@ -442,14 +445,19 @@ func main() {
 ```
 
 **Usage:**
+
+Connect to local server:
 ```bash
-# Connect to local server
 ./client
+```
 
-# Connect to remote server
+Connect to remote server:
+```bash
 SERVER_ADDR=https://api.example.com:8443 ./client
+```
 
-# Use different config
+Use different config:
+```bash
 E5S_CONFIG=./prod.yaml SERVER_ADDR=https://prod.example.com:8443 ./client
 ```
 
