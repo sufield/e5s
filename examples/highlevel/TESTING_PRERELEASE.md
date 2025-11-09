@@ -658,11 +658,8 @@ EOF
 Run the test client:
 
 ```bash
-# Delete any previous run to get fresh logs
-kubectl delete job e5s-client 2>/dev/null || true
-
-# Apply the client job
-kubectl apply -f k8s-client-job.yaml
+# Run the client job (replace if it exists)
+kubectl replace --force -f k8s-client-job.yaml
 
 # Wait for job to complete
 sleep 10
@@ -671,10 +668,10 @@ sleep 10
 kubectl logs -l app=e5s-client
 ```
 
-**Note**: Kubernetes Jobs don't automatically restart. To re-run the client and get fresh logs, delete and reapply:
+**Note**: Kubernetes Jobs don't automatically restart. To re-run the client with fresh logs, use:
 
 ```bash
-kubectl delete job e5s-client && kubectl apply -f k8s-client-job.yaml
+kubectl replace --force -f k8s-client-job.yaml
 ```
 
 **Expected client output**:
@@ -759,8 +756,7 @@ kubectl wait --for=condition=ready pod -l app=e5s-server --timeout=60s
 
 Test with client using new image:
 ```bash
-kubectl delete job e5s-client 2>/dev/null || true
-kubectl apply -f k8s-client-job.yaml
+kubectl replace --force -f k8s-client-job.yaml
 sleep 10
 kubectl logs -l app=e5s-client
 ```
@@ -1173,7 +1169,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "TEST 1: Authenticated Client (HAS SPIRE identity)"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-kubectl apply -f k8s-client-job.yaml
+kubectl replace --force -f k8s-client-job.yaml 2>/dev/null || kubectl apply -f k8s-client-job.yaml
 echo "Waiting for authenticated client..."
 sleep 10
 echo "Client Output:"
@@ -1372,8 +1368,7 @@ kubectl apply -f k8s-configs.yaml
 3. Restart deployments to pick up new config:
 ```bash
 kubectl rollout restart deployment/e5s-server
-kubectl delete job e5s-client
-kubectl apply -f k8s-client-job.yaml
+kubectl replace --force -f k8s-client-job.yaml
 ```
 
 4. Check results:
@@ -1395,10 +1390,14 @@ This command:
 3. Deletes the server pod (Kubernetes automatically recreates it with the new image)
 4. Waits for the new pod to be ready
 
-Then verify with a fresh client run:
+Then test with a fresh client run:
 ```bash
-kubectl delete job e5s-client 2>/dev/null || true
-kubectl apply -f k8s-client-job.yaml
+make test-client
+```
+
+Or manually:
+```bash
+kubectl replace --force -f k8s-client-job.yaml
 sleep 10
 kubectl logs -l app=e5s-client
 ```

@@ -1,6 +1,6 @@
 .PHONY: test test-verbose test-race test-coverage test-coverage-html test-short \
 	clean help examples build build-cli build-all \
-	restart-server restart-client \
+	restart-server test-client \
 	example-highlevel-server example-highlevel-client example-minikube-server example-minikube-client \
 	lint lint-fix fmt fmt-check vet tidy verify \
 	ci ci-local \
@@ -34,7 +34,7 @@ TOOLS_SEC=govulncheck gosec gitleaks
 #
 # Development (Minikube):
 #   make restart-server  - Rebuild and restart server in one command
-#   make restart-client  - Rebuild and restart client in one command
+#   make test-client     - Rebuild, run, and show logs for client in one command
 #
 # Setup (Ubuntu 24.04 only):
 #   make install-tools   - Install all required tools (Go, Docker, kubectl, etc.)
@@ -106,9 +106,9 @@ EOF
 	@kubectl wait --for=condition=ready pod -l app=e5s-server --timeout=30s
 	@echo "✓ Server restarted successfully"
 
-## restart-client: Rebuild and restart e5s-example-client in Minikube
-restart-client:
-	@echo "Rebuilding and restarting client..."
+## test-client: Rebuild, run, and show logs for e5s-example-client in Minikube
+test-client:
+	@echo "Testing client (rebuild + run + logs)..."
 	@echo "  1. Building client binary..."
 	@CGO_ENABLED=0 go build -o bin/example-client ./cmd/example-client
 	@echo "  2. Setting Minikube docker environment..."
@@ -122,9 +122,13 @@ WORKDIR /app \
 COPY bin/example-client . \
 ENTRYPOINT ["/app/example-client"] \
 EOF
-	@echo "  5. Deleting job to allow recreation..."
-	@kubectl delete job e5s-client 2>/dev/null || true
-	@echo "✓ Client image rebuilt (apply job manifest to run)"
+	@echo "  5. Replacing job (delete + recreate)..."
+	@kubectl replace --force -f examples/highlevel/k8s-client-job.yaml 2>/dev/null || kubectl apply -f examples/highlevel/k8s-client-job.yaml
+	@echo "  6. Waiting for job to complete..."
+	@sleep 10
+	@echo ""
+	@echo "=== Client Logs ==="
+	@kubectl logs -l app=e5s-client
 
 # ============================================================================
 # Code Quality Targets (match CI)
