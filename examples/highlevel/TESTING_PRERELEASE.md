@@ -1383,44 +1383,19 @@ kubectl logs -l app=e5s-client
 
 ### Restarting Server to Pick Up Code Changes
 
-After making changes to the e5s library code, you need to rebuild and restart the server to see the changes:
+After making changes to the e5s library code, use this single command to rebuild and restart:
 
-1. Rebuild server binary:
 ```bash
-CGO_ENABLED=0 go build -o bin/server ./server
+make restart-server
 ```
 
-2. Point to Minikube's Docker daemon:
-```bash
-eval $(minikube docker-env)
-```
+This command:
+1. Rebuilds the server binary
+2. Rebuilds the Docker image in Minikube
+3. Deletes the server pod (Kubernetes automatically recreates it with the new image)
+4. Waits for the new pod to be ready
 
-3. Remove old Docker image to force clean rebuild:
-```bash
-docker rmi e5s-server:dev 2>/dev/null || true
-```
-
-4. Rebuild Docker image:
-```bash
-docker build -t e5s-server:dev -f - . <<'EOF'
-FROM alpine:latest
-WORKDIR /app
-COPY bin/server .
-ENTRYPOINT ["/app/server"]
-EOF
-```
-
-5. Restart the server deployment to pick up the new image:
-```bash
-kubectl rollout restart deployment/e5s-server
-```
-
-6. Wait for new pod to be ready:
-```bash
-kubectl wait --for=condition=ready pod -l app=e5s-server --timeout=60s
-```
-
-7. Verify with fresh client run:
+Then verify with a fresh client run:
 ```bash
 kubectl delete job e5s-client 2>/dev/null || true
 kubectl apply -f k8s-client-job.yaml
@@ -1428,7 +1403,37 @@ sleep 10
 kubectl logs -l app=e5s-client
 ```
 
-The `kubectl rollout restart` command gracefully restarts the deployment, creating new pods with the updated image while maintaining availability.
+<details>
+<summary>Manual steps (if make is not available)</summary>
+
+If you can't use make, run these steps manually:
+
+```bash
+# 1. Rebuild server binary
+CGO_ENABLED=0 go build -o bin/example-server ./cmd/example-server
+
+# 2. Point to Minikube's Docker daemon
+eval $(minikube docker-env)
+
+# 3. Remove old Docker image
+docker rmi e5s-server:dev 2>/dev/null || true
+
+# 4. Rebuild Docker image
+docker build -t e5s-server:dev -f - . <<'EOF'
+FROM alpine:latest
+WORKDIR /app
+COPY bin/example-server .
+ENTRYPOINT ["/app/example-server"]
+EOF
+
+# 5. Delete pod to force recreation
+kubectl delete pod -l app=e5s-server
+
+# 6. Wait for new pod
+kubectl wait --for=condition=ready pod -l app=e5s-server --timeout=30s
+```
+
+</details>
 
 ### Testing SPIRE Integration Changes
 

@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strings"
 
 	"github.com/sufield/e5s"
 )
@@ -144,7 +143,7 @@ USE CASES:
 	}
 
 	// Create HTTP request
-	req, err := http.NewRequest(*method, *url, nil)
+	req, err := http.NewRequest(*method, *url, http.NoBody)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -198,15 +197,4 @@ USE CASES:
 	}
 
 	return nil
-}
-
-// extractHostPort extracts host:port from a URL for display purposes
-func extractHostPort(rawURL string) string {
-	// Simple extraction - just for debug display
-	rawURL = strings.TrimPrefix(rawURL, "https://")
-	rawURL = strings.TrimPrefix(rawURL, "http://")
-	if idx := strings.Index(rawURL, "/"); idx != -1 {
-		return rawURL[:idx]
-	}
-	return rawURL
 }
