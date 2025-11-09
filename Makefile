@@ -32,14 +32,14 @@ TOOLS_SEC=govulncheck gosec gitleaks
 #   make fmt             - Format code
 #   make help            - Show all available targets
 #
-# Development (Minikube):
-#   make start-stack     - Start complete stack (Minikube + SPIRE + apps)
-#   make stop-stack      - Stop complete stack (apps + SPIRE + Minikube)
-#   make restart-server  - Rebuild and restart server in one command
-#   make test-client     - Rebuild, run, and show logs for client in one command
+# Complete Setup Flow:
+#   make install-tools   - [1] Install prerequisites (Go, Docker, Minikube, kubectl, Helm)
+#   make start-stack     - [2] Start testing stack (Minikube + SPIRE)
+#   make restart-server  - [3] Rebuild and restart server during development
+#   make test-client     - [4] Rebuild, run, and show logs for client
+#   make stop-stack      - [5] Stop everything (apps + SPIRE + Minikube)
 #
-# Setup (Ubuntu 24.04 only):
-#   make install-tools   - Install all required tools (Go, Docker, kubectl, etc.)
+# Individual Commands:
 #   make verify-tools    - Verify all required tools are installed
 # ============================================================================
 
@@ -89,6 +89,8 @@ build-all: build build-cli build-examples
 ## start-stack: Start complete testing stack (Minikube + SPIRE + e5s apps)
 start-stack:
 	@echo "Starting complete testing stack..."
+	@echo ""
+	@echo "Note: If prerequisites are missing, run 'make install-tools' first (Ubuntu 24.04)"
 	@echo ""
 	@echo "=== Step 1: Starting Minikube ==="
 	@minikube status > /dev/null 2>&1 || minikube start --cpus=4 --memory=8192 --driver=docker
