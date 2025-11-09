@@ -370,6 +370,7 @@ Security best practices are enforced automatically:
 ### 4. Middleware Support
 
 #### go-spiffe SDK
+
 Must implement custom middleware for peer extraction:
 
 ```go
@@ -387,6 +388,7 @@ func authMiddleware(next http.Handler) http.Handler {
 ```
 
 #### e5s
+
 Provides ready-to-use middleware utilities:
 
 ```go
@@ -407,6 +409,7 @@ See `examples/middleware/main.go` for complete examples.
 ### 5. Testing
 
 #### go-spiffe SDK
+
 Requires mocking Workload API or running full SPIRE stack:
 
 ```go
@@ -466,21 +469,29 @@ Requires a running SPIRE agent for all tests. See `docs/INTEGRATION_TESTING.md` 
 ### From go-spiffe SDK to e5s
 
 1. **Extract configuration values to YAML:**
-   ```go
-   // Before: hardcoded
-   const socketPath = "unix:///tmp/spire-agent/public/api.sock"
+   
+   Before: hardcoded
 
-   // After: config file
-   // spire:
-   //   workload_socket: "unix:///tmp/spire-agent/public/api.sock"
+   ```go
+   const socketPath = "unix:///tmp/spire-agent/public/api.sock"
+   ```
+
+   After: config file
+   
+   ```yaml
+   spire:
+      workload_socket: "unix:///tmp/spire-agent/public/api.sock"
    ```
 
 2. **Replace source creation:**
-   ```go
-   // Before
-   source, err := workloadapi.NewX509Source(ctx, ...)
+   Before:
 
-   // After
+   ```go
+   source, err := workloadapi.NewX509Source(ctx, ...)
+   ```
+   After
+   
+   ```go
    client, err := e5s.Client(ctx, "config.yaml")
    ```
 
@@ -574,7 +585,7 @@ For gRPC, use raw go-spiffe SDK with the `spiffegrpc` package.
 
 ## Conclusion
 
-- **e5s is a convenience wrapper** around go-spiffe SDK for HTTP use cases
+- **e5s is a full-featured library** built on go-spiffe SDK that provides config-driven workflows, production features, and both high-level and low-level APIs for HTTP mTLS
 - **Both are equally secure** - same underlying mechanisms
 - **Choose based on your needs:**
   - HTTP services → e5s

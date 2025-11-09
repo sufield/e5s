@@ -15,30 +15,41 @@ This generated documentation includes:
 
 Use the `go doc` command:
 
-```bash
-# View package-level documentation
-go doc github.com/sufield/e5s
+View package-level documentation
 
-# View specific function documentation
+```bash 
+go doc github.com/sufield/e5s
+```
+
+View specific function documentation
+
+```bash
 go doc github.com/sufield/e5s.Run
 go doc github.com/sufield/e5s.Start
 go doc github.com/sufield/e5s.Client
+```
 
-# View all exported symbols
+View all exported symbols
+
+```bash
 go doc -all github.com/sufield/e5s
 ```
 
 Or run a local documentation server:
 
+Install godoc (if not already installed)
+
 ```bash
-# Install godoc (if not already installed)
 go install golang.org/x/tools/cmd/godoc@latest
-
-# Start local documentation server
-godoc -http=:6060
-
-# Visit http://localhost:6060/pkg/github.com/sufield/e5s/
 ```
+
+Start local documentation server
+
+```bash
+godoc -http=:6060
+```
+
+Visit http://localhost:6060/pkg/github.com/sufield/e5s/
 
 ## API Overview
 

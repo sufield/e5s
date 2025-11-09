@@ -190,26 +190,7 @@ Create a client once, use it for multiple requests.
 
 ### Create Configuration File
 
-Use the existing `e5s.yaml` from this directory, or create one:
-
-```yaml
-spire:
-  # Path to SPIRE Agent's Workload API socket
-  workload_socket: unix:///tmp/spire-agent/public/api.sock
-
-  # (Optional) How long to wait for identity from SPIRE before failing startup
-  # If not set, defaults to 30s
-  # initial_fetch_timeout: 30s
-
-server:
-  listen_addr: ":8443"
-  # Accept any client in this trust domain
-  allowed_client_trust_domain: "example.org"
-
-client:
-  # Connect to any server in this trust domain
-  expected_server_trust_domain: "example.org"
-```
+Use the existing `e5s.yaml` from this directory.
 
 ### Build Binaries
 
@@ -464,7 +445,7 @@ func main() {
 **Try to run it:**
 
 ```bash
-cd ~/mtls-demo
+cd ~/demo
 go run unregistered-client/main.go
 ```
 

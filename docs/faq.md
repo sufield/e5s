@@ -131,9 +131,15 @@ client, shutdown, err := e5s.Client(configPath)
 ```
 
 Or use Helm values files for Kubernetes deployments:
+
+Apply dev environment (uses values-dev.yaml):
 ```bash
-helmfile -e dev apply     # Uses values-dev.yaml
-helmfile -e prod apply    # Uses values-prod.yaml
+helmfile -e dev apply
+```
+
+Apply prod environment (uses values-prod.yaml):
+```bash
+helmfile -e prod apply
 ```
 
 ### Why does the server use `:8443` but the client uses `localhost:8443`?
@@ -297,12 +303,15 @@ See the integration test examples:
 2. **Local testing** - Use scripts in `examples/minikube-lowlevel/`
 
 Example integration test setup:
+
+Start Minikube with SPIRE:
 ```bash
-# Start Minikube with SPIRE
 cd examples/minikube-lowlevel
 ./setup.sh
+```
 
-# Run integration tests
+Run integration tests:
+```bash
 ./scripts/run-integration-tests.sh
 ```
 
@@ -390,15 +399,20 @@ This usually means:
 3. **Wrong socket path** - Client is not connecting to SPIRE agent properly
 
 Debug steps:
+
+Check if workload is registered:
 ```bash
-# Check if workload is registered
 kubectl exec -n spire-system spire-server-0 -- \
   spire-server entry show
+```
 
-# Check SPIRE agent logs
+Check SPIRE agent logs:
+```bash
 kubectl logs -n spire-system -l app=spire-agent
+```
 
-# Check your app logs
+Check your app logs:
+```bash
 kubectl logs <your-pod>
 ```
 
@@ -500,16 +514,63 @@ Yes! Use each for what it's best at:
 
 Example:
 ```go
-// HTTP server with e5s
-go func() {
-    shutdown, _ := e5s.Start("config.yaml", httpHandler)
-    defer shutdown()
-}()
+import (
+    "context"
+    "os"
+    "os/signal"
+    "syscall"
 
-// gRPC server with go-spiffe SDK
-source, _ := workloadapi.NewX509Source(ctx)
-creds := grpccredentials.MTLSServerCredentials(source, source, ...)
-grpcServer := grpc.NewServer(grpc.Creds(creds))
+    "github.com/spiffe/go-spiffe/v2/spiffegrpc/grpccredentials"
+    "github.com/spiffe/go-spiffe/v2/workloadapi"
+    "github.com/sufield/e5s"
+    "google.golang.org/grpc"
+)
+
+func main() {
+    ctx, cancel := context.WithCancel(context.Background())
+    defer cancel()
+
+    // Start HTTP server with e5s
+    httpShutdown, err := e5s.Start("config.yaml", httpHandler)
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer httpShutdown()
+
+    // Start gRPC server with go-spiffe SDK
+    source, err := workloadapi.NewX509Source(ctx)
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer source.Close()
+
+    creds := grpccredentials.MTLSServerCredentials(source, source,
+        tlsconfig.AuthorizeAny())
+    grpcServer := grpc.NewServer(grpc.Creds(creds))
+
+    // Register gRPC services here
+    // pb.RegisterYourServiceServer(grpcServer, &yourService{})
+
+    listener, err := net.Listen("tcp", ":50051")
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    go func() {
+        if err := grpcServer.Serve(listener); err != nil {
+            log.Printf("gRPC server error: %v", err)
+        }
+    }()
+
+    // Wait for interrupt signal
+    sigChan := make(chan os.Signal, 1)
+    signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+    <-sigChan
+
+    // Graceful shutdown
+    grpcServer.GracefulStop()
+    httpShutdown()
+}
 ```
 
 ---

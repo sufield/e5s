@@ -8,14 +8,14 @@
 go get github.com/sufield/e5s@latest
 ```
 
-## Core Concepts
+## Main Packages
 
 The library has two main packages:
 
 - **`spiffehttp`** - Provider-agnostic mTLS primitives and policy
 - **`spire`** - SPIRE Workload API client
 
-## Quick Example: mTLS Server
+## Example mTLS Server
 
 ```go
 package main
@@ -74,7 +74,7 @@ func main() {
 }
 ```
 
-## Quick Example: mTLS Client
+## Example mTLS Client
 
 ```go
 package main

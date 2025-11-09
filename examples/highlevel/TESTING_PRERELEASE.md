@@ -52,17 +52,21 @@ When you:
 
 ## Step 1: Create Test Application Directory
 
-Create a test application that uses your local e5s code:
+Create a test application that uses your local e5s code.
 
+Navigate to the e5s project root (where your e5s code is located):
 ```bash
-# Navigate to the e5s project root
-cd /path/to/e5s  # Where your e5s code is located
+cd /path/to/e5s
+```
 
-# Create a test directory
+Create a test directory:
+```bash
 mkdir -p demo
 cd demo
+```
 
-# Initialize Go module
+Initialize Go module:
+```bash
 go mod init demo
 ```
 
@@ -292,31 +296,32 @@ Create `client-config.yaml`:
 
 ```bash
 cat > client-config.yaml <<'EOF'
-# Application-specific configuration
-# This is YOUR application's config - not part of e5s library
 server_url: "https://localhost:8443/time"
 EOF
 ```
 
-This file contains settings specific to your application (like server URLs, timeouts, etc.).
+This file contains settings specific to your application (like server URLs, timeouts, etc.). This is YOUR application's config - not part of e5s library.
 
 ### Create e5s Library Configuration
 
 The configuration below includes hardcoded SPIFFE IDs for simplicity in this initial setup. In production, you should discover SPIFFE IDs using the e5s CLI tool to avoid typos:
 
->
+> Build the CLI tool:
 > ```bash
-> # Build the CLI tool
 > go build -o bin/e5s ./cmd/e5s
->
-> # Discover SPIFFE ID from running pod
-> ./bin/e5s discover pod e5s-client
-> # Output: spiffe://example.org/ns/default/sa/default
->
-> # Or construct SPIFFE ID from known values
-> ./bin/e5s spiffe-id k8s example.org default default
-> # Output: spiffe://example.org/ns/default/sa/default
 > ```
+>
+> Discover SPIFFE ID from running pod:
+> ```bash
+> ./bin/e5s discover pod e5s-client
+> ```
+> Output: spiffe://example.org/ns/default/sa/default
+>
+> Or construct SPIFFE ID from known values:
+> ```bash
+> ./bin/e5s spiffe-id k8s example.org default default
+> ```
+> Output: spiffe://example.org/ns/default/sa/default
 >
 > See **Step 11: Discovering SPIFFE IDs** for instructions on using the CLI tool.
 
@@ -373,8 +378,7 @@ go get gopkg.in/yaml.v3
 
 ## Step 6: Build Test Binaries
 
-Build test applications. These builds will use LOCAL e5s code (due to replace directive)
-From test-demo directory:
+Build test applications. These builds will use LOCAL e5s code (due to replace directive) from test-demo directory.
 
 Build server:
 ```bash
@@ -656,10 +660,10 @@ Now you can quickly test e5s library changes:
 
 ### Steps
 
-Make changes to e5s library code:
+Make changes to e5s library code (go to e5s project root):
 ```bash
-cd ..  # Go to e5s project root
-vim e5s.go  # Edit any e5s files
+cd ..
+vim e5s.go
 ```
 
 Return to test-demo and rebuild binaries:
@@ -1108,42 +1112,39 @@ EOF
 
 ### Run Both Tests
 
+Create service account for unregistered client (if not already created):
 ```bash
-# Create service account for unregistered client (if not already created)
 kubectl create serviceaccount unregistered-client -n default 2>/dev/null || true
+```
 
-# Clean up any previous jobs
+Clean up any previous jobs:
+```bash
 kubectl delete job e5s-client e5s-unregistered-client 2>/dev/null || true
 sleep 2
+```
 
+Run both tests:
+```bash
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "TEST 1: Authenticated Client (HAS SPIRE identity)"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-
-# Deploy authenticated client
 kubectl apply -f k8s-client-job.yaml
 echo "Waiting for authenticated client..."
 sleep 10
-
 echo "Client Output:"
 kubectl logs -l app=e5s-client
 echo ""
-
 echo "Server Logs (authenticated request):"
 kubectl logs -l app=e5s-server --tail=3 | grep "Authenticated"
 echo ""
-
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "TEST 2: Unregistered Client (NO SPIRE identity)"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-
-# Deploy unregistered client
 kubectl apply -f k8s-unregistered-client-job.yaml
 echo "Waiting for unregistered client to fail..."
 sleep 30
-
 echo "Unregistered Client Output (will fail):"
 kubectl logs -l app=e5s-unregistered-client 2>&1
 echo ""
@@ -1314,19 +1315,25 @@ Inside the pod, run:
 
 If you modify `internal/config/`:
 
+1. Update k8s-configs.yaml with new config:
 ```bash
-# 1. Update k8s-configs.yaml with new config
 vim k8s-configs.yaml
+```
 
-# 2. Apply updated ConfigMap
+2. Apply updated ConfigMap:
+```bash
 kubectl apply -f k8s-configs.yaml
+```
 
-# 3. Restart deployments to pick up new config
+3. Restart deployments to pick up new config:
+```bash
 kubectl rollout restart deployment/e5s-server
 kubectl delete job e5s-client
 kubectl apply -f k8s-client-job.yaml
+```
 
-# 4. Check results
+4. Check results:
+```bash
 kubectl logs -l app=e5s-client
 ```
 
@@ -1463,28 +1470,36 @@ After release, verify:
 
 **Issue: "replace directive not working"**
 
+Verify replace directive is in go.mod:
 ```bash
-# Verify replace directive is in go.mod
 cat go.mod | grep replace
+```
 
-# Should show:
-# replace github.com/sufield/e5s => ..
+Should show:
+```
+replace github.com/sufield/e5s => ..
+```
 
-# Re-run go mod tidy
+Re-run go mod tidy:
+```bash
 go mod tidy
+```
 
-# Verify e5s.go exists in parent directory
+Verify e5s.go exists in parent directory:
+```bash
 ls -la ../e5s.go
 ```
 
 **Issue: "changes not reflected in build"**
 
+Always rebuild after changing e5s code:
 ```bash
-# Always rebuild after changing e5s code
 go build -o bin/server ./server
 go build -o bin/client ./client
+```
 
-# Or use go run (rebuilds automatically)
+Or use go run (rebuilds automatically):
+```bash
 go run ./server/main.go
 ```
 

@@ -220,19 +220,29 @@ e5s does all of this in one `Start("e5s.yaml", handler)` call.
 
 To verify layer compliance:
 
+Check that spire doesn't import e5s or spiffehttp
+
 ```bash
-# Check that spire doesn't import e5s or spiffehttp
 go list -f '{{.ImportPath}}: {{.Imports}}' ./spire | grep -E 'e5s|spiffehttp'
-# Should return nothing
+```
+
+Should return nothing
 
 # Check that spiffehttp doesn't import e5s or spire
-go list -f '{{.ImportPath}}: {{.Imports}}' ./spiffehttp | grep -E 'github.com/sufield/e5s[^/]|spire'
-# Should return nothing
 
-# Check that e5s imports both spire and spiffehttp
-go list -f '{{.ImportPath}}: {{.Imports}}' . | grep -E 'spire|spiffehttp'
-# Should show: github.com/sufield/e5s/spire github.com/sufield/e5s/spiffehttp
+```bash
+go list -f '{{.ImportPath}}: {{.Imports}}' ./spiffehttp | grep -E 'github.com/sufield/e5s[^/]|spire'
 ```
+
+Should return nothing
+
+Check that e5s imports both spire and spiffehttp
+
+```bash
+go list -f '{{.ImportPath}}: {{.Imports}}' . | grep -E 'spire|spiffehttp'
+```
+
+Should show: github.com/sufield/e5s/spire github.com/sufield/e5s/spiffehttp
 
 ## Evolution
 
