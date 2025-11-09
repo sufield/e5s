@@ -12,10 +12,7 @@ Or build from source:
 
 ```bash
 cd /path/to/e5s
-```
-
-```bash
-go build -o bin/e5s ./cmd/e5s
+make build-cli
 ```
 
 ## Commands
@@ -66,13 +63,29 @@ fi
 
 Construct SPIFFE IDs from components to prevent manual errors.
 
-**Kubernetes service account:**
+**Kubernetes service account (auto-detect trust domain):**
 
 ```bash
-e5s spiffe-id k8s example.org default api-client 
+e5s spiffe-id k8s default api-client
 ```
 
 Output: spiffe://example.org/ns/default/sa/api-client
+
+The trust domain is auto-detected from your SPIRE Helm installation or ConfigMap. To use a specific trust domain:
+
+```bash
+e5s spiffe-id k8s default api-client --trust-domain=example.org
+```
+
+**From deployment YAML file:**
+
+```bash
+e5s spiffe-id from-deployment ./k8s/client-deployment.yaml
+```
+
+Output: spiffe://example.org/ns/production/sa/api-client
+
+This extracts namespace, service account, and auto-detects trust domain from the deployment file.
 
 **Custom path:**
 
@@ -85,13 +98,13 @@ Output: spiffe://example.org/service/api-server
 **Use in shell scripts:**
 
 ```bash
-ALLOWED_CLIENT_ID=$(e5s spiffe-id k8s example.org production api-client)
+ALLOWED_CLIENT_ID=$(e5s spiffe-id k8s production api-client)
 echo "allowed_client_spiffe_id: \"$ALLOWED_CLIENT_ID\"" >> e5s.yaml
 ```
 
 **Use with envsubst:**
 ```bash
-export CLIENT_SPIFFE_ID=$(e5s spiffe-id k8s example.org default web-frontend)
+export CLIENT_SPIFFE_ID=$(e5s spiffe-id k8s default web-frontend)
 envsubst < e5s.yaml.template > e5s.yaml
 ```
 
@@ -99,9 +112,18 @@ envsubst < e5s.yaml.template > e5s.yaml
 
 Discover actual SPIFFE IDs from running Kubernetes resources.
 
+**Discover trust domain:**
+```bash
+e5s discover trust-domain
+```
+
+Output: example.org
+
+This auto-detects the trust domain from your SPIRE Helm installation or ConfigMap.
+
 **From pod name:**
 ```bash
-e5s discover pod e5s-client 
+e5s discover pod e5s-client
 ```
 
 Output: spiffe://example.org/ns/default/sa/default
@@ -115,26 +137,37 @@ Output: spiffe://example.org/ns/production/sa/api-client-sa
 
 **From deployment:**
 ```bash
+e5s discover deployment web-frontend
+```
+
+Output: spiffe://example.org/ns/default/sa/web-sa
+
+All discovery commands auto-detect the trust domain. To override:
+```bash
 e5s discover deployment web-frontend --trust-domain my-domain.com
 ```
 
 Output: spiffe://my-domain.com/ns/default/sa/web-sa
 
-**Use in deployment scripts:**
+**Use in deployment scripts (UNIX philosophy - composable):**
 
 ```bash
-# Discover the actual client SPIFFE ID
-CLIENT_ID=$(e5s discover pod my-client)
+# Recommended: Use label selector (no manual pod selection)
+CLIENT_ID=$(e5s discover label app=api-client)
 
-# Update server config to allow that specific client
+# Or pipe kubectl output to e5s
+CLIENT_ID=$(kubectl get pods -l app=api-client -o name | head -1 | cut -d/ -f2 | xargs e5s discover pod)
+
+# Generate config with discovered ID
 cat > server-config.yaml <<EOF
 server:
   listen_addr: ":8443"
   allowed_client_spiffe_id: "$CLIENT_ID"
 EOF
 
-# Deploy
-kubectl create configmap server-config --from-file=server-config.yaml
+# Validate and deploy
+e5s validate server-config.yaml && \
+kubectl create configmap server-config --from-file=server-config.yaml && \
 kubectl apply -f deployment.yaml
 ```
 

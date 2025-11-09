@@ -10,11 +10,11 @@
 
 ## When to Use This Guide
 
-When you:
-- Are developing new features for the e5s library
-- Need to test changes before creating a release
-- Want to validate bug fixes in a real environment
-- Are testing the tutorial steps before release
+When:
+- Developing new features for the e5s library
+- Testing changes before creating a release
+- Validating bug fixes in a real environment
+- Testing the tutorial steps before release
 
 ---
 
@@ -39,7 +39,7 @@ When you:
 3. **Build e5s CLI Tool**: Build the CLI tool for checking versions and managing configurations
 
    ```bash
-   go build -o bin/e5s ./cmd/e5s
+   make build-cli
    ```
 
 4. **Verify Required Tools**: Check that all required tools are installed
@@ -52,20 +52,23 @@ When you:
 
 ## Step 1: Create Test Application Directory
 
-Create a test application that uses your local e5s code.
+Create a test application that uses your local e5s code. 
 
-Navigate to the e5s project root (where your e5s code is located):
+Go to the e5s project root:
+
 ```bash
 cd /path/to/e5s
 ```
 
 Create a test directory:
+
 ```bash
 mkdir -p demo
 cd demo
 ```
 
 Initialize Go module:
+
 ```bash
 go mod init demo
 ```
@@ -113,8 +116,8 @@ replace github.com/sufield/e5s => ..
 ```
 
 - The `replace` directive tells Go to use the parent directory instead of downloading from GitHub
-- Any `import "github.com/sufield/e5s"` in your code will use your local e5s code
-- You can modify e5s code and immediately see changes in your test application
+- Any `import "github.com/sufield/e5s"` in code will use local e5s code
+- You can modify e5s code and immediately see changes in test application
 - Perfect for iterating on library changes
 
 ---
@@ -130,9 +133,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -140,9 +140,6 @@ import (
 )
 
 func main() {
-	// Set config path for e5s to use
-	os.Setenv("E5S_CONFIG", "e5s.yaml")
-
 	// Create HTTP router
 	r := chi.NewRouter()
 
@@ -162,7 +159,7 @@ func main() {
 			return
 		}
 		log.Printf("✓ Authenticated request from: %s", id)
-    log.Printf("--------------Nov 6, 2025------(server main.go running...)")
+    log.Printf("--------------Nov 10, 2025------(server main.go running...)")
 
 		// Get current server time
 		serverTime := time.Now().Format(time.RFC3339)
@@ -171,21 +168,10 @@ func main() {
 		fmt.Fprintf(w, "%s\n", response)
 	})
 
-	// Start server in background
-	shutdown, err := e5s.Start("e5s.yaml", r)
-	if err != nil {
+	// Start server with automatic signal handling and graceful shutdown
+	if err := e5s.Serve("e5s.yaml", r); err != nil {
 		log.Fatal(err)
 	}
-	defer func() {
-		if err := shutdown(); err != nil {
-			log.Printf("Shutdown error: %v", err)
-		}
-	}()
-
-	// Wait for interrupt signal
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-	<-sigChan
 }
 ```
 
@@ -215,7 +201,7 @@ type AppConfig struct {
 }
 
 func main() {
-  log.Printf("--------------Nov 6, 2025------(client main.go running...)")
+  log.Printf("--------------Nov 10, 2025------(client main.go running...)")
 	log.Println("Starting e5s mTLS client...")
 
 	// Load application-specific configuration
@@ -235,28 +221,26 @@ func main() {
 		log.Fatalf("❌ server_url not set in config and SERVER_URL environment variable not set")
 	}
 
-	// Create mTLS client
-	client, cleanup, err := e5s.Client("e5s.yaml")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer func() {
-		if err := cleanup(); err != nil {
-			log.Printf("Cleanup error: %v", err)
+	// Perform mTLS GET request with automatic client lifecycle management
+	err = e5s.WithClient("e5s.yaml", func(client *http.Client) error {
+		resp, err := client.Get(serverURL)
+		if err != nil {
+			return err
 		}
-	}()
+		defer resp.Body.Close()
 
-	// Perform mTLS GET request
-	resp, err := client.Get(serverURL)
+		// Read and print response
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+		log.Printf("← Server response: %s", string(body))
+		fmt.Print(string(body))
+		return nil
+	})
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer resp.Body.Close()
-
-	// Read and print response
-	body, _ := io.ReadAll(resp.Body)
-	log.Printf("← Server response: %s", string(body))
-	fmt.Print(string(body))
 }
 
 // loadAppConfig loads the application-specific configuration
@@ -300,35 +284,93 @@ server_url: "https://localhost:8443/time"
 EOF
 ```
 
-This file contains settings specific to your application (like server URLs, timeouts, etc.). This is YOUR application's config - not part of e5s library.
+This file has settings specific to your application (like server URLs, timeouts, etc.). This is YOUR application's config - not part of e5s library.
 
 ### Create e5s Library Configuration
 
-The configuration below includes hardcoded SPIFFE IDs for simplicity in this initial setup. In production, you should discover SPIFFE IDs using the e5s CLI tool to avoid typos:
+Use the e5s CLI tool to construct the SPIFFE ID to avoid mistakes.
 
-> Build the CLI tool:
-> ```bash
-> go build -o bin/e5s ./cmd/e5s
-> ```
->
-> Discover SPIFFE ID from running pod:
-> ```bash
-> ./bin/e5s discover pod e5s-client
-> ```
-> Output: spiffe://example.org/ns/default/sa/default
->
-> Or construct SPIFFE ID from known values:
-> ```bash
-> ./bin/e5s spiffe-id k8s example.org default default
-> ```
-> Output: spiffe://example.org/ns/default/sa/default
->
-> See **Step 11: Discovering SPIFFE IDs** for instructions on using the CLI tool.
+The SPIFFE ID format for Kubernetes is: `spiffe://{trust-domain}/ns/{namespace}/sa/{service-account}`
 
-Create `e5s.yaml`:
+**Where do these values come from?**
+
+These values come from your Kubernetes deployment configuration. You need to know:
+
+1. **Namespace**: The Kubernetes namespace where your client will run (e.g., `default`, `production`)
+2. **Service Account**: The Kubernetes service account your client pod will use (e.g., `default`, `api-client`)
+
+**How to find these values:**
+
+From your Kubernetes deployment YAML:
+```yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  namespace: default          # <-- This is your namespace
+spec:
+  template:
+    spec:
+      serviceAccountName: default  # <-- This is your service account
+```
+
+Or if your deployment is already running, discover the SPIFFE ID automatically.
+
+**Recommended: Use label selector** (most composable with UNIX philosophy):
 
 ```bash
-cat > e5s.yaml <<'EOF'
+# Discover from label selector - no manual pod name needed
+CLIENT_SPIFFE_ID=$(./bin/e5s discover label app=e5s-client)
+```
+
+**Alternative: Pipe kubectl output to e5s**:
+
+```bash
+# Using UNIX pipes - kubectl finds pod, xargs passes to e5s
+CLIENT_SPIFFE_ID=$(kubectl get pods -l app=e5s-client -o name | head -1 | cut -d/ -f2 | xargs ./bin/e5s discover pod)
+```
+
+**Or extract from deployment YAML file** (before deploying):
+
+```bash
+# Extract everything from YAML - namespace, service account, and trust domain
+CLIENT_SPIFFE_ID=$(./bin/e5s spiffe-id from-deployment ./k8s-client.yaml)
+```
+
+**For this tutorial, we're using:**
+- Namespace: `default` (standard Kubernetes namespace)
+- Service Account: `default` (standard Kubernetes service account)
+
+Since we know these values, construct the SPIFFE ID using the CLI tool (trust domain is auto-detected):
+
+```bash
+CLIENT_SPIFFE_ID=$(./bin/e5s spiffe-id k8s default default)
+echo "Client SPIFFE ID: $CLIENT_SPIFFE_ID"
+```
+
+**What this command does:**
+- `spiffe-id k8s` - construct a Kubernetes-style SPIFFE ID
+- `default` (first) - Kubernetes namespace
+- `default` (second) - Kubernetes service account name
+- Trust domain is auto-detected from SPIRE installation
+
+The trust domain is auto-detected from your SPIRE Helm installation or ConfigMap. If you need to see what trust domain was detected, run:
+
+```bash
+./bin/e5s discover trust-domain
+```
+
+If auto-detection fails (e.g., SPIRE not installed via Helm), you can explicitly specify the trust domain:
+
+```bash
+CLIENT_SPIFFE_ID=$(./bin/e5s spiffe-id k8s default default --trust-domain=example.org)
+```
+
+Output: `Client SPIFFE ID: spiffe://example.org/ns/default/sa/default`
+
+Now create `e5s.yaml` using the discovered SPIFFE ID:
+
+```bash
+cat > e5s.yaml <<EOF
 spire:
   # Path to SPIRE Agent's Workload API socket
   workload_socket: unix:///tmp/spire-agent/public/api.sock
@@ -342,7 +384,7 @@ server:
   # Only accept the specific registered client SPIFFE ID
   # This demonstrates zero-trust: even if SPIRE issues other identities,
   # the server only accepts the explicitly authorized client
-  allowed_client_spiffe_id: "spiffe://example.org/ns/default/sa/default"
+  allowed_client_spiffe_id: "$CLIENT_SPIFFE_ID"
 
 client:
   # Connect to any server in this trust domain
@@ -614,18 +656,25 @@ EOF
 - All configuration is explicit and visible in ConfigMaps
 
 Run the test client:
+
 ```bash
+# Delete any previous run to get fresh logs
+kubectl delete job e5s-client 2>/dev/null || true
+
+# Apply the client job
 kubectl apply -f k8s-client-job.yaml
-```
 
-Wait a few seconds:
-```bash
+# Wait for job to complete
 sleep 10
+
+# Check the logs
+kubectl logs -l app=e5s-client
 ```
 
-Check logs:
+**Note**: Kubernetes Jobs don't automatically restart. To re-run the client and get fresh logs, delete and reapply:
+
 ```bash
-kubectl logs -l app=e5s-client
+kubectl delete job e5s-client && kubectl apply -f k8s-client-job.yaml
 ```
 
 **Expected client output**:
@@ -811,11 +860,6 @@ spiffe://example.org/ns/production/sa/my-client
 The e5s CLI tool prevents manual errors by automatically discovering and constructing SPIFFE IDs.
 
 **Quick Start:**
-
-Build the CLI tool (one time):
-```bash
-go build -o bin/e5s ./cmd/e5s
-```
 
 Discover SPIFFE ID from running pod:
 ```bash
@@ -1023,7 +1067,7 @@ server:
 
 ✅ **Right approach:** Discover actual SPIFFE IDs using observability, then configure explicit authorization
 
-**principle:** Your configuration should match reality (what identities are actually being used), not assumptions.
+Your configuration should match reality (what identities are actually being used), not assumptions.
 
 ---
 
@@ -1336,6 +1380,55 @@ kubectl apply -f k8s-client-job.yaml
 ```bash
 kubectl logs -l app=e5s-client
 ```
+
+### Restarting Server to Pick Up Code Changes
+
+After making changes to the e5s library code, you need to rebuild and restart the server to see the changes:
+
+1. Rebuild server binary:
+```bash
+CGO_ENABLED=0 go build -o bin/server ./server
+```
+
+2. Point to Minikube's Docker daemon:
+```bash
+eval $(minikube docker-env)
+```
+
+3. Remove old Docker image to force clean rebuild:
+```bash
+docker rmi e5s-server:dev 2>/dev/null || true
+```
+
+4. Rebuild Docker image:
+```bash
+docker build -t e5s-server:dev -f - . <<'EOF'
+FROM alpine:latest
+WORKDIR /app
+COPY bin/server .
+ENTRYPOINT ["/app/server"]
+EOF
+```
+
+5. Restart the server deployment to pick up the new image:
+```bash
+kubectl rollout restart deployment/e5s-server
+```
+
+6. Wait for new pod to be ready:
+```bash
+kubectl wait --for=condition=ready pod -l app=e5s-server --timeout=60s
+```
+
+7. Verify with fresh client run:
+```bash
+kubectl delete job e5s-client 2>/dev/null || true
+kubectl apply -f k8s-client-job.yaml
+sleep 10
+kubectl logs -l app=e5s-client
+```
+
+The `kubectl rollout restart` command gracefully restarts the deployment, creating new pods with the updated image while maintaining availability.
 
 ### Testing SPIRE Integration Changes
 

@@ -11,7 +11,7 @@ import (
 
 func discoverCommand(args []string) error {
 	fs := flag.NewFlagSet("discover", flag.ExitOnError)
-	trustDomain := fs.String("trust-domain", "example.org", "SPIRE trust domain")
+	trustDomain := fs.String("trust-domain", "", "SPIRE trust domain (default: auto-detect from cluster)")
 	namespace := fs.String("namespace", "", "Kubernetes namespace (default: current namespace)")
 
 	fs.Usage = func() {
@@ -21,16 +21,21 @@ USAGE:
     e5s discover <resource-type> <name> [flags]
 
 RESOURCE TYPES:
+    trust-domain Discover SPIRE trust domain from cluster
     pod          Discover from pod name
     label        Discover from pods matching label selector
     deployment   Discover from deployment name
 
 FLAGS:
-    --trust-domain string   SPIRE trust domain (default "example.org")
+    --trust-domain string   SPIRE trust domain (default: auto-detect)
     --namespace string      Kubernetes namespace (default: current namespace)
 
 EXAMPLES:
-    # Discover from pod name
+    # Discover trust domain from SPIRE installation
+    e5s discover trust-domain
+    Output: example.org
+
+    # Discover from pod name (auto-detects trust domain)
     e5s discover pod e5s-client
     Output: spiffe://example.org/ns/default/sa/default
 
@@ -43,6 +48,7 @@ EXAMPLES:
     Output: spiffe://example.org/ns/default/sa/web-sa
 
     # Use in shell scripts
+    TRUST_DOMAIN=$(e5s discover trust-domain)
     CLIENT_ID=$(e5s discover pod e5s-client)
     echo "allowed_client_spiffe_id: \"$CLIENT_ID\"" >> e5s.yaml`)
 	}
@@ -51,12 +57,23 @@ EXAMPLES:
 		return err
 	}
 
-	if fs.NArg() < 2 {
+	if fs.NArg() < 1 {
 		fs.Usage()
 		return fmt.Errorf("insufficient arguments")
 	}
 
 	resourceType := fs.Arg(0)
+
+	// Handle trust-domain discovery (no second argument needed)
+	if resourceType == "trust-domain" {
+		return discoverTrustDomain()
+	}
+
+	if fs.NArg() < 2 {
+		fs.Usage()
+		return fmt.Errorf("insufficient arguments for %s", resourceType)
+	}
+
 	name := fs.Arg(1)
 
 	// Check if kubectl is available
@@ -64,13 +81,23 @@ EXAMPLES:
 		return fmt.Errorf("kubectl is not available - ensure it's installed and in PATH")
 	}
 
+	// Auto-detect trust domain if not provided
+	td := *trustDomain
+	if td == "" {
+		detectedTD, err := autoDetectTrustDomain()
+		if err != nil {
+			return fmt.Errorf("failed to auto-detect trust domain (use --trust-domain flag): %w", err)
+		}
+		td = detectedTD
+	}
+
 	switch resourceType {
 	case "pod":
-		return discoverFromPod(name, *namespace, *trustDomain)
+		return discoverFromPod(name, *namespace, td)
 	case "label":
-		return discoverFromLabel(name, *namespace, *trustDomain)
+		return discoverFromLabel(name, *namespace, td)
 	case "deployment":
-		return discoverFromDeployment(name, *namespace, *trustDomain)
+		return discoverFromDeployment(name, *namespace, td)
 	default:
 		return fmt.Errorf("unknown resource type: %s", resourceType)
 	}
@@ -79,7 +106,7 @@ EXAMPLES:
 func isKubectlAvailable() bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "kubectl", "version", "--client", "--short")
+	cmd := exec.CommandContext(ctx, "kubectl", "version", "--client")
 	return cmd.Run() == nil
 }
 
@@ -171,4 +198,96 @@ func discoverFromDeployment(deploymentName, namespace, trustDomain string) error
 	spiffeID := fmt.Sprintf("spiffe://%s/ns/%s/sa/%s", trustDomain, deployNamespace, serviceAccount)
 	fmt.Println(spiffeID)
 	return nil
+}
+
+// discoverTrustDomain discovers the SPIRE trust domain from the cluster
+func discoverTrustDomain() error {
+	td, err := autoDetectTrustDomain()
+	if err != nil {
+		return err
+	}
+	fmt.Println(td)
+	return nil
+}
+
+// autoDetectTrustDomain attempts to auto-detect the SPIRE trust domain
+func autoDetectTrustDomain() (string, error) {
+	// Try multiple methods to detect trust domain
+
+	// Method 1: Check Helm release values for SPIRE
+	if td, err := getTrustDomainFromHelm(); err == nil && td != "" {
+		return td, nil
+	}
+
+	// Method 2: Check SPIRE server configmap
+	if td, err := getTrustDomainFromConfigMap(); err == nil && td != "" {
+		return td, nil
+	}
+
+	// Method 3: Check environment variable
+	// This would be set in CI/CD or local development
+	// We could support E5S_TRUST_DOMAIN env var in future
+
+	return "", fmt.Errorf("could not auto-detect trust domain - tried Helm and ConfigMap methods")
+}
+
+// getTrustDomainFromHelm tries to get trust domain from Helm release
+func getTrustDomainFromHelm() (string, error) {
+	// Check if helm is available
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if exec.CommandContext(ctx, "helm", "version").Run() != nil {
+		return "", fmt.Errorf("helm not available")
+	}
+
+	// Try to get SPIRE Helm values
+	cmd := exec.Command("helm", "get", "values", "spire", "-n", "spire", "-o", "json")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get helm values: %w", err)
+	}
+
+	// Parse JSON to extract trustDomain
+	// Simple string search for "trustDomain":"value"
+	outputStr := string(output)
+	trustDomainPrefix := `"trustDomain":"`
+	idx := strings.Index(outputStr, trustDomainPrefix)
+	if idx == -1 {
+		return "", fmt.Errorf("trustDomain not found in helm values")
+	}
+
+	// Extract the value after "trustDomain":"
+	start := idx + len(trustDomainPrefix)
+	end := strings.Index(outputStr[start:], `"`)
+	if end == -1 {
+		return "", fmt.Errorf("malformed trustDomain value")
+	}
+
+	return outputStr[start : start+end], nil
+}
+
+// getTrustDomainFromConfigMap tries to get trust domain from SPIRE server configmap
+func getTrustDomainFromConfigMap() (string, error) {
+	// Try to get SPIRE server configmap
+	cmd := exec.Command("kubectl", "get", "configmap", "-n", "spire", "-l", "app.kubernetes.io/name=server", "-o", "yaml")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get SPIRE configmap: %w", err)
+	}
+
+	// Search for trust_domain in the configmap
+	outputStr := string(output)
+	for _, line := range strings.Split(outputStr, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "trust_domain") {
+			// Parse: trust_domain = "example.org"
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) == 2 {
+				td := strings.Trim(strings.TrimSpace(parts[1]), `"`)
+				return td, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("trust_domain not found in SPIRE configmap")
 }

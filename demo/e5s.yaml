@@ -11,7 +11,7 @@ server:
   # Only accept the specific registered client SPIFFE ID
   # This demonstrates zero-trust: even if SPIRE issues other identities,
   # the server only accepts the explicitly authorized client
-  allowed_client_spiffe_id: "spiffe://example.org/ns/default/sa/default"
+  allowed_client_spiffe_id: "$CLIENT_SPIFFE_ID"
 
 client:
   # Connect to any server in this trust domain

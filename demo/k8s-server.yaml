@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: e5s-server
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: e5s-server
+  template:
+    metadata:
+      labels:
+        app: e5s-server
+    spec:
+      serviceAccountName: default
+      containers:
+      - name: server
+        image: e5s-server:dev
+        imagePullPolicy: Never  # Use local image from Minikube
+        volumeMounts:
+        - name: spire-agent-socket
+          mountPath: /spire/agent-socket
+          readOnly: true
+        - name: config
+          mountPath: /app/e5s.yaml
+          subPath: e5s.yaml
+      volumes:
+      - name: spire-agent-socket
+        csi:
+          driver: "csi.spiffe.io"
+          readOnly: true
+      - name: config
+        configMap:
+          name: e5s-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: e5s-server
+  namespace: default
+spec:
+  selector:
+    app: e5s-server
+  ports:
+  - protocol: TCP
+    port: 8443
+    targetPort: 8443

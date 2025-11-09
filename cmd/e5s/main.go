@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 )
 
@@ -27,6 +28,7 @@ func main() {
 
 	// Execute
 	if err := registry.Execute(os.Args[1:]); err != nil {
+		fmt.Fprintln(os.Stderr, "Error:", err)
 		os.Exit(1)
 	}
 }
@@ -36,9 +38,11 @@ func registerCommands(r *CommandRegistry) {
 	r.Register(&Command{
 		Name:        "spiffe-id",
 		Description: "Construct SPIFFE IDs from components",
-		Usage:       "e5s spiffe-id <type> <trust-domain> [components...]",
+		Usage:       "e5s spiffe-id <type> [arguments...] [flags]",
 		Examples: []string{
-			"e5s spiffe-id k8s example.org default api-client",
+			"e5s spiffe-id k8s default api-client",
+			"e5s spiffe-id k8s default api-client --trust-domain=example.org",
+			"e5s spiffe-id from-deployment ./k8s/client.yaml",
 			"e5s spiffe-id custom example.org service api-server",
 		},
 		Run: spiffeIDCommand,
@@ -48,8 +52,9 @@ func registerCommands(r *CommandRegistry) {
 	r.Register(&Command{
 		Name:        "discover",
 		Description: "Discover SPIFFE IDs from Kubernetes pods",
-		Usage:       "e5s discover <resource-type> <name> [flags]",
+		Usage:       "e5s discover <resource-type> [name] [flags]",
 		Examples: []string{
+			"e5s discover trust-domain",
 			"e5s discover pod e5s-client",
 			"e5s discover label app=api-client --namespace production",
 			"e5s discover deployment web-frontend",
