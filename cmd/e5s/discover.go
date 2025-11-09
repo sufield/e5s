@@ -280,7 +280,6 @@ func getTrustDomainFromConfigMap() (string, error) {
 	for _, line := range strings.Split(outputStr, "\n") {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "trust_domain") {
-			// Parse: trust_domain = "example.org"
 			parts := strings.SplitN(line, "=", 2)
 			if len(parts) == 2 {
 				td := strings.Trim(strings.TrimSpace(parts[1]), `"`)

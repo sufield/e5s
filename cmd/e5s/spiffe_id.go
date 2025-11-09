@@ -147,7 +147,7 @@ func handleFromDeployment(fs *flag.FlagSet, trustDomainFlag string) error {
 
 func handleCustomSpiffeID(fs *flag.FlagSet) error {
 	if fs.NArg() < 3 {
-		return fmt.Errorf("custom type requires <trust-domain> <path-component>...")
+		return fmt.Errorf("custom type requires <trust-domain> <path-component>")
 	}
 
 	trustDomain := fs.Arg(1)
