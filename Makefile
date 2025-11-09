@@ -1,6 +1,6 @@
 .PHONY: test test-verbose test-race test-coverage test-coverage-html test-short \
 	clean help examples build build-cli build-all \
-	restart-server test-client \
+	start-stack stop-stack restart-server test-client \
 	example-highlevel-server example-highlevel-client example-minikube-server example-minikube-client \
 	lint lint-fix fmt fmt-check vet tidy verify \
 	ci ci-local \
@@ -33,6 +33,8 @@ TOOLS_SEC=govulncheck gosec gitleaks
 #   make help            - Show all available targets
 #
 # Development (Minikube):
+#   make start-stack     - Start complete stack (Minikube + SPIRE + apps)
+#   make stop-stack      - Stop complete stack (apps + SPIRE + Minikube)
 #   make restart-server  - Rebuild and restart server in one command
 #   make test-client     - Rebuild, run, and show logs for client in one command
 #
@@ -83,6 +85,93 @@ build-all: build build-cli build-examples
 # ============================================================================
 # Development/Testing Targets (Minikube)
 # ============================================================================
+
+## start-stack: Start complete testing stack (Minikube + SPIRE + e5s apps)
+start-stack:
+	@echo "Starting complete testing stack..."
+	@echo ""
+	@echo "=== Step 1: Starting Minikube ==="
+	@minikube status > /dev/null 2>&1 || minikube start --cpus=4 --memory=8192 --driver=docker
+	@echo "✓ Minikube is running"
+	@echo ""
+	@echo "=== Step 2: Installing SPIRE ==="
+	@echo "  → Adding Helm repo..."
+	@helm repo add spiffe https://spiffe.github.io/helm-charts-hardened/ > /dev/null 2>&1 || true
+	@helm repo update > /dev/null 2>&1
+	@echo "  → Creating spire namespace..."
+	@kubectl create namespace spire 2>/dev/null || true
+	@echo "  → Installing SPIRE CRDs..."
+	@helm install spire-crds spire-crds \
+		--repo https://spiffe.github.io/helm-charts-hardened/ \
+		--namespace spire 2>/dev/null || echo "  (CRDs already installed)"
+	@echo "  → Installing SPIRE..."
+	@helm install spire spire \
+		--repo https://spiffe.github.io/helm-charts-hardened/ \
+		--namespace spire \
+		--set global.spire.trustDomain=example.org \
+		--set global.spire.clusterName=minikube-cluster 2>/dev/null || echo "  (SPIRE already installed)"
+	@echo "  → Waiting for SPIRE Server to be ready..."
+	@kubectl wait --for=condition=ready pod \
+		-l app.kubernetes.io/name=server \
+		-n spire \
+		--timeout=120s 2>/dev/null || echo "  (timed out or already running)"
+	@echo "  → Waiting for SPIRE Agent to be ready..."
+	@kubectl wait --for=condition=ready pod \
+		-l app.kubernetes.io/name=agent \
+		-n spire \
+		--timeout=120s 2>/dev/null || echo "  (timed out or already running)"
+	@echo "✓ SPIRE is running"
+	@echo ""
+	@echo "=== Step 3: Checking e5s applications ==="
+	@if kubectl get deployment e5s-server 2>/dev/null; then \
+		echo "✓ e5s-server deployment exists"; \
+	else \
+		echo "  Note: e5s-server not deployed yet. Follow examples/highlevel/TESTING_PRERELEASE.md to deploy."; \
+	fi
+	@echo ""
+	@echo "✓ Stack is ready!"
+	@echo ""
+	@echo "=== Step 4: Configuring Docker environment ==="
+	@echo "To build images for Minikube, run this in your shell:"
+	@echo "  eval \$$(minikube -p minikube docker-env)"
+	@echo ""
+	@echo "Next steps:"
+	@echo "  1. Follow examples/highlevel/TESTING_PRERELEASE.md to deploy your test apps"
+	@echo "  2. Use 'make restart-server' to rebuild and restart server"
+	@echo "  3. Use 'make test-client' to test with client"
+
+## stop-stack: Stop complete testing stack (e5s apps + SPIRE + Minikube)
+stop-stack:
+	@echo "Stopping complete testing stack..."
+	@echo ""
+	@echo "=== Step 1: Cleaning up e5s applications ==="
+	@kubectl delete deployment e5s-server 2>/dev/null || true
+	@kubectl delete service e5s-server 2>/dev/null || true
+	@kubectl delete job e5s-client e5s-unregistered-client 2>/dev/null || true
+	@kubectl delete configmap e5s-config client-config 2>/dev/null || true
+	@kubectl delete serviceaccount unregistered-client 2>/dev/null || true
+	@echo "✓ e5s applications cleaned up"
+	@echo ""
+	@echo "=== Step 2: Uninstalling SPIRE ==="
+	@helm uninstall spire -n spire 2>/dev/null || true
+	@helm uninstall spire-crds -n spire 2>/dev/null || true
+	@kubectl delete clusterrole spire-agent spire-server spire-controller-manager 2>/dev/null || true
+	@kubectl delete clusterrolebinding spire-agent spire-server spire-controller-manager 2>/dev/null || true
+	@kubectl delete csidriver csi.spiffe.io 2>/dev/null || true
+	@kubectl delete validatingwebhookconfiguration spire-server 2>/dev/null || true
+	@kubectl delete mutatingwebhookconfiguration spire-controller-manager 2>/dev/null || true
+	@kubectl delete crd clusterspiffeids.spire.spiffe.io 2>/dev/null || true
+	@kubectl delete crd clusterstaticentries.spire.spiffe.io 2>/dev/null || true
+	@kubectl delete crd clusterfederatedtrustdomains.spire.spiffe.io 2>/dev/null || true
+	@kubectl delete crd controllermanagerconfigs.spire.spiffe.io 2>/dev/null || true
+	@kubectl delete namespace spire 2>/dev/null || true
+	@echo "✓ SPIRE uninstalled"
+	@echo ""
+	@echo "=== Step 3: Stopping Minikube ==="
+	@minikube stop 2>/dev/null || true
+	@echo "✓ Minikube stopped"
+	@echo ""
+	@echo "✓ Stack completely stopped"
 
 ## restart-server: Rebuild and restart e5s-example-server in Minikube
 restart-server:
