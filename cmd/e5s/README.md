@@ -2,6 +2,25 @@
 
 Command-line utility for working with the e5s mTLS library.
 
+## Command Organization
+
+The e5s CLI provides two types of tools:
+
+### Control Plane Tools
+
+Commands that inspect configuration, construct SPIFFE IDs, and query cluster state. These tools **don't send mTLS traffic** - they help you configure and understand your environment.
+
+* `e5s spiffe-id` - Construct SPIFFE IDs from components
+* `e5s discover` - Discover SPIFFE IDs from Kubernetes resources
+* `e5s validate` - Validate e5s configuration files
+* `e5s version` - Show version and environment information
+
+### Data Plane Tools
+
+Commands that **actually send or receive mTLS traffic** using the e5s library. These are debugging and testing tools.
+
+* `e5s client request` - Make mTLS requests (like curl for e5s)
+
 ## Installation
 
 ```bash
@@ -204,6 +223,57 @@ else
     echo "✗ Invalid configuration"
     exit 1
 fi
+```
+
+### `client request` - Make mTLS Requests (Data-Plane Debugging)
+
+Send mTLS requests using e5s client - like `curl` but with SPIFFE authentication.
+
+**Simple GET request:**
+
+```bash
+e5s client request \
+  --config ./e5s.yaml \
+  --url https://localhost:8443/time
+```
+
+**Debug mode (shows TLS handshake, config details):**
+
+```bash
+e5s client request \
+  --config ./e5s-debug.yaml \
+  --url https://server.example.com:1234/time \
+  --debug \
+  --verbose
+```
+
+**POST request:**
+
+```bash
+e5s client request \
+  --config ./e5s.yaml \
+  --url https://api.example.com/endpoint \
+  --method POST
+```
+
+**Use cases:**
+
+1. Debug mTLS handshake issues
+2. Verify server certificate validation
+3. Test SPIFFE ID authorization
+4. Reproduce production issues locally with custom configs
+
+**sshd-like debugging workflow:**
+
+```bash
+# Server on custom port (debug mode)
+e5s-example-server -config ./e5s-debug-server.yaml -debug
+
+# Client connecting to debug server
+e5s client request \
+  --config ./e5s-debug-client.yaml \
+  --url https://debug-server:1234/time \
+  --debug
 ```
 
 ## Real-World Examples

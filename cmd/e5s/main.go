@@ -74,6 +74,18 @@ func registerCommands(r *CommandRegistry) {
 		Run: validateCommand,
 	})
 
+	// Register client command (data-plane debugging)
+	r.Register(&Command{
+		Name:        "client",
+		Description: "Make mTLS requests using e5s (data-plane debugging)",
+		Usage:       "e5s client <subcommand> [flags]",
+		Examples: []string{
+			"e5s client request --config ./e5s.yaml --url https://localhost:8443/time",
+			"e5s client request --config ./e5s.yaml --url https://server:8443/api --debug",
+		},
+		Run: clientCommand,
+	})
+
 	// Register version command
 	r.Register(&Command{
 		Name:        "version",
