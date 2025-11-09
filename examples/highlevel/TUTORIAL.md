@@ -20,6 +20,7 @@
    - Server and client workloads registered
 
 2. **Verify Required Tools**
+
    ```bash
    make verify-tools
    ```
@@ -28,7 +29,7 @@
 
 # Building Your mTLS Application
 
-Now that the SPIRE infrastructure is running, you can build applications that use it for mTLS. In this section, you'll write a simple server and client using the e5s library, which abstracts all the complexity of SPIRE integration.
+With the SPIRE infrastructure running, you can build applications that use it for mTLS. In this section, you'll write a simple server and client using the e5s library, which abstracts all the complexity of SPIRE integration.
 
 **Goal**: Build and run mTLS applications that automatically obtain certificates from SPIRE.
 
@@ -39,21 +40,32 @@ Now that the SPIRE infrastructure is running, you can build applications that us
 Create a new directory for your application and install dependencies:
 
 ```bash
-# Create a directory for your application
 mkdir -p ~/demo
-cd ~/demo
+```
 
-# Initialize Go module
+```bash
+cd ~/demo
+```
+
+Initialize Go module
+
+```bash
 go mod init demo
+```
 
 # Install e5s library
-go get github.com/sufield/e5s@latest
 
+```bash
+go get github.com/sufield/e5s@latest
+```
 # Install chi router (for HTTP routing)
+
+```bash
 go get github.com/go-chi/chi/v5
 ```
 
 Your `go.mod` should look like:
+
 ```
 module demo
 
@@ -147,6 +159,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 
 	"github.com/sufield/e5s"
 )
@@ -163,8 +176,14 @@ func main() {
 		}
 	}()
 
+	// Get server address from environment variable
+	serverAddr := os.Getenv("SERVER_ADDR")
+	if serverAddr == "" {
+		serverAddr = "https://localhost:8443"
+	}
+
 	// Perform mTLS GET request
-	resp, err := client.Get("https://localhost:8443/hello")
+	resp, err := client.Get(serverAddr + "/hello")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -181,12 +200,13 @@ func main() {
   - Loads config from e5s.yaml
   - Creates an mTLS-enabled HTTP client
   - Returns the client and a cleanup function
+- Reads server address from `SERVER_ADDR` environment variable (defaults to `https://localhost:8443`)
 - Uses the standard Go `http.Client` interface to make requests
 - Properly cleans up resources with the cleanup function
 
 Create a client once, use it for multiple requests.
 
-**For advanced patterns** like context timeouts, custom headers, or retry logic, see [ADVANCED.md](ADVANCED.md).
+**For advanced use** like context timeouts, custom headers, or retry logic, see [ADVANCED.md](ADVANCED.md).
 
 ### Create Configuration File
 
@@ -194,12 +214,15 @@ Use the existing `e5s.yaml` from this directory.
 
 ### Build Binaries
 
-```bash
-# From your mtls-demo directory
-# Build server
-go build -o bin/server ./server
+From demo directory, build server:
 
-# Build client
+```bash
+go build -o bin/server ./server
+```
+
+Build client
+
+```bash
 go build -o bin/client ./client
 ```
 
@@ -299,6 +322,7 @@ Let's run locally and connect to SPIRE in Minikube:
 ### Port Forward SPIRE Agent Socket
 
 In a separate terminal, keep this running:
+
 ```bash
 kubectl port-forward -n spire \
   $(kubectl get pod -n spire -l app.kubernetes.io/name=agent -o jsonpath='{.items[0].metadata.name}') \
@@ -328,6 +352,7 @@ client:
 ### Create Symlink to Agent Socket
 
 Create symlink from local machine to forwarded socket:
+
 ```bash
 ln -sf ~/.minikube/profiles/minikube/apiserver.sock /tmp/spire-agent.sock
 ```
@@ -343,6 +368,7 @@ ln -sf ~/.minikube/profiles/minikube/apiserver.sock /tmp/spire-agent.sock
 ```
 
 **Expected output**:
+
 ```
 2024/10/30 10:00:00 Starting mTLS server (config: e5s.yaml)...
 2024/10/30 10:00:00 Server running - press Ctrl+C to stop
@@ -355,6 +381,7 @@ SERVER_ADDR=https://localhost:8443 ./bin/client
 ```
 
 **Expected output**:
+
 ```
 2024/10/30 10:00:01 Creating mTLS client (config: e5s.yaml)...
 2024/10/30 10:00:01 Client created successfully
@@ -382,11 +409,13 @@ Now let's verify mTLS setup by testing both success and failure cases.
 The client you ran in Step 4 successfully connected because it was registered with SPIRE.
 
 **Why it worked:**
+
 - Client was registered in Part A, Step 3
 - SPIRE issued it a certificate with SPIFFE ID: `spiffe://example.org/client`
 - Server accepted it because it's in the allowed trust domain (`example.org`)
 
 **Expected success output** (from Step 4):
+
 ```
 2024/10/30 10:00:01 Creating mTLS client (config: e5s.yaml)...
 2024/10/30 10:00:01 Client created successfully
@@ -418,6 +447,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 
 	"github.com/sufield/e5s"
 )
@@ -429,9 +459,19 @@ func main() {
 	if err != nil {
 		log.Fatalf("Connection failed (expected): %v", err)
 	}
-	defer cleanup()
+	defer func() {
+		if err := cleanup(); err != nil {
+			log.Printf("Cleanup error: %v", err)
+		}
+	}()
 
-	resp, err := client.Get("https://localhost:8443/hello")
+	// Get server address from environment variable
+	serverAddr := os.Getenv("SERVER_ADDR")
+	if serverAddr == "" {
+		serverAddr = "https://localhost:8443"
+	}
+
+	resp, err := client.Get(serverAddr + "/hello")
 	if err != nil {
 		log.Fatalf("Request failed (expected): %v", err)
 	}

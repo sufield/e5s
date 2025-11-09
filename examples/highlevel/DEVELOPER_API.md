@@ -203,11 +203,15 @@ import (
 )
 
 func main() {
-    client, shutdown, err := e5s.Client()
+    client, shutdown, err := e5s.Client("e5s.yaml")
     if err != nil {
         log.Fatal(err)
     }
-    defer shutdown()
+    defer func() {
+        if err := shutdown(); err != nil {
+            log.Printf("Cleanup error: %v", err)
+        }
+    }()
 
     resp, err := client.Get("https://localhost:8443/hello")
     if err != nil {
@@ -221,7 +225,7 @@ func main() {
 ```
 
 The client:
-1. Uses intelligent defaults (checks E5S_CONFIG env var, falls back to `e5s.yaml`)
+1. Loads configuration from `e5s.yaml` (must be explicitly specified)
 2. Connects to SPIRE Agent
 3. Returns standard `*http.Client` with mTLS
 4. Automatically presents SPIFFE ID to servers

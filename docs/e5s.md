@@ -1,4 +1,4 @@
-Here’s a **1-page Product Positioning Brief** mapping *Aikido’s “State of AI in Security & Development 2026”* findings to **e5s** capabilities — concise, launch-ready version:
+**1-page Product Positioning Brief** mapping *Aikido’s “State of AI in Security & Development 2026”* findings to **e5s** capabilities:
 
 ---
 
@@ -44,9 +44,3 @@ It eliminates cryptographic complexity, enforces zero-trust by default, and brid
 | **Category** | Secure Identity & mTLS Automation                               |
 | **Maturity** | Developer-ready MVP, production-grade                           |
 | **Vision**   | Make identity-based security as simple as `http.ListenAndServe` |
-
----
-
-### **Tagline**
-
-> **“e5s — Zero-Trust Made Developer-Ready.”**

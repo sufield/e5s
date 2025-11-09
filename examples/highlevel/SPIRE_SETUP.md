@@ -292,16 +292,23 @@ After completing this SPIRE setup:
 
 When you're done:
 
+Uninstall SPIRE from Minikube
+
 ```bash
-# Uninstall SPIRE from Minikube
 helm uninstall spire -n spire
 helm uninstall spire-crds -n spire
 kubectl delete namespace spire
+```
 
-# Stop Minikube
+Stop Minikube
+
+```bash
 minikube stop
+```
 
-# (Optional) Delete Minikube cluster
+Delete Minikube cluster (Optional)
+
+```bash
 minikube delete
 ```
 

@@ -319,17 +319,28 @@ Instead, report via GitHub Security Advisories: https://github.com/sufield/e5s/s
 ### Adding Falco Rules
 
 1. **Test the rule locally:**
+
+Edit rules
+
    ```bash
-   # Edit rules
-   sudo nano /etc/falco/falco_rules.local.yaml
+   sudo vi /etc/falco/falco_rules.local.yaml
+   ```
 
-   # Validate
+   Validate
+   
+   ```bash
    sudo falco --validate /etc/falco/falco_rules.local.yaml
+   ```
 
-   # Restart
+   Restart
+   
+   ```bash
    sudo systemctl restart falco
+   ```
 
-   # Trigger and verify
+   Trigger and verify
+  
+   ```bash
    <test command>
    sudo journalctl -u falco -n 20
    ```
@@ -346,23 +357,7 @@ Instead, report via GitHub Security Advisories: https://github.com/sufield/e5s/s
 
 ## Resources
 
-### Internal Documentation
 - [FALCO_GUIDE.md](FALCO_GUIDE.md) - Comprehensive Falco guide
-- [../README.md](../README.md) - Main project documentation
-- [../examples/README.md](../examples/README.md) - Deployment examples
-
-### External Resources
 - **Falco**: https://falco.org/docs
-- **SPIFFE/SPIRE**: https://spiffe.io/docs
 - **gosec**: https://github.com/securego/gosec
 - **OWASP**: https://owasp.org/www-project-go-secure-coding-practices-guide/
-
-### Security Communities
-- Falco Slack: https://slack.falco.org
-- SPIFFE Slack: https://slack.spiffe.io
-- #golang-security on Gophers Slack
-
----
-
-**Last Updated**: 2025-11-03
-**Contact**: https://github.com/sufield/e5s/security

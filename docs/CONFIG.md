@@ -80,17 +80,20 @@ Path to the SPIRE Agent's Workload API socket.
 **Format**: `unix:///path/to/socket` or `/path/to/socket`
 
 **Example**:
+
 ```yaml
 spire:
   workload_socket: "unix:///tmp/spire-agent/public/api.sock"
 ```
 
 **Common values**:
+
 - Linux/Mac: `unix:///tmp/spire-agent/public/api.sock`
 - Kubernetes: `unix:///run/spire/sockets/agent.sock`
 - Custom deployment: Check your SPIRE agent configuration
 
 **Notes**:
+
 - The `unix://` prefix is optional but recommended for clarity
 - Socket must be accessible by the e5s process
 - SPIRE agent must be running and healthy
@@ -104,17 +107,20 @@ How long to wait for the first SVID/Bundle from the Workload API before giving u
 **Default**: `30s`
 
 **Example**:
+
 ```yaml
 spire:
   initial_fetch_timeout: "45s"
 ```
 
 **Recommendations**:
+
 - Development: `10s` - `30s` (fail fast for quick iteration)
 - Production: `30s` - `60s` (tolerate network/load delays)
 - CI/CD: `15s` - `30s` (balance speed vs reliability)
 
 **Notes**:
+
 - Only affects startup time, not runtime rotation
 - After initial fetch, certificates rotate automatically
 - Too short: May fail during heavy load or slow networks
@@ -133,6 +139,7 @@ Address and port for the HTTPS server to listen on.
 **Format**: `host:port` or `:port`
 
 **Examples**:
+
 ```yaml
 server:
   listen_addr: ":8443"              # Listen on all interfaces, port 8443
@@ -142,11 +149,13 @@ server:
 ```
 
 **Common values**:
+
 - `:8443` - Standard mTLS port (all interfaces)
 - `:443` - HTTPS port (requires root/CAP_NET_BIND_SERVICE)
 - `localhost:8443` - Local development only
 
 **Notes**:
+
 - Empty host means "all interfaces"
 - Port must not be in use by another process
 - Ports < 1024 require elevated privileges on Linux/Mac
@@ -162,12 +171,14 @@ Allow connections from a **specific client SPIFFE ID only**.
 **Format**: Full SPIFFE ID string
 
 **Example**:
+
 ```yaml
 server:
   allowed_client_spiffe_id: "spiffe://example.org/client/api-client"
 ```
 
 **Use when**:
+
 - You know the exact client SPIFFE ID
 - You want maximum security (zero-trust, specific identity)
 - Single client or known set of clients
@@ -181,12 +192,14 @@ Allow connections from **any client in the specified trust domain**.
 **Format**: Trust domain only (no `spiffe://` prefix)
 
 **Example**:
+
 ```yaml
 server:
   allowed_client_trust_domain: "example.org"
 ```
 
 **Use when**:
+
 - Multiple clients from the same organization/environment
 - Trust all workloads in your SPIRE deployment
 - Development/testing environments
@@ -194,6 +207,7 @@ server:
 **Security**: Permissive - any workload in the trust domain can connect
 
 **Notes**:
+
 - More convenient but less secure than specific ID
 - Suitable for internal microservices within same trust boundary
 - Consider using specific ID for external-facing services
@@ -211,6 +225,7 @@ The HTTPS URL of the server to connect to.
 **Format**: `https://host:port/path`
 
 **Examples**:
+
 ```yaml
 client:
   server_url: "https://localhost:8443/api"
@@ -219,6 +234,7 @@ client:
 ```
 
 **Notes**:
+
 - Must use `https://` scheme (mTLS requires TLS)
 - Port is required
 - Path is optional but often needed
@@ -234,12 +250,14 @@ Verify the server has a **specific SPIFFE ID**.
 **Format**: Full SPIFFE ID string
 
 **Example**:
+
 ```yaml
 client:
   expected_server_spiffe_id: "spiffe://example.org/server/api-server"
 ```
 
 **Use when**:
+
 - You know the exact server SPIFFE ID
 - You want maximum security (prevent impersonation)
 - Connecting to a specific known service
@@ -253,12 +271,14 @@ Accept **any server in the specified trust domain**.
 **Format**: Trust domain only (no `spiffe://` prefix)
 
 **Example**:
+
 ```yaml
 client:
   expected_server_trust_domain: "example.org"
 ```
 
 **Use when**:
+
 - Connecting to multiple servers in the same organization
 - Dynamic server discovery (load balancers, service mesh)
 - Development/testing environments
@@ -266,6 +286,7 @@ client:
 **Security**: Permissive - any workload in the trust domain is trusted
 
 **Notes**:
+
 - More flexible but less secure than specific ID
 - Suitable for internal microservices
 - Consider using specific ID for sensitive connections
@@ -415,7 +436,7 @@ The config package enforces these rules:
 
 ## Environment Variable Overrides
 
-**Important**: The config package itself does NOT handle environment variables. Environment variable substitution (if needed) happens in the application layer (`cmd/` or user code), NOT in the config parser.
+The config package itself does NOT handle environment variables. Environment variable substitution (if needed) happens in the application layer (`cmd/` or user code), NOT in the config parser.
 
 This design keeps the config format language-independent and tool-friendly.
 
@@ -481,6 +502,7 @@ When introducing version 2:
 ### Security
 
 1. **Use Specific IDs in Production**
+
    ```yaml
    # Good: Zero-trust
    allowed_client_spiffe_id: "spiffe://prod.example.org/client"
@@ -490,6 +512,7 @@ When introducing version 2:
    ```
 
 2. **Protect Config Files**
+
    ```bash
    # Config files may contain sensitive paths/settings
    chmod 600 e5s.yaml
@@ -497,6 +520,7 @@ When introducing version 2:
    ```
 
 3. **Version Your Configs**
+
    ```yaml
    # Always include version for future-proofing
    version: 1
@@ -505,6 +529,7 @@ When introducing version 2:
 ### Operations
 
 1. **Use Appropriate Timeouts**
+
    ```yaml
    # Production: tolerate delays
    initial_fetch_timeout: "45s"
@@ -514,6 +539,7 @@ When introducing version 2:
    ```
 
 2. **Document Your Choices**
+
    ```yaml
    # Why using trust domain instead of specific ID
    server:
@@ -524,6 +550,7 @@ When introducing version 2:
 ### Deployment
 
 1. **One Config Per Environment**
+
    ```
    config/
    ├── dev.yaml
@@ -532,11 +559,13 @@ When introducing version 2:
    ```
 
 2. **Validate Before Deploying**
+
    ```bash
    e5s validate prod.yaml
    ```
 
 3. **Use ConfigMaps in Kubernetes**
+
    ```bash
    kubectl create configmap e5s-config --from-file=e5s.yaml
    ```
@@ -589,14 +618,6 @@ allowed_client_spiffe_id: "example.org/client"
 1. Upgrade e5s to a newer version
 2. Downgrade config file to version 1
 3. Remove `version:` field (defaults to 1)
-
----
-
-## Related Documentation
-
-- [Architecture](./ARCHITECTURE.md) - How config fits into e5s layering
-- [API Documentation](./API.md) - Using config in code
-- [Debug Mode](./DEBUG_MODE.md) - No config changes needed for debug mode
 
 ---
 

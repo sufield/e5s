@@ -82,26 +82,40 @@ Older versions may work but are not tested.
 
 Use the e5s CLI to verify your environment:
 
-```bash
-# Check runtime versions
+Check runtime versions
+
+```bash 
 e5s version
+```
 
-# Check development requirements
+Check development requirements
+
+```bash
 e5s version --mode dev
+```
 
-# Check production requirements
+Check production requirements
+
+```bash
 e5s version --mode prod
+```
 
-# Detailed version information
+Detailed version information
+
+```bash
 e5s version --verbose
 ```
 
 Or use the Makefile:
 
-```bash
-# Capture current environment versions
-make env-versions
+Capture current environment versions
 
-# Run all release checks (includes version verification)
+```bash
+make env-versions
+```
+
+Run all release checks (includes version verification)
+
+```bash
 make release-check
 ```

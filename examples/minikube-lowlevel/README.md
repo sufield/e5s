@@ -33,26 +33,36 @@ This example demonstrates production-like mTLS communication using e5s with SPIR
      └─────────────────┘
 ```
 
-## Quick Start
+## Steps
 
 ### 1. Start Minikube and deploy SPIRE
 
 ```bash
 # From repository root
 cd examples/minikube-lowlevel
+```
 
 # Start cluster and deploy SPIRE
+
+```bash
 ./scripts/cluster-up.sh
+```
 
 # Wait for SPIRE to be ready
+
+```bash
 kubectl wait --for=condition=ready pod -l app=spire-server -n spire --timeout=300s
+```
+
+```bash
 kubectl wait --for=condition=ready pod -l app=spire-agent -n spire --timeout=300s
 ```
 
 ### 2. Register workloads with SPIRE
 
-```bash
-# Register server and client workload entries
+Register server and client workload entries
+
+```bash 
 ./scripts/setup-spire-registrations.sh
 ```
 
@@ -63,31 +73,44 @@ This creates SPIFFE IDs:
 ### 3. Build and run the server
 
 **Server Configuration:**
+
 The server expects the SPIRE socket at:
+
 ```yaml
 SPIFFE_ENDPOINT_SOCKET=/tmp/spire-agent/public/api.sock
 ```
 
+Build server binary
+
 ```bash
-# Build server binary
 go build -o bin/server ./cmd/server
+```
 
 # Deploy to Minikube (or run locally with socket access)
+
+```bash
 kubectl create configmap server-binary --from-file=bin/server -n spire
-# Deploy using the helmfile in infra/
-# (Adjust based on your actual deployment method)
+```
+
+Deploy using the helmfile in infra (Adjust based on your actual deployment method)
 
 # Check server logs
+
+```bash
 kubectl logs -l app=mtls-server -n spire -f
 ```
 
 ### 4. Run the client
 
-```bash
-# Build client binary
-go build -o bin/client ./cmd/client
+Build client binary
 
-# Run client (replace SERVER_ADDR with actual service address)
+```bash 
+go build -o bin/client ./cmd/client
+```
+
+Run client (replace SERVER_ADDR with actual service address)
+
+```bash
 export SERVER_ADDR=https://mtls-server.spire.svc.cluster.local:8443
 ./bin/client
 ```
@@ -102,11 +125,15 @@ Cert Expires: <timestamp from your SPIRE deployment>
 
 ## Running Integration Tests
 
-```bash
-# Run full integration test suite
-./scripts/run-integration-tests.sh
+Run full integration test suite
 
-# Run tests in CI mode (with verbose output)
+```bash
+./scripts/run-integration-tests.sh
+```
+
+Run tests in CI mode (with verbose output)
+
+```bash
 ./scripts/run-integration-tests-ci.sh
 ```
 
@@ -122,39 +149,57 @@ Cert Expires: <timestamp from your SPIRE deployment>
 
 ### Server can't connect to SPIRE socket
 
-```bash
-# Check SPIRE Agent is running
+Check SPIRE Agent is running
+
+```bash 
 kubectl get pods -n spire -l app=spire-agent
+```
 
 # Verify socket exists in pod
-kubectl exec -n spire spire-agent-xxxxx -- ls -la /tmp/spire-agent/public/api.sock
 
-# Check socket permissions
+```bash
+kubectl exec -n spire spire-agent-xxxxx -- ls -la /tmp/spire-agent/public/api.sock
+```
+
+Check socket permissions
+
+```bash
 kubectl exec -n spire spire-agent-xxxxx -- stat /tmp/spire-agent/public/api.sock
 ```
 
 ### Workload not registered
 
+List all registered workload entries
+
 ```bash
-# List all registered workload entries
 kubectl exec -n spire spire-server-0 -- \
   /opt/spire/bin/spire-server entry show
+```
 
-# Re-run registration script
+Re-run registration script
+
+```bash
 ./scripts/setup-spire-registrations.sh
 ```
 
 ### mTLS handshake failures
 
+Enable debug logging in server/client
+
 ```bash
-# Enable debug logging in server/client
 export SPIFFE_ENDPOINT_SOCKET=/tmp/spire-agent/public/api.sock
 export LOG_LEVEL=debug
+```
 
-# Check server logs for verification errors
+Check server logs for verification errors
+
+```bash
 kubectl logs -l app=mtls-server -n spire --tail=50
+```
 
-# Verify trust domains match
+Verify trust domains match
+
+```bash
 kubectl exec -n spire spire-server-0 -- \
   /opt/spire/bin/spire-server bundle show
 ```
@@ -184,11 +229,15 @@ The examples use trust domain `example.org`. To change it:
 
 ## Cleanup
 
-```bash
-# Delete Minikube cluster
-./scripts/cluster-down.sh
+Delete Minikube cluster
 
-# Or just delete SPIRE namespace
+```bash 
+./scripts/cluster-down.sh
+```
+
+Or just delete SPIRE namespace
+
+```bash
 kubectl delete namespace spire
 ```
 

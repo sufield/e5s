@@ -206,6 +206,14 @@ tlsConfig, err := spiffehttp.NewClientTLSConfig(
 On the server side, extract the authenticated client's identity:
 
 ```go
+import (
+    "log"
+    "net/http"
+    "time"
+
+    "github.com/sufield/e5s/spiffehttp"
+)
+
 func handler(w http.ResponseWriter, r *http.Request) {
     peer, ok := spiffehttp.PeerFromRequest(r)
     if !ok {
@@ -218,8 +226,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
         peer.ID.String(), peer.ID.TrustDomain().Name())
 
     // Check certificate expiry
-    if time.Until(peer.ExpiresAt) < 5*time.Minute {
-        log.Printf("Warning: client cert expires soon: %s", peer.ExpiresAt)
+    if time.Until(peer.Certs[0].NotAfter) < 5*time.Minute {
+        log.Printf("Warning: client cert expires soon: %s", peer.Certs[0].NotAfter)
     }
 }
 ```

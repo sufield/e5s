@@ -206,7 +206,11 @@ client, shutdown, err := e5s.Client("e5s.dev.yaml")
 if err != nil {
     log.Fatal(err)
 }
-defer shutdown()
+defer func() {
+    if err := shutdown(); err != nil {
+        log.Printf("Cleanup error: %v", err)
+    }
+}()
 
 resp, err := client.Get("https://secure-service:8443/api")
 if err != nil {

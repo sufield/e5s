@@ -1,8 +1,8 @@
 # HTTP Middleware Examples
 
-This directory contains **reference implementations** of HTTP middleware patterns for SPIFFE mTLS.
+This directory contains **reference implementations** of HTTP middleware for SPIFFE mTLS.
 
-**Important:** This is NOT part of the core `spiffehttp` library. These are examples showing how to build your own middleware with full control over behavior.
+This is NOT part of the core `spiffehttp` library. These are examples showing how to build your own middleware with full control over behavior.
 
 ## Why Not Include Middleware in the Library?
 
@@ -17,6 +17,7 @@ You should build middleware specific to your needs rather than using a one-size-
 ## What's Included
 
 ### `authMiddleware`
+
 Basic example that extracts peer identity and attaches it to context.
 
 **Use this when:** You want simple authentication without authorization logic.
@@ -26,6 +27,7 @@ protectedHandler := authMiddleware(http.HandlerFunc(myHandler))
 ```
 
 ### `trustDomainMiddleware`
+
 Enforces trust domain boundaries with custom error messages.
 
 **Use this when:** You accept mTLS from multiple trust domains but need per-route policies.
@@ -36,6 +38,7 @@ restrictedHandler := trustDomainMiddleware(td)(http.HandlerFunc(myHandler))
 ```
 
 ### `certExpiryWarningMiddleware`
+
 Logs warnings for certificates expiring soon.
 
 **Use this when:** Debugging certificate rotation issues or implementing monitoring.
@@ -50,27 +53,41 @@ This example requires a running SPIRE agent. See the [minikube-lowlevel example]
 
 ### With SPIRE Running Locally
 
-```bash
-# Start the server
-go run main.go
+Start the server
 
-# From another terminal with mTLS client configured:
+```bash
+go run main.go
+```
+
+From another terminal with mTLS client configured:
+
+```bash
 curl https://localhost:8443/api/hello
 ```
 
 ### Testing Different Endpoints
 
+Public endpoint (no auth required)
+
 ```bash
-# Public endpoint (no auth required)
 curl https://localhost:8443/health
+```
 
 # Basic auth (any valid SPIFFE peer)
+
+```bash
 curl --cert client.crt --key client.key https://localhost:8443/api/hello
+```
 
 # Trust domain restricted (example.org only)
+
+```bash
 curl --cert client.crt --key client.key https://localhost:8443/api/restricted
+```
 
 # With cert expiry monitoring
+
+```bash
 curl --cert client.crt --key client.key https://localhost:8443/api/monitored
 ```
 
@@ -238,9 +255,3 @@ func authMiddlewareEcho(next echo.HandlerFunc) echo.HandlerFunc {
     }
 }
 ```
-
-## See Also
-
-- [Core library documentation](../../docs/QUICKSTART_LIBRARY.md)
-- [High-level API example](../highlevel/)
-- [SPIRE deployment example](../minikube-lowlevel/)

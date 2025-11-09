@@ -1,6 +1,4 @@
-# **e5s: Zero-Trust Made Developer-Ready**
-
-**Two-Column Launch Brief**
+# **e5s: Zero-Trust Library**
 
 | **Market Problem (from Aikido Report)**                                 | **e5s Advantage (Solution & Value)**                                                                                                                                  |
 | ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -29,7 +27,3 @@
 
 **Category:** Secure Identity Automation (Zero-Trust for Developers)
 **Audience:** Backend & Platform Engineers in cloud-native teams
-**Vision:** Make zero-trust as simple as `http.ListenAndServe`.
-**Tagline:**
-
-> **“e5s — Zero-Trust Made Developer-Ready.”**

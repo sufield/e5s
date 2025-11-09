@@ -117,10 +117,15 @@ func main() {
 
 func run(ctx context.Context) error {
     // Create HTTP client from config file
-    client, err := e5s.Client(ctx, "client-config.yaml")
+    client, cleanup, err := e5s.Client("client-config.yaml")
     if err != nil {
         return fmt.Errorf("failed to create client: %w", err)
     }
+    defer func() {
+        if err := cleanup(); err != nil {
+            log.Printf("Cleanup error: %v", err)
+        }
+    }()
 
     // Make HTTP request
     resp, err := client.Get("https://localhost:8443/")

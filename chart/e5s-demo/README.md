@@ -10,12 +10,13 @@ Helm chart for deploying the e5s SPIFFE/SPIRE mTLS demo server and client.
 
 ## Installation
 
-Docker images are automatically published to GitHub Container Registry when a release is created. Check [GitHub Releases](https://github.com/sufield/e5s/releases) for available versions. Until the first release is published, you'll need to build images locally for testing.
+Docker images are automatically published to GitHub Container Registry when a release is created. Check [GitHub Releases](https://github.com/sufield/e5s/releases) for available versions.
 
 ### Quick Start with GoReleaser Images
 
+Install using images from GoReleaser (replace v0.1.0 with desired version)
+
 ```bash
-# Install using images from GoReleaser (replace v0.1.0 with desired version)
 helm install e5s-demo ./chart/e5s-demo \
   --set server.image.tag=v0.1.0 \
   --set client.image.tag=v0.1.0
@@ -98,6 +99,9 @@ Ensure SPIRE agent is running and the CSI driver is installed:
 
 ```bash
 kubectl get pods -n spire-system
+```
+
+```bash
 kubectl get csidriver
 ```
 
@@ -108,8 +112,3 @@ If using a specific tag, ensure the image exists:
 ```bash
 docker pull ghcr.io/sufield/e5s-demo-server:v0.1.0
 ```
-
-## More Information
-
-- [e5s Library Documentation](https://github.com/sufield/e5s)
-- [SPIRE Documentation](https://spiffe.io/docs/latest/spire/)

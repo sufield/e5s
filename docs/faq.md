@@ -401,17 +401,20 @@ This usually means:
 Debug steps:
 
 Check if workload is registered:
+
 ```bash
 kubectl exec -n spire-system spire-server-0 -- \
   spire-server entry show
 ```
 
 Check SPIRE agent logs:
+
 ```bash
 kubectl logs -n spire-system -l app=spire-agent
 ```
 
 Check your app logs:
+
 ```bash
 kubectl logs <your-pod>
 ```
@@ -420,8 +423,9 @@ kubectl logs <your-pod>
 
 Enable debug logging in SPIRE agent:
 
+In SPIRE agent config
+
 ```yaml
-# In SPIRE agent config
 agent:
   log_level: "DEBUG"
 ```
@@ -492,14 +496,19 @@ server:
 ```
 
 2. Replace source creation:
-```go
-// Before
+
+Before
+
+```go 
 source, err := workloadapi.NewX509Source(ctx, ...)
 defer source.Close()
 tlsConfig := tlsconfig.MTLSServerConfig(source, source, ...)
 srv := &http.Server{...}
+```
 
-// After
+After
+
+```go
 shutdown, err := e5s.Start("config.yaml", handler)
 defer shutdown()
 ```
@@ -513,6 +522,7 @@ Yes! Use each for what it's best at:
 - go-spiffe SDK for gRPC or custom protocols
 
 Example:
+
 ```go
 import (
     "context"
@@ -597,7 +607,7 @@ Open a GitHub issue with the feature request template. Include:
 
 ### Can I contribute code?
 
-Yes! See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines. Key points:
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines.
 - Fork the repository
 - Write tests for your changes
 - Run linters: `golangci-lint run`
