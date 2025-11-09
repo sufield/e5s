@@ -60,9 +60,11 @@ package e5s
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -72,6 +74,13 @@ import (
 	"github.com/sufield/e5s/spiffehttp"
 	"github.com/sufield/e5s/spire"
 )
+
+// isDebug returns true if E5S_DEBUG environment variable is set to enable debug logging.
+// Recognized values: "1", "true", "TRUE", "debug", "DEBUG"
+func isDebug() bool {
+	v := os.Getenv("E5S_DEBUG")
+	return v == "1" || strings.EqualFold(v, "true") || strings.EqualFold(v, "debug")
+}
 
 // newSPIRESource initializes the SPIRE identity source and returns:
 //   - x509Source: the X.509 source used for TLS
@@ -176,6 +185,15 @@ func buildServer(configPath string, handler http.Handler) (
 		Handler:           wrapped,
 		TLSConfig:         tlsCfg,
 		ReadHeaderTimeout: 10 * time.Second, // Prevent Slowloris attacks
+	}
+
+	// Enable debug logging if E5S_DEBUG is set
+	if isDebug() {
+		srv.ErrorLog = log.New(os.Stderr, "e5s/http: ", log.LstdFlags|log.Lshortfile)
+		log.Printf("e5s DEBUG: config_path=%q", configPath)
+		log.Printf("e5s DEBUG: listen_addr=%q", cfg.Server.ListenAddr)
+		log.Printf("e5s DEBUG: allowed_client_spiffe_id=%q", cfg.Server.AllowedClientSPIFFEID)
+		log.Printf("e5s DEBUG: allowed_client_trust_domain=%q", cfg.Server.AllowedClientTrustDomain)
 	}
 
 	return srv, identityShutdown, nil
@@ -623,6 +641,13 @@ func Client(configPath string) (*http.Client, func() error, error) {
 		Transport: &http.Transport{
 			TLSClientConfig: tlsCfg,
 		},
+	}
+
+	// Enable debug logging if E5S_DEBUG is set
+	if isDebug() {
+		log.Printf("e5s DEBUG: config_path=%q", configPath)
+		log.Printf("e5s DEBUG: expected_server_spiffe_id=%q", cfg.Client.ExpectedServerSPIFFEID)
+		log.Printf("e5s DEBUG: expected_server_trust_domain=%q", cfg.Client.ExpectedServerTrustDomain)
 	}
 
 	// identityShutdown is already idempotent, no need for additional sync.Once

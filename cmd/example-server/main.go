@@ -25,6 +25,7 @@ func main() {
 	versionFlag := flag.Bool("version", false, "Print version information and exit")
 	// Default to example config for demonstration
 	configPath := flag.String("config", "examples/highlevel/e5s.yaml", "Path to e5s config file")
+	debug := flag.Bool("debug", false, "Enable debug mode (foreground, verbose logging)")
 	flag.Parse()
 
 	if *versionFlag {
@@ -34,11 +35,18 @@ func main() {
 		os.Exit(0)
 	}
 
+	// Enable debug logging if requested
+	if *debug {
+		log.SetFlags(log.LstdFlags | log.Lmicroseconds | log.Lshortfile)
+		os.Setenv("E5S_DEBUG", "1")
+		log.Println("⚠️  DEBUG MODE: verbose logging enabled")
+	}
+
 	log.Printf("e5s mTLS server (version %s)", version)
 	log.Printf("Using config: %s", *configPath)
 
-	// Check for debug mode
-	debugMode := os.Getenv("E5S_DEBUG_SINGLE_THREAD") != ""
+	// Check for debug mode (support both new -debug flag and legacy env var)
+	debugMode := *debug || os.Getenv("E5S_DEBUG_SINGLE_THREAD") != ""
 	if debugMode {
 		log.Println("⚠️  DEBUG MODE: Running in single-threaded mode")
 		log.Println("   This eliminates e5s's HTTP server goroutine for debugging")

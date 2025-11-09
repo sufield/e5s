@@ -32,6 +32,9 @@ func main() {
 	appConfigPath := flag.String("app-config", "examples/highlevel/client-config.yaml", "Path to app config file")
 	// e5s library config (SPIRE socket, trust domain, etc.)
 	e5sConfigPath := flag.String("e5s-config", "examples/highlevel/e5s.yaml", "Path to e5s config file")
+	// Convenience flags for sshd-like debugging experience
+	urlFlag := flag.String("url", "", "Server URL (overrides config)")
+	debug := flag.Bool("debug", false, "Enable debug mode (verbose logging)")
 	flag.Parse()
 
 	if *versionFlag {
@@ -41,14 +44,21 @@ func main() {
 		os.Exit(0)
 	}
 
+	// Enable debug logging if requested
+	if *debug {
+		log.SetFlags(log.LstdFlags | log.Lmicroseconds | log.Lshortfile)
+		os.Setenv("E5S_DEBUG", "1")
+		log.Println("⚠️  DEBUG MODE: verbose logging enabled")
+	}
+
 	log.Printf("e5s mTLS client (version %s)", version)
 	log.Printf("App config: %s", *appConfigPath)
 	log.Printf("e5s config: %s", *e5sConfigPath)
 
-	os.Exit(run(*appConfigPath, *e5sConfigPath))
+	os.Exit(run(*appConfigPath, *e5sConfigPath, *urlFlag))
 }
 
-func run(appConfigPath, e5sConfigPath string) int {
+func run(appConfigPath, e5sConfigPath, urlFlagValue string) int {
 	// Load application-specific configuration
 	appCfg, err := loadAppConfig(appConfigPath)
 	if err != nil {
@@ -56,14 +66,16 @@ func run(appConfigPath, e5sConfigPath string) int {
 		return 1
 	}
 
-	// Allow SERVER_URL environment variable to override config
-	// This is useful for Kubernetes deployments
-	serverURL := os.Getenv("SERVER_URL")
+	// Determine server URL with priority: -url flag > SERVER_URL env var > config file
+	serverURL := urlFlagValue
+	if serverURL == "" {
+		serverURL = os.Getenv("SERVER_URL")
+	}
 	if serverURL == "" {
 		serverURL = appCfg.ServerURL
 	}
 	if serverURL == "" {
-		log.Printf("❌ server_url not set in config and SERVER_URL environment variable not set")
+		log.Printf("❌ server_url not set in config, SERVER_URL env var, or -url flag")
 		return 1
 	}
 
