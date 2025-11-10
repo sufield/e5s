@@ -9,7 +9,7 @@ Guide to building mTLS applications with e5s and SPIRE.
 - **[TUTORIAL.md](TUTORIAL.md)** - Step-by-step tutorial for end users
   *Learn how to build and deploy mTLS applications from scratch. Start here if you're new to SPIRE or e5s.*
 
-- **[SPIRE_SETUP.md](SPIRE_SETUP.md)** - SPIRE infrastructure setup guide
+- **SPIRE Setup** - Run `make start-stack` to set up SPIRE infrastructure
   *Set up SPIRE Server and Agent in Minikube for local development and testing (~15 minutes).*
 
 ### For Developers

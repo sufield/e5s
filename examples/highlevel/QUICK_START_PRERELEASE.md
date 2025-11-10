@@ -11,7 +11,7 @@
    cd examples/highlevel
    ```
 
-   Follow [SPIRE_SETUP.md](SPIRE_SETUP.md) to set up SPIRE in Minikube (~15 minutes)
+   Run `make start-stack` to set up SPIRE in Minikube (~15 minutes)
 
 2. **Verify tools are installed**
    ```bash
@@ -108,7 +108,7 @@ minikube status
 
 **Need to restart SPIRE?**
 ```bash
-# See examples/highlevel/SPIRE_SETUP.md
+# Run: make start-stack
 ```
 
 **Want to see logs?**

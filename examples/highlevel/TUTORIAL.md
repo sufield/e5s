@@ -14,7 +14,7 @@
 
 ## Prerequisites
 
-1. **SPIRE Infrastructure Running**: [SPIRE_SETUP.md](SPIRE_SETUP.md) in Minikube is complete. (~15 minutes)
+1. **SPIRE Infrastructure Running**: Run `make start-stack` to set up SPIRE in Minikube (~15 minutes)
    - Minikube cluster running
    - SPIRE Server and Agent installed
    - Server and client workloads registered
@@ -630,13 +630,13 @@ cd ~/mtls-demo
 rm -rf bin/
 ```
 
-**To clean up SPIRE infrastructure**, follow the cleanup instructions in [SPIRE_SETUP.md](SPIRE_SETUP.md).
+**To clean up SPIRE infrastructure**, run `make stop-stack`.
 
 ---
 
 ## Resources
 
-- **SPIRE Setup**: See [SPIRE_SETUP.md](SPIRE_SETUP.md) for infrastructure setup and cleanup
+- **SPIRE Setup**: Run `make start-stack` to set up infrastructure, `make stop-stack` to clean up
 - **Troubleshooting Guide**: See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for common issues
 - **Advanced Examples**: See [ADVANCED.md](ADVANCED.md) for advanced patterns and control
 - **e5s Library Docs**: See [main README](../../README.md) for library documentation

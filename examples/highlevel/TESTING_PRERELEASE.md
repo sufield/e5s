@@ -20,12 +20,19 @@ When:
 
 ## Prerequisites
 
-1. **SPIRE Infrastructure Running**: Follow [SPIRE_SETUP.md](SPIRE_SETUP.md) to set up SPIRE in Minikube (~15 minutes)
-   - Minikube cluster running
-   - SPIRE Server and Agent installed via Helm
-   - Server and client workloads registered
+1. **SPIRE Infrastructure Running**: Start SPIRE in Minikube (~15 minutes)
 
-  The setup uses Helm to install SPIRE infrastructure. This guide deploys test applications using kubectl directly without using Helm.
+   ```bash
+   make start-stack
+   ```
+
+   This will:
+   - Start Minikube cluster (if not running)
+   - Install SPIRE Server and Agent via Helm
+   - Configure trust domain: `example.org`
+   - Wait for all SPIRE components to be ready
+
+   The Makefile uses Helm to install SPIRE infrastructure. This guide deploys test applications using kubectl directly without using Helm.
 
 2. **Local e5s Code**: You should be in the e5s project directory
 
