@@ -1,0 +1,40 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: e5s-unregistered-client
+  namespace: default
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: e5s-unregistered-client
+    spec:
+      serviceAccountName: unregistered-client
+      restartPolicy: Never
+      containers:
+      - name: client
+        image: e5s-client:dev
+        imagePullPolicy: Never
+        command: ["/app/client"]
+        volumeMounts:
+        - name: spire-agent-socket
+          mountPath: /spire/agent-socket
+          readOnly: true
+        - name: e5s-config
+          mountPath: /app/e5s.yaml
+          subPath: e5s.yaml
+        - name: client-config
+          mountPath: /app/client-config.yaml
+          subPath: client-config.yaml
+      volumes:
+      - name: spire-agent-socket
+        csi:
+          driver: "csi.spiffe.io"
+          readOnly: true
+      - name: e5s-config
+        configMap:
+          name: e5s-config
+      - name: client-config
+        configMap:
+          name: client-config
