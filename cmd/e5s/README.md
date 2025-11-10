@@ -122,6 +122,7 @@ echo "allowed_client_spiffe_id: \"$ALLOWED_CLIENT_ID\"" >> e5s.yaml
 ```
 
 **Use with envsubst:**
+
 ```bash
 export CLIENT_SPIFFE_ID=$(e5s spiffe-id k8s default web-frontend)
 envsubst < e5s.yaml.template > e5s.yaml
@@ -132,6 +133,7 @@ envsubst < e5s.yaml.template > e5s.yaml
 Discover actual SPIFFE IDs from running Kubernetes resources.
 
 **Discover trust domain:**
+
 ```bash
 e5s discover trust-domain
 ```
@@ -141,6 +143,7 @@ Output: example.org
 This auto-detects the trust domain from your SPIRE Helm installation or ConfigMap.
 
 **From pod name:**
+
 ```bash
 e5s discover pod e5s-client
 ```
@@ -148,6 +151,7 @@ e5s discover pod e5s-client
 Output: spiffe://example.org/ns/default/sa/default
 
 **From label selector:**
+
 ```bash
 e5s discover label app=api-client --namespace production
 ```
@@ -155,6 +159,7 @@ e5s discover label app=api-client --namespace production
 Output: spiffe://example.org/ns/production/sa/api-client-sa
 
 **From deployment:**
+
 ```bash
 e5s discover deployment web-frontend
 ```
@@ -162,6 +167,7 @@ e5s discover deployment web-frontend
 Output: spiffe://example.org/ns/default/sa/web-sa
 
 All discovery commands auto-detect the trust domain. To override:
+
 ```bash
 e5s discover deployment web-frontend --trust-domain my-domain.com
 ```
@@ -170,23 +176,39 @@ Output: spiffe://my-domain.com/ns/default/sa/web-sa
 
 **Use in deployment scripts (UNIX philosophy - composable):**
 
+Recommended: Use label selector (no manual pod selection)
+
 ```bash
-# Recommended: Use label selector (no manual pod selection)
 CLIENT_ID=$(e5s discover label app=api-client)
+```
 
-# Or pipe kubectl output to e5s
+Or pipe kubectl output to e5s
+
+```bash
 CLIENT_ID=$(kubectl get pods -l app=api-client -o name | head -1 | cut -d/ -f2 | xargs e5s discover pod)
+```
 
-# Generate config with discovered ID
+Generate config with discovered ID
+
+```bash
 cat > server-config.yaml <<EOF
 server:
   listen_addr: ":8443"
   allowed_client_spiffe_id: "$CLIENT_ID"
 EOF
+```
 
-# Validate and deploy
-e5s validate server-config.yaml && \
-kubectl create configmap server-config --from-file=server-config.yaml && \
+Validate and deploy
+
+```bash
+e5s validate server-config.yaml
+```
+
+```bash
+kubectl create configmap server-config --from-file=server-config.yaml
+```
+
+```bash
 kubectl apply -f deployment.yaml
 ```
 
@@ -214,8 +236,9 @@ e5s validate e5s.yaml --mode client
 
 **Use in CI/CD:**
 
+Validate before deploying
+
 ```bash
-# Validate before deploying
 if e5s validate config/production.yaml; then
     echo "✓ Configuration is valid"
     kubectl apply -f deployment.yaml
@@ -265,11 +288,15 @@ e5s client request \
 
 **sshd-like debugging workflow:**
 
-```bash
-# Server on custom port (debug mode)
-e5s-example-server -config ./e5s-debug-server.yaml -debug
+Server on custom port (debug mode)
 
-# Client connecting to debug server
+```bash 
+e5s-example-server -config ./e5s-debug-server.yaml -debug
+```
+
+Client connecting to debug server
+
+```bash
 e5s client request \
   --config ./e5s-debug-client.yaml \
   --url https://debug-server:1234/time \

@@ -464,12 +464,3 @@ func (st *SPIRETest) createWorkloadEntry() {
 		st.t.Logf("Created workload entry: %s", spiffeID)
 	}
 }
-
-// Cleanup explicitly cleans up SPIRE processes and temporary files.
-//
-// This is automatically called via t.Cleanup(), but you can call it explicitly
-// if you need to tear down SPIRE before the test completes.
-func (st *SPIRETest) Cleanup() {
-	// Cleanup is handled via t.Cleanup() callbacks registered during setup
-	// This method is provided for explicit cleanup if needed
-}
