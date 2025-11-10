@@ -122,8 +122,7 @@ start-stack:
 		--repo https://spiffe.github.io/helm-charts-hardened/ \
 		--namespace spire 2>/dev/null || echo "  (CRDs already installed)"
 	@echo "  → Installing SPIRE..."
-	@helm install spire spire \
-		--repo https://spiffe.github.io/helm-charts-hardened/ \
+	@helm install spire spiffe/spire \
 		--namespace spire \
 		--set global.spire.trustDomain=example.org \
 		--set global.spire.clusterName=minikube-cluster 2>/dev/null || echo "  (SPIRE already installed)"

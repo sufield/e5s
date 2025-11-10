@@ -313,34 +313,13 @@ spec:
       serviceAccountName: default  # <-- This is your service account
 ```
 
-Or if your deployment is already running, discover the SPIFFE ID automatically.
-
-**Recommended: Use label selector** (most composable with UNIX philosophy):
-
-```bash
-# Discover from label selector - no manual pod name needed
-CLIENT_SPIFFE_ID=$(./bin/e5s discover label app=e5s-client)
-```
-
-**Alternative: Pipe kubectl output to e5s**:
-
-```bash
-# Using UNIX pipes - kubectl finds pod, xargs passes to e5s
-CLIENT_SPIFFE_ID=$(kubectl get pods -l app=e5s-client -o name | head -1 | cut -d/ -f2 | xargs ./bin/e5s discover pod)
-```
-
-**Or extract from deployment YAML file** (before deploying):
-
-```bash
-# Extract everything from YAML - namespace, service account, and trust domain
-CLIENT_SPIFFE_ID=$(./bin/e5s spiffe-id from-deployment ./k8s-client.yaml)
-```
-
 **For this tutorial, we're using:**
 - Namespace: `default` (standard Kubernetes namespace)
 - Service Account: `default` (standard Kubernetes service account)
 
-Since we know these values, construct the SPIFFE ID using the CLI tool (trust domain is auto-detected):
+Since we know these values from our deployment configuration (defined in Step 8), we can construct the SPIFFE ID now using the CLI tool:
+
+> **Note**: Discovery commands (`e5s discover pod/label/deployment`) require running pods and are shown later in **Step 11** after deployment. For initial configuration, we use the construction approach below since we already know the namespace and service account from our deployment YAML.
 
 ```bash
 CLIENT_SPIFFE_ID=$(./bin/e5s spiffe-id k8s default default)
@@ -600,7 +579,7 @@ kubectl apply -f k8s-server.yaml
 
 Wait for server to be ready:
 ```bash
-kubectl wait --for=condition=ready pod -l app=e5s-server -n default --timeout=60s
+kubectl wait --for=condition=ready pod -l app=e5s-server --timeout=60s
 ```
 
 ### Test with Client Job
@@ -857,9 +836,9 @@ The e5s CLI tool prevents manual errors by automatically discovering and constru
 
 **Quick Start:**
 
-Discover SPIFFE ID from running pod:
+Discover SPIFFE ID using label selector (works for Jobs, Deployments, etc.):
 ```bash
-./bin/e5s discover pod e5s-client
+./bin/e5s discover label app=e5s-client
 ```
 
 Output: spiffe://example.org/ns/default/sa/default
@@ -871,15 +850,9 @@ allowed_client_spiffe_id: "spiffe://example.org/ns/default/sa/default"
 
 **All Discovery Methods:**
 
-**Discover from pod name:**
-```bash
-./bin/e5s discover pod e5s-client
-```
+**Discover from label selector:** ⭐ RECOMMENDED
 
-Output: spiffe://example.org/ns/default/sa/default
-
-**Discover from label selector:**
-
+This works for any resource type (Jobs, Deployments, StatefulSets, etc.):
 ```bash
 ./bin/e5s discover label app=e5s-client
 ```
@@ -887,8 +860,20 @@ Output: spiffe://example.org/ns/default/sa/default
 Output: spiffe://example.org/ns/default/sa/default
 
 **Discover from deployment:**
+
+This works for Deployments (like our server):
 ```bash
-./bin/e5s discover deployment e5s-client
+./bin/e5s discover deployment e5s-server
+```
+
+Output: spiffe://example.org/ns/default/sa/default
+
+**Discover from pod name:**
+
+For Jobs, get the full pod name first (Job pods have generated names):
+```bash
+POD_NAME=$(kubectl get pods -l app=e5s-client -o name | head -1 | cut -d/ -f2)
+./bin/e5s discover pod $POD_NAME
 ```
 
 Output: spiffe://example.org/ns/default/sa/default
@@ -897,7 +882,7 @@ Output: spiffe://example.org/ns/default/sa/default
 
 Discover the client's actual SPIFFE ID:
 ```bash
-CLIENT_ID=$(./bin/e5s discover pod e5s-client)
+CLIENT_ID=$(./bin/e5s discover label app=e5s-client)
 ```
 
 Update server config with the discovered ID:
