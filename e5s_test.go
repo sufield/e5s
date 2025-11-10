@@ -99,14 +99,14 @@ func TestStartWithContext_ContextCancellation(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	// Create a context that's already cancelled
+	// Create a context that's already canceled
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	// This should fail because the context is cancelled
+	// This should fail because the context is canceled
 	_, err := e5s.StartWithContext(ctx, "/nonexistent/config.yaml", handler)
 	if err == nil {
-		t.Error("expected error with cancelled context, got nil")
+		t.Error("expected error with canceled context, got nil")
 	}
 }
 
@@ -216,14 +216,14 @@ func TestClientWithContext_InvalidConfig(t *testing.T) {
 
 // TestClientWithContext_ContextCancellation verifies context cancellation during initialization.
 func TestClientWithContext_ContextCancellation(t *testing.T) {
-	// Create a context that's already cancelled
+	// Create a context that's already canceled
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	// This should fail because the context is cancelled
+	// This should fail because the context is canceled
 	_, _, err := e5s.ClientWithContext(ctx, "/nonexistent/config.yaml")
 	if err == nil {
-		t.Error("expected error with cancelled context, got nil")
+		t.Error("expected error with canceled context, got nil")
 	}
 }
 
