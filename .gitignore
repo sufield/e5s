@@ -25,6 +25,7 @@ inmem_coverage.html
 
 # Example binaries
 examples/*/bin/
+demo/bin/
 
 # Test demo generated files (scripts create these)
 test-demo/bin/
