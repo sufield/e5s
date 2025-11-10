@@ -653,34 +653,59 @@ func makeRequestWithRetry(client *http.Client, url string, maxRetries int) error
 type CircuitBreaker struct {
 	failures    int
 	lastFailure time.Time
+	state       string // "closed", "open", "half-open"
 	threshold   int
 	timeout     time.Duration
 	mu          sync.Mutex
 }
 
+func NewCircuitBreaker(threshold int, timeout time.Duration) *CircuitBreaker {
+	return &CircuitBreaker{
+		threshold: threshold,
+		timeout:   timeout,
+		state:     "closed",
+	}
+}
+
 func (cb *CircuitBreaker) Call(fn func() error) error {
+	// Check state before attempting call
+	cb.mu.Lock()
+	switch cb.state {
+	case "open":
+		if time.Since(cb.lastFailure) > cb.timeout {
+			// Transition to half-open for test request
+			cb.state = "half-open"
+		} else {
+			cb.mu.Unlock()
+			return fmt.Errorf("circuit breaker open")
+		}
+	case "half-open":
+		// Allow one test request
+	case "closed":
+		// Normal operation
+	}
+	cb.mu.Unlock()
+
+	// Execute function WITHOUT holding lock (allows concurrency)
+	err := fn()
+
+	// Update state based on result
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 
-	// Check if circuit is open
-	if cb.failures >= cb.threshold {
-		if time.Since(cb.lastFailure) < cb.timeout {
-			return fmt.Errorf("circuit breaker open")
-		}
-		// Reset after timeout
-		cb.failures = 0
-	}
-
-	// Attempt call
-	err := fn()
 	if err != nil {
 		cb.failures++
 		cb.lastFailure = time.Now()
+		// Open circuit if threshold reached or if half-open test failed
+		if cb.failures >= cb.threshold || cb.state == "half-open" {
+			cb.state = "open"
+		}
 		return err
 	}
 
-	// Success - reset failures
+	// Success - reset and close circuit
 	cb.failures = 0
+	cb.state = "closed"
 	return nil
 }
 
@@ -696,10 +721,7 @@ func main() {
 		}
 	}()
 
-	cb := &CircuitBreaker{
-		threshold: 5,
-		timeout:   30 * time.Second,
-	}
+	cb := NewCircuitBreaker(5, 30*time.Second)
 
 	err = cb.Call(func() error {
 		resp, err := client.Get("https://api.example.com/data")
@@ -715,6 +737,19 @@ func main() {
 	}
 }
 ```
+
+**Key improvements in this implementation:**
+
+1. **Concurrency-Safe** - Mutex released before calling `fn()`, allowing multiple goroutines to execute concurrently
+2. **Half-Open State** - After timeout, allows a test request; success closes circuit, failure reopens it
+3. **Explicit State Machine** - Clear transitions between closed → open → half-open → closed
+4. **Thread-Safe** - Protects state changes but doesn't serialize function execution
+
+For production use, consider adding:
+- Metrics/logging for state transitions
+- Exponential backoff on repeated failures
+- Configurable success threshold for half-open → closed transition
+- Using `sync/atomic` for lock-free failure counting
 
 ---
 
