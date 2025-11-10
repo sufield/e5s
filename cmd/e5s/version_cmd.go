@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -13,7 +12,6 @@ import (
 
 func versionCommand(args []string) error {
 	fs := flag.NewFlagSet("version", flag.ExitOnError)
-	verbose := fs.Bool("verbose", false, "Show detailed version information")
 	format := fs.String("format", "json", "Output format: json, plain")
 	mode := fs.String("mode", "", "Show requirements: dev, prod (default: show runtime versions)")
 
@@ -26,7 +24,6 @@ USAGE:
 FLAGS:
     --format string    Output format: json, plain (default "json")
     --mode string      Show requirements: dev, prod (default: show runtime versions)
-    --verbose          Show detailed version information (JSON only)
 
 MODES:
     (default)  Show actual runtime versions of installed tools
@@ -46,9 +43,6 @@ EXAMPLES:
 
     # Show production requirements (JSON)
     e5s version --mode prod
-
-    # Show detailed information including TLS config
-    e5s version --verbose
 
     # Output in plain format for simple parsing
     e5s version --format plain
@@ -74,13 +68,13 @@ EXAMPLES:
 	case "prod":
 		return showProdRequirements(*format)
 	case "":
-		return showRuntimeVersions(*verbose, *format)
+		return showRuntimeVersions(*format)
 	default:
 		return fmt.Errorf("invalid mode: %s (must be: dev, prod)", *mode)
 	}
 }
 
-func showRuntimeVersions(verbose bool, format string) error {
+func showRuntimeVersions(format string) error {
 	tools := []struct {
 		name     string
 		command  []string
@@ -121,19 +115,19 @@ func showRuntimeVersions(verbose bool, format string) error {
 	// JSON output
 	if format == "json" {
 		type tlsConfig struct {
-			MinTLSVersion      string `json:"min_tls_version"`
-			MaxTLSVersion      string `json:"max_tls_version"`
-			ClientAuth         string `json:"client_auth"`
-			CertificateSource  string `json:"certificate_source"`
+			MinTLSVersion       string `json:"min_tls_version"`
+			MaxTLSVersion       string `json:"max_tls_version"`
+			ClientAuth          string `json:"client_auth"`
+			CertificateSource   string `json:"certificate_source"`
 			CertificateRotation string `json:"certificate_rotation"`
 		}
 
 		type runtimeOutput struct {
-			E5SVersion     string        `json:"e5s_version"`
-			E5SCommit      string        `json:"e5s_commit"`
-			E5SBuilt       string        `json:"e5s_built"`
-			TLSConfig      tlsConfig     `json:"tls_config"`
-			Runtime        []toolVersion `json:"runtime"`
+			E5SVersion string        `json:"e5s_version"`
+			E5SCommit  string        `json:"e5s_commit"`
+			E5SBuilt   string        `json:"e5s_built"`
+			TLSConfig  tlsConfig     `json:"tls_config"`
+			Runtime    []toolVersion `json:"runtime"`
 		}
 
 		output := runtimeOutput{
@@ -141,10 +135,10 @@ func showRuntimeVersions(verbose bool, format string) error {
 			E5SCommit:  commit,
 			E5SBuilt:   date,
 			TLSConfig: tlsConfig{
-				MinTLSVersion:      "TLS 1.3",
-				MaxTLSVersion:      "TLS 1.3",
-				ClientAuth:         "Required (mTLS)",
-				CertificateSource:  "SPIRE Workload API",
+				MinTLSVersion:       "TLS 1.3",
+				MaxTLSVersion:       "TLS 1.3",
+				ClientAuth:          "Required (mTLS)",
+				CertificateSource:   "SPIRE Workload API",
 				CertificateRotation: "Automatic",
 			},
 			Runtime: toolVersions,
@@ -171,34 +165,6 @@ func showRuntimeVersions(verbose bool, format string) error {
 
 	// Invalid format
 	return fmt.Errorf("invalid format: %s (must be: json, plain)", format)
-}
-
-func printTLSConfig() {
-	// Get TLS version names
-	minVersion := getTLSVersionName(tls.VersionTLS13)
-
-	table := NewTableWriter([]string{"Setting", "Value"})
-	table.AddRow([]string{"Minimum TLS Version", minVersion})
-	table.AddRow([]string{"Maximum TLS Version", "TLS 1.3"})
-	table.AddRow([]string{"Client Auth", "Required (mTLS)"})
-	table.AddRow([]string{"Certificate Source", "SPIRE Workload API"})
-	table.AddRow([]string{"Certificate Rotation", "Automatic"})
-	table.Print()
-}
-
-func getTLSVersionName(version uint16) string {
-	switch version {
-	case tls.VersionTLS10:
-		return "TLS 1.0"
-	case tls.VersionTLS11:
-		return "TLS 1.1"
-	case tls.VersionTLS12:
-		return "TLS 1.2"
-	case tls.VersionTLS13:
-		return "TLS 1.3"
-	default:
-		return fmt.Sprintf("Unknown (0x%04x)", version)
-	}
 }
 
 func getToolVersion(command []string) (string, error) {
@@ -251,29 +217,6 @@ func getToolVersion(command []string) (string, error) {
 	return result, nil
 }
 
-func showDetailedInfo() {
-	// Show Go environment
-	fmt.Println("\nGo Environment:")
-	if goroot, err := getToolVersion([]string{"go", "env", "GOROOT"}); err == nil {
-		fmt.Printf("  GOROOT: %s\n", goroot)
-	}
-	if gopath, err := getToolVersion([]string{"go", "env", "GOPATH"}); err == nil {
-		fmt.Printf("  GOPATH: %s\n", gopath)
-	}
-
-	// Show Docker info if available
-	if _, err := getToolVersion([]string{"docker", "version"}); err == nil {
-		if info, err := getToolVersion([]string{"docker", "info", "--format", "{{.ServerVersion}}"}); err == nil {
-			fmt.Printf("\nDocker Server: %s\n", info)
-		}
-	}
-
-	// Show Kubernetes context if available
-	if ctx, err := getToolVersion([]string{"kubectl", "config", "current-context"}); err == nil {
-		fmt.Printf("\nKubernetes Context: %s\n", ctx)
-	}
-}
-
 func showDevRequirements(format string) error {
 	// Development requirements from COMPATIBILITY.md
 	type requirement struct {
@@ -300,10 +243,10 @@ func showDevRequirements(format string) error {
 	// JSON output
 	if format == "json" {
 		type devOutput struct {
-			Mode          string        `json:"mode"`
-			Description   string        `json:"description"`
-			Requirements  []requirement `json:"requirements"`
-			Installation  []string      `json:"installation"`
+			Mode         string        `json:"mode"`
+			Description  string        `json:"description"`
+			Requirements []requirement `json:"requirements"`
+			Installation []string      `json:"installation"`
 		}
 
 		output := devOutput{
@@ -364,11 +307,11 @@ func showProdRequirements(format string) error {
 	// JSON output
 	if format == "json" {
 		type prodOutput struct {
-			Mode         string        `json:"mode"`
-			Description  string        `json:"description"`
-			Requirements []requirement `json:"requirements"`
-			Deployment   []string      `json:"deployment"`
-			Documentation []string     `json:"documentation"`
+			Mode          string        `json:"mode"`
+			Description   string        `json:"description"`
+			Requirements  []requirement `json:"requirements"`
+			Deployment    []string      `json:"deployment"`
+			Documentation []string      `json:"documentation"`
 		}
 
 		output := prodOutput{
