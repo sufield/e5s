@@ -106,7 +106,9 @@ if command -v helm >/dev/null 2>&1; then
     echo "  Helm already installed: $(helm version --short) ✓"
 else
     echo "  Downloading and installing Helm..."
-    cd /tmp && curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+    # Pin to specific commit hash for security (OpenSSF Scorecard requirement)
+    # Commit: 0ee89d2d4ee91d7edd21a9445f39f4eb0fed2973 from 2025-11-10
+    cd /tmp && curl -fsSL https://raw.githubusercontent.com/helm/helm/0ee89d2d4ee91d7edd21a9445f39f4eb0fed2973/scripts/get-helm-3 | bash
     echo "  ✓ Helm installed: $(helm version --short)"
 fi
 echo ""

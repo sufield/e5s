@@ -33,7 +33,9 @@ if [ ! -f go.mod ]; then
     go mod init test-demo
     go mod edit -replace github.com/sufield/e5s=..
     go get github.com/go-chi/chi/v5@v5.2.3
-    go get github.com/sufield/e5s  # Add to require section (uses replace directive)
+    # Pin to @latest but replaced by local version via replace directive above
+    # OpenSSF Scorecard requires explicit version, though replace makes it irrelevant
+    go get github.com/sufield/e5s@latest
 else
     echo "2. Go module already initialized"
 fi
