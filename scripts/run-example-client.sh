@@ -13,7 +13,7 @@ cd "$(dirname "$0")/.."
 
 # Config paths
 APP_CONFIG="examples/highlevel/client-config.yaml"
-E5S_CONFIG="examples/highlevel/e5s.yaml"
+E5S_CONFIG="examples/highlevel/e5s-client.yaml"
 
 # Allow overriding server URL
 SERVER_URL="${1:-https://localhost:8443/time}"

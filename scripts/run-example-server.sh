@@ -19,7 +19,7 @@ if [[ "${1:-}" == "--debug" ]]; then
 fi
 
 # Config paths
-CONFIG="examples/highlevel/e5s.yaml"
+CONFIG="examples/highlevel/e5s-server.yaml"
 
 echo "========================================"
 echo "e5s Example Server"

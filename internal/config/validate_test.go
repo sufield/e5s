@@ -9,24 +9,17 @@ import (
 func TestValidateServer(t *testing.T) {
 	tests := []struct {
 		name    string
-		cfg     FileConfig
+		cfg     ServerFileConfig
 		wantErr bool
 		errMsg  string
 	}{
 		{
 			name: "valid config with client SPIFFE ID",
-			cfg: FileConfig{
-				SPIRE: struct {
-					WorkloadSocket      string `yaml:"workload_socket"`
-					InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
-				}{
+			cfg: ServerFileConfig{
+				SPIRE: SPIRESection{
 					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
-				Server: struct {
-					ListenAddr               string `yaml:"listen_addr"`
-					AllowedClientSPIFFEID    string `yaml:"allowed_client_spiffe_id"`
-					AllowedClientTrustDomain string `yaml:"allowed_client_trust_domain"`
-				}{
+				Server: ServerSection{
 					ListenAddr:            ":8443",
 					AllowedClientSPIFFEID: "spiffe://example.org/client",
 				},
@@ -35,18 +28,11 @@ func TestValidateServer(t *testing.T) {
 		},
 		{
 			name: "valid config with trust domain",
-			cfg: FileConfig{
-				SPIRE: struct {
-					WorkloadSocket      string `yaml:"workload_socket"`
-					InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
-				}{
+			cfg: ServerFileConfig{
+				SPIRE: SPIRESection{
 					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
-				Server: struct {
-					ListenAddr               string `yaml:"listen_addr"`
-					AllowedClientSPIFFEID    string `yaml:"allowed_client_spiffe_id"`
-					AllowedClientTrustDomain string `yaml:"allowed_client_trust_domain"`
-				}{
+				Server: ServerSection{
 					ListenAddr:               ":8443",
 					AllowedClientTrustDomain: "example.org",
 				},
@@ -55,12 +41,8 @@ func TestValidateServer(t *testing.T) {
 		},
 		{
 			name: "missing workload socket",
-			cfg: FileConfig{
-				Server: struct {
-					ListenAddr               string `yaml:"listen_addr"`
-					AllowedClientSPIFFEID    string `yaml:"allowed_client_spiffe_id"`
-					AllowedClientTrustDomain string `yaml:"allowed_client_trust_domain"`
-				}{
+			cfg: ServerFileConfig{
+				Server: ServerSection{
 					ListenAddr:            ":8443",
 					AllowedClientSPIFFEID: "spiffe://example.org/client",
 				},
@@ -70,18 +52,11 @@ func TestValidateServer(t *testing.T) {
 		},
 		{
 			name: "missing listen address",
-			cfg: FileConfig{
-				SPIRE: struct {
-					WorkloadSocket      string `yaml:"workload_socket"`
-					InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
-				}{
+			cfg: ServerFileConfig{
+				SPIRE: SPIRESection{
 					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
-				Server: struct {
-					ListenAddr               string `yaml:"listen_addr"`
-					AllowedClientSPIFFEID    string `yaml:"allowed_client_spiffe_id"`
-					AllowedClientTrustDomain string `yaml:"allowed_client_trust_domain"`
-				}{
+				Server: ServerSection{
 					AllowedClientSPIFFEID: "spiffe://example.org/client",
 				},
 			},
@@ -90,18 +65,11 @@ func TestValidateServer(t *testing.T) {
 		},
 		{
 			name: "missing both client ID and trust domain",
-			cfg: FileConfig{
-				SPIRE: struct {
-					WorkloadSocket      string `yaml:"workload_socket"`
-					InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
-				}{
+			cfg: ServerFileConfig{
+				SPIRE: SPIRESection{
 					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
-				Server: struct {
-					ListenAddr               string `yaml:"listen_addr"`
-					AllowedClientSPIFFEID    string `yaml:"allowed_client_spiffe_id"`
-					AllowedClientTrustDomain string `yaml:"allowed_client_trust_domain"`
-				}{
+				Server: ServerSection{
 					ListenAddr: ":8443",
 				},
 			},
@@ -110,18 +78,11 @@ func TestValidateServer(t *testing.T) {
 		},
 		{
 			name: "both client ID and trust domain set",
-			cfg: FileConfig{
-				SPIRE: struct {
-					WorkloadSocket      string `yaml:"workload_socket"`
-					InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
-				}{
+			cfg: ServerFileConfig{
+				SPIRE: SPIRESection{
 					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
-				Server: struct {
-					ListenAddr               string `yaml:"listen_addr"`
-					AllowedClientSPIFFEID    string `yaml:"allowed_client_spiffe_id"`
-					AllowedClientTrustDomain string `yaml:"allowed_client_trust_domain"`
-				}{
+				Server: ServerSection{
 					ListenAddr:               ":8443",
 					AllowedClientSPIFFEID:    "spiffe://example.org/client",
 					AllowedClientTrustDomain: "example.org",
@@ -132,18 +93,11 @@ func TestValidateServer(t *testing.T) {
 		},
 		{
 			name: "invalid SPIFFE ID format",
-			cfg: FileConfig{
-				SPIRE: struct {
-					WorkloadSocket      string `yaml:"workload_socket"`
-					InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
-				}{
+			cfg: ServerFileConfig{
+				SPIRE: SPIRESection{
 					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
-				Server: struct {
-					ListenAddr               string `yaml:"listen_addr"`
-					AllowedClientSPIFFEID    string `yaml:"allowed_client_spiffe_id"`
-					AllowedClientTrustDomain string `yaml:"allowed_client_trust_domain"`
-				}{
+				Server: ServerSection{
 					ListenAddr:            ":8443",
 					AllowedClientSPIFFEID: "not-a-valid-spiffe-id",
 				},
@@ -153,18 +107,11 @@ func TestValidateServer(t *testing.T) {
 		},
 		{
 			name: "invalid trust domain format",
-			cfg: FileConfig{
-				SPIRE: struct {
-					WorkloadSocket      string `yaml:"workload_socket"`
-					InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
-				}{
+			cfg: ServerFileConfig{
+				SPIRE: SPIRESection{
 					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
-				Server: struct {
-					ListenAddr               string `yaml:"listen_addr"`
-					AllowedClientSPIFFEID    string `yaml:"allowed_client_spiffe_id"`
-					AllowedClientTrustDomain string `yaml:"allowed_client_trust_domain"`
-				}{
+				Server: ServerSection{
 					ListenAddr:               ":8443",
 					AllowedClientTrustDomain: "invalid domain!",
 				},
@@ -174,18 +121,11 @@ func TestValidateServer(t *testing.T) {
 		},
 		{
 			name: "whitespace trimming for SPIFFE ID",
-			cfg: FileConfig{
-				SPIRE: struct {
-					WorkloadSocket      string `yaml:"workload_socket"`
-					InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
-				}{
+			cfg: ServerFileConfig{
+				SPIRE: SPIRESection{
 					WorkloadSocket: "  /run/spire/sockets/agent.sock  ",
 				},
-				Server: struct {
-					ListenAddr               string `yaml:"listen_addr"`
-					AllowedClientSPIFFEID    string `yaml:"allowed_client_spiffe_id"`
-					AllowedClientTrustDomain string `yaml:"allowed_client_trust_domain"`
-				}{
+				Server: ServerSection{
 					ListenAddr:            "  :8443  ",
 					AllowedClientSPIFFEID: "  spiffe://example.org/client  ",
 				},
@@ -194,18 +134,11 @@ func TestValidateServer(t *testing.T) {
 		},
 		{
 			name: "whitespace trimming for trust domain",
-			cfg: FileConfig{
-				SPIRE: struct {
-					WorkloadSocket      string `yaml:"workload_socket"`
-					InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
-				}{
+			cfg: ServerFileConfig{
+				SPIRE: SPIRESection{
 					WorkloadSocket: "  /run/spire/sockets/agent.sock  ",
 				},
-				Server: struct {
-					ListenAddr               string `yaml:"listen_addr"`
-					AllowedClientSPIFFEID    string `yaml:"allowed_client_spiffe_id"`
-					AllowedClientTrustDomain string `yaml:"allowed_client_trust_domain"`
-				}{
+				Server: ServerSection{
 					ListenAddr:               "  :8443  ",
 					AllowedClientTrustDomain: "  example.org  ",
 				},
@@ -216,7 +149,7 @@ func TestValidateServer(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			spireConfig, authz, err := ValidateServer(&tt.cfg)
+			spireConfig, authz, err := ValidateServerConfig(&tt.cfg)
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("ValidateServer() expected error containing %q, got nil", tt.errMsg)
@@ -251,24 +184,17 @@ func TestValidateServer(t *testing.T) {
 func TestValidateClient(t *testing.T) {
 	tests := []struct {
 		name    string
-		cfg     FileConfig
+		cfg     ClientFileConfig
 		wantErr bool
 		errMsg  string
 	}{
 		{
 			name: "valid config with server SPIFFE ID",
-			cfg: FileConfig{
-				SPIRE: struct {
-					WorkloadSocket      string `yaml:"workload_socket"`
-					InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
-				}{
+			cfg: ClientFileConfig{
+				SPIRE: SPIRESection{
 					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
-				Client: struct {
-					ServerURL                 string `yaml:"server_url"`
-					ExpectedServerSPIFFEID    string `yaml:"expected_server_spiffe_id"`
-					ExpectedServerTrustDomain string `yaml:"expected_server_trust_domain"`
-				}{
+				Client: ClientSection{
 					ExpectedServerSPIFFEID: "spiffe://example.org/server",
 				},
 			},
@@ -276,18 +202,11 @@ func TestValidateClient(t *testing.T) {
 		},
 		{
 			name: "valid config with trust domain",
-			cfg: FileConfig{
-				SPIRE: struct {
-					WorkloadSocket      string `yaml:"workload_socket"`
-					InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
-				}{
+			cfg: ClientFileConfig{
+				SPIRE: SPIRESection{
 					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
-				Client: struct {
-					ServerURL                 string `yaml:"server_url"`
-					ExpectedServerSPIFFEID    string `yaml:"expected_server_spiffe_id"`
-					ExpectedServerTrustDomain string `yaml:"expected_server_trust_domain"`
-				}{
+				Client: ClientSection{
 					ExpectedServerTrustDomain: "example.org",
 				},
 			},
@@ -295,12 +214,8 @@ func TestValidateClient(t *testing.T) {
 		},
 		{
 			name: "missing workload socket",
-			cfg: FileConfig{
-				Client: struct {
-					ServerURL                 string `yaml:"server_url"`
-					ExpectedServerSPIFFEID    string `yaml:"expected_server_spiffe_id"`
-					ExpectedServerTrustDomain string `yaml:"expected_server_trust_domain"`
-				}{
+			cfg: ClientFileConfig{
+				Client: ClientSection{
 					ExpectedServerSPIFFEID: "spiffe://example.org/server",
 				},
 			},
@@ -309,11 +224,8 @@ func TestValidateClient(t *testing.T) {
 		},
 		{
 			name: "missing both server ID and trust domain",
-			cfg: FileConfig{
-				SPIRE: struct {
-					WorkloadSocket      string `yaml:"workload_socket"`
-					InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
-				}{
+			cfg: ClientFileConfig{
+				SPIRE: SPIRESection{
 					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
 			},
@@ -322,18 +234,11 @@ func TestValidateClient(t *testing.T) {
 		},
 		{
 			name: "both server ID and trust domain set",
-			cfg: FileConfig{
-				SPIRE: struct {
-					WorkloadSocket      string `yaml:"workload_socket"`
-					InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
-				}{
+			cfg: ClientFileConfig{
+				SPIRE: SPIRESection{
 					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
-				Client: struct {
-					ServerURL                 string `yaml:"server_url"`
-					ExpectedServerSPIFFEID    string `yaml:"expected_server_spiffe_id"`
-					ExpectedServerTrustDomain string `yaml:"expected_server_trust_domain"`
-				}{
+				Client: ClientSection{
 					ExpectedServerSPIFFEID:    "spiffe://example.org/server",
 					ExpectedServerTrustDomain: "example.org",
 				},
@@ -343,18 +248,11 @@ func TestValidateClient(t *testing.T) {
 		},
 		{
 			name: "invalid SPIFFE ID format",
-			cfg: FileConfig{
-				SPIRE: struct {
-					WorkloadSocket      string `yaml:"workload_socket"`
-					InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
-				}{
+			cfg: ClientFileConfig{
+				SPIRE: SPIRESection{
 					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
-				Client: struct {
-					ServerURL                 string `yaml:"server_url"`
-					ExpectedServerSPIFFEID    string `yaml:"expected_server_spiffe_id"`
-					ExpectedServerTrustDomain string `yaml:"expected_server_trust_domain"`
-				}{
+				Client: ClientSection{
 					ExpectedServerSPIFFEID: "not-a-valid-spiffe-id",
 				},
 			},
@@ -363,18 +261,11 @@ func TestValidateClient(t *testing.T) {
 		},
 		{
 			name: "invalid trust domain format",
-			cfg: FileConfig{
-				SPIRE: struct {
-					WorkloadSocket      string `yaml:"workload_socket"`
-					InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
-				}{
+			cfg: ClientFileConfig{
+				SPIRE: SPIRESection{
 					WorkloadSocket: "/run/spire/sockets/agent.sock",
 				},
-				Client: struct {
-					ServerURL                 string `yaml:"server_url"`
-					ExpectedServerSPIFFEID    string `yaml:"expected_server_spiffe_id"`
-					ExpectedServerTrustDomain string `yaml:"expected_server_trust_domain"`
-				}{
+				Client: ClientSection{
 					ExpectedServerTrustDomain: "invalid domain!",
 				},
 			},
@@ -383,18 +274,11 @@ func TestValidateClient(t *testing.T) {
 		},
 		{
 			name: "whitespace trimming for SPIFFE ID",
-			cfg: FileConfig{
-				SPIRE: struct {
-					WorkloadSocket      string `yaml:"workload_socket"`
-					InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
-				}{
+			cfg: ClientFileConfig{
+				SPIRE: SPIRESection{
 					WorkloadSocket: "  /run/spire/sockets/agent.sock  ",
 				},
-				Client: struct {
-					ServerURL                 string `yaml:"server_url"`
-					ExpectedServerSPIFFEID    string `yaml:"expected_server_spiffe_id"`
-					ExpectedServerTrustDomain string `yaml:"expected_server_trust_domain"`
-				}{
+				Client: ClientSection{
 					ExpectedServerSPIFFEID: "  spiffe://example.org/server  ",
 				},
 			},
@@ -402,18 +286,11 @@ func TestValidateClient(t *testing.T) {
 		},
 		{
 			name: "whitespace trimming for trust domain",
-			cfg: FileConfig{
-				SPIRE: struct {
-					WorkloadSocket      string `yaml:"workload_socket"`
-					InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
-				}{
+			cfg: ClientFileConfig{
+				SPIRE: SPIRESection{
 					WorkloadSocket: "  /run/spire/sockets/agent.sock  ",
 				},
-				Client: struct {
-					ServerURL                 string `yaml:"server_url"`
-					ExpectedServerSPIFFEID    string `yaml:"expected_server_spiffe_id"`
-					ExpectedServerTrustDomain string `yaml:"expected_server_trust_domain"`
-				}{
+				Client: ClientSection{
 					ExpectedServerTrustDomain: "  example.org  ",
 				},
 			},
@@ -423,7 +300,7 @@ func TestValidateClient(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			spireConfig, authz, err := ValidateClient(&tt.cfg)
+			spireConfig, authz, err := ValidateClientConfig(&tt.cfg)
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("ValidateClient() expected error containing %q, got nil", tt.errMsg)
@@ -458,18 +335,15 @@ func TestValidateClient(t *testing.T) {
 func TestValidateSPIREConfig_Timeout(t *testing.T) {
 	tests := []struct {
 		name            string
-		cfg             FileConfig
+		cfg             ServerFileConfig
 		wantErr         bool
 		errMsg          string
 		expectedTimeout time.Duration
 	}{
 		{
 			name: "default timeout when not specified",
-			cfg: FileConfig{
-				SPIRE: struct {
-					WorkloadSocket      string `yaml:"workload_socket"`
-					InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
-				}{
+			cfg: ServerFileConfig{
+				SPIRE: SPIRESection{
 					WorkloadSocket: "/run/spire/sockets/agent.sock",
 					// InitialFetchTimeout not set
 				},
@@ -479,11 +353,8 @@ func TestValidateSPIREConfig_Timeout(t *testing.T) {
 		},
 		{
 			name: "valid timeout - seconds",
-			cfg: FileConfig{
-				SPIRE: struct {
-					WorkloadSocket      string `yaml:"workload_socket"`
-					InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
-				}{
+			cfg: ServerFileConfig{
+				SPIRE: SPIRESection{
 					WorkloadSocket:      "/run/spire/sockets/agent.sock",
 					InitialFetchTimeout: "10s",
 				},
@@ -493,11 +364,8 @@ func TestValidateSPIREConfig_Timeout(t *testing.T) {
 		},
 		{
 			name: "valid timeout - minutes",
-			cfg: FileConfig{
-				SPIRE: struct {
-					WorkloadSocket      string `yaml:"workload_socket"`
-					InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
-				}{
+			cfg: ServerFileConfig{
+				SPIRE: SPIRESection{
 					WorkloadSocket:      "/run/spire/sockets/agent.sock",
 					InitialFetchTimeout: "2m",
 				},
@@ -507,11 +375,8 @@ func TestValidateSPIREConfig_Timeout(t *testing.T) {
 		},
 		{
 			name: "invalid timeout format",
-			cfg: FileConfig{
-				SPIRE: struct {
-					WorkloadSocket      string `yaml:"workload_socket"`
-					InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
-				}{
+			cfg: ServerFileConfig{
+				SPIRE: SPIRESection{
 					WorkloadSocket:      "/run/spire/sockets/agent.sock",
 					InitialFetchTimeout: "not-a-duration",
 				},
@@ -521,11 +386,8 @@ func TestValidateSPIREConfig_Timeout(t *testing.T) {
 		},
 		{
 			name: "negative timeout",
-			cfg: FileConfig{
-				SPIRE: struct {
-					WorkloadSocket      string `yaml:"workload_socket"`
-					InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
-				}{
+			cfg: ServerFileConfig{
+				SPIRE: SPIRESection{
 					WorkloadSocket:      "/run/spire/sockets/agent.sock",
 					InitialFetchTimeout: "-5s",
 				},
@@ -535,11 +397,8 @@ func TestValidateSPIREConfig_Timeout(t *testing.T) {
 		},
 		{
 			name: "zero timeout",
-			cfg: FileConfig{
-				SPIRE: struct {
-					WorkloadSocket      string `yaml:"workload_socket"`
-					InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
-				}{
+			cfg: ServerFileConfig{
+				SPIRE: SPIRESection{
 					WorkloadSocket:      "/run/spire/sockets/agent.sock",
 					InitialFetchTimeout: "0s",
 				},
@@ -549,11 +408,8 @@ func TestValidateSPIREConfig_Timeout(t *testing.T) {
 		},
 		{
 			name: "whitespace trimming for timeout",
-			cfg: FileConfig{
-				SPIRE: struct {
-					WorkloadSocket      string `yaml:"workload_socket"`
-					InitialFetchTimeout string `yaml:"initial_fetch_timeout"`
-				}{
+			cfg: ServerFileConfig{
+				SPIRE: SPIRESection{
 					WorkloadSocket:      "/run/spire/sockets/agent.sock",
 					InitialFetchTimeout: "  15s  ",
 				},
@@ -565,7 +421,7 @@ func TestValidateSPIREConfig_Timeout(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			spireConfig, err := validateSPIREConfig(&tt.cfg)
+			spireConfig, err := validateSPIRESection(tt.cfg.SPIRE)
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("validateSPIREConfig() expected error containing %q, got nil", tt.errMsg)

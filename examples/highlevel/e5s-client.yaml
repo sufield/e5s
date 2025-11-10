@@ -1,0 +1,22 @@
+# e5s client configuration file
+
+spire:
+  # Path to SPIRE Agent's Workload API socket
+  # Default for SPIRE: unix:///tmp/spire-agent/public/api.sock
+  workload_socket: unix:///tmp/spire-agent/public/api.sock
+
+  # (Optional) How long to wait for identity from SPIRE before failing startup
+  # If not set, defaults to 30s
+  # initial_fetch_timeout: 30s
+
+client:
+  # Server authentication policy (exactly one of these should be set)
+
+  # Option 1: Require this exact server SPIFFE ID
+  # expected_server_spiffe_id: "spiffe://example.org/api-server"
+
+  # Option 2: Allow any server in this trust domain (used in this example)
+  expected_server_trust_domain: "example.org"
+
+  # Note: Server URL is now passed via environment variable (SERVER_URL)
+  # This follows the 12-factor app pattern for configuration

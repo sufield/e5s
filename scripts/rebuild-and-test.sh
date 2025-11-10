@@ -79,8 +79,8 @@ spec:
           mountPath: /spire/agent-socket
           readOnly: true
         - name: config
-          mountPath: /app/e5s.yaml
-          subPath: e5s.yaml
+          mountPath: /app/e5s-client.yaml
+          subPath: e5s-client.yaml
       volumes:
       - name: spire-agent-socket
         csi:
@@ -88,7 +88,7 @@ spec:
           readOnly: true
       - name: config
         configMap:
-          name: e5s-config
+          name: e5s-client-config
 JOBEOF
 
 echo "   Waiting for client job to complete (max 60s)..."
@@ -140,8 +140,8 @@ spec:
           mountPath: /spire/agent-socket
           readOnly: true
         - name: config
-          mountPath: /app/e5s.yaml
-          subPath: e5s.yaml
+          mountPath: /app/e5s-client.yaml
+          subPath: e5s-client.yaml
       volumes:
       - name: spire-agent-socket
         csi:
@@ -149,7 +149,7 @@ spec:
           readOnly: true
       - name: config
         configMap:
-          name: e5s-config
+          name: e5s-client-config
 UNREGEOF
 
 echo "   Waiting for unregistered client to fail (max 60s)..."

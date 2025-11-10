@@ -133,28 +133,28 @@ func newSPIRESource(
 
 // loadServerConfig loads and validates server configuration from the specified file.
 // Returns the raw config and validated SPIRE config ready for use.
-func loadServerConfig(path string) (config.FileConfig, config.SPIREConfig, error) {
-	cfg, err := config.Load(path)
+func loadServerConfig(path string) (config.ServerFileConfig, config.SPIREConfig, error) {
+	cfg, err := config.LoadServerConfig(path)
 	if err != nil {
-		return config.FileConfig{}, config.SPIREConfig{}, fmt.Errorf("failed to load config: %w", err)
+		return config.ServerFileConfig{}, config.SPIREConfig{}, fmt.Errorf("failed to load config: %w", err)
 	}
-	spireCfg, _, err := config.ValidateServer(&cfg)
+	spireCfg, _, err := config.ValidateServerConfig(&cfg)
 	if err != nil {
-		return config.FileConfig{}, config.SPIREConfig{}, fmt.Errorf("invalid server config: %w", err)
+		return config.ServerFileConfig{}, config.SPIREConfig{}, fmt.Errorf("invalid server config: %w", err)
 	}
 	return cfg, spireCfg, nil
 }
 
 // loadClientConfig loads and validates client configuration from the specified file.
 // Returns the raw config and validated SPIRE config ready for use.
-func loadClientConfig(path string) (config.FileConfig, config.SPIREConfig, error) {
-	cfg, err := config.Load(path)
+func loadClientConfig(path string) (config.ClientFileConfig, config.SPIREConfig, error) {
+	cfg, err := config.LoadClientConfig(path)
 	if err != nil {
-		return config.FileConfig{}, config.SPIREConfig{}, fmt.Errorf("failed to load config: %w", err)
+		return config.ClientFileConfig{}, config.SPIREConfig{}, fmt.Errorf("failed to load config: %w", err)
 	}
-	spireCfg, _, err := config.ValidateClient(&cfg)
+	spireCfg, _, err := config.ValidateClientConfig(&cfg)
 	if err != nil {
-		return config.FileConfig{}, config.SPIREConfig{}, fmt.Errorf("invalid client config: %w", err)
+		return config.ClientFileConfig{}, config.SPIREConfig{}, fmt.Errorf("invalid client config: %w", err)
 	}
 	return cfg, spireCfg, nil
 }

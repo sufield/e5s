@@ -31,7 +31,7 @@ func main() {
 	// Application config (server URL, etc.)
 	appConfigPath := flag.String("app-config", "examples/highlevel/client-config.yaml", "Path to app config file")
 	// e5s library config (SPIRE socket, trust domain, etc.)
-	e5sConfigPath := flag.String("e5s-config", "examples/highlevel/e5s.yaml", "Path to e5s config file")
+	e5sConfigPath := flag.String("e5s-config", "examples/highlevel/e5s-client.yaml", "Path to e5s config file")
 	// Convenience flags for sshd-like debugging experience
 	urlFlag := flag.String("url", "", "Server URL (overrides config)")
 	debug := flag.Bool("debug", false, "Enable debug mode (verbose logging)")

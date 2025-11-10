@@ -44,7 +44,7 @@ func FuzzValidateServer(f *testing.F) {
 	f.Add("/tmp/agent.sock", "0.0.0.0:443", "", "example.org", "1m")
 
 	f.Fuzz(func(t *testing.T, socket, addr, clientID, trustDomain, timeout string) {
-		cfg := &FileConfig{
+		cfg := &ServerFileConfig{
 			SPIRE: SPIRESection{
 				WorkloadSocket:      socket,
 				InitialFetchTimeout: timeout,
@@ -57,7 +57,7 @@ func FuzzValidateServer(f *testing.F) {
 		}
 
 		// Should never panic, even with malformed input
-		_, _, _ = ValidateServer(cfg)
+		_, _, _ = ValidateServerConfig(cfg)
 	})
 }
 
@@ -68,7 +68,7 @@ func FuzzValidateClient(f *testing.F) {
 	f.Add("/tmp/agent.sock", "", "example.org", "1m")
 
 	f.Fuzz(func(t *testing.T, socket, serverID, trustDomain, timeout string) {
-		cfg := &FileConfig{
+		cfg := &ClientFileConfig{
 			SPIRE: SPIRESection{
 				WorkloadSocket:      socket,
 				InitialFetchTimeout: timeout,
@@ -80,6 +80,6 @@ func FuzzValidateClient(f *testing.F) {
 		}
 
 		// Should never panic, even with malformed input
-		_, _, _ = ValidateClient(cfg)
+		_, _, _ = ValidateClientConfig(cfg)
 	})
 }

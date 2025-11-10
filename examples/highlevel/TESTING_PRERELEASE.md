@@ -215,7 +215,7 @@ func main() {
 	})
 
 	// Start server with automatic signal handling and graceful shutdown
-	if err := e5s.Serve("e5s.yaml", r); err != nil {
+	if err := e5s.Serve("e5s-server.yaml", r); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -252,7 +252,7 @@ func main() {
 	}
 
 	// Perform mTLS GET request with automatic client lifecycle management
-	err := e5s.WithClient("e5s.yaml", func(client *http.Client) error {
+	err := e5s.WithClient("e5s-client.yaml", func(client *http.Client) error {
 		resp, err := client.Get(serverURL)
 		if err != nil {
 			return err
@@ -278,14 +278,15 @@ func main() {
 
 This follows the 12-factor app pattern:
 
-1. **e5s Config** (`e5s.yaml`) - SPIRE/mTLS configuration managed by the e5s library
-2. **Environment Variables** - Application-specific settings (like SERVER_URL) come from environment
+1. **e5s Server Config** (`e5s-server.yaml`) - SPIRE/mTLS configuration for server processes
+2. **e5s Client Config** (`e5s-client.yaml`) - SPIRE/mTLS configuration for client processes
+3. **Environment Variables** - Application-specific settings (like SERVER_URL) come from environment
 
-This keeps infrastructure config (e5s.yaml) separate from application config (environment variables).
+Each binary gets its own configuration file that describes only what that process does. This keeps infrastructure config separate from application config.
 
 ---
 
-## Step 5: Create e5s Configuration File
+## Step 5: Create e5s Configuration Files
 
 Use the e5s CLI tool to construct the SPIFFE ID to avoid mistakes.
 
@@ -345,17 +346,15 @@ CLIENT_SPIFFE_ID=$(./bin/e5s spiffe-id k8s default default --trust-domain=exampl
 
 Output: `Client SPIFFE ID: spiffe://example.org/ns/default/sa/default`
 
-Now create `e5s.yaml` using the discovered SPIFFE ID:
+Now create separate configuration files for server and client:
+
+**Server configuration** (`e5s-server.yaml`):
 
 ```bash
-cat > e5s.yaml <<EOF
+cat > e5s-server.yaml <<EOF
 spire:
   # Path to SPIRE Agent's Workload API socket
   workload_socket: unix:///tmp/spire-agent/public/api.sock
-
-  # (Optional) How long to wait for identity from SPIRE before failing startup
-  # If not set, defaults to 30s
-  # initial_fetch_timeout: 30s
 
 server:
   listen_addr: ":8443"
@@ -363,6 +362,16 @@ server:
   # This demonstrates zero-trust: even if SPIRE issues other identities,
   # the server only accepts the explicitly authorized client
   allowed_client_spiffe_id: "$CLIENT_SPIFFE_ID"
+EOF
+```
+
+**Client configuration** (`e5s-client.yaml`):
+
+```bash
+cat > e5s-client.yaml <<EOF
+spire:
+  # Path to SPIRE Agent's Workload API socket
+  workload_socket: unix:///tmp/spire-agent/public/api.sock
 
 client:
   # Connect to any server in this trust domain
@@ -370,7 +379,7 @@ client:
 EOF
 ```
 
-This file contains SPIRE and mTLS settings used by the e5s library.
+Each binary gets its own configuration file describing only that process's role.
 
 ---
 
@@ -404,24 +413,20 @@ Every time e5s library code is modified, rebuild these binaries to see the chang
 
 For now, we'll use the default service account's SPIFFE ID. See **Step 11** for SPIFFE ID discovery instructions.
 
-Create ConfigMap for e5s configuration:
+Create separate ConfigMaps for server and client configurations:
 
 ```bash
 cat > k8s-configs.yaml <<'EOF'
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: e5s-config
+  name: e5s-server-config
   namespace: default
 data:
-  e5s.yaml: |
+  e5s-server.yaml: |
     spire:
       # Path to SPIRE Agent socket inside Kubernetes pods
       workload_socket: unix:///spire/agent-socket/spire-agent.sock
-
-      # (Optional) How long to wait for identity from SPIRE before failing startup
-      # If not set, defaults to 30s
-      # initial_fetch_timeout: 30s
 
     server:
       listen_addr: ":8443"
@@ -429,6 +434,17 @@ data:
       # This demonstrates zero-trust: even if SPIRE auto-registers other service accounts,
       # the server only accepts the explicitly authorized client identity
       allowed_client_spiffe_id: "spiffe://example.org/ns/default/sa/default"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: e5s-client-config
+  namespace: default
+data:
+  e5s-client.yaml: |
+    spire:
+      # Path to SPIRE Agent socket inside Kubernetes pods
+      workload_socket: unix:///spire/agent-socket/spire-agent.sock
 
     client:
       expected_server_trust_domain: "example.org"
@@ -510,8 +526,8 @@ spec:
           mountPath: /spire/agent-socket
           readOnly: true
         - name: config
-          mountPath: /app/e5s.yaml
-          subPath: e5s.yaml
+          mountPath: /app/e5s-server.yaml
+          subPath: e5s-server.yaml
       volumes:
       - name: spire-agent-socket
         csi:
@@ -519,7 +535,7 @@ spec:
           readOnly: true
       - name: config
         configMap:
-          name: e5s-config
+          name: e5s-server-config
 ---
 apiVersion: v1
 kind: Service
@@ -576,8 +592,8 @@ spec:
           mountPath: /spire/agent-socket
           readOnly: true
         - name: e5s-config
-          mountPath: /app/e5s.yaml
-          subPath: e5s.yaml
+          mountPath: /app/e5s-client.yaml
+          subPath: e5s-client.yaml
       volumes:
       - name: spire-agent-socket
         csi:
@@ -585,14 +601,14 @@ spec:
           readOnly: true
       - name: e5s-config
         configMap:
-          name: e5s-config
+          name: e5s-client-config
 EOF
 ```
 
 **Configuration Approach:**
 - Server URL comes from `SERVER_URL` environment variable (12-factor app pattern)
-- SPIRE/mTLS config comes from `e5s.yaml` ConfigMap
-- Clean separation: infrastructure config (e5s.yaml) vs application config (env vars)
+- SPIRE/mTLS config comes from role-specific ConfigMaps (`e5s-server-config` for server, `e5s-client-config` for client)
+- Clean separation: infrastructure config vs application config, and server config vs client config
 
 Run the test client:
 
@@ -803,7 +819,7 @@ Discover SPIFFE ID using label selector (works for Jobs, Deployments, etc.):
 
 Output: spiffe://example.org/ns/default/sa/default
 
-Use in configuration. Copy the output and paste into your e5s.yaml:
+Use in configuration. Copy the output and paste into your e5s-server.yaml:
 ```bash
 allowed_client_spiffe_id: "spiffe://example.org/ns/default/sa/default"
 ```
@@ -851,14 +867,25 @@ cat > k8s-configs.yaml <<EOF
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: e5s-config
+  name: e5s-server-config
 data:
-  e5s.yaml: |
+  e5s-server.yaml: |
     spire:
       workload_socket: unix:///spire/agent-socket/spire-agent.sock
     server:
       listen_addr: ":8443"
       allowed_client_spiffe_id: "$CLIENT_ID"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: e5s-client-config
+data:
+  e5s-client.yaml: |
+    spire:
+      workload_socket: unix:///spire/agent-socket/spire-agent.sock
+    client:
+      expected_server_trust_domain: "example.org"
 EOF
 ```
 
@@ -1077,8 +1104,8 @@ spec:
           mountPath: /spire/agent-socket
           readOnly: true
         - name: e5s-config
-          mountPath: /app/e5s.yaml
-          subPath: e5s.yaml
+          mountPath: /app/e5s-client.yaml
+          subPath: e5s-client.yaml
       volumes:
       - name: spire-agent-socket
         csi:
@@ -1086,7 +1113,7 @@ spec:
           readOnly: true
       - name: e5s-config
         configMap:
-          name: e5s-config
+          name: e5s-client-config
 EOF
 ```
 
@@ -1269,8 +1296,8 @@ kubectl run -it test-client --rm --restart=Never \
         "readOnly": true
       }, {
         "name": "config",
-        "mountPath": "/app/e5s.yaml",
-        "subPath": "e5s.yaml"
+        "mountPath": "/app/e5s-client.yaml",
+        "subPath": "e5s-client.yaml"
       }]
     }],
     "volumes": [{
@@ -1278,7 +1305,7 @@ kubectl run -it test-client --rm --restart=Never \
       "csi": {"driver": "csi.spiffe.io", "readOnly": true}
     }, {
       "name": "config",
-      "configMap": {"name": "e5s-config"}
+      "configMap": {"name": "e5s-client-config"}
     }]
   }
 }

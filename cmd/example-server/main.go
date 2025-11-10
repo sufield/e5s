@@ -24,7 +24,7 @@ var (
 func main() {
 	versionFlag := flag.Bool("version", false, "Print version information and exit")
 	// Default to example config for demonstration
-	configPath := flag.String("config", "examples/highlevel/e5s.yaml", "Path to e5s config file")
+	configPath := flag.String("config", "examples/highlevel/e5s-server.yaml", "Path to e5s server config file")
 	debug := flag.Bool("debug", false, "Enable debug mode (foreground, verbose logging)")
 	flag.Parse()
 

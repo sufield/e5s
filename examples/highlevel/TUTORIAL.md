@@ -115,7 +115,7 @@ func main() {
 	})
 
 	// Start server with automatic signal handling and shutdown
-	if err := e5s.Serve("e5s.yaml", r); err != nil {
+	if err := e5s.Serve("e5s-server.yaml", r); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -124,8 +124,8 @@ func main() {
 **What this code does:**
 - Creates a chi router with two endpoints: `/healthz` and `/hello`
 - The `/hello` endpoint extracts the client's SPIFFE ID using `e5s.PeerID()`
-- Calls `e5s.Serve("e5s.yaml", r)` which:
-  - Loads config from e5s.yaml
+- Calls `e5s.Serve("e5s-server.yaml", r)` which:
+  - Loads server config from e5s-server.yaml
   - Connects to SPIRE and sets up mTLS
   - Handles interrupt signals (Ctrl+C) automatically
   - Performs graceful shutdown on exit
@@ -159,7 +159,7 @@ func main() {
 	}
 
 	// Create mTLS client with automatic cleanup
-	err := e5s.WithClient("e5s.yaml", func(client *http.Client) error {
+	err := e5s.WithClient("e5s-client.yaml", func(client *http.Client) error {
 		// Perform mTLS GET request
 		resp, err := client.Get(serverAddr + "/hello")
 		if err != nil {
@@ -182,8 +182,8 @@ func main() {
 ```
 
 **What this code does:**
-- Calls `e5s.WithClient("e5s.yaml", func...)` which:
-  - Loads config from e5s.yaml
+- Calls `e5s.WithClient("e5s-client.yaml", func...)` which:
+  - Loads client config from e5s-client.yaml
   - Creates an mTLS-enabled HTTP client
   - Passes it to your function
   - Automatically cleans up resources when done
@@ -195,9 +195,30 @@ For multiple requests, reuse the client inside the callback function.
 
 **For advanced use** (long-lived clients, manual lifecycle management, etc.), use `e5s.Client()`. See [ADVANCED.md](ADVANCED.md).
 
-### Create Configuration File
+### Create Configuration Files
 
-Use the existing `e5s.yaml` from this directory.
+Create two separate config files, one for the server and one for the client:
+
+**e5s-server.yaml:**
+```yaml
+spire:
+  workload_socket: unix:///tmp/spire-agent/public/api.sock
+
+server:
+  listen_addr: ":8443"
+  allowed_client_trust_domain: "example.org"
+```
+
+**e5s-client.yaml:**
+```yaml
+spire:
+  workload_socket: unix:///tmp/spire-agent/public/api.sock
+
+client:
+  expected_server_trust_domain: "example.org"
+```
+
+Each binary gets its own configuration file that describes only what that process does.
 
 ### Build Binaries
 
@@ -242,7 +263,7 @@ spec:
       readOnly: true
     env:
     - name: E5S_CONFIG
-      value: "/app/e5s.yaml"
+      value: "/app/e5s-server.yaml"
     ports:
     - containerPort: 8443
       name: https
@@ -286,7 +307,7 @@ spec:
           readOnly: true
         env:
         - name: E5S_CONFIG
-          value: "/app/e5s.yaml"
+          value: "/app/e5s-client.yaml"
         - name: SERVER_ADDR
           value: "https://e5s-server.default.svc.cluster.local:8443"
       volumes:
@@ -316,21 +337,24 @@ kubectl port-forward -n spire \
   8081:8081
 ```
 
-### Update e5s.yaml for Local Development
+### Update Config Files for Local Development
 
-Temporarily modify `e5s.yaml` to use the port-forwarded socket:
+Temporarily modify both config files to use the port-forwarded socket:
 
+**e5s-server.yaml:**
 ```yaml
 spire:
   workload_socket: unix:///tmp/spire-agent.sock
 
-  # (Optional) How long to wait for identity from SPIRE before failing startup
-  # If not set, defaults to 30s
-  # initial_fetch_timeout: 30s
-
 server:
   listen_addr: ":8443"
   allowed_client_trust_domain: "example.org"
+```
+
+**e5s-client.yaml:**
+```yaml
+spire:
+  workload_socket: unix:///tmp/spire-agent.sock
 
 client:
   expected_server_trust_domain: "example.org"
@@ -357,7 +381,7 @@ ln -sf ~/.minikube/profiles/minikube/apiserver.sock /tmp/spire-agent.sock
 **Expected output**:
 
 ```
-2024/10/30 10:00:00 Starting mTLS server (config: e5s.yaml)...
+2024/10/30 10:00:00 Starting mTLS server (config: e5s-server.yaml)...
 2024/10/30 10:00:00 Server running - press Ctrl+C to stop
 ```
 
@@ -370,7 +394,7 @@ SERVER_ADDR=https://localhost:8443 ./bin/client
 **Expected output**:
 
 ```
-2024/10/30 10:00:01 Creating mTLS client (config: e5s.yaml)...
+2024/10/30 10:00:01 Creating mTLS client (config: e5s-client.yaml)...
 2024/10/30 10:00:01 Client created successfully
 2024/10/30 10:00:01 Making request to https://localhost:8443/hello...
 2024/10/30 10:00:01 Response (status 200): Hello, spiffe://example.org/client!
@@ -404,7 +428,7 @@ The client you ran in Step 4 successfully connected because it was registered wi
 **Expected success output** (from Step 4):
 
 ```
-2024/10/30 10:00:01 Creating mTLS client (config: e5s.yaml)...
+2024/10/30 10:00:01 Creating mTLS client (config: e5s-client.yaml)...
 2024/10/30 10:00:01 Client created successfully
 2024/10/30 10:00:01 Making request to https://localhost:8443/hello...
 2024/10/30 10:00:01 Response (status 200): Hello, spiffe://example.org/client!
@@ -442,7 +466,7 @@ import (
 func main() {
 	log.Println("Attempting to connect as unregistered workload...")
 
-	client, cleanup, err := e5s.Client("e5s.yaml")
+	client, cleanup, err := e5s.Client("e5s-client.yaml")
 	if err != nil {
 		log.Fatalf("Connection failed (expected): %v", err)
 	}
@@ -576,9 +600,10 @@ Let's break down the mTLS flow:
 Now that you have mTLS working:
 
 1. **Try Specific SPIFFE ID Authorization**:
-   Update `e5s.yaml` to require specific client IDs:
+   Update `e5s-server.yaml` to require specific client IDs:
    ```yaml
    server:
+     listen_addr: ":8443"
      allowed_client_spiffe_id: "spiffe://example.org/client"
    ```
 

@@ -14,7 +14,57 @@ const (
 	CurrentConfigVersion = 1
 )
 
-// Load reads and parses an e5s configuration file.
+// LoadServerConfig reads and parses an e5s server configuration file.
+// Use this for processes that listen for mTLS connections (servers).
+func LoadServerConfig(path string) (ServerFileConfig, error) {
+	// Clean the path to prevent directory traversal attacks
+	cleanPath := filepath.Clean(path)
+	data, err := os.ReadFile(cleanPath) // #nosec G304 - Config file path is trusted (from admin/user)
+	if err != nil {
+		return ServerFileConfig{}, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	var cfg ServerFileConfig
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return ServerFileConfig{}, fmt.Errorf("failed to parse config file: %w", err)
+	}
+
+	// Validate version if specified
+	// Version 0 (unspecified) is treated as version 1 for backward compatibility
+	if cfg.Version != 0 && cfg.Version != CurrentConfigVersion {
+		return ServerFileConfig{}, fmt.Errorf("unsupported config version %d (current version: %d)", cfg.Version, CurrentConfigVersion)
+	}
+
+	return cfg, nil
+}
+
+// LoadClientConfig reads and parses an e5s client configuration file.
+// Use this for processes that make mTLS connections (clients).
+func LoadClientConfig(path string) (ClientFileConfig, error) {
+	// Clean the path to prevent directory traversal attacks
+	cleanPath := filepath.Clean(path)
+	data, err := os.ReadFile(cleanPath) // #nosec G304 - Config file path is trusted (from admin/user)
+	if err != nil {
+		return ClientFileConfig{}, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	var cfg ClientFileConfig
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return ClientFileConfig{}, fmt.Errorf("failed to parse config file: %w", err)
+	}
+
+	// Validate version if specified
+	// Version 0 (unspecified) is treated as version 1 for backward compatibility
+	if cfg.Version != 0 && cfg.Version != CurrentConfigVersion {
+		return ClientFileConfig{}, fmt.Errorf("unsupported config version %d (current version: %d)", cfg.Version, CurrentConfigVersion)
+	}
+
+	return cfg, nil
+}
+
+// Load reads and parses a legacy combined e5s configuration file.
+// DEPRECATED: Use LoadServerConfig or LoadClientConfig instead.
+// This function exists only for backward compatibility and will be removed in a future version.
 func Load(path string) (FileConfig, error) {
 	// Clean the path to prevent directory traversal attacks
 	cleanPath := filepath.Clean(path)

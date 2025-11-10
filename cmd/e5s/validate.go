@@ -78,8 +78,7 @@ func validateAuto(cfg *config.FileConfig, path string) error {
 		cfg.Server.AllowedClientTrustDomain != ""
 
 	hasClient := cfg.Client.ExpectedServerSPIFFEID != "" ||
-		cfg.Client.ExpectedServerTrustDomain != "" ||
-		cfg.Client.ServerURL != ""
+		cfg.Client.ExpectedServerTrustDomain != ""
 
 	switch {
 	case hasServer && hasClient:
@@ -138,10 +137,7 @@ func validateClient(cfg *config.FileConfig, path string) error {
 
 	fmt.Printf("✓ Valid client configuration: %s\n", path)
 	fmt.Println("\nClient settings:")
-
-	if cfg.Client.ServerURL != "" {
-		fmt.Printf("  Server URL: %s\n", cfg.Client.ServerURL)
-	}
+	fmt.Println("  Note: Server URL should be passed via SERVER_URL env var or -url flag")
 
 	if cfg.Client.ExpectedServerSPIFFEID != "" {
 		fmt.Printf("  Server verification: Specific SPIFFE ID\n")
