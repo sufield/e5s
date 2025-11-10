@@ -14,9 +14,24 @@ SHELL := /bin/bash
 # Default target
 .DEFAULT_GOAL := help
 
+# Go configuration
+GO          ?= go
+BINDIR      ?= bin
+PKG_CLI     := ./cmd/e5s
+PKG_SERVER  := ./cmd/example-server
+PKG_CLIENT  := ./cmd/example-client
+PKG_MW_EX   := ./examples/middleware
+
+# Test configuration
+TEST_PKGS   := ./...
+TEST_FLAGS  ?= -count=1
+
+# Version (for releases and env-versions)
+VERSION     ?= $(shell git describe --tags --dirty --always 2>/dev/null || echo dev)
+
 # Required tools
-REQUIRED_TOOLS=go
-TOOLS_SEC=govulncheck gosec gitleaks
+REQUIRED_TOOLS := go docker minikube kubectl helm
+TOOLS_SEC      := govulncheck gosec gitleaks golangci-lint
 
 # ============================================================================
 # Quick Reference
@@ -57,25 +72,25 @@ help:
 ## build: Build example binaries (server and client)
 build:
 	@echo "Building example binaries..."
-	@mkdir -p bin
-	@go build -o bin/example-server ./cmd/example-server
-	@go build -o bin/example-client ./cmd/example-client
-	@echo "✓ Binaries: bin/example-server, bin/example-client"
+	@mkdir -p $(BINDIR)
+	@$(GO) build -o $(BINDIR)/example-server $(PKG_SERVER)
+	@$(GO) build -o $(BINDIR)/example-client $(PKG_CLIENT)
+	@echo "✓ Binaries: $(BINDIR)/example-server, $(BINDIR)/example-client"
 
 ## build-cli: Build e5s CLI tool
 build-cli:
 	@echo "Building e5s CLI..."
-	@mkdir -p bin
-	@go build -o bin/e5s ./cmd/e5s
-	@echo "✓ Binary: bin/e5s"
+	@mkdir -p $(BINDIR)
+	@$(GO) build -o $(BINDIR)/e5s $(PKG_CLI)
+	@echo "✓ Binary: $(BINDIR)/e5s"
 
 ## build-examples: Build all example code (ensures examples compile)
 build-examples:
 	@echo "Building examples..."
-	@mkdir -p bin
+	@mkdir -p $(BINDIR)
 	@echo "  Building middleware example..."
-	@cd examples/middleware && go build -o ../../bin/example-middleware .
-	@echo "✓ Examples built: bin/example-middleware"
+	@cd $(PKG_MW_EX) && $(GO) build -o ../../$(BINDIR)/example-middleware .
+	@echo "✓ Examples built: $(BINDIR)/example-middleware"
 
 ## build-all: Build all binaries (examples + CLI)
 build-all: build build-cli build-examples
@@ -179,7 +194,7 @@ stop-stack:
 restart-server:
 	@echo "Rebuilding and restarting server..."
 	@echo "  1. Building server binary..."
-	@CGO_ENABLED=0 go build -o bin/example-server ./cmd/example-server
+	@CGO_ENABLED=0 $(GO) build -o $(BINDIR)/example-server $(PKG_SERVER)
 	@echo "  2. Setting Minikube docker environment..."
 	@eval $$(minikube docker-env) && \
 		echo "  3. Removing old Docker image..." && \
@@ -188,7 +203,7 @@ restart-server:
 		docker build -t e5s-server:dev -f - . <<'EOF' \
 FROM alpine:latest \
 WORKDIR /app \
-COPY bin/example-server . \
+COPY $(BINDIR)/example-server . \
 ENTRYPOINT ["/app/example-server"] \
 EOF
 	@echo "  5. Deleting pod to force recreation..."
@@ -201,7 +216,7 @@ EOF
 test-client:
 	@echo "Testing client (rebuild + run + logs)..."
 	@echo "  1. Building client binary..."
-	@CGO_ENABLED=0 go build -o bin/example-client ./cmd/example-client
+	@CGO_ENABLED=0 $(GO) build -o $(BINDIR)/example-client $(PKG_CLIENT)
 	@echo "  2. Setting Minikube docker environment..."
 	@eval $$(minikube docker-env) && \
 		echo "  3. Removing old Docker image..." && \
@@ -210,7 +225,7 @@ test-client:
 		docker build -t e5s-client:dev -f - . <<'EOF' \
 FROM alpine:latest \
 WORKDIR /app \
-COPY bin/example-client . \
+COPY $(BINDIR)/example-client . \
 ENTRYPOINT ["/app/example-client"] \
 EOF
 	@echo "  5. Replacing job (delete + recreate)..."
@@ -246,9 +261,10 @@ fmt:
 ## fmt-check: Check if code is formatted
 fmt-check:
 	@echo "Checking code formatting..."
-	@if [ -n "$$(gofmt -l .)" ]; then \
+	@UNFORMATTED=$$(gofmt -l .); \
+	if [ -n "$$UNFORMATTED" ]; then \
 		echo "::error::Code is not formatted. Run 'make fmt'"; \
-		gofmt -l .; \
+		echo "$$UNFORMATTED"; \
 		exit 1; \
 	fi
 	@echo "✓ Code is properly formatted"
@@ -256,23 +272,25 @@ fmt-check:
 ## vet: Run go vet
 vet:
 	@echo "Running go vet..."
-	@go vet ./...
+	@$(GO) vet ./...
 	@echo "✓ Vet passed"
 
 ## tidy: Tidy go modules
 tidy:
 	@echo "Tidying go modules..."
-	@go mod tidy
+	@$(GO) mod tidy
 	@echo "✓ Modules tidied"
 
 ## verify: Verify go modules
 verify:
 	@echo "Verifying go modules..."
-	@go mod verify
+	@$(GO) mod verify
 	@echo "✓ Modules verified"
 
 ## ci-local: Run all checks that CI runs (local version)
-ci-local: tidy verify lint vet test-race
+ci-local:
+	@echo "Running CI checks with readonly modules..."
+	@GOFLAGS="-mod=readonly" $(MAKE) tidy verify lint vet test-race
 	@echo ""
 	@echo "======================================"
 	@echo "✓ All CI checks passed locally!"
@@ -288,34 +306,34 @@ ci: ci-local
 ## test: Run all tests
 test:
 	@echo "Running library tests..."
-	@go test ./...
+	@$(GO) test $(TEST_FLAGS) $(TEST_PKGS)
 
 ## test-verbose: Run tests with verbose output
 test-verbose:
 	@echo "Running tests (verbose)..."
-	@go test -v ./...
+	@$(GO) test $(TEST_FLAGS) -v $(TEST_PKGS)
 
 ## test-race: Run tests with race detector
 test-race:
 	@echo "Running tests with race detector..."
-	@go test -race ./...
+	@$(GO) test $(TEST_FLAGS) -race $(TEST_PKGS)
 
 ## test-short: Run tests in short mode
 test-short:
 	@echo "Running tests in short mode..."
-	@go test -short ./...
+	@$(GO) test $(TEST_FLAGS) -short $(TEST_PKGS)
 
 ## test-coverage: Run tests with coverage report
 test-coverage:
 	@echo "Running tests with coverage..."
-	@go test -coverprofile=coverage.out ./...
-	@go tool cover -func=coverage.out
+	@$(GO) test $(TEST_FLAGS) -coverprofile=coverage.out $(TEST_PKGS)
+	@$(GO) tool cover -func=coverage.out
 
 ## test-coverage-html: Generate HTML coverage report
 test-coverage-html:
 	@echo "Generating HTML coverage report..."
-	@go test -coverprofile=coverage.out ./...
-	@go tool cover -html=coverage.out -o coverage.html
+	@$(GO) test $(TEST_FLAGS) -coverprofile=coverage.out $(TEST_PKGS)
+	@$(GO) tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report: coverage.html"
 
 ## clean: Remove generated files
@@ -339,9 +357,9 @@ examples: build build-examples
 ## sec-install-tools: Install security scanning tools
 sec-install-tools:
 	@echo "Installing security tools..."
-	@go install golang.org/x/vuln/cmd/govulncheck@latest
-	@go install github.com/securego/gosec/v2/cmd/gosec@latest
-	@go install github.com/zricethezav/gitleaks/v8@latest
+	@$(GO) install golang.org/x/vuln/cmd/govulncheck@latest
+	@$(GO) install github.com/securego/gosec/v2/cmd/gosec@latest
+	@$(GO) install github.com/zricethezav/gitleaks/v8@latest
 	@echo "✓ Security tools installed"
 
 ## sec-deps: Check for dependency vulnerabilities
@@ -350,14 +368,14 @@ sec-deps:
 	@govulncheck ./...
 	@echo ""
 	@echo "Verifying module hygiene..."
-	@go mod tidy
-	@go mod verify
+	@$(GO) mod tidy
+	@$(GO) mod verify
 	@echo "✓ Dependency check complete"
 
 ## sec-lint: Run security-focused static analysis
 sec-lint:
 	@echo "Running security analysis..."
-	@go vet ./...
+	@$(GO) vet ./...
 	@echo ""
 	@gosec ./...
 	@echo "✓ Security lint complete"
@@ -371,10 +389,10 @@ sec-secrets:
 ## sec-test: Run tests with race detector and coverage
 sec-test:
 	@echo "Running security tests..."
-	@go test -race -covermode=atomic -coverprofile=coverage.out ./...
+	@$(GO) test $(TEST_FLAGS) -race -covermode=atomic -coverprofile=coverage.out ./...
 	@echo ""
 	@echo "Coverage summary:"
-	@go tool cover -func=coverage.out | tail -1
+	@$(GO) tool cover -func=coverage.out | tail -1
 	@echo "✓ Security tests complete"
 
 ## sec-all: Run all security checks
@@ -429,147 +447,54 @@ release-build:
 	@echo "Building release binaries..."
 	@mkdir -p dist
 	@echo "Building e5s CLI for Linux/amd64..."
-	@GOOS=linux GOARCH=amd64 go build -o dist/e5s-linux-amd64 ./cmd/e5s
+	@GOOS=linux GOARCH=amd64 $(GO) build -o dist/e5s-linux-amd64 $(PKG_CLI)
 	@echo "Building e5s CLI for Linux/arm64..."
-	@GOOS=linux GOARCH=arm64 go build -o dist/e5s-linux-arm64 ./cmd/e5s
+	@GOOS=linux GOARCH=arm64 $(GO) build -o dist/e5s-linux-arm64 $(PKG_CLI)
 	@echo "Building e5s CLI for macOS/amd64..."
-	@GOOS=darwin GOARCH=amd64 go build -o dist/e5s-darwin-amd64 ./cmd/e5s
+	@GOOS=darwin GOARCH=amd64 $(GO) build -o dist/e5s-darwin-amd64 $(PKG_CLI)
 	@echo "Building e5s CLI for macOS/arm64..."
-	@GOOS=darwin GOARCH=arm64 go build -o dist/e5s-darwin-arm64 ./cmd/e5s
+	@GOOS=darwin GOARCH=arm64 $(GO) build -o dist/e5s-darwin-arm64 $(PKG_CLI)
 	@echo "Building e5s CLI for Windows/amd64..."
-	@GOOS=windows GOARCH=amd64 go build -o dist/e5s-windows-amd64.exe ./cmd/e5s
+	@GOOS=windows GOARCH=amd64 $(GO) build -o dist/e5s-windows-amd64.exe $(PKG_CLI)
 	@echo ""
 	@echo "✓ Release binaries built in dist/"
 	@ls -lh dist/
 
 ## install-tools: Install all required tools (Ubuntu 24.04 only)
 install-tools:
-	@echo "Installing required tools for Ubuntu 24.04..."
-	@echo ""
-	@# Check OS
-	@if [ ! -f /etc/os-release ]; then \
-		echo "Error: /etc/os-release not found. This target is for Ubuntu 24.04 only."; \
-		exit 1; \
-	fi
-	@if ! grep -q "Ubuntu" /etc/os-release || ! grep -q "24.04" /etc/os-release; then \
-		echo "Error: This target is designed for Ubuntu 24.04 only."; \
-		echo "Current OS:"; \
-		cat /etc/os-release | grep PRETTY_NAME; \
-		exit 1; \
-	fi
-	@echo "Detected Ubuntu 24.04 ✓"
-	@echo ""
-	@# Install Go 1.25.3
-	@echo "Installing Go 1.25.3..."
-	@if command -v go >/dev/null 2>&1; then \
-		CURRENT_GO=$$(go version | awk '{print $$3}' | sed 's/go//'); \
-		echo "  Current Go version: $$CURRENT_GO"; \
-		if [ "$$CURRENT_GO" != "1.25.3" ]; then \
-			echo "  Removing old Go version..."; \
-			sudo rm -rf /usr/local/go; \
-		else \
-			echo "  Go 1.25.3 already installed ✓"; \
-		fi; \
-	fi
-	@if ! command -v go >/dev/null 2>&1 || ! go version | grep -q "go1.25.3"; then \
-		echo "  Downloading Go 1.25.3..."; \
-		cd /tmp && curl -LO https://go.dev/dl/go1.25.3.linux-amd64.tar.gz; \
-		echo "  Installing to /usr/local/go..."; \
-		sudo tar -C /usr/local -xzf go1.25.3.linux-amd64.tar.gz; \
-		rm go1.25.3.linux-amd64.tar.gz; \
-		if ! grep -q "/usr/local/go/bin" ~/.bashrc; then \
-			echo 'export PATH=$$PATH:/usr/local/go/bin' >> ~/.bashrc; \
-			echo "  Added Go to PATH in ~/.bashrc"; \
-		fi; \
-		export PATH=$$PATH:/usr/local/go/bin; \
-		/usr/local/go/bin/go version; \
-		echo "  ✓ Go 1.25.3 installed"; \
-	fi
-	@echo ""
-	@# Install Docker
-	@echo "Installing Docker..."
-	@if command -v docker >/dev/null 2>&1; then \
-		echo "  Docker already installed: $$(docker --version) ✓"; \
-	else \
-		echo "  Adding Docker repository..."; \
-		sudo apt-get update -qq; \
-		sudo apt-get install -y -qq ca-certificates curl; \
-		sudo install -m 0755 -d /etc/apt/keyrings; \
-		sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc; \
-		sudo chmod a+r /etc/apt/keyrings/docker.asc; \
-		echo "deb [arch=$$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $$(. /etc/os-release && echo $$VERSION_CODENAME) stable" | \
-			sudo tee /etc/apt/sources.list.d/docker.list > /dev/null; \
-		echo "  Installing Docker..."; \
-		sudo apt-get update -qq; \
-		sudo apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin; \
-		echo "  Adding user to docker group..."; \
-		sudo usermod -aG docker $$USER; \
-		echo "  ✓ Docker installed (logout/login required for docker group)"; \
-	fi
-	@echo ""
-	@# Install kubectl
-	@echo "Installing kubectl..."
-	@if command -v kubectl >/dev/null 2>&1; then \
-		echo "  kubectl already installed: $$(kubectl version --client --short 2>/dev/null || kubectl version --client) ✓"; \
-	else \
-		echo "  Downloading latest kubectl..."; \
-		cd /tmp && curl -LO "https://dl.k8s.io/release/$$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"; \
-		sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl; \
-		rm kubectl; \
-		echo "  ✓ kubectl installed: $$(kubectl version --client --short 2>/dev/null || kubectl version --client)"; \
-	fi
-	@echo ""
-	@# Install Minikube
-	@echo "Installing Minikube..."
-	@if command -v minikube >/dev/null 2>&1; then \
-		echo "  Minikube already installed: $$(minikube version --short) ✓"; \
-	else \
-		echo "  Downloading latest Minikube..."; \
-		cd /tmp && curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64; \
-		sudo install minikube-linux-amd64 /usr/local/bin/minikube; \
-		rm minikube-linux-amd64; \
-		echo "  ✓ Minikube installed: $$(minikube version --short)"; \
-	fi
-	@echo ""
-	@# Install Helm
-	@echo "Installing Helm..."
-	@if command -v helm >/dev/null 2>&1; then \
-		echo "  Helm already installed: $$(helm version --short) ✓"; \
-	else \
-		echo "  Downloading and installing Helm..."; \
-		cd /tmp && curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash; \
-		echo "  ✓ Helm installed: $$(helm version --short)"; \
-	fi
-	@echo ""
-	@echo "======================================"
-	@echo "✓ All tools installed successfully!"
-	@echo "======================================"
-	@echo ""
-	@echo "IMPORTANT: If Docker was just installed, you need to:"
-	@echo "  1. Logout and login again (for docker group to take effect)"
-	@echo "  2. OR run: newgrp docker"
-	@echo ""
-	@echo "IMPORTANT: If Go was just installed, run:"
-	@echo "  source ~/.bashrc"
-	@echo "  OR start a new terminal session"
-	@echo ""
-	@echo "Verify installation with: make verify-tools"
+	@bash scripts/install-tools-ubuntu-24.04.sh
 
 ## verify-tools: Verify required tools are installed
 verify-tools:
 	@echo "Verifying required tools..."
 	@echo ""
-	@go version
-	@docker --version
-	@minikube status || echo "Minikube not running (run 'minikube start' to start it)"
-	@kubectl version --client
+	@echo "Core tools:"
+	@for tool in $(REQUIRED_TOOLS); do \
+		printf "  %-12s " "$$tool:"; \
+		if command -v $$tool >/dev/null 2>&1; then \
+			echo "✓"; \
+		else \
+			echo "✗ MISSING"; \
+			exit 1; \
+		fi; \
+	done
+	@echo ""
+	@echo "Security tools (optional):"
+	@for tool in $(TOOLS_SEC); do \
+		printf "  %-12s " "$$tool:"; \
+		if command -v $$tool >/dev/null 2>&1; then \
+			echo "✓"; \
+		else \
+			echo "- (run 'make sec-install-tools' to install)"; \
+		fi; \
+	done
 	@echo ""
 	@echo "✓ All required tools are available"
 
 ## env-versions: Capture current environment versions
 env-versions:
 	@echo "Capturing environment versions..."
-	@E5S_VERSION=$(version) bash scripts/env-versions.sh dev artifacts
+	@E5S_VERSION=$(VERSION) bash scripts/env-versions.sh dev artifacts
 	@echo ""
 	@echo "Environment version info saved to artifacts/env-versions-dev.txt"
 	@echo "Use this information to update VERSIONS.md and CHANGELOG.md"

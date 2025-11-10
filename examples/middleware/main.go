@@ -28,6 +28,7 @@ import (
 //   - Custom authorization logic (trust domain checks, path-based rules)
 //   - Logging and metrics
 //   - Rate limiting per SPIFFE ID
+//
 // example-start:auth-middleware
 func authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -43,6 +44,7 @@ func authMiddleware(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
+
 // example-end:auth-middleware
 
 // trustDomainMiddleware is an example with explicit trust domain authorization.
