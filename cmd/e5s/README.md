@@ -40,10 +40,26 @@ make build-cli
 
 Display version information for e5s, TLS configuration, and runtime environment.
 
-**Show current runtime versions:**
+**Show current runtime versions (JSON by default):**
 
 ```bash
 e5s version
+```
+
+Output:
+```json
+{
+  "e5s_version": "0.1.0",
+  "e5s_commit": "abc123",
+  "e5s_built": "2025-01-15",
+  "tls_config": {
+    "min_tls_version": "TLS 1.3",
+    "client_auth": "Required (mTLS)"
+  },
+  "runtime": [
+    {"component": "Go", "version": "go1.25.3", "status": "installed"}
+  ]
+}
 ```
 
 **Show development requirements:**
@@ -51,30 +67,106 @@ e5s version
 e5s version --mode dev
 ```
 
-Shows required tool versions for development
-
 **Show production requirements:**
 ```bash
 e5s version --mode prod
 ```
 
-Shows required components for production deployment
+**Using jq to format and extract data:**
 
-**Show detailed information:**
 ```bash
-e5s version --verbose 
+# Pretty-print JSON for human readability
+e5s version | jq .
+
+# Extract specific version
+e5s version | jq -r '.e5s_version'
+# Output: 0.1.0
+
+# Get Go version
+e5s version | jq -r '.runtime[] | select(.component=="Go") | .version'
+# Output: go1.25.3
+
+# List all installed tools
+e5s version | jq -r '.runtime[] | select(.status=="installed") | .component'
+# Output:
+# Go
+# Docker
+# Helm
+# Minikube
+
+# Get TLS configuration as key=value
+e5s version | jq -r '.tls_config | to_entries[] | "\(.key)=\(.value)"'
+# Output:
+# min_tls_version=TLS 1.3
+# max_tls_version=TLS 1.3
+# client_auth=Required (mTLS)
+
+# Find missing required tools
+e5s version | jq -r '.runtime[] | select(.status=="not found" and .required==true) | .component'
+# Output: (lists any missing required tools)
+
+# Get dev requirements for specific component
+e5s version --mode dev | jq '.requirements[] | select(.component=="Go")'
+# Output:
+# {
+#   "component": "Go",
+#   "version": "go1.25.3",
+#   "required": true
+# }
+
+# Create environment variables from version info
+eval $(e5s version | jq -r '"E5S_VERSION=\(.e5s_version)\nE5S_COMMIT=\(.e5s_commit)"')
+echo $E5S_VERSION  # Output: 0.1.0
+
+# Generate markdown table from requirements
+e5s version --mode dev | jq -r '.requirements[] | "| \(.component) | \(.version) | \(if .required then "Required" else "Optional" end) |"'
+# Output:
+# | e5s | 0.1.0 | Required |
+# | Go | go1.25.3 | Required |
+# ...
+
+# Check if specific tool is installed
+if e5s version | jq -e '.runtime[] | select(.component=="Docker" and .status=="installed")' > /dev/null; then
+  echo "Docker is installed"
+fi
+
+# Export runtime versions to shell variables
+eval $(e5s version | jq -r '.runtime[] | "export \(.component | ascii_upcase | gsub("[^A-Z0-9]"; "_"))_VERSION=\"\(.version)\""')
+echo $GO_VERSION     # Output: go1.25.3
+echo $DOCKER_VERSION # Output: 28.5.2
 ```
 
-Includes GOROOT, GOPATH, Docker server version, k8s context
+**Plain text format for simple parsing:**
+
+```bash
+e5s version --format plain
+# Output:
+# e5s_version=0.1.0
+# e5s_commit=abc123
+# e5s_built=2025-01-15
+# go=go1.25.3
+# docker=28.5.2
+
+# Extract specific value with grep
+e5s version --format plain | grep '^go=' | cut -d= -f2
+# Output: go1.25.3
+```
 
 **Use in CI/CD to check environment:**
 
 ```bash
-# Verify all required tools are installed
-e5s version --mode dev
-if [ $? -ne 0 ]; then
-    echo "Missing required tools"
+# Verify all required tools are installed (exit on first missing tool)
+MISSING=$(e5s version | jq -r '.runtime[] | select(.status=="not found" and .required==true) | .component' | head -1)
+if [ -n "$MISSING" ]; then
+    echo "Error: Required tool $MISSING is not installed"
     exit 1
+fi
+
+# Check minimum Go version
+CURRENT_GO=$(e5s version | jq -r '.runtime[] | select(.component=="Go") | .version')
+REQUIRED_GO=$(e5s version --mode dev | jq -r '.requirements[] | select(.component=="Go") | .version')
+if [ "$CURRENT_GO" != "$REQUIRED_GO" ]; then
+    echo "Warning: Go version mismatch. Current: $CURRENT_GO, Required: $REQUIRED_GO"
 fi
 ```
 

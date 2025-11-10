@@ -76,15 +76,6 @@ func (r *CommandRegistry) Execute(args []string) error {
 	case "help", "-h", "--help":
 		r.PrintHelp(os.Stdout)
 		return nil
-	case "version", "-v", "--version":
-		// version is a registered command, but also handle short flags
-		if len(args) == 1 {
-			// Just print version info
-			fmt.Printf("e5s CLI %s\n", r.version.Version)
-			fmt.Printf("  commit: %s\n", r.version.Commit)
-			fmt.Printf("  built:  %s\n", r.version.Date)
-			return nil
-		}
 	}
 
 	// Execute registered command
