@@ -4,39 +4,6 @@ import (
 	"testing"
 )
 
-// FuzzLoad tests the config loading function with random inputs
-// to find panics, crashes, or unexpected behavior
-func FuzzLoad(f *testing.F) {
-	// Seed corpus with valid YAML examples
-	f.Add([]byte(`
-spire:
-  workload_socket: unix:///tmp/spire-agent/public/api.sock
-  initial_fetch_timeout: 30s
-server:
-  listen_addr: :8443
-  allowed_client_spiffe_id: spiffe://example.org/myservice
-`))
-
-	f.Add([]byte(`
-spire:
-  workload_socket: /tmp/agent.sock
-client:
-  expected_server_spiffe_id: spiffe://example.org/server
-`))
-
-	// Fuzz with random YAML-like data
-	f.Fuzz(func(t *testing.T, data []byte) {
-		// Write to temp file
-		tmpfile := t.TempDir() + "/fuzz_config.yaml"
-		if err := WriteForTest(tmpfile, data); err != nil {
-			t.Skip()
-		}
-
-		// Try to load - should never panic
-		_, _ = Load(tmpfile)
-	})
-}
-
 // FuzzValidateServer tests server config validation with random inputs
 func FuzzValidateServer(f *testing.F) {
 	// Seed with valid configs

@@ -27,13 +27,13 @@ MODES:
 
 EXAMPLES:
     # Validate configuration (auto-detect mode)
-    e5s validate e5s.yaml
+    e5s validate e5s-server.yaml
 
     # Validate as server configuration
-    e5s validate e5s.yaml --mode server
+    e5s validate e5s-server.yaml --mode server
 
     # Validate as client configuration
-    e5s validate e5s.yaml --mode client
+    e5s validate e5s-client.yaml --mode client
 
     # Use in CI/CD pipelines
     if e5s validate config/production.yaml; then
@@ -53,59 +53,75 @@ EXAMPLES:
 
 	configPath := fs.Arg(0)
 
-	// Load configuration
-	cfg, err := config.Load(configPath)
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
-	}
-
 	// Validate based on mode
 	switch *mode {
 	case "auto":
-		return validateAuto(&cfg, configPath)
+		return validateAuto(configPath)
 	case "server":
-		return validateServer(&cfg, configPath)
+		return validateServerFile(configPath)
 	case "client":
-		return validateClient(&cfg, configPath)
+		return validateClientFile(configPath)
 	default:
 		return fmt.Errorf("invalid mode: %s (use 'auto', 'server', or 'client')", *mode)
 	}
 }
 
-func validateAuto(cfg *config.FileConfig, path string) error {
-	hasServer := cfg.Server.ListenAddr != "" ||
-		cfg.Server.AllowedClientSPIFFEID != "" ||
-		cfg.Server.AllowedClientTrustDomain != ""
-
-	hasClient := cfg.Client.ExpectedServerSPIFFEID != "" ||
-		cfg.Client.ExpectedServerTrustDomain != ""
-
-	switch {
-	case hasServer && hasClient:
-		fmt.Printf("✓ Configuration appears to contain both server and client sections\n")
-		fmt.Println("\nValidating server configuration:")
-		if err := validateServer(cfg, path); err != nil {
-			return err
+func validateAuto(path string) error {
+	// Try loading as server config first
+	serverCfg, serverErr := config.LoadServerConfig(path)
+	if serverErr == nil {
+		// Validate server config
+		_, _, err := config.ValidateServerConfig(&serverCfg)
+		if err == nil {
+			fmt.Println("✓ Detected server configuration")
+			return printServerConfig(&serverCfg, path)
 		}
-		fmt.Println("\nValidating client configuration:")
-		return validateClient(cfg, path)
-	case hasServer:
-		fmt.Println("✓ Detected server configuration")
-		return validateServer(cfg, path)
-	case hasClient:
-		fmt.Println("✓ Detected client configuration")
-		return validateClient(cfg, path)
-	default:
-		return fmt.Errorf("configuration contains neither server nor client settings")
 	}
+
+	// Try loading as client config
+	clientCfg, clientErr := config.LoadClientConfig(path)
+	if clientErr == nil {
+		// Validate client config
+		_, _, err := config.ValidateClientConfig(&clientCfg)
+		if err == nil {
+			fmt.Println("✓ Detected client configuration")
+			return printClientConfig(&clientCfg, path)
+		}
+	}
+
+	// Both failed, return helpful error
+	return fmt.Errorf("failed to load config as server or client:\n  Server: %v\n  Client: %v", serverErr, clientErr)
 }
 
-func validateServer(cfg *config.FileConfig, path string) error {
-	_, _, err := config.ValidateServer(cfg)
+func validateServerFile(path string) error {
+	cfg, err := config.LoadServerConfig(path)
+	if err != nil {
+		return fmt.Errorf("failed to load server config: %w", err)
+	}
+
+	_, _, err = config.ValidateServerConfig(&cfg)
 	if err != nil {
 		return fmt.Errorf("server validation failed: %w", err)
 	}
 
+	return printServerConfig(&cfg, path)
+}
+
+func validateClientFile(path string) error {
+	cfg, err := config.LoadClientConfig(path)
+	if err != nil {
+		return fmt.Errorf("failed to load client config: %w", err)
+	}
+
+	_, _, err = config.ValidateClientConfig(&cfg)
+	if err != nil {
+		return fmt.Errorf("client validation failed: %w", err)
+	}
+
+	return printClientConfig(&cfg, path)
+}
+
+func printServerConfig(cfg *config.ServerFileConfig, path string) error {
 	fmt.Printf("✓ Valid server configuration: %s\n", path)
 	fmt.Println("\nServer settings:")
 	fmt.Printf("  Listen address: %s\n", cfg.Server.ListenAddr)
@@ -129,12 +145,7 @@ func validateServer(cfg *config.FileConfig, path string) error {
 	return nil
 }
 
-func validateClient(cfg *config.FileConfig, path string) error {
-	_, _, err := config.ValidateClient(cfg)
-	if err != nil {
-		return fmt.Errorf("client validation failed: %w", err)
-	}
-
+func printClientConfig(cfg *config.ClientFileConfig, path string) error {
 	fmt.Printf("✓ Valid client configuration: %s\n", path)
 	fmt.Println("\nClient settings:")
 	fmt.Println("  Note: Server URL should be passed via SERVER_URL env var or -url flag")

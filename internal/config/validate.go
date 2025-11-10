@@ -58,12 +58,6 @@ func validateSPIRESection(spire SPIRESection) (SPIREConfig, error) {
 	return SPIREConfig{InitialFetchTimeout: timeout}, nil
 }
 
-// validateSPIREConfig validates and parses common SPIRE configuration.
-// DEPRECATED: Use validateSPIRESection instead.
-func validateSPIREConfig(cfg *FileConfig) (SPIREConfig, error) {
-	return validateSPIRESection(cfg.SPIRE)
-}
-
 // validateAuthz parses and validates a SPIFFE ID or trust domain policy.
 // Ensures exactly one is set, trims whitespace, and uses SDK for validation.
 func validateAuthz(idStr, tdStr, prefix string) (spiffeid.ID, spiffeid.TrustDomain, error) {
@@ -110,37 +104,6 @@ func ValidateServerConfig(cfg *ServerFileConfig) (SPIREConfig, ServerAuthz, erro
 // ValidateClientConfig validates client configuration and returns parsed verification policy.
 func ValidateClientConfig(cfg *ClientFileConfig) (SPIREConfig, ClientAuthz, error) {
 	spireConfig, err := validateSPIRESection(cfg.SPIRE)
-	if err != nil {
-		return SPIREConfig{}, ClientAuthz{}, err
-	}
-	id, td, err := validateAuthz(cfg.Client.ExpectedServerSPIFFEID, cfg.Client.ExpectedServerTrustDomain, "client.expected_server")
-	if err != nil {
-		return SPIREConfig{}, ClientAuthz{}, err
-	}
-	return spireConfig, ClientAuthz{ID: id, TrustDomain: td}, nil
-}
-
-// ValidateServer validates server configuration and returns parsed authorization policy.
-// DEPRECATED: Use ValidateServerConfig instead.
-func ValidateServer(cfg *FileConfig) (SPIREConfig, ServerAuthz, error) {
-	spireConfig, err := validateSPIREConfig(cfg)
-	if err != nil {
-		return SPIREConfig{}, ServerAuthz{}, err
-	}
-	if strings.TrimSpace(cfg.Server.ListenAddr) == "" {
-		return SPIREConfig{}, ServerAuthz{}, errors.New("server.listen_addr must be set")
-	}
-	id, td, err := validateAuthz(cfg.Server.AllowedClientSPIFFEID, cfg.Server.AllowedClientTrustDomain, "server.allowed_client")
-	if err != nil {
-		return SPIREConfig{}, ServerAuthz{}, err
-	}
-	return spireConfig, ServerAuthz{ID: id, TrustDomain: td}, nil
-}
-
-// ValidateClient validates client configuration and returns parsed verification policy.
-// DEPRECATED: Use ValidateClientConfig instead.
-func ValidateClient(cfg *FileConfig) (SPIREConfig, ClientAuthz, error) {
-	spireConfig, err := validateSPIREConfig(cfg)
 	if err != nil {
 		return SPIREConfig{}, ClientAuthz{}, err
 	}

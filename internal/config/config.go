@@ -52,13 +52,3 @@ type ClientFileConfig struct {
 	SPIRE  SPIRESection  `yaml:"spire"`
 	Client ClientSection `yaml:"client"`
 }
-
-// FileConfig represents the legacy combined configuration file structure.
-// DEPRECATED: Use ServerFileConfig or ClientFileConfig instead.
-// This type exists only for backward compatibility and will be removed in a future version.
-type FileConfig struct {
-	Version int           `yaml:"version,omitempty"`
-	SPIRE   SPIRESection  `yaml:"spire"`
-	Server  ServerSection `yaml:"server"`
-	Client  ClientSection `yaml:"client"`
-}
