@@ -9,7 +9,8 @@
 
 services:
   spire-server:
-    image: ghcr.io/spiffe/spire-server:1.13.0
+    # Pinned by SHA256 digest for OpenSSF Scorecard compliance (v1.13.0)
+    image: ghcr.io/spiffe/spire-server@sha256:d715435ba011eca7a3c098ca66a781d2ab2cecf5de9afcfb0a0e071957ef1d32
     hostname: spire-server
     container_name: spire-server-test
     ports:
@@ -27,7 +28,8 @@ services:
       - spire-test
 
   spire-agent:
-    image: ghcr.io/spiffe/spire-agent:1.13.0
+    # Pinned by SHA256 digest for OpenSSF Scorecard compliance (v1.13.0)
+    image: ghcr.io/spiffe/spire-agent@sha256:7c48043708abe27dd5e54c1888c34eb7b11553b607a1995ae5ae56a0b2276453
     hostname: spire-agent
     container_name: spire-agent-test
     depends_on:
