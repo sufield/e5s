@@ -33,7 +33,7 @@ if [ ! -f go.mod ]; then
     go mod init test-demo
     go mod edit -replace github.com/sufield/e5s=..
     go get github.com/go-chi/chi/v5@v5.2.3
-    # Note: e5s uses local replace directive above, no explicit go get needed
+    go get github.com/sufield/e5s  # Add to require section (uses replace directive)
 else
     echo "2. Go module already initialized"
 fi
@@ -47,6 +47,9 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/sufield/e5s"
@@ -71,7 +74,20 @@ func main() {
 		fmt.Fprintf(w, "Hello, %s!\n", id)
 	})
 
-	e5s.Run(r)
+	shutdown, err := e5s.Start("e5s.yaml", r)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func() {
+		if err := shutdown(); err != nil {
+			log.Printf("Shutdown error: %v", err)
+		}
+	}()
+
+	// Wait for interrupt signal
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	<-sigChan
 }
 EOF
 
@@ -84,6 +100,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"os"
 
 	"github.com/sufield/e5s"
@@ -95,14 +112,23 @@ func main() {
 		serverURL = "https://localhost:8443/hello"
 	}
 
-	resp, err := e5s.Get(serverURL)
+	err := e5s.WithClient("e5s.yaml", func(client *http.Client) error {
+		resp, err := client.Get(serverURL)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(body))
+		return nil
+	})
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-	fmt.Println(string(body))
 }
 EOF
 

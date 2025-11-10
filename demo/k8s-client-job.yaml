@@ -16,6 +16,9 @@ spec:
         image: e5s-client:dev
         imagePullPolicy: Never
         command: ["/app/client"]
+        env:
+        - name: SERVER_URL
+          value: "https://e5s-server:8443/time"
         volumeMounts:
         - name: spire-agent-socket
           mountPath: /spire/agent-socket
@@ -23,9 +26,6 @@ spec:
         - name: e5s-config
           mountPath: /app/e5s.yaml
           subPath: e5s.yaml
-        - name: client-config
-          mountPath: /app/client-config.yaml
-          subPath: client-config.yaml
       volumes:
       - name: spire-agent-socket
         csi:
@@ -34,6 +34,3 @@ spec:
       - name: e5s-config
         configMap:
           name: e5s-config
-      - name: client-config
-        configMap:
-          name: client-config

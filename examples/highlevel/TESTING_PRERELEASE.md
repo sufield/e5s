@@ -18,6 +18,45 @@ When:
 
 ---
 
+## ⚡ Quick Start (Automated Scripts)
+
+**For fast iterations**: Use these automated scripts to test your changes in ~30 seconds per iteration.
+
+**Prerequisites**: SPIRE must be running (`make start-stack`)
+
+### Initial Setup (Once)
+
+```bash
+./scripts/test-prerelease.sh
+```
+
+Creates test environment and deploys both server and client. You should see:
+```
+Hello, spiffe://example.org/ns/default/sa/default!
+```
+
+### Test Your Changes (Repeat)
+
+```bash
+# 1. Make code changes
+vim e5s.go
+
+# 2. Test your changes
+./scripts/rebuild-and-test.sh
+```
+
+Rebuilds binaries, redeploys, and shows test results (~30 seconds).
+
+### Cleanup
+
+```bash
+./scripts/cleanup-prerelease.sh
+```
+
+**Note**: For understanding what these scripts do or manual step-by-step control, see the detailed guide below.
+
+---
+
 ## Prerequisites
 
 1. **SPIRE Infrastructure Running**: Start SPIRE in Minikube (~15 minutes)
@@ -198,39 +237,22 @@ import (
 	"net/http"
 	"os"
 
-	"gopkg.in/yaml.v3"
 	"github.com/sufield/e5s"
 )
-
-// AppConfig represents the client application configuration
-// In a real application, you would define your own config structure
-type AppConfig struct {
-	ServerURL string `yaml:"server_url"`
-}
 
 func main() {
   log.Printf("--------------Nov 10, 2025------(client main.go running...)")
 	log.Println("Starting e5s mTLS client...")
 
-	// Load application-specific configuration
-	// This demonstrates the real-world use: your app manages its own config
-	cfg, err := loadAppConfig("client-config.yaml")
-	if err != nil {
-		log.Fatalf("❌ Failed to load app config: %v", err)
-	}
-
-	// Allow SERVER_URL environment variable to override config
-	// This is common for Kubernetes deployments
+	// Get server URL from environment variable
+	// This follows the 12-factor app pattern: config in environment
 	serverURL := os.Getenv("SERVER_URL")
 	if serverURL == "" {
-		serverURL = cfg.ServerURL
-	}
-	if serverURL == "" {
-		log.Fatalf("❌ server_url not set in config and SERVER_URL environment variable not set")
+		log.Fatalf("❌ SERVER_URL environment variable not set")
 	}
 
 	// Perform mTLS GET request with automatic client lifecycle management
-	err = e5s.WithClient("e5s.yaml", func(client *http.Client) error {
+	err := e5s.WithClient("e5s.yaml", func(client *http.Client) error {
 		resp, err := client.Get(serverURL)
 		if err != nil {
 			return err
@@ -250,51 +272,20 @@ func main() {
 		log.Fatal(err)
 	}
 }
-
-// loadAppConfig loads the application-specific configuration
-// This demonstrates the real-world pattern: applications manage their own config files
-func loadAppConfig(path string) (*AppConfig, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read config file: %w", err)
-	}
-
-	var cfg AppConfig
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("failed to parse config: %w", err)
-	}
-
-	return &cfg, nil
-}
 ```
 
-**Real-World Approach:**
+**Configuration Approach:**
 
-This approach is for production applications:
+This follows the 12-factor app pattern:
 
-1. **Application Config** (`client-config.yaml`) - Your app manages its own application-specific configuration including server URLs, timeouts, etc.
-2. **e5s Config** (`e5s.yaml`) - SPIRE/mTLS configuration managed by the e5s library
-3. **Environment Overrides** - Allow environment variables to override config values for deployment flexibility
+1. **e5s Config** (`e5s.yaml`) - SPIRE/mTLS configuration managed by the e5s library
+2. **Environment Variables** - Application-specific settings (like SERVER_URL) come from environment
 
-This separation of concerns is standard practice.
+This keeps infrastructure config (e5s.yaml) separate from application config (environment variables).
 
 ---
 
-## Step 5: Create Configuration Files
-
-### Create Application Configuration
-
-Create `client-config.yaml`:
-
-```bash
-cat > client-config.yaml <<'EOF'
-server_url: "https://localhost:8443/time"
-EOF
-```
-
-This file has settings specific to your application (like server URLs, timeouts, etc.). This is YOUR application's config - not part of e5s library.
-
-### Create e5s Library Configuration
+## Step 5: Create e5s Configuration File
 
 Use the e5s CLI tool to construct the SPIFFE ID to avoid mistakes.
 
@@ -381,28 +372,6 @@ EOF
 
 This file contains SPIRE and mTLS settings used by the e5s library.
 
-### Verify Configuration Files
-
-Check that both files were created:
-
-```bash
-ls -la *.yaml
-```
-
-You should see:
-```
-client-config.yaml  # Your application's config
-e5s.yaml           # e5s library config
-```
-
-### Add YAML Dependency
-
-The client application needs a YAML parser to read `client-config.yaml`:
-
-```bash
-go get gopkg.in/yaml.v3
-```
-
 ---
 
 ## Step 6: Build Test Binaries
@@ -435,7 +404,7 @@ Every time e5s library code is modified, rebuild these binaries to see the chang
 
 For now, we'll use the default service account's SPIFFE ID. See **Step 11** for SPIFFE ID discovery instructions.
 
-Create ConfigMaps for both application and e5s configuration:
+Create ConfigMap for e5s configuration:
 
 ```bash
 cat > k8s-configs.yaml <<'EOF'
@@ -463,17 +432,6 @@ data:
 
     client:
       expected_server_trust_domain: "example.org"
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: client-config
-  namespace: default
-data:
-  client-config.yaml: |
-    # Application-specific configuration
-    # Server URL for Kubernetes service discovery
-    server_url: "https://e5s-server:8443/time"
 EOF
 ```
 
@@ -482,8 +440,6 @@ Apply the configuration:
 ```bash
 kubectl apply -f k8s-configs.yaml
 ```
-
-Both `e5s-config` ConfigMap and `client-config` ConfigMap get mounted into the client pod.
 
 ---
 
@@ -612,6 +568,9 @@ spec:
         image: e5s-client:dev
         imagePullPolicy: Never
         command: ["/app/client"]
+        env:
+        - name: SERVER_URL
+          value: "https://e5s-server:8443/time"
         volumeMounts:
         - name: spire-agent-socket
           mountPath: /spire/agent-socket
@@ -619,9 +578,6 @@ spec:
         - name: e5s-config
           mountPath: /app/e5s.yaml
           subPath: e5s.yaml
-        - name: client-config
-          mountPath: /app/client-config.yaml
-          subPath: client-config.yaml
       volumes:
       - name: spire-agent-socket
         csi:
@@ -630,17 +586,13 @@ spec:
       - name: e5s-config
         configMap:
           name: e5s-config
-      - name: client-config
-        configMap:
-          name: client-config
 EOF
 ```
 
-**Configuration-Driven:**
-- Client reads server URL from `client-config.yaml` (no hardcoded values)
-- SPIRE/mTLS config comes from `e5s.yaml`
-- Environment variables can override config if needed (optional, not required)
-- All configuration is explicit and visible in ConfigMaps
+**Configuration Approach:**
+- Server URL comes from `SERVER_URL` environment variable (12-factor app pattern)
+- SPIRE/mTLS config comes from `e5s.yaml` ConfigMap
+- Clean separation: infrastructure config (e5s.yaml) vs application config (env vars)
 
 Run the test client:
 
@@ -1117,6 +1069,9 @@ spec:
         image: e5s-client:dev
         imagePullPolicy: Never
         command: ["/app/client"]
+        env:
+        - name: SERVER_URL
+          value: "https://e5s-server:8443/time"
         volumeMounts:
         - name: spire-agent-socket
           mountPath: /spire/agent-socket
@@ -1124,9 +1079,6 @@ spec:
         - name: e5s-config
           mountPath: /app/e5s.yaml
           subPath: e5s.yaml
-        - name: client-config
-          mountPath: /app/client-config.yaml
-          subPath: client-config.yaml
       volumes:
       - name: spire-agent-socket
         csi:
@@ -1135,9 +1087,6 @@ spec:
       - name: e5s-config
         configMap:
           name: e5s-config
-      - name: client-config
-        configMap:
-          name: client-config
 EOF
 ```
 
@@ -1505,7 +1454,7 @@ After testing, delete Kubernetes resources:
 kubectl delete deployment e5s-server
 kubectl delete service e5s-server
 kubectl delete job e5s-client e5s-unregistered-client
-kubectl delete configmap e5s-config client-config
+kubectl delete configmap e5s-config
 kubectl delete serviceaccount unregistered-client
 ```
 

@@ -22,14 +22,3 @@ data:
 
     client:
       expected_server_trust_domain: "example.org"
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: client-config
-  namespace: default
-data:
-  client-config.yaml: |
-    # Application-specific configuration
-    # Server URL for Kubernetes service discovery
-    server_url: "https://e5s-server:8443/time"

@@ -88,9 +88,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/sufield/e5s"
@@ -117,36 +114,25 @@ func main() {
 		fmt.Fprintf(w, "Hello, %s!\n", id)
 	})
 
-	// Start server with automatic shutdown function
-	shutdown, err := e5s.Start("e5s.yaml", r)
-	if err != nil {
+	// Start server with automatic signal handling and shutdown
+	if err := e5s.Serve("e5s.yaml", r); err != nil {
 		log.Fatal(err)
 	}
-	defer func() {
-		if err := shutdown(); err != nil {
-			log.Printf("Shutdown error: %v", err)
-		}
-	}()
-
-	// Wait for interrupt signal
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-	<-sigChan
 }
 ```
 
 **What this code does:**
 - Creates a chi router with two endpoints: `/healthz` and `/hello`
 - The `/hello` endpoint extracts the client's SPIFFE ID using `e5s.PeerID()`
-- Calls `e5s.Start("e5s.yaml", r)` which:
+- Calls `e5s.Serve("e5s.yaml", r)` which:
   - Loads config from e5s.yaml
   - Connects to SPIRE and sets up mTLS
-  - Returns a shutdown function for cleanup
-- Sets up signal handling to gracefully shutdown on Ctrl+C
+  - Handles interrupt signals (Ctrl+C) automatically
+  - Performs graceful shutdown on exit
 
-Just define your routes, call `e5s.Start()`, and handle shutdown.
+Just define your routes and call `e5s.Serve()` - signal handling and shutdown are automatic!
 
-**For single-threaded debugging**, use `e5s.StartSingleThread()` which blocks instead of running in background. See [ADVANCED.md](ADVANCED.md).
+**For advanced control** (manual shutdown, custom signals, etc.), use `e5s.Start()`. See [ADVANCED.md](ADVANCED.md).
 
 ### Create Client Application
 
@@ -159,54 +145,55 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"os"
 
 	"github.com/sufield/e5s"
 )
 
 func main() {
-	// Create mTLS client
-	client, cleanup, err := e5s.Client("e5s.yaml")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer func() {
-		if err := cleanup(); err != nil {
-			log.Printf("Cleanup error: %v", err)
-		}
-	}()
-
 	// Get server address from environment variable
 	serverAddr := os.Getenv("SERVER_ADDR")
 	if serverAddr == "" {
 		serverAddr = "https://localhost:8443"
 	}
 
-	// Perform mTLS GET request
-	resp, err := client.Get(serverAddr + "/hello")
+	// Create mTLS client with automatic cleanup
+	err := e5s.WithClient("e5s.yaml", func(client *http.Client) error {
+		// Perform mTLS GET request
+		resp, err := client.Get(serverAddr + "/hello")
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		// Read and print response
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(body))
+		return nil
+	})
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer resp.Body.Close()
-
-	// Read and print response
-	body, _ := io.ReadAll(resp.Body)
-	fmt.Println(string(body))
 }
 ```
 
 **What this code does:**
-- Calls `e5s.Client("e5s.yaml")` which:
+- Calls `e5s.WithClient("e5s.yaml", func...)` which:
   - Loads config from e5s.yaml
   - Creates an mTLS-enabled HTTP client
-  - Returns the client and a cleanup function
+  - Passes it to your function
+  - Automatically cleans up resources when done
 - Reads server address from `SERVER_ADDR` environment variable (defaults to `https://localhost:8443`)
 - Uses the standard Go `http.Client` interface to make requests
-- Properly cleans up resources with the cleanup function
+- Cleanup is automatic - no defer needed!
 
-Create a client once, use it for multiple requests.
+For multiple requests, reuse the client inside the callback function.
 
-**For advanced use** like context timeouts, custom headers, or retry logic, see [ADVANCED.md](ADVANCED.md).
+**For advanced use** (long-lived clients, manual lifecycle management, etc.), use `e5s.Client()`. See [ADVANCED.md](ADVANCED.md).
 
 ### Create Configuration File
 
