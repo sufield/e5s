@@ -303,60 +303,7 @@ func buildServer(configPath string, handler http.Handler) (
 //	}
 //	os.Exit(0)
 func Start(configPath string, handler http.Handler) (shutdown func() error, err error) {
-	srv, identityShutdown, err := buildServer(configPath, handler)
-	if err != nil {
-		return nil, err
-	}
-
-	// Channel to capture server startup errors
-	errCh := make(chan error, 1)
-
-	// Start server in background
-	go func() {
-		// Empty cert/key paths - TLS config comes from tlsCfg.GetCertificate
-		err := srv.ListenAndServeTLS("", "")
-		// Only send non-graceful errors
-		if err != nil && err != http.ErrServerClosed {
-			errCh <- err
-		}
-	}()
-
-	// Give server a moment to bind or fail
-	// This prevents returning success when bind fails immediately
-	select {
-	case err := <-errCh:
-		if shutdownErr := identityShutdown(); shutdownErr != nil {
-			return nil, fmt.Errorf("server startup failed: %w (cleanup error: %v)", err, shutdownErr)
-		}
-		return nil, fmt.Errorf("server startup failed: %w", err)
-	case <-time.After(100 * time.Millisecond):
-		// Server started successfully (or will report error later via logs)
-	}
-
-	// Ensure shutdown is only executed once
-	var shutdownOnce sync.Once
-	var shutdownErr error
-
-	// Return shutdown function
-	shutdownFunc := func() error {
-		shutdownOnce.Do(func() {
-			// Create timeout context for graceful shutdown
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-
-			// Stop accepting new connections and drain in-flight requests
-			err1 := srv.Shutdown(ctx)
-
-			// Release SPIRE resources
-			err2 := identityShutdown()
-
-			// Return first error encountered
-			shutdownErr = firstErr(err1, err2)
-		})
-		return shutdownErr
-	}
-
-	return shutdownFunc, nil
+	return StartWithContext(context.Background(), configPath, handler)
 }
 
 // StartWithContext starts an mTLS server with a custom context for SPIRE initialization.
@@ -714,59 +661,7 @@ func WithClient(configPath string, fn func(*http.Client) error) error {
 //	}
 //	defer resp.Body.Close()
 func Client(configPath string) (*http.Client, func() error, error) {
-	// Load and validate configuration
-	cfg, spireConfig, err := loadClientConfig(configPath)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	ctx := context.Background()
-
-	// Centralized SPIRE setup
-	x509Source, identityShutdown, err := newSPIRESource(
-		ctx,
-		cfg.SPIRE.WorkloadSocket,
-		spireConfig.InitialFetchTimeout,
-	)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create SPIRE source: %w", err)
-	}
-
-	// Build client TLS config with server verification
-	// Note: cfg.* fields are already validated in config.ValidateClient.
-	// spiffehttp still performs its own validation because it is a lower-level API.
-	tlsCfg, err := spiffehttp.NewClientTLSConfig(
-		ctx,
-		x509Source,
-		x509Source,
-		spiffehttp.ClientConfig{
-			ExpectedServerID:          cfg.Client.ExpectedServerSPIFFEID,
-			ExpectedServerTrustDomain: cfg.Client.ExpectedServerTrustDomain,
-		},
-	)
-	if err != nil {
-		if shutdownErr := identityShutdown(); shutdownErr != nil {
-			return nil, nil, fmt.Errorf("failed to create client TLS config: %w (cleanup error: %v)", err, shutdownErr)
-		}
-		return nil, nil, fmt.Errorf("failed to create client TLS config: %w", err)
-	}
-
-	// Create HTTP client with mTLS
-	httpClient := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: tlsCfg,
-		},
-	}
-
-	// Enable debug logging if E5S_DEBUG is set
-	debugf("client config_path=%q expected_server_spiffe_id=%q expected_server_trust_domain=%q",
-		configPath,
-		cfg.Client.ExpectedServerSPIFFEID,
-		cfg.Client.ExpectedServerTrustDomain,
-	)
-
-	// identityShutdown is already idempotent, no need for additional sync.Once
-	return httpClient, identityShutdown, nil
+	return ClientWithContext(context.Background(), configPath)
 }
 
 // ClientWithContext returns an HTTP client configured for mTLS using SPIRE with a custom context.
