@@ -626,7 +626,7 @@ Now that you have mTLS working:
    - Use specific SPIFFE IDs instead of trust domains
    - Add request logging
    - Set up monitoring and alerting
-   - Review [security documentation](../../security/)
+   - Review [runtime security monitoring](../../docs/how-to/monitor-with-falco.md)
 
 ---
 

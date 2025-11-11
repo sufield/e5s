@@ -5,21 +5,147 @@
 
 A Go library for building mutual TLS services with SPIFFE identity verification and automatic certificate rotation based on go-spiffe SDK.
 
-## The Problem
+# The Problem
 
-In traditional setups for securing communication between microservices in a distributed system, you have to deal with API keys and sensitive secrets stored directly in your code, configuration files, or environment variables. This creates major security risks because these plain-text secrets can be easily exposed through code leaks, misconfigurations, or attacks, leading to headaches like constant manual updates, vulnerability scans, and the fear of breaches if someone gains access to your repo or server.
+## ❌ Before: Static API Keys
 
-With e5s, you eliminate the need for any API keys or plain-text secrets in your codebase entirely. Instead, you simply register your microservices with the system and set them up to use secure, cryptographic identities that are automatically managed and verified. This removes vulnerable attack surfaces by avoiding any storage of sensitive info in text form, relying on encrypted certificates that rotate without your intervention, making your setup safer and easier to maintain in a zero-trust environment where every connection is double-checked for authenticity.
+Every service call required a shared secret.
 
-Just as biometric authentication verifies humans by scanning unique traits like fingerprints or facial features — eliminating the need for passwords and reducing risks from stolen credentials — e5s uses cryptographic identities (via certificates) to authenticate microservices, automatically verifying each one's unique fingerprint in a connection without relying on shared secrets or manual key management, enhancing security in distributed systems.
+**Weather Service (server)**
 
-You are already familiar with SSL certificates used by web sites. It secures communication between a user's browser and a web server (HTTPS), where the server presents a certificate to prove its identity and encrypt the connection. 
+```go
+func (s *WeatherService) GetForecast(w http.ResponseWriter, r *http.Request) {
+    apiKey := r.Header.Get("Authorization")
+    if apiKey != "Bearer weather-client-secret" {
+        http.Error(w, "unauthorized", http.StatusUnauthorized)
+        return
+    }
 
-e5s builds on this same foundation but extends it to mutual TLS (mTLS) for securing interactions between microservices in a distributed system. It's like requiring both the client and server microservices to show their unique identity before talking, ensuring two-way trust in a zero-trust environment. 
+    // business logic
+    forecast := s.GetData()
+    json.NewEncoder(w).Encode(forecast)
+}
+```
 
-We shift to identity-based authentication: instead of relying on static API keys or shared secrets, e5s uses dynamic, cryptographic identities (via standards like SPIFFE) tied specifically to each service's role or workload, which are automatically issued, verified, and rotated without downtime or manual intervention. This reduces risks from compromised keys and simplifies scaling, connecting the web security you know to a more automated, fine-grained approach for service-to-service comms.
+**Weather Client**
 
-## The Solution
+```go
+func main() {
+    apiKey := os.Getenv("WEATHER_API_KEY")
+    req, _ := http.NewRequest("GET", "https://weather-service:8080/forecast", nil)
+    req.Header.Set("Authorization", "Bearer "+apiKey)
+
+    resp, err := http.DefaultClient.Do(req)
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer resp.Body.Close()
+}
+```
+
+**Problems**
+
+* Secrets in code or environment variables
+* Manual rotation and redeployment when keys change
+* Leaks through logs, git, or config files
+* Separate keys for every service pair
+
+---
+
+# The Solution
+## ✅ After: Identity-Based Authentication with e5s
+
+Each service has its own **cryptographic identity** (SPIFFE ID).
+No API keys, no secrets, no manual rotation.
+
+**Weather Service (server)**
+
+```go
+func forecastHandler(w http.ResponseWriter, r *http.Request) {
+    // Client already authenticated via mTLS
+    forecast := map[string]string{"forecast": "Sunny"}
+    json.NewEncoder(w).Encode(forecast)
+}
+
+func main() {
+    http.HandleFunc("/forecast", forecastHandler)
+
+    if err := e5s.Serve("server-config.yaml", http.DefaultServeMux); err != nil {
+        log.Fatal(err)
+    }
+}
+```
+
+**server-config.yaml:**
+```yaml
+version: 1
+spire:
+  workload_socket: "unix:///tmp/spire-agent/public/api.sock"
+server:
+  listen_addr: ":8080"
+  allowed_client_spiffe_id: "spiffe://prod.company.com/weather-client"
+```
+
+**Weather Client**
+
+```go
+func main() {
+    client, cleanup, err := e5s.Client("client-config.yaml")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer cleanup()
+
+    resp, err := client.Get("https://weather-service:8080/forecast")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer resp.Body.Close()
+
+    var result map[string]string
+    json.NewDecoder(resp.Body).Decode(&result)
+    fmt.Println(result["forecast"])
+}
+```
+
+**client-config.yaml:**
+```yaml
+version: 1
+spire:
+  workload_socket: "unix:///tmp/spire-agent/public/api.sock"
+client:
+  expected_server_spiffe_id: "spiffe://prod.company.com/weather-service"
+```
+
+---
+
+## What Changed
+
+| Aspect         | Before (API Keys)       | After (e5s)               |
+| -------------- | ----------------------- | ------------------------- |
+| Authentication | Shared secret in header | mTLS using SPIFFE IDs     |
+| Rotation       | Manual                  | Automatic                 |
+| Secret Storage | Env vars / config       | None                      |
+| Breach Risk    | High (key leaks)        | Low (certs rotate hourly) |
+| Setup          | Add key per service     | Register identity once    |
+| Maintenance    | Continuous              | Zero-touch                |
+
+---
+
+## Example Setup
+
+```bash
+# One-time identity registration
+spire-server entry create -spiffeID spiffe://prod.company.com/weather-client \
+    -parentID spiffe://prod.company.com/spire-agent -selector unix:uid:1000
+
+spire-server entry create -spiffeID spiffe://prod.company.com/weather-service \
+    -parentID spiffe://prod.company.com/spire-agent -selector unix:uid:1000
+```
+
+Now, your services prove who they are through short-lived certificates—no shared keys, no dashboards, no secret rotation scripts.
+
+## How does e5s work?
 
 e5s solves the challenges of implementing secure, identity-based mutual TLS (mTLS) in distributed systems by adopting the proven SPIFFE standard. It simplifies 
 
