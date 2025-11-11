@@ -1,6 +1,6 @@
 # Integration Testing with SPIRE
 
-This document explains how to run end-to-end integration tests for the e5s library with real SPIRE infrastructure.
+This document explains how integration tests work with real SPIRE infrastructure in GitHub CI.
 
 ## Overview
 
@@ -16,29 +16,36 @@ Integration tests verify:
 - Trust bundle management
 - Real-world SPIRE integration scenarios
 
-## Quick Start
+## Running Integration Tests in CI
 
-### Local Testing with Docker
+Integration tests run automatically in GitHub Actions on every push and pull request via the `.github/workflows/integration.yml` workflow.
 
-The easiest way to run integration tests locally is using Docker Compose:
+### How CI Works
 
-```bash
-# Start SPIRE infrastructure
-docker compose -f docker-compose.test.yml up -d
+The GitHub Actions workflow:
 
-# Wait for SPIRE to be ready (about 10 seconds)
-sleep 10
+1. **Sets up Go** environment (version from go.mod)
+2. **Downloads SPIRE binaries** from GitHub releases
+3. **Sets environment variables** (`SPIRE_SERVER` and `SPIRE_AGENT` paths)
+4. **Runs integration tests** with `go test -tags=integration`
+5. **Uploads coverage** to Codecov
 
-# Run integration tests
-go test -tags=integration -v ./...
+The test helpers in the codebase automatically start and stop SPIRE server/agent processes using the binaries from the environment variables.
 
-# Clean up
-docker compose -f docker-compose.test.yml down
+### Workflow Configuration
+
+```yaml
+# .github/workflows/integration.yml
+- name: Download and setup SPIRE binaries
+  run: |
+    wget https://github.com/spiffe/spire/releases/download/v1.13.0/spire-1.13.0-linux-amd64-musl.tar.gz
+    tar xzf spire-1.13.0-linux-amd64-musl.tar.gz
+    echo "SPIRE_SERVER=$PWD/spire-1.13.0/bin/spire-server" >> $GITHUB_ENV
+    echo "SPIRE_AGENT=$PWD/spire-1.13.0/bin/spire-agent" >> $GITHUB_ENV
+
+- name: Run Integration Tests
+  run: go test -v -tags=integration -timeout=5m -coverprofile=coverage-integration.txt ./...
 ```
-
-### Running in CI
-
-Integration tests run automatically in GitHub Actions on every push and pull request. See `.github/workflows/integration.yml` for the CI configuration.
 
 ## Test Structure
 
@@ -74,129 +81,6 @@ This ensures:
 - Integration tests don't run during normal `go test ./...`
 - They only run when explicitly requested with `-tags=integration`
 - Fast feedback loop for unit tests, comprehensive validation via integration tests
-
-## Running Tests
-
-### All Integration Tests
-
-```bash
-go test -tags=integration -v ./...
-```
-
-### Specific Package
-
-```bash
-go test -tags=integration -v ./spire
-```
-
-### Single Test
-
-```bash
-go test -tags=integration -v ./spire -run TestIntegration_NewIdentitySource_RealSPIRE
-```
-
-### With Coverage
-
-```bash
-go test -tags=integration -v -coverprofile=coverage-integration.txt ./...
-```
-
-### Skip Long-Running Tests
-
-```bash
-go test -tags=integration -v -short ./...
-```
-
-## Local Setup Options
-
-### Option 1: Docker Compose (Recommended)
-
-**Pros:**
-- Isolated, reproducible environment
-- Automatic cleanup
-- Matches CI environment
-
-**Cons:**
-- Requires Docker
-- Slightly slower startup
-
-```bash
-docker compose -f docker-compose.test.yml up -d
-export SPIFFE_ENDPOINT_SOCKET=unix:///var/run/spire/agent.sock
-go test -tags=integration -v ./...
-docker compose -f docker-compose.test.yml down
-```
-
-### Option 2: Local SPIRE Binaries
-
-**Pros:**
-- Faster iteration
-- Direct access to SPIRE logs
-
-**Cons:**
-- Manual setup
-- Requires SPIRE binaries in PATH
-
-```bash
-# Download SPIRE release
-wget https://github.com/spiffe/spire/releases/download/v1.13.0/spire-1.13.0-linux-amd64-musl.tar.gz
-tar xzf spire-1.13.0-linux-amd64-musl.tar.gz
-cd spire-1.13.0
-
-# Start server
-bin/spire-server run -config conf/server/server.conf &
-
-# Start agent
-bin/spire-agent run -config conf/agent/agent.conf &
-
-# Run tests
-export SPIFFE_ENDPOINT_SOCKET=unix:///tmp/spire-agent/public/api.sock
-go test -tags=integration -v ../e5s/...
-
-# Cleanup
-killall spire-server spire-agent
-```
-
-### Option 3: Kubernetes (Advanced)
-
-For testing in a Kubernetes environment:
-
-```bash
-# Deploy SPIRE to kind cluster
-kind create cluster
-kubectl apply -f https://raw.githubusercontent.com/spiffe/spire/main/support/k8s/k8s-workload-registrar/mode-crd/config/spire.yaml
-
-# Port-forward agent socket
-kubectl port-forward -n spire spire-agent-xxxxx 8081:8081
-
-# Run tests
-export SPIFFE_ENDPOINT_SOCKET=unix:///tmp/spire-agent/public/api.sock
-go test -tags=integration -v ./...
-```
-
-## CI/CD Integration
-
-### GitHub Actions
-
-The project includes a complete GitHub Actions workflow at `.github/workflows/integration.yml` that:
-
-1. Starts SPIRE server as a service container
-2. Downloads and starts SPIRE agent
-3. Runs integration tests with coverage
-4. Uploads coverage reports
-
-**Running on Pull Requests:**
-```yaml
-on:
-  pull_request:
-    branches: [main]
-```
-
-**Manual Trigger:**
-```yaml
-on:
-  workflow_dispatch:
-```
 
 ## Test Patterns
 
@@ -264,73 +148,37 @@ func TestIntegration_Feature(t *testing.T) {
 }
 ```
 
-## Troubleshooting
+## Troubleshooting CI Failures
 
 ### Tests Hang or Timeout
 
-**Problem:** Tests hang waiting for SPIRE agent
+**Check:**
+- Test timeout is sufficient (currently 5m in workflow)
+- SPIRE binaries downloaded correctly
+- Test helpers can find SPIRE_SERVER and SPIRE_AGENT env vars
 
 **Solutions:**
-```bash
-# Verify agent socket exists
-ls -la /tmp/spire-agent/public/api.sock
-
-# Check agent logs
-docker compose -f docker-compose.test.yml logs spire-agent
-
-# Increase test timeout
-go test -tags=integration -timeout=10m -v ./...
-```
+- Increase timeout in `.github/workflows/integration.yml`
+- Check GitHub Actions logs for SPIRE startup errors
 
 ### Connection Refused
 
-**Problem:** `connection refused` when connecting to SPIRE
+**Check:**
+- SPIRE agent socket path is correct
+- Test helpers successfully started SPIRE processes
+- Timing issues (test started before SPIRE ready)
 
 **Solutions:**
-```bash
-# Check SPIRE services are running
-docker compose -f docker-compose.test.yml ps
-
-# Verify network connectivity
-docker compose -f docker-compose.test.yml exec spire-agent /opt/spire/bin/spire-agent healthcheck
-
-# Check socket path
-export SPIFFE_ENDPOINT_SOCKET=unix:///tmp/spire-agent/public/api.sock
+```go
+// Add startup wait in test helpers
+time.Sleep(2 * time.Second)  // Or better: poll for readiness
 ```
 
 ### Certificate Expiry Errors
 
-**Problem:** Tests fail with expired certificates
-
-**Solutions:**
-```bash
-# Restart SPIRE to get fresh certificates
-docker compose -f docker-compose.test.yml restart
-
-# Or use shorter certificate TTLs in SPIRE config for testing
-```
-
-### Tests Pass Locally but Fail in CI
-
-**Problem:** Tests work locally but not in CI
-
 **Check:**
-- Socket path differences (Docker volume mounts)
-- Timing issues (add retries/waits)
-- Network connectivity (service containers vs localhost)
-- Environment variables
-
-**Solutions:**
-```go
-// Make socket path configurable
-socket := os.Getenv("SPIFFE_ENDPOINT_SOCKET")
-if socket == "" {
-    socket = "unix:///tmp/spire-agent/public/api.sock"  // CI default
-}
-
-// Add startup wait
-time.Sleep(2 * time.Second)  // Or better: poll for readiness
-```
+- SPIRE configuration has appropriate TTLs
+- System clock is correct
 
 ## Best Practices
 
@@ -349,7 +197,7 @@ Integration tests should verify real-world usage:
 ### 3. Keep Tests Fast
 
 - Use `testing.Short()` for expensive tests
-- Run in parallel when possible
+- Run in parallel when possible (`t.Parallel()`)
 - Clean up resources promptly
 
 ### 4. Make Tests Deterministic
@@ -377,17 +225,14 @@ func TestIntegration_Feature(t *testing.T) {
 Integration test coverage is tracked separately from unit test coverage:
 
 ```bash
-# Unit test coverage
+# Unit test coverage (local)
 go test -coverprofile=coverage-unit.txt ./...
 
-# Integration test coverage
+# Integration test coverage (CI)
 go test -tags=integration -coverprofile=coverage-integration.txt ./...
-
-# View combined coverage
-go tool cover -html=coverage-integration.txt
 ```
 
-CI automatically uploads both coverage reports to Codecov with different flags.
+CI automatically uploads integration coverage reports to Codecov with the `integration` flag.
 
 ## Contributing
 
