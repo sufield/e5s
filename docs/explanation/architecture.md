@@ -1,6 +1,6 @@
 # e5s Architecture
 
-This document defines the internal layering of e5s, which enforces modularity and prevents circular dependencies.
+This document explains the internal layering of e5s, which enforces modularity and prevents circular dependencies.
 
 ## Layer Model
 
@@ -157,7 +157,6 @@ This layer is maintained by the SPIFFE community and used without any modificati
 
 **Purpose**: Implementation details not part of public API:
 - `internal/config` - YAML parsing and validation
-- `internal/bg` - Background execution abstraction
 - `internal/testhelpers` - Test utilities
 
 **Rules**:
@@ -180,8 +179,8 @@ This layer is maintained by the SPIFFE community and used without any modificati
 ```
 cmd/*, examples/
     ↓
-   e5s  ←──┐
-  ↙   ↘    │
+   e5s
+  ↙   ↘
 spire  spiffehttp
   ↘   ↙
 go-spiffe (external)

@@ -153,7 +153,7 @@ Run with: `E5S_DEBUG_SINGLE_THREAD=1 ./your-server`
 | go-spiffe SDK goroutines | Running (cert rotation, trust bundle updates, Workload API) | Running (cert rotation, trust bundle updates, Workload API) |
 | e5s's own goroutines | +1 HTTP server goroutine | 0 (e5s runs in your goroutine) |
 
-**Key distinction**:
+**Distinction**:
 - e5s concurrency: **Eliminated** with StartSingleThread()
 - go-spiffe concurrency: **Unchanged** (SDK goroutines run in both modes)
 
@@ -662,31 +662,9 @@ func Start(configPath string, handler http.Handler) (shutdown func() error, err 
 }
 ```
 
-The key difference: **one `go func()` statement.**
+The difference: **one `go func()` statement.**
 
 Everything else is identical, which is why this mode is so useful for debugging.
-
-### Future Abstraction: `internal/bg` Package
-
-e5s includes an optional abstraction for background execution:
-
-```go
-import "github.com/sufield/e5s/internal/bg"
-
-// Production: use bg.Async{}
-runner := bg.Async{}
-runner.Do(func() {
-    // Runs in goroutine
-})
-
-// Debug: use bg.Sync{}
-runner := bg.Sync{}
-runner.Do(func() {
-    // Runs inline
-})
-```
-
-This abstraction is currently unused but available for future features that might need background tasks (health checks, metrics, etc.).
 
 ## Best Practices
 
