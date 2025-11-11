@@ -11,7 +11,6 @@ e5s provides **two APIs** for SPIFFE/SPIRE-based mutual TLS for different develo
 ### Low-Level API (`pkg/spiffehttp`, `pkg/spire`)
 
 **For platform/infrastructure teams** - Full control over TLS and identity:
-- See [QUICKSTART_LIBRARY.md](QUICKSTART_LIBRARY.md) for API reference
 - See [../examples/minikube-lowlevel/](../examples/minikube-lowlevel/) for SPIRE cluster setup
 
 ## Public API

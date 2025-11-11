@@ -6,7 +6,7 @@ Deploy the e5s SPIFFE/SPIRE mTLS demo using Helm with production-ready Docker im
 
 The e5s Helm chart provides a simple way to deploy the demo server and client to Kubernetes using pre-built multi-arch Docker images from GoReleaser. This eliminates the need to build images locally and enables versioned deployments.
 
-**Note:** Docker images are automatically published to GitHub Container Registry (GHCR) when a release is created using GoReleaser. See [examples/minikube-lowlevel/](../examples/minikube-lowlevel/) for local development setup.
+Docker images are automatically published to GitHub Container Registry (GHCR) when a release is created using GoReleaser. See [examples/minikube-lowlevel/](../examples/minikube-lowlevel/) for local development setup.
 
 ## Prerequisites
 

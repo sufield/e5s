@@ -82,11 +82,9 @@ This ensures:
 - They only run when explicitly requested with `-tags=integration`
 - Fast feedback loop for unit tests, comprehensive validation via integration tests
 
-## Test Patterns
-
 ### Test Setup
 
-Most integration tests follow this pattern:
+Most integration tests follow this structure:
 
 ```go
 func TestIntegration_Feature(t *testing.T) {
@@ -233,14 +231,3 @@ go test -tags=integration -coverprofile=coverage-integration.txt ./...
 ```
 
 CI automatically uploads integration coverage reports to Codecov with the `integration` flag.
-
-## Contributing
-
-When adding new features:
-
-1. Write unit tests first (fast feedback)
-2. Add integration tests for E2E scenarios
-3. Ensure CI passes before merging
-4. Update this document if adding new test patterns
-
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for general contribution guidelines.
