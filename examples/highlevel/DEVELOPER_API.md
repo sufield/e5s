@@ -249,5 +249,5 @@ You just use `e5s.Start()`, `e5s.Client()`, and `e5s.PeerID()`.
 ## Next Steps
 
 - See [minikube-lowlevel example](../minikube-lowlevel/) for complete SPIRE cluster setup
-- Read [API documentation](../../docs/QUICKSTART_LIBRARY.md) for lower-level usage
+- Read [API documentation](../../docs/reference/low-level-api.md) for lower-level usage
 - Check [security documentation](../../security/) for production hardening

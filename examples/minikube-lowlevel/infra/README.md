@@ -137,7 +137,7 @@ Falco adds minimal overhead:
 - Memory: 256Mi request, 512Mi limit
 - Driver: modern_ebpf (no kernel module required)
 
-For more details, see [security/README.md](../../../security/) and [security/FALCO_GUIDE.md](../../../security/FALCO_GUIDE.md).
+For more details, see [../../docs/how-to/falco-guide.md for comprehensive Falco integration guide.
 
 ## Directory Structure
 

@@ -299,7 +299,7 @@ No. e5s sets `ReadHeaderTimeout: 10 * time.Second` by default, which protects ag
 
 See the integration test examples:
 
-1. **Integration tests** - Run full SPIRE stack in Kubernetes (see `docs/INTEGRATION_TESTING.md`)
+1. **Integration tests** - Run full SPIRE stack in Kubernetes (see `docs/how-to/run-integration-tests.md`)
 2. **Local testing** - Use scripts in `examples/minikube-lowlevel/`
 
 Example integration test setup:

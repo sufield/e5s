@@ -809,7 +809,7 @@ For production, always use `Start()` or `Serve()`.
 
 ## Additional Resources
 
-- [API Documentation](./API.md) - Full e5s API reference
+- [API Documentation](../reference/api.md) - Full e5s API reference
 - [FAQ](./faq.md) - Common questions and answers
 - [Example: Debug Server](../examples/debug/) - Working example with debug mode
 - [SPIRE Documentation](https://spiffe.io/docs/latest/spire/) - Understanding SPIRE behavior

@@ -1,49 +1,43 @@
 # e5s Documentation
 
-e5s provides **two APIs** for SPIFFE/SPIRE-based mutual TLS for different developer needs:
+Documentation for the e5s SPIFFE/SPIRE mTLS library.
 
-### High-Level API (`e5s.Start`, `e5s.Client`)
+## Getting Started
 
-**For application developers** - Config-driven, one-line setup:
-- See [../README.md](../README.md) for quick examples
-- See [../examples/highlevel/](../examples/highlevel/) for production-ready server with chi router
+- [Project README](../README.md) - Overview, installation, quick start
+- [Examples](../examples/) - Working code for all use cases
 
-### Low-Level API (`pkg/spiffehttp`, `pkg/spire`)
+## Tutorials
 
-**For platform/infrastructure teams** - Full control over TLS and identity:
-- See [../examples/minikube-lowlevel/](../examples/minikube-lowlevel/) for SPIRE cluster setup
+Learning-oriented guides for getting started:
 
-## Public API
+- [Build Your First mTLS App](../examples/highlevel/TUTORIAL.md) - Step-by-step tutorial
 
-The library exposes two packages:
+## How-To Guides
 
-### `pkg/spiffehttp` - Core mTLS Library
+Task-oriented guides for specific scenarios:
 
-Provider-agnostic primitives for building mTLS connections with SPIFFE identity:
+- [Deploy to Kubernetes with Helm](how-to/deploy-helm.md)
+- [Debug mTLS Connections](how-to/debug-mtls.md)
+- [Run Integration Tests](how-to/run-integration-tests.md)
+- [Monitor with Falco](how-to/monitor-with-falco.md)
+- [Falco Deep Dive](how-to/falco-guide.md)
 
-- `NewServerTLSConfig()` - Create server TLS config with client verification
-- `NewClientTLSConfig()` - Create client TLS config with server verification
-- `PeerFromRequest()` - Extract authenticated peer identity from requests
-- `PeerFromContext()` - Retrieve peer from request context
-- `WithPeer()` - Attach peer to context
+## Explanation
 
-### `pkg/spire` - SPIRE Adapter
+Understanding e5s concepts and design:
 
-SPIRE Workload API client:
+- [Core Concepts](explanation/concepts.md) - High-level vs low-level APIs, SPIFFE/SPIRE
+- [Architecture](explanation/architecture.md) - Design decisions and internal structure
+- [Comparison with go-spiffe SDK](explanation/comparison.md)
+- [FAQ](explanation/faq.md)
+- [Design Document](explanation/design.md)
 
-- `NewIdentitySource()` - Connect to SPIRE Agent
-- `X509Source()` - Access underlying SDK source
-- Automatic certificate rotation
-- Trust bundle updates
-- Thread-safe, share across servers/clients
+## Reference
 
-## Deployment Guides
+Technical specifications and lookups:
 
-- [**Helm Chart Deployment**](HELM_DEPLOYMENT.md) - Deploy demos using Helm with production-ready images
-- [**Integration Testing**](INTEGRATION_TESTING.md) - Test SPIRE integrations locally
-- [**Falco Security Monitoring**](FALCO.md) - Runtime security monitoring for SPIRE workloads
-
-## Architecture
-
-- **Core** (`pkg/spiffehttp`) - TLS configuration using go-spiffe SDK
-- **Adapter** (`pkg/spire`) - SPIRE Workload API client
+- [API Reference](https://pkg.go.dev/github.com/sufield/e5s) - Complete API on pkg.go.dev
+- [Low-Level API Guide](reference/low-level-api.md) - `spire` and `spiffehttp` packages
+- [Configuration Reference](reference/config.md) - Complete e5s.yaml options
+- [Troubleshooting](reference/troubleshooting.md) - Error messages and solutions

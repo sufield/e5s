@@ -1,12 +1,12 @@
 ## Library Security Implementation
 
-The mTLS security enforcement is implemented in **[`pkg/spiffehttp`](../pkg/spiffehttp/)** with SPIFFE identity verification, TLS 1.3 enforcement, and peer authentication. See the [library quickstart](../docs/QUICKSTART_LIBRARY.md) for usage examples.
+The mTLS security enforcement is implemented in **[`pkg/spiffehttp`](../pkg/spiffehttp/)** with SPIFFE identity verification, TLS 1.3 enforcement, and peer authentication. See the [library quickstart](../reference/low-level-api.md) for usage examples.
 
 ## Contents
 
 ### Falco Runtime Security Monitoring
 
-- **[FALCO_GUIDE.md](FALCO_GUIDE.md)** - Comprehensive guide for Falco integration
+- **[falco-guide.md](falco-guide.md)** - Comprehensive guide for Falco integration
 
 > **Note**: Custom Falco rules and automation scripts for this project are planned for a future release. For now, follow the manual installation steps below or refer to the [official Falco documentation](https://falco.org/docs/).
 
@@ -357,7 +357,7 @@ Edit rules
 
 ## Resources
 
-- [FALCO_GUIDE.md](FALCO_GUIDE.md) - Comprehensive Falco guide
+- [falco-guide.md](falco-guide.md) - Comprehensive Falco guide
 - **Falco**: https://falco.org/docs
 - **gosec**: https://github.com/securego/gosec
 - **OWASP**: https://owasp.org/www-project-go-secure-coding-practices-guide/

@@ -1573,7 +1573,7 @@ go run ./server/main.go
 
 This means test code is imported into the library. Keep test code separate from library code.
 
-**For other issues**: See [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
+**For other issues**: See [../../docs/reference/troubleshooting.md](../../docs/reference/troubleshooting.md)
 
 ---
 
@@ -1581,7 +1581,7 @@ This means test code is imported into the library. Keep test code separate from 
 
 - **End User Tutorial**: See [TUTORIAL.md](TUTORIAL.md) for the published library tutorial
 - **SPIRE Setup**: See [SPIRE_SETUP.md](SPIRE_SETUP.md) for infrastructure setup
-- **Troubleshooting**: See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for common issues
+- **Troubleshooting**: See [../../docs/reference/troubleshooting.md](../../docs/reference/troubleshooting.md) for common issues
 - **Advanced Usage**: See [ADVANCED.md](ADVANCED.md) for advanced usage
 - **Library Docs**: See [main README](../../README.md)
 

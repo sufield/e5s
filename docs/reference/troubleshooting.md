@@ -367,7 +367,7 @@ For bugs or feature requests:
 
 ## Related Documentation
 
-- [DEBUG_MODE.md](./DEBUG_MODE.md) - Detailed explanation of StartSingleThread()
-- [ARCHITECTURE.md](./ARCHITECTURE.md) - e5s internal layering
-- [CONFIG.md](./CONFIG.md) - Configuration reference
-- [API.md](./API.md) - API documentation
+- [../how-to/debug-mtls.md](./../how-to/debug-mtls.md) - Detailed explanation of StartSingleThread()
+- [../explanation/architecture.md](./../explanation/architecture.md) - e5s internal layering
+- [CONFIG.md](config.md) - Configuration reference
+- [API.md](api.md) - API documentation

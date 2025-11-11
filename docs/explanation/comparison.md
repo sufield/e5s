@@ -422,7 +422,7 @@ Requires mocking Workload API or running full SPIRE stack:
 ```
 
 #### e5s
-Requires a running SPIRE agent for all tests. See `docs/INTEGRATION_TESTING.md` for setup instructions.
+Requires a running SPIRE agent for all tests. See `docs/how-to/run-integration-tests.md` for setup instructions.
 
 ---
 
@@ -606,8 +606,8 @@ You can even use both in the same application:
 
 ## Further Reading
 
-- [e5s API Reference](./API.md)
-- [e5s Quickstart](./QUICKSTART_LIBRARY.md)
+- [e5s API Reference](../reference/api.md)
+- [e5s Quickstart](../reference/low-level-api.md)
 - [Custom Middleware Examples](../examples/middleware/)
 
 ## Questions?

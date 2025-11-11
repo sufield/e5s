@@ -632,7 +632,7 @@ helm install e5s-demo ./chart/e5s-demo -f migration-values.yaml
 
 - [Helm Chart README](../chart/e5s-demo/README.md)
 - [e5s CLI Tool Documentation](../cmd/e5s/README.md)
-- [e5s Configuration Reference](./API.md)
+- [e5s Configuration Reference](../reference/api.md)
 - [SPIRE Documentation](https://spiffe.io/docs/latest/spire/)
 - [GitHub Releases](https://github.com/sufield/e5s/releases) - Download binaries and view Docker image tags
 
@@ -641,5 +641,5 @@ helm install e5s-demo ./chart/e5s-demo -f migration-values.yaml
 For issues and questions:
 
 - Open an issue: https://github.com/sufield/e5s/issues
-- Check FAQ: [docs/faq.md](./faq.md)
+- Check FAQ: [doc../explanation/faq.md](../explanation/faq.md)
 - View examples: [examples/](../examples/)

@@ -46,9 +46,9 @@ Use go-spiffe directly only if you need non-HTTP services or custom workflows.
 
 ## Documentation
 
-- **[API Reference](https://pkg.go.dev/github.com/sufield/e5s)** - Complete API documentation on pkg.go.dev
-- **[API Guide](docs/API.md)** - Detailed guide with examples and patterns
-- **[Quickstart](docs/QUICKSTART_LIBRARY.md)** - Get started in 5 minutes
+- **[docs/](docs/)** - Complete documentation hub
+- **[API Reference](https://pkg.go.dev/github.com/sufield/e5s)** - API docs on pkg.go.dev
+- **[Examples](examples/)** - Working code for all use cases
 
 ## Quick Start
 
@@ -95,7 +95,7 @@ A **high-level** and a **low-level** APIs are provided because they serve differ
 
 #### Recommended for Most Users
 
-Simple configuration approach - create `e5s.dev.yaml` for development, `e5s.prod.yaml` for production, and call `e5s.Run()`.
+Simple configuration approach - create `e5s.yaml` with your SPIRE socket path and authorization policy.
 
 **Example Server:**
 
@@ -104,6 +104,7 @@ package main
 
 import (
     "fmt"
+    "log"
     "net/http"
 
     "github.com/sufield/e5s"
@@ -120,7 +121,9 @@ func main() {
     })
 
     // Start mTLS server - handles config, SPIRE, and graceful shutdown
-    e5s.Run(http.DefaultServeMux)
+    if err := e5s.Serve("e5s.yaml", http.DefaultServeMux); err != nil {
+        log.Fatal(err)
+    }
 }
 ```
 
@@ -177,20 +180,25 @@ cp path/to/e5s/examples/highlevel/e5s.yaml ./e5s.yaml
 
 Then edit for your environment (e5s.dev.yaml, e5s.prod.yaml, etc.)
 
-Then provide the config path explicitly:
+Then provide the config path:
 
-1. **Explicit path** (recommended):
-   ```go
-   shutdown, err := e5s.Start("e5s.prod.yaml", handler)
-   ```
+**Simple approach - blocks with signal handling:**
+```go
+if err := e5s.Serve("e5s.yaml", handler); err != nil {
+    log.Fatal(err)
+}
+```
 
-2. **Via E5S_CONFIG environment variable**:
-   ```bash
-   export E5S_CONFIG=/etc/myapp/e5s.prod.yaml
-   ```
-   ```go
-   shutdown, err := e5s.StartServer(handler)  // Uses E5S_CONFIG
-   ```
+**Advanced approach - custom shutdown:**
+```go
+shutdown, err := e5s.Start("e5s.yaml", handler)
+if err != nil {
+    log.Fatal(err)
+}
+defer shutdown()
+
+// Your custom shutdown logic here
+```
 
 **Example config structure:**
 
@@ -208,166 +216,43 @@ In your application, create separate config files (`e5s.dev.yaml`, `e5s.staging.
 
 #### For Advanced Use Cases
 
-Direct control over TLS configuration for custom scenarios.
+The low-level API provides programmatic control over TLS configuration when you need customization beyond what the high-level API offers.
 
-**Example: mTLS Server**
+**Use the low-level API when:**
+- Building libraries or frameworks on top of e5s
+- Integrating with custom identity providers
+- Need fine-grained control over TLS settings
+- Building non-HTTP services
 
-```go
-package main
-
-import (
-    "context"
-    "fmt"
-    "log"
-    "net/http"
-    "os/signal"
-    "syscall"
-    "time"
-
-    "github.com/sufield/e5s/spiffehttp"
-    "github.com/sufield/e5s/spire"
-)
-
-func main() {
-    // Create context that listens for interrupt signals
-    ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-    defer stop()
-
-    // Create SPIRE certificate source
-    source, err := spire.NewIdentitySource(ctx, spire.Config{})
-    if err != nil {
-        log.Fatal(err)
-    }
-    defer source.Close()
-
-    // Get SDK X509Source for TLS config
-    x509Source := source.X509Source()
-
-    // Create server TLS config (accepts any client in same trust domain)
-    tlsConfig, err := spiffehttp.NewServerTLSConfig(
-        ctx,
-        x509Source,
-        x509Source,
-        spiffehttp.ServerConfig{},
-    )
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    // HTTP handler that extracts peer identity
-    http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-        peer, ok := spiffehttp.PeerFromRequest(r)
-        if !ok {
-            http.Error(w, "unauthorized", http.StatusUnauthorized)
-            return
-        }
-        fmt.Fprintf(w, "Hello, %s!\n", peer.ID.String())
-    })
-
-    // Start HTTPS server with mTLS
-    server := &http.Server{
-        Addr:      ":8443",
-        TLSConfig: tlsConfig,
-    }
-
-    // Start server in a goroutine
-    go func() {
-        log.Println("Server listening on :8443")
-        if err := server.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
-            log.Fatalf("Server error: %v", err)
-        }
-    }()
-
-    // Wait for interrupt signal for graceful shutdown
-    <-ctx.Done()
-    stop()
-
-    // Graceful shutdown with timeout
-    shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-    defer cancel()
-
-    if err := server.Shutdown(shutdownCtx); err != nil {
-        log.Fatalf("Server shutdown error: %v", err)
-    }
-
-    log.Println("Server stopped gracefully")
-}
-```
-
-**Example: mTLS Client**
+**Core packages:**
 
 ```go
-package main
-
 import (
-    "context"
-    "io"
-    "log"
-    "net/http"
-    "os"
-    "time"
-
-    "github.com/sufield/e5s/spiffehttp"
-    "github.com/sufield/e5s/spire"
+    "github.com/sufield/e5s/spire"       // SPIRE Workload API client
+    "github.com/sufield/e5s/spiffehttp"  // mTLS TLS config builders
 )
-
-func main() {
-    ctx := context.Background()
-
-    // Create SPIRE certificate source
-    source, err := spire.NewIdentitySource(ctx, spire.Config{})
-    if err != nil {
-        log.Fatal(err)
-    }
-    defer source.Close()
-
-    // Get SDK X509Source for TLS config
-    x509Source := source.X509Source()
-
-    // Create client TLS config
-    tlsConfig, err := spiffehttp.NewClientTLSConfig(
-        ctx,
-        x509Source,
-        x509Source,
-        spiffehttp.ClientConfig{
-            ExpectedServerTrustDomain: "example.org",
-        },
-    )
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    // Create HTTP client with mTLS
-    client := &http.Client{
-        Transport: &http.Transport{
-            TLSClientConfig: tlsConfig,
-        },
-    }
-
-    // Create context with timeout for the request
-    reqCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-    defer cancel()
-
-    // Create request with context
-    req, err := http.NewRequestWithContext(reqCtx, "GET", "https://server.example.org:8443", nil)
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    // Make mTLS request
-    resp, err := client.Do(req)
-    if err != nil {
-        log.Fatal(err)
-    }
-    defer resp.Body.Close()
-
-    if _, err := io.Copy(os.Stdout, resp.Body); err != nil {
-        log.Fatal(err)
-    }
-}
 ```
 
-**Want more control?** → See [examples/minikube-lowlevel/](examples/minikube-lowlevel/) for low-level API usage with full SPIRE cluster setup.
+**Basic pattern:**
+
+1. Create SPIRE identity source: `spire.NewIdentitySource(ctx, config)`
+2. Build TLS config: `spiffehttp.NewServerTLSConfig()` or `spiffehttp.NewClientTLSConfig()`
+3. Create `http.Server` or `http.Client` with the TLS config
+4. Handle graceful shutdown manually
+
+**Comparison to high-level API:**
+
+| What | High-Level | Low-Level |
+|------|-----------|-----------|
+| Config | YAML file | Go code |
+| Setup code | ~10 lines | ~75+ lines |
+| Shutdown | Automatic | Manual |
+| Hardcoded values | None | Ports, IDs, domains in code |
+
+**Complete examples:**
+- **Low-level API reference:** [docs/reference/low-level-api.md](docs/reference/low-level-api.md)
+- **Working code:** [examples/middleware/](examples/middleware/)
+- **Infrastructure setup:** [examples/minikube-lowlevel/](examples/minikube-lowlevel/)
 
 ## Architecture
 
@@ -402,13 +287,6 @@ internal/config/        # Config file loading (not exported)
 - `e5s.go` - Wires everything together based on config file
 
 The examples are separate modules (each has its own `go.mod`) so you can vendor/copy them without pulling extra dependencies into your service. The core library has minimal dependencies.
-
-## Documentation
-
-- **[Tutorial](examples/highlevel/TUTORIAL.md)** - Build your first mTLS app (start here!)
-- **[Quick Start: Testing](examples/highlevel/QUICK_START_PRERELEASE.md)** - ⚡ For library developers (3 commands)
-- **[Examples](examples/)** - High-level, middleware, and infrastructure examples
-- **[API Docs](docs/API.md)** - Complete API reference
 
 ## Development
 

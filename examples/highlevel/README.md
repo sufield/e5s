@@ -27,7 +27,7 @@ Guide to building mTLS applications with e5s and SPIRE.
 
 ### Reference
 
-- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Common issues and solutions
+- **[../../docs/reference/troubleshooting.md](../../docs/reference/troubleshooting.md)** - Common issues and solutions
   *Troubleshooting guide for SPIRE setup, configuration, deployment, and connectivity issues.*
 
 - **[e5s.yaml](e5s.yaml)** - Example configuration file

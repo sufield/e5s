@@ -84,7 +84,7 @@ See the COMPATIBILITY.md
 
 **Integration Testing:**
 
-See [docs/INTEGRATION_TESTING.md](docs/INTEGRATION_TESTING.md) for detailed setup instructions and version requirements.
+See [docs/how-to/run-integration-tests.md](docs/how-to/run-integration-tests.md) for detailed setup instructions and version requirements.
 
 ### Local Development
 
