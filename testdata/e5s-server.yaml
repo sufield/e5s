@@ -1,0 +1,6 @@
+spire:
+  workload_socket: unix:///spire-agent/public/api.sock
+server:
+  listen_addr: ":8443"
+  # allow by trust domain for simplicity
+  allowed_client_trust_domain: "example.org"

@@ -1,0 +1,4 @@
+spire:
+  workload_socket: unix:///spire-agent/public/api.sock
+client:
+  expected_server_trust_domain: "example.org"
