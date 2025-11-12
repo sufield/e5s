@@ -105,7 +105,9 @@ func SetupSPIRE(t *testing.T) *SPIRETest {
 
 	// Clean up temp dir on test completion
 	t.Cleanup(func() {
-		os.RemoveAll(tempDir)
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("Warning: failed to remove temp dir %s: %v", tempDir, err)
+		}
 	})
 
 	trustDomain := "example.org"
@@ -161,7 +163,9 @@ func getFreePort() (int, error) {
 		return 0, err
 	}
 	port := listener.Addr().(*net.TCPAddr).Port
-	listener.Close()
+	if err := listener.Close(); err != nil {
+		return 0, fmt.Errorf("failed to close listener: %w", err)
+	}
 	return port, nil
 }
 
@@ -224,6 +228,7 @@ plugins {
 		serverBin = "spire-server"
 	}
 
+	// #nosec G204 -- serverBin is from SPIRE_SERVER env var or PATH lookup, not user input
 	st.serverCmd = exec.Command(serverBin, "run", "-config", serverConfPath)
 	st.serverCmd.Stdout = os.Stdout
 	st.serverCmd.Stderr = os.Stderr
@@ -334,6 +339,7 @@ plugins {
 	}
 
 	agentID := fmt.Sprintf("spiffe://%s/test-agent", st.TrustDomain)
+	// #nosec G204 -- serverBin is from SPIRE_SERVER env var or PATH lookup, not user input
 	tokenCmd := exec.Command(serverBin, "token", "generate",
 		"-spiffeID", agentID,
 		"-socketPath", st.adminAPISocket)
@@ -363,6 +369,7 @@ plugins {
 		agentBin = "spire-agent"
 	}
 
+	// #nosec G204 -- agentBin is from SPIRE_AGENT env var or PATH lookup, not user input
 	st.agentCmd = exec.Command(agentBin, "run",
 		"-config", agentConfPath,
 		"-socketPath", st.SocketPath,
@@ -450,6 +457,7 @@ func (st *SPIRETest) createWorkloadEntry() {
 	}
 
 	// Create entry via spire-server CLI
+	// #nosec G204 -- serverBin is from SPIRE_SERVER env var or PATH lookup, not user input
 	cmd := exec.Command(serverBin, "entry", "create",
 		"-spiffeID", spiffeID,
 		"-parentID", fmt.Sprintf("spiffe://%s/test-agent", st.TrustDomain),

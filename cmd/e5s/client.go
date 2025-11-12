@@ -118,7 +118,9 @@ USE CASES:
 	// Enable debug logging if requested
 	if *debug {
 		log.SetFlags(log.LstdFlags | log.Lmicroseconds | log.Lshortfile)
-		os.Setenv("E5S_DEBUG", "1")
+		if err := os.Setenv("E5S_DEBUG", "1"); err != nil {
+			log.Printf("Warning: failed to set E5S_DEBUG: %v", err)
+		}
 		log.Printf("DEBUG: config=%q", *config)
 		log.Printf("DEBUG: url=%q", *url)
 		log.Printf("DEBUG: method=%q", *method)

@@ -118,6 +118,7 @@ func discoverFromPod(podName, namespace, trustDomain string) error {
 	}
 	args = append(args, "-o", "jsonpath={.spec.serviceAccountName},{.metadata.namespace}")
 
+	// #nosec G204 -- kubectl is a standard CLI tool, args are constructed from validated flags
 	cmd := exec.Command("kubectl", args...)
 	output, err := cmd.Output()
 	if err != nil {
@@ -145,6 +146,7 @@ func discoverFromLabel(labelSelector, namespace, trustDomain string) error {
 	}
 	args = append(args, "-o", "jsonpath={.items[0].spec.serviceAccountName},{.items[0].metadata.namespace}")
 
+	// #nosec G204 -- kubectl is a standard CLI tool, args are constructed from validated flags
 	cmd := exec.Command("kubectl", args...)
 	output, err := cmd.Output()
 	if err != nil {
@@ -176,6 +178,7 @@ func discoverFromDeployment(deploymentName, namespace, trustDomain string) error
 	}
 	args = append(args, "-o", "jsonpath={.spec.template.spec.serviceAccountName},{.metadata.namespace}")
 
+	// #nosec G204 -- kubectl is a standard CLI tool, args are constructed from validated flags
 	cmd := exec.Command("kubectl", args...)
 	output, err := cmd.Output()
 	if err != nil {

@@ -38,7 +38,9 @@ func main() {
 	// Enable debug logging if requested
 	if *debug {
 		log.SetFlags(log.LstdFlags | log.Lmicroseconds | log.Lshortfile)
-		os.Setenv("E5S_DEBUG", "1")
+		if err := os.Setenv("E5S_DEBUG", "1"); err != nil {
+			log.Printf("Warning: failed to set E5S_DEBUG: %v", err)
+		}
 		log.Println("⚠️  DEBUG MODE: verbose logging enabled")
 	}
 

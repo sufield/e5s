@@ -111,6 +111,7 @@ func handleFromDeployment(fs *flag.FlagSet, trustDomainFlag string) error {
 	deploymentFile := fs.Arg(1)
 
 	// Read deployment YAML
+	// #nosec G304 -- deploymentFile is from CLI argument, user controls the path
 	data, err := os.ReadFile(deploymentFile)
 	if err != nil {
 		return fmt.Errorf("failed to read deployment file: %w", err)
