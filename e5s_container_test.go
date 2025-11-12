@@ -1,3 +1,6 @@
+//go:build integration
+// +build integration
+
 package e5s_test
 
 import (

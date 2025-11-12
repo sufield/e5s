@@ -1,6 +1,9 @@
 # golangci-lint configuration for SPIRE mTLS library
 # Security-focused linter configuration following docs/security2.md
 
+# Configuration version (required for golangci-lint v2+)
+version: 2
+
 run:
   timeout: 5m
   tests: true
