@@ -481,7 +481,25 @@ for i := 0; i < 1000; i++ {
 
 If you're still stuck:
 
-1. **Enable debug logging** (if available in future versions)
+1. **Enable debug logging**:
+
+   Set the `E5S_DEBUG` environment variable to see detailed configuration:
+   ```bash
+   export E5S_DEBUG=1
+   # or: export E5S_DEBUG=true
+   # or: export E5S_DEBUG=debug
+
+   # Then run your application
+   kubectl set env deployment/your-app E5S_DEBUG=1
+   kubectl rollout restart deployment/your-app
+   ```
+
+   Debug output includes:
+   - Configuration file path
+   - Listen addresses
+   - SPIFFE ID validation settings
+   - Trust domain configuration
+
 2. **Check SPIRE logs**:
 
    SPIRE Server logs:
