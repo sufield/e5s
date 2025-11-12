@@ -97,11 +97,13 @@ func SetupSPIREContainers(t *testing.T) (*SPIREContainers, func()) {
 	trustDomain := "example.org"
 
 	// Create Docker network for SPIRE components
+	//nolint:staticcheck // TODO: migrate to newer testcontainers network API
 	networkReq := testcontainers.NetworkRequest{
 		Name:           fmt.Sprintf("spire-test-%d", time.Now().UnixNano()),
 		CheckDuplicate: true,
 	}
 
+	//nolint:staticcheck // TODO: migrate to newer testcontainers network API
 	network, err := testcontainers.GenericNetwork(ctx, testcontainers.GenericNetworkRequest{
 		NetworkRequest: networkReq,
 	})
@@ -205,7 +207,7 @@ plugins {
 			{
 				HostFilePath:      "", // Will use Reader instead
 				ContainerFilePath: "/opt/spire/conf/server/server.conf",
-				FileMode:          0600,
+				FileMode:          0o600,
 				Reader:            nil, // Set below
 			},
 		},
@@ -326,10 +328,11 @@ plugins {
 			{
 				HostFilePath:      "",
 				ContainerFilePath: "/opt/spire/conf/agent/agent.conf",
-				FileMode:          0600,
+				FileMode:          0o600,
 				Reader:            bytes.NewReader([]byte(agentConfig)),
 			},
 		},
+		//nolint:staticcheck // TODO: migrate to newer testcontainers mount API
 		Mounts: testcontainers.Mounts(
 			testcontainers.BindMount(socketDir, "/tmp/spire-agent/public"),
 		),
@@ -363,7 +366,7 @@ func (sc *SPIREContainers) waitForSocket(ctx context.Context) {
 	for time.Now().Before(deadline) {
 		select {
 		case <-ctx.Done():
-			sc.t.Fatal("Context cancelled while waiting for socket")
+			sc.t.Fatal("Context canceled while waiting for socket")
 		case <-ticker.C:
 			// Check if socket file exists on host
 			if _, err := os.Stat(sc.SocketPath); err == nil {

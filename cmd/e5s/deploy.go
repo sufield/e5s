@@ -453,7 +453,7 @@ func addHelmRepo(settings *cli.EnvSettings, name, url string) error {
 	repoDir := filepath.Dir(repoFile)
 
 	// Create repo directory if it doesn't exist
-	if err := os.MkdirAll(repoDir, 0755); err != nil {
+	if err := os.MkdirAll(repoDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create repository directory: %w", err)
 	}
 
@@ -486,7 +486,7 @@ func addHelmRepo(settings *cli.EnvSettings, name, url string) error {
 	repoFileData.Update(entry)
 
 	// Save repo file
-	if err := repoFileData.WriteFile(repoFile, 0644); err != nil {
+	if err := repoFileData.WriteFile(repoFile, 0o644); err != nil {
 		return fmt.Errorf("failed to write repository file: %w", err)
 	}
 
@@ -852,7 +852,7 @@ func runMTLSTest(namespace, trustDomain string) error {
 	testPodName := "e5s-test-client"
 
 	fmt.Println("   Creating test client pod...")
-	pod := createTestClientPod(testPodName, namespace, trustDomain)
+	pod := createTestClientPod(testPodName, namespace)
 
 	// Delete existing test pod if it exists
 	_ = clientset.CoreV1().Pods(namespace).Delete(ctx, testPodName, metav1.DeleteOptions{})
@@ -895,7 +895,7 @@ func runMTLSTest(namespace, trustDomain string) error {
 }
 
 // createTestClientPod creates a pod spec for testing mTLS
-func createTestClientPod(name, namespace, trustDomain string) *corev1.Pod {
+func createTestClientPod(name, namespace string) *corev1.Pod {
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -909,8 +909,8 @@ func createTestClientPod(name, namespace, trustDomain string) *corev1.Pod {
 			RestartPolicy: corev1.RestartPolicyNever,
 			Containers: []corev1.Container{
 				{
-					Name:  "client",
-					Image: "e5s-client:dev",
+					Name:            "client",
+					Image:           "e5s-client:dev",
 					ImagePullPolicy: corev1.PullNever,
 					Env: []corev1.EnvVar{
 						{
