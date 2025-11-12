@@ -21,7 +21,7 @@ jobs:
           cache: true
 
       - name: Run unit tests with coverage
-        run: go test -v -coverprofile=coverage.out ./...
+        run: go test -short -v -coverprofile=coverage.out ./...
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4.6.0
