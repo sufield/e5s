@@ -98,7 +98,7 @@ func (r *CommandRegistry) PrintHelp(w io.Writer) {
 	fmt.Fprintln(w, "COMMANDS:")
 
 	// Print commands in a consistent order
-	order := []string{"version", "spiffe-id", "discover", "validate", "help"}
+	order := []string{"version", "spiffe-id", "discover", "validate", "client", "deploy", "help"}
 	for _, name := range order {
 		if cmd, ok := r.commands[name]; ok {
 			fmt.Fprintf(w, "    %-12s %s\n", cmd.Name, cmd.Description)

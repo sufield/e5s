@@ -86,6 +86,21 @@ func registerCommands(r *CommandRegistry) {
 		Run: clientCommand,
 	})
 
+	// Register deploy command
+	r.Register(&Command{
+		Name:        "deploy",
+		Description: "Deploy and manage e5s test environments",
+		Usage:       "e5s deploy <subcommand> [arguments] [flags]",
+		Examples: []string{
+			"e5s deploy cluster create --name e5s-test --wait 60s",
+			"e5s deploy spire install --trust-domain demo.e5s.io",
+			"e5s deploy app install --chart-path chart/e5s-demo",
+			"e5s deploy test run",
+			"e5s deploy test verify",
+		},
+		Run: deployCommand,
+	})
+
 	// Register version command
 	r.Register(&Command{
 		Name:        "version",
