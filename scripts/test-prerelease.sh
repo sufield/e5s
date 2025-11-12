@@ -7,7 +7,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 TEST_DIR="$PROJECT_ROOT/test-demo"
-CHART_DIR="$TEST_DIR/charts/e5s-test"
+CHART_DIR="$PROJECT_ROOT/chart/e5s-demo"
 
 echo "=== e5s Pre-Release Testing Setup (Helm-based) ==="
 echo ""
@@ -76,7 +76,7 @@ func main() {
 		fmt.Fprintf(w, "Hello, %s!\n", id)
 	})
 
-	shutdown, err := e5s.Start("e5s-server.yaml", r)
+	shutdown, err := e5s.Start("/app/e5s.yaml", r)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -114,7 +114,7 @@ func main() {
 		serverURL = "https://localhost:8443/hello"
 	}
 
-	err := e5s.WithClient("e5s-client.yaml", func(client *http.Client) error {
+	err := e5s.WithClient("/app/e5s.yaml", func(client *http.Client) error {
 		resp, err := client.Get(serverURL)
 		if err != nil {
 			return err
@@ -176,18 +176,30 @@ echo "   ✓ Template rendering successful"
 # Step 8: Deploy using Helm (server only, no jobs)
 echo "8. Deploying server to Kubernetes using Helm..."
 helm upgrade --install e5s-test "$CHART_DIR" \
+    --set server.image.repository=e5s-server \
+    --set server.image.tag=dev \
+    --set server.image.pullPolicy=Never \
     --set client.enabled=false \
-    --set unregisteredClient.enabled=false \
     --wait \
     --timeout 90s
 
 echo "   Waiting for server pod to be ready..."
-kubectl wait --for=condition=ready pod -l app=e5s-server -n default --timeout=90s
+kubectl wait --for=condition=ready pod -l app.kubernetes.io/component=server -n default --timeout=90s
 echo "   ✓ Server is ready"
 
 # Step 9: Test with authenticated client (using kubectl, not Helm)
 echo ""
 echo "9. Testing with authenticated client..."
+
+# Create client config if it doesn't exist
+kubectl get configmap e5s-client-config >/dev/null 2>&1 || \
+kubectl create configmap e5s-client-config --from-literal=e5s.yaml='
+version: 1
+spire:
+  workload_socket: unix:///spire/agent-socket/spire-agent.sock
+client:
+  expected_server_trust_domain: example.org
+'
 
 # Clean up any previous test jobs
 kubectl delete job e5s-client 2>/dev/null || true
@@ -214,15 +226,15 @@ spec:
         imagePullPolicy: Never
         env:
         - name: SERVER_URL
-          value: "https://e5s-server:8443/hello"
+          value: "https://e5s-test-e5s-demo-server:8443/hello"
         command: ["/app/client"]
         volumeMounts:
         - name: spire-agent-socket
           mountPath: /spire/agent-socket
           readOnly: true
         - name: config
-          mountPath: /app/e5s-client.yaml
-          subPath: e5s-client.yaml
+          mountPath: /app/e5s.yaml
+          subPath: e5s.yaml
       volumes:
       - name: spire-agent-socket
         csi:
@@ -243,7 +255,7 @@ echo ""
 echo "✓ Authenticated Client (registered with SPIRE):"
 echo "---"
 echo "Server logs (last 10 lines):"
-kubectl logs -l app=e5s-server --tail=10
+kubectl logs -l app.kubernetes.io/component=server --tail=10
 echo ""
 echo "Client logs:"
 kubectl logs -l app=e5s-client --tail=20
@@ -275,12 +287,12 @@ spec:
         imagePullPolicy: Never
         env:
         - name: SERVER_URL
-          value: "https://e5s-server:8443/hello"
+          value: "https://e5s-test-e5s-demo-server:8443/hello"
         command: ["/app/client"]
         volumeMounts:
         - name: config
-          mountPath: /app/e5s-client.yaml
-          subPath: e5s-client.yaml
+          mountPath: /app/e5s.yaml
+          subPath: e5s.yaml
         # NOTE: NO SPIRE socket mounted!
       volumes:
       - name: config
@@ -296,7 +308,7 @@ echo ""
 echo "❌ Unregistered Client (NO SPIRE identity):"
 echo "---"
 echo "Server logs (should show no new unauthorized requests):"
-kubectl logs -l app=e5s-server --tail=5
+kubectl logs -l app.kubernetes.io/component=server --tail=5
 echo ""
 echo "Unregistered client logs (should fail to get identity):"
 kubectl logs -l app=e5s-unregistered-client --tail=20 2>/dev/null || echo "   (Pod failed before producing logs - expected)"
@@ -322,7 +334,7 @@ echo "To iterate on code changes:"
 echo "  ./scripts/rebuild-and-test.sh"
 echo ""
 echo "To view server logs:"
-echo "  kubectl logs -l app=e5s-server -f"
+echo "  kubectl logs -l app.kubernetes.io/component=server -f"
 echo ""
 echo "To clean up:"
 echo "  ./scripts/cleanup-prerelease.sh"
