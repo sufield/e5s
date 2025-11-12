@@ -752,6 +752,8 @@ func deployTestRun(args []string) error {
 		return err
 	}
 
+	_ = trustDomain // Reserved for future use
+
 	fmt.Println("🧪 Running e5s integration tests...")
 	fmt.Println("")
 
@@ -777,7 +779,7 @@ func deployTestRun(args []string) error {
 
 	// Step 2: Run mTLS verification
 	fmt.Println("2. Running mTLS verification test...")
-	if err := runMTLSTest(*namespace, *trustDomain); err != nil {
+	if err := runMTLSTest(*namespace); err != nil {
 		fmt.Println("   ❌ mTLS verification failed")
 		return err
 	}
@@ -810,10 +812,12 @@ func deployTestVerify(args []string) error {
 		return err
 	}
 
+	_ = trustDomain // Reserved for future use
+
 	fmt.Println("🔍 Verifying mTLS communication...")
 	fmt.Println("")
 
-	if err := runMTLSTest(*namespace, *trustDomain); err != nil {
+	if err := runMTLSTest(*namespace); err != nil {
 		fmt.Println("❌ mTLS verification failed")
 		return err
 	}
@@ -834,7 +838,7 @@ func deployTestVerify(args []string) error {
 }
 
 // runMTLSTest creates a test client pod and verifies mTLS communication
-func runMTLSTest(namespace, trustDomain string) error {
+func runMTLSTest(namespace string) error {
 	// Create Kubernetes clientset
 	config, err := getKubeConfig()
 	if err != nil {
