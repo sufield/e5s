@@ -6,6 +6,8 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
@@ -120,7 +122,16 @@ func run(appConfigPath, e5sConfigPath, urlFlagValue string) int {
 // loadAppConfig loads the application-specific configuration.
 // This demonstrates the real-world pattern: applications manage their own config files.
 func loadAppConfig(path string) (*AppConfig, error) {
-	data, err := os.ReadFile(path)
+	// Validate path to prevent directory traversal attacks
+	cleanPath := filepath.Clean(path)
+	if filepath.IsAbs(cleanPath) {
+		return nil, fmt.Errorf("absolute paths not allowed")
+	}
+	if strings.Contains(cleanPath, "..") {
+		return nil, fmt.Errorf("path traversal not allowed")
+	}
+
+	data, err := os.ReadFile(cleanPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}

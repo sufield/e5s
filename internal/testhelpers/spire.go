@@ -170,7 +170,7 @@ func (st *SPIRETest) startServer() {
 	st.t.Helper()
 
 	serverDir := filepath.Join(st.TempDir, "server")
-	if err := os.MkdirAll(serverDir, 0o755); err != nil {
+	if err := os.MkdirAll(serverDir, 0o750); err != nil {
 		st.t.Fatalf("Failed to create server dir: %v", err)
 	}
 
@@ -257,7 +257,7 @@ func (st *SPIRETest) startAgent() {
 	st.t.Helper()
 
 	agentDir := filepath.Join(st.TempDir, "agent")
-	if err := os.MkdirAll(agentDir, 0o755); err != nil {
+	if err := os.MkdirAll(agentDir, 0o750); err != nil {
 		st.t.Fatalf("Failed to create agent dir: %v", err)
 	}
 

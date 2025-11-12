@@ -453,7 +453,7 @@ func addHelmRepo(settings *cli.EnvSettings, name, url string) error {
 	repoDir := filepath.Dir(repoFile)
 
 	// Create repo directory if it doesn't exist
-	if err := os.MkdirAll(repoDir, 0o755); err != nil {
+	if err := os.MkdirAll(repoDir, 0o750); err != nil {
 		return fmt.Errorf("failed to create repository directory: %w", err)
 	}
 
