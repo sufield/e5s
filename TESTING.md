@@ -17,6 +17,21 @@ This document describes the testing strategy for the e5s library.
         └──────────────────┘
 ```
 
+## Test Categories and Build Tags
+
+Tests are organized using Go build tags to control which tests run:
+
+| Category | Build Tag | Files | Speed | Requirements |
+|----------|-----------|-------|-------|--------------|
+| **Unit Tests** | _(none)_ | `e5s_test.go`, `example_test.go` | Fast (< 1s) | None |
+| **Integration Tests** | `integration` | `integration_test.go`, `e5s_server_startup_test.go`, `e5s_serve_test.go` | Moderate (seconds) | SPIRE agent running or auto-started |
+| **Container Tests** | `container` | `e5s_container_test.go` | Slow (minutes) | Docker daemon |
+
+**Default behavior** (`go test ./...`):
+- ✅ Runs unit tests only
+- ❌ Skips integration tests (requires `-tags=integration`)
+- ❌ Skips container tests (requires `-tags=container`)
+
 ## Unit Tests
 
 **Purpose:** Test individual functions and components in isolation.
@@ -199,35 +214,73 @@ e5s deploy cluster delete --name e5s-test
 
 ## Running Tests
 
-### Quick Tests (Unit Only)
+### Unit Tests Only (Default, Fast)
 
 ```bash
-# Run all unit tests (skip integration)
-go test -short ./...
+# Run only unit tests (no build tags needed)
+go test ./...
 
 # With coverage
-go test -short -coverprofile=coverage.out ./...
+go test -coverprofile=coverage.out ./...
 go tool cover -html=coverage.out
-```
-
-### Full Tests (Unit + Integration)
-
-```bash
-# Run all tests including containers
-go test -v ./...
-
-# Run specific integration test
-go test -v -run TestE5SWithContainers
 
 # With race detector
 go test -race ./...
 ```
 
+**Expected time:** < 1 second
+**Requirements:** None
+
+### Integration Tests (Moderate Speed)
+
+```bash
+# Run unit tests + integration tests
+go test -tags=integration ./...
+
+# Run specific integration test
+go test -tags=integration -v -run TestE2E_Start_Client_PeerID
+
+# With race detector
+go test -tags=integration -race ./...
+```
+
+**Expected time:** 5-30 seconds
+**Requirements:** SPIRE agent (auto-started by testhelpers if not present)
+
+### Container Tests (Slow)
+
+```bash
+# Run only container tests
+go test -tags=container -v ./...
+
+# Run specific container test
+go test -tags=container -v -run TestServe_EndToEnd_withSPIRE
+```
+
+**Expected time:** 2-5 minutes
+**Requirements:** Docker daemon running
+
+### All Tests (Complete)
+
+```bash
+# Run all tests (unit + integration + container)
+go test -tags=integration,container -v ./...
+
+# With coverage
+go test -tags=integration,container -coverprofile=coverage.out ./...
+```
+
+**Expected time:** 2-5 minutes
+**Requirements:** Docker daemon running
+
 ### CI/CD Tests
 
 ```bash
-# Run in CI environment
+# Fast feedback (unit tests only)
 go test -v -race -coverprofile=coverage.out ./...
+
+# Full validation (all tests)
+go test -tags=integration,container -v -race -coverprofile=coverage.out ./...
 
 # Upload coverage
 go tool cover -func=coverage.out
@@ -238,6 +291,13 @@ go tool cover -func=coverage.out
 ### Unit Test Template
 
 ```go
+// File: myfeature_test.go
+// No build tag needed for unit tests
+
+package e5s_test
+
+import "testing"
+
 func TestMyFeature(t *testing.T) {
     // Setup
     input := setupTestInput()
@@ -259,20 +319,56 @@ func TestMyFeature(t *testing.T) {
 ### Integration Test Template
 
 ```go
-func TestMyFeatureWithSPIRE(t *testing.T) {
-    if testing.Short() {
-        t.Skip("Skipping integration test in short mode")
-    }
+//go:build integration
+// +build integration
 
-    // Setup SPIRE
-    spire, cleanup := testhelpers.SetupSPIREContainers(t)
-    defer cleanup()
+package e5s_test
+
+import (
+    "context"
+    "testing"
+    "time"
+    "github.com/sufield/e5s/internal/testhelpers"
+)
+
+func TestMyFeatureWithSPIRE(t *testing.T) {
+    // Setup SPIRE (auto-started if not present)
+    st := testhelpers.SetupSPIRE(t)
 
     // Create context with timeout
     ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
     defer cancel()
 
     // Test with real SPIRE
+    // ...
+}
+```
+
+### Container Test Template
+
+```go
+//go:build container
+// +build container
+
+package e5s_test
+
+import (
+    "context"
+    "testing"
+    tc "github.com/testcontainers/testcontainers-go"
+)
+
+func TestMyFeatureWithContainers(t *testing.T) {
+    if testing.Short() {
+        t.Skip("Skipping container test in short mode")
+    }
+
+    ctx := context.Background()
+
+    // Create network, volumes, containers
+    // ...
+
+    // Test end-to-end with real containers
     // ...
 }
 ```
@@ -367,7 +463,8 @@ wait.ForLog("...").WithStartupTimeout(120 * time.Second)
 
 ### DO
 
-✅ Use `testing.Short()` to skip slow tests
+✅ **Use build tags** for slow/heavy tests (`//go:build integration` or `//go:build container`)
+✅ **Keep unit tests fast** (< 1s) so developers run them frequently
 ✅ Use `t.Cleanup()` for guaranteed cleanup
 ✅ Use `context.WithTimeout()` for explicit timeouts
 ✅ Use table-driven tests for multiple cases
@@ -376,11 +473,21 @@ wait.ForLog("...").WithStartupTimeout(120 * time.Second)
 
 ### DON'T
 
+❌ Don't put slow tests in files without build tags (slows down default `go test ./...`)
+❌ Don't use `testing.Short()` alone - prefer build tags for heavy tests
 ❌ Don't use `time.Sleep()` for synchronization (use wait strategies)
 ❌ Don't leave containers running after tests
 ❌ Don't test implementation details
 ❌ Don't write flaky tests (use deterministic inputs)
 ❌ Don't ignore errors in tests
+
+### When to Use Each Test Type
+
+| Test Type | Use When | Don't Use When |
+|-----------|----------|----------------|
+| **Unit** | Testing logic, validation, parsing | Need real network/crypto/SPIRE |
+| **Integration** | Testing with real SPIRE agent | Can mock effectively |
+| **Container** | Testing full deployment, multi-container setup | Integration tests are sufficient |
 
 ## References
 

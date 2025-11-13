@@ -187,8 +187,8 @@ See [SECURITY.md](.github/SECURITY.md) for more information.
 
 All example code lives in the repository and is **compiled in CI** to ensure it stays valid:
 
-- **cmd/example-server/** - High-level API server example
-- **cmd/example-client/** - High-level API client example
+- **examples/basic-server/** - High-level API server example
+- **examples/basic-client/** - High-level API client example
 - **examples/middleware/** - Custom middleware patterns example
 
 ### Keeping Examples and Docs in Sync
@@ -201,13 +201,13 @@ Example code is the source of truth. Update the actual working examples:
 
 ```bash
 # Edit the example file
-vim cmd/example-server/main.go
+vim examples/basic-server/main.go
 
 # Verify it compiles
 make build-examples
 
 # Verify it still works (if possible)
-go run ./cmd/example-server
+go run ./examples/basic-server
 ```
 
 #### 2. Use Example Markers
@@ -223,17 +223,16 @@ func ImportantFeature() {
 ```
 
 **Existing markers:**
-- `cmd/example-server/main.go`:
-  - `server-setup` - Basic server configuration (lines 38-45)
-  - `authenticated-endpoint` - Handler with peer identity extraction (lines 55-75)
-  - `server-start` - Starting the server with e5s.Start() (lines 77-82)
+- `examples/basic-server/main.go`:
+  - `server-setup` - Basic server configuration
+  - `authenticated-endpoint` - Handler with peer identity extraction
+  - `server-start` - Starting the server with e5s.Start()
 
-- `cmd/example-client/main.go`:
-  - `client-config` - Client configuration setup (lines 70-73)
-  - `client-request` - Making an mTLS request (lines 75-88)
+- `examples/basic-client/main.go`:
+  - `client-request` - Making an mTLS request
 
 - `examples/middleware/main.go`:
-  - `auth-middleware` - Authentication middleware pattern (lines 31-45)
+  - `auth-middleware` - Authentication middleware pattern
 
 #### 3. Reference Examples in Documentation
 
@@ -242,11 +241,11 @@ Instead of copying code into docs, **reference the actual example files**:
 ```markdown
 ## Example Server
 
-See [cmd/example-server/main.go](cmd/example-server/main.go) for a complete working example.
+See [examples/basic-server/main.go](examples/basic-server/main.go) for a complete working example.
 
 The key sections are marked with `example-start`/`example-end` comments:
-- Server setup: lines 38-45 (marker: `server-setup`)
-- Authenticated endpoint: lines 55-75 (marker: `authenticated-endpoint`)
+- Server setup (marker: `server-setup`)
+- Authenticated endpoint (marker: `authenticated-endpoint`)
 ```
 
 **Benefits of this approach:**
@@ -336,11 +335,11 @@ func Example_authorization()     // Package-level example demonstrating authoriz
 - **Location**: `*_test.go` files
 - **Tested**: Compiled by `go test` (run if they have `// Output:` comments)
 
-**Example Programs** (`cmd/example-*`, `examples/*`):
+**Example Programs** (`examples/*`):
 - **Purpose**: Complete, runnable applications
 - **Audience**: Developers building similar systems
 - **Scope**: Full workflows and integration patterns
-- **Location**: Separate `main` packages
+- **Location**: Separate `main` packages in `examples/` directory
 - **Tested**: Built by CI (`make build-examples`)
 
 **Use both**: Godoc examples for API docs, example programs for real-world patterns.

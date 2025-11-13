@@ -120,10 +120,10 @@ Try to trigger the same issue
 Debug mode + race detector
 
 ```bash
-E5S_DEBUG_SINGLE_THREAD=1 go run -race ./cmd/example-server
+E5S_DEBUG_SINGLE_THREAD=1 go run -race ./examples/basic-server
 
 # Or normal mode + race detector
-go run -race ./cmd/example-server
+go run -race ./examples/basic-server
 ```
 
 The race detector will report data races with stack traces.
@@ -132,7 +132,7 @@ The race detector will report data races with stack traces.
 
 ```bash
 # Debug mode + single CPU + race detector
-GOMAXPROCS=1 E5S_DEBUG_SINGLE_THREAD=1 go run -race ./cmd/example-server
+GOMAXPROCS=1 E5S_DEBUG_SINGLE_THREAD=1 go run -race ./examples/basic-server
 ```
 
 This maximizes reproducibility of race conditions.
@@ -172,7 +172,7 @@ spire:
 3. Test workload API directly:
    ```bash
    SPIFFE_ENDPOINT_SOCKET=unix:///tmp/spire-agent/public/api.sock \
-     go run ./cmd/example-server
+     go run ./examples/basic-server
    ```
 
 ### Issue: "tls: failed to verify certificate"
@@ -357,7 +357,7 @@ If you're still stuck:
 2. **Try debug mode** - Eliminate concurrency as a factor
 3. **Use race detector** - Find data races automatically
 4. **Simplify** - Remove complexity until it works, then add back
-5. **Compare with examples** - Check cmd/example-server for working code
+5. **Compare with examples** - Check examples/basic-server for working code
 
 For bugs or feature requests:
 - GitHub Issues: https://github.com/sufield/e5s/issues

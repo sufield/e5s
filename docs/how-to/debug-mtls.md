@@ -344,8 +344,8 @@ A user reports:
 ```bash
 # Use minimal e5s example
 cd examples/highlevel
-go build -o /tmp/e5s-server ./cmd/example-server
-go build -o /tmp/e5s-client ./cmd/example-client
+go build -o /tmp/e5s-server ./examples/basic-server
+go build -o /tmp/e5s-client ./examples/basic-client
 
 # Run against user's SPIRE
 export SPIRE_SOCKET=/path/to/their/spire/agent.sock

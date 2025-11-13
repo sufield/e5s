@@ -1378,7 +1378,7 @@ If you can't use make, run these steps manually:
 
 ```bash
 # 1. Rebuild server binary
-CGO_ENABLED=0 go build -o bin/example-server ./cmd/example-server
+CGO_ENABLED=0 go build -o bin/example-server ./examples/basic-server
 
 # 2. Point to Minikube's Docker daemon
 eval $(minikube docker-env)

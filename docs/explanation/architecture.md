@@ -9,8 +9,8 @@ e5s is organized in **5 layers**, from low-level primitives to high-level conven
 ```
 ┌─────────────────────────────────────────────────────────┐
 │  Layer 4: cmd/ + examples/                              │
-│  ├─ cmd/example-server, cmd/example-client              │
 │  ├─ cmd/e5s (CLI tool)                                  │
+│  ├─ examples/* (example programs)                       │
 │  └─ Executable programs built on e5s API                │
 └────────────────┬────────────────────────────────────────┘
                  │

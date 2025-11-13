@@ -465,7 +465,7 @@ make tidy                  # Tidy go modules
 make verify                # Verify go modules
 
 # Building
-make build                 # Build cmd/example-server and cmd/example-client
+make build                 # Build examples/basic-server and examples/basic-client
 make examples              # Build all examples (4 binaries)
 make example-highlevel-server   # Application developer example
 make example-highlevel-client
