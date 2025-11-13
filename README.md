@@ -3,7 +3,11 @@
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/11425/badge)](https://www.bestpractices.dev/projects/11425)
 [![Go Report Card](https://goreportcard.com/badge/github.com/sufield/e5s)](https://goreportcard.com/report/github.com/sufield/e5s)
 
-A Go library for building mutual TLS services with SPIFFE identity verification and automatic certificate rotation based on go-spiffe SDK.
+A Go library for building applications that use identity-based authentication instead of API keys.
+
+Build mutual TLS services with SPIFFE identity verification and automatic certificate rotation with almost no boilerplate code. Built on the battle-tested go-spiffe SDK.
+
+Eliminate API keys and plaintext secrets from your services, dramatically reducing the attack surface that comes with leaked credentials, secret sprawl, and rotation headaches.
 
 # The Problem
 
@@ -11,7 +15,7 @@ A Go library for building mutual TLS services with SPIFFE identity verification 
 
 Every service call required a shared secret.
 
-**Weather Service (server)**
+**Weather Server**
 
 ```go
 func (s *WeatherService) GetForecast(w http.ResponseWriter, r *http.Request) {
@@ -58,7 +62,7 @@ func main() {
 Each service has its own **cryptographic identity** (SPIFFE ID).
 No API keys, no secrets, no manual rotation.
 
-**Weather Service (server)**
+**Weather Server**
 
 ```go
 func forecastHandler(w http.ResponseWriter, r *http.Request) {

@@ -111,7 +111,7 @@ func TestE5SWithContainers(t *testing.T) {
 ```
 
 **Characteristics:**
-- 🐢 Moderate speed (seconds to start containers)
+- Moderate speed (seconds to start containers)
 - Requires Docker daemon
 - Tests real SPIRE behavior
 - Automatic cleanup via `t.Cleanup()`
@@ -160,7 +160,7 @@ e5s deploy cluster delete --name e5s-test
 ```
 
 **Characteristics:**
-- 🐢 Slow (minutes for full workflow)
+- Slow (minutes for full workflow)
 - Requires Kubernetes cluster (Kind, Minikube, etc.)
 - Production-like environment
 - Good for demos and documentation

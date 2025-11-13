@@ -222,7 +222,7 @@ To verify layer compliance:
 Check that spire doesn't import e5s or spiffehttp
 
 ```bash
-go list -f '{{.ImportPath}}: {{.Imports}}' ./spire | grep -E 'e5s|spiffehttp'
+go list -f '{{range .Imports}}{{println .}}{{end}}' ./spire | grep -E 'e5s|spiffehttp'
 ```
 
 Should return nothing
@@ -238,10 +238,14 @@ Should return nothing
 Check that e5s imports both spire and spiffehttp
 
 ```bash
-go list -f '{{.ImportPath}}: {{.Imports}}' . | grep -E 'spire|spiffehttp'
+go list -f '{{range .Imports}}{{println .}}{{end}}' . | grep -E 'spire|spiffehttp'
 ```
 
-Should show: github.com/sufield/e5s/spire github.com/sufield/e5s/spiffehttp
+Should show:
+```
+github.com/sufield/e5s/spiffehttp
+github.com/sufield/e5s/spire
+```
 
 ## Evolution
 
