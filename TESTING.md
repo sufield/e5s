@@ -62,9 +62,9 @@ func TestConfigValidation(t *testing.T) {
 - High coverage of edge cases
 - Uses mocks/fakes for external systems
 
-## Integration Tests (Testcontainers)
+## Integration Tests
 
-**Purpose:** Test real mTLS communication with actual SPIRE infrastructure.
+**Purpose:** Test real mTLS communication with actual SPIRE infrastructure using Testcontainers.
 
 **Location:** `e5s_container_test.go`, other `*_integration_test.go` files
 

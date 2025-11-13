@@ -394,7 +394,7 @@ import (
 | Hardcoded values | None | Ports, IDs, domains in code |
 
 **Complete examples:**
-- **Low-level API reference:** [docs/reference/low-level-api.md](docs/reference/low-level-api.md)
+- **API reference:** [docs/reference/api.md](docs/reference/api.md)
 - **Working code:** [examples/middleware/](examples/middleware/)
 - **Infrastructure setup:** [examples/minikube-lowlevel/](examples/minikube-lowlevel/)
 

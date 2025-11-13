@@ -607,7 +607,7 @@ You can even use both in the same application:
 ## Further Reading
 
 - [e5s API Reference](../reference/api.md)
-- [e5s Quickstart](../reference/low-level-api.md)
+- [e5s Quickstart](../reference/api.md)
 - [Custom Middleware Examples](../examples/middleware/)
 
 ## Questions?

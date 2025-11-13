@@ -81,4 +81,4 @@ func main() {
 
 - [examples/highlevel/](../../examples/highlevel/) - High-level API examples
 - [examples/middleware/](../../examples/middleware/) - Low-level API examples
-- [reference/low-level-api.md](../reference/low-level-api.md) - Low-level API reference
+- [reference/api.md](../reference/api.md) - Low-level API reference

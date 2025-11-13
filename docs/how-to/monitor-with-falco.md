@@ -1,6 +1,6 @@
 ## Library Security Implementation
 
-The mTLS security enforcement is implemented in **[`pkg/spiffehttp`](../pkg/spiffehttp/)** with SPIFFE identity verification, TLS 1.3 enforcement, and peer authentication. See the [library quickstart](../reference/low-level-api.md) for usage examples.
+The mTLS security enforcement is implemented in **[`pkg/spiffehttp`](../pkg/spiffehttp/)** with SPIFFE identity verification, TLS 1.3 enforcement, and peer authentication. See the [library quickstart](../reference/api.md) for usage examples.
 
 ## Contents
 
