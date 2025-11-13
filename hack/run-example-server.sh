@@ -6,7 +6,7 @@
 #   ./scripts/run-example-server.sh --debug      # Debug mode (single-threaded)
 #
 # This script only orchestrates: sets environment, paths, and runs the Go binary.
-# All server logic lives in cmd/example-server.
+# All server logic lives in examples/basic-server.
 
 set -euo pipefail
 
@@ -42,4 +42,4 @@ if [[ "$MODE" == "debug" ]]; then
 fi
 
 # Run server (go run compiles and executes)
-exec go run ./cmd/example-server -config "$CONFIG"
+exec go run ./examples/basic-server -config "$CONFIG"

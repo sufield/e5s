@@ -18,8 +18,8 @@ SHELL := /bin/bash
 GO          ?= go
 BINDIR      ?= bin
 PKG_CLI     := ./cmd/e5s
-PKG_SERVER  := ./cmd/example-server
-PKG_CLIENT  := ./cmd/example-client
+PKG_SERVER  := ./examples/basic-server
+PKG_CLIENT  := ./examples/basic-client
 PKG_MW_EX   := ./examples/middleware
 
 # Test configuration
@@ -41,7 +41,7 @@ TOOLS_SEC      := govulncheck gosec gitleaks golangci-lint
 #   make release-check   - Run all pre-release checks (CI + security + build)
 #   make lint            - Quick lint check (what CI runs)
 #   make test            - Run tests quickly
-#   make build           - Build example binaries (cmd/example-server, cmd/example-client)
+#   make build           - Build example binaries (examples/basic-server, examples/basic-client)
 #   make build-cli       - Build e5s CLI tool
 #   make build-examples  - Build all example code (ensures examples compile)
 #   make fmt             - Format code

@@ -5,7 +5,7 @@
 #   ./scripts/run-example-client.sh [SERVER_URL]
 #
 # This script only orchestrates: sets environment, paths, and runs the Go binary.
-# All client logic lives in cmd/example-client.
+# All client logic lives in examples/basic-client.
 
 set -euo pipefail
 
@@ -30,6 +30,6 @@ echo ""
 export SERVER_URL
 
 # Run client (go run compiles and executes)
-exec go run ./cmd/example-client \
+exec go run ./examples/basic-client \
     -app-config "$APP_CONFIG" \
     -e5s-config "$E5S_CONFIG"

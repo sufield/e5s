@@ -12,7 +12,7 @@ before:
 builds:
   # Example server binary (for Docker and local use)
   - id: example-server
-    main: ./cmd/example-server
+    main: ./examples/basic-server
     binary: e5s-example-server
     env:
       - CGO_ENABLED=0
@@ -32,7 +32,7 @@ builds:
 
   # Example client binary (for Docker and local use)
   - id: example-client
-    main: ./cmd/example-client
+    main: ./examples/basic-client
     binary: e5s-example-client
     env:
       - CGO_ENABLED=0
