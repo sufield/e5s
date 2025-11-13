@@ -1,0 +1,299 @@
+# Link Checking Workflow
+#
+# Strategy:
+# - On PR: Check links, report but DON'T fail (external links can break anytime)
+# - On main: Check links, create issue if broken
+# - On schedule: Weekly check, create issue if broken
+#
+# This prevents:
+# - Blocking PRs due to external link failures
+# - Accumulating broken links over time
+# - Missing internal link breakages
+
+name: Check Links
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '**.md'
+      - '.github/workflows/links.yml'
+  push:
+    branches: [main]
+    paths:
+      - '**.md'
+  schedule:
+    # Run every Monday at 9 AM UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch:  # Allow manual runs
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check-links:
+    name: Check Markdown Links
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check links with lychee
+        id: lychee
+        uses: lycheeverse/lychee-action@v2
+        with:
+          # Check all markdown files
+          args: |
+            --verbose
+            --no-progress
+            --exclude-loopback
+            --max-concurrency 128
+            --timeout 20
+            --accept 200,204,301,302,307,308,429
+            --exclude 'https://github.com/sufield/e5s/discussions'
+            --exclude 'https://keybase.io/sufield'
+            '**/*.md'
+          # Generate JSON output for parsing
+          format: json
+          output: lychee-report.json
+          # Don't fail the build on broken links (we'll handle it below)
+          fail: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Parse lychee results
+        id: parse
+        if: always()
+        run: |
+          # Check if report exists
+          if [ ! -f lychee-report.json ]; then
+            echo "No report generated"
+            echo "has_errors=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Parse JSON results
+          total=$(jq '.total' lychee-report.json)
+          successful=$(jq '.successful' lychee-report.json)
+          failures=$(jq '.failures' lychee-report.json)
+          timeouts=$(jq '.timeouts' lychee-report.json)
+          excludes=$(jq '.excludes' lychee-report.json)
+
+          echo "total=$total" >> $GITHUB_OUTPUT
+          echo "successful=$successful" >> $GITHUB_OUTPUT
+          echo "failures=$failures" >> $GITHUB_OUTPUT
+          echo "timeouts=$timeouts" >> $GITHUB_OUTPUT
+          echo "excludes=$excludes" >> $GITHUB_OUTPUT
+
+          # Check if there are any failures
+          if [ "$failures" -gt 0 ] || [ "$timeouts" -gt 0 ]; then
+            echo "has_errors=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_errors=false" >> $GITHUB_OUTPUT
+          fi
+
+          # Generate categorized error lists
+          echo "## Broken Links Report" > errors.md
+          echo "" >> errors.md
+          echo "**Summary:**" >> errors.md
+          echo "- 🔍 Total: $total" >> errors.md
+          echo "- ✅ Successful: $successful" >> errors.md
+          echo "- 🚫 Failures: $failures" >> errors.md
+          echo "- ⏳ Timeouts: $timeouts" >> errors.md
+          echo "- 👻 Excluded: $excludes" >> errors.md
+          echo "" >> errors.md
+
+          # Categorize errors
+          if [ "$failures" -gt 0 ] || [ "$timeouts" -gt 0 ]; then
+            echo "### Internal Link Errors" >> errors.md
+            jq -r '.fail_map | to_entries[] | select(.value[0].status == "Failed: Network error") | "- `\(.key)` in \(.value | map(.source) | unique | join(", "))"' lychee-report.json >> errors.md || true
+
+            echo "" >> errors.md
+            echo "### External Link Errors (404)" >> errors.md
+            jq -r '.fail_map | to_entries[] | select(.value[0].status | contains("404")) | "- [\(.key)](\(.key)) - ❌ Not Found\n  - Referenced in: \(.value | map(.source) | unique | join(", "))"' lychee-report.json >> errors.md || true
+
+            echo "" >> errors.md
+            echo "### Timeout Errors" >> errors.md
+            jq -r '.fail_map | to_entries[] | select(.value[0].status | contains("Timeout")) | "- [\(.key)](\(.key)) - ⏰ Timeout\n  - Referenced in: \(.value | map(.source) | unique | join(", "))"' lychee-report.json >> errors.md || true
+
+            echo "" >> errors.md
+            echo "### Other Errors" >> errors.md
+            jq -r '.fail_map | to_entries[] | select(.value[0].status | (contains("404") or contains("Timeout") or contains("Network error")) | not) | "- [\(.key)](\(.key)) - \(.value[0].status)\n  - Referenced in: \(.value | map(.source) | unique | join(", "))"' lychee-report.json >> errors.md || true
+          fi
+
+      - name: Upload report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: link-check-report
+          path: |
+            lychee-report.json
+            errors.md
+          retention-days: 90
+
+      - name: Add PR comment (if PR and has errors)
+        if: github.event_name == 'pull_request' && steps.parse.outputs.has_errors == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const errors = fs.readFileSync('errors.md', 'utf8');
+
+            const body = `## 🔗 Link Check Report
+
+            ${errors}
+
+            <details>
+            <summary>ℹ️ About this check</summary>
+
+            This is a **non-blocking** check. Broken external links won't prevent your PR from merging, as they can break at any time.
+
+            **Action required:**
+            - ✅ Fix any **internal** link errors (wrong file paths)
+            - ⚠️ Review **external** link errors (may need URL updates)
+            - ℹ️ **Timeout** errors can often be ignored (temporary network issues)
+
+            See [docs/maintenance.md](https://github.com/${{ github.repository }}/blob/main/docs/maintenance.md) for how to fix common issues.
+            </details>`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+      - name: Update job summary
+        if: always()
+        run: |
+          if [ -f errors.md ]; then
+            cat errors.md >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ All links are valid!" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Create/Update issue (if scheduled/main and has errors)
+        if: |
+          (github.event_name == 'schedule' || github.event_name == 'push') &&
+          steps.parse.outputs.has_errors == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const errors = fs.readFileSync('errors.md', 'utf8');
+
+            // Check if issue already exists
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'documentation,broken-links',
+              creator: 'github-actions[bot]'
+            });
+
+            const existingIssue = issues.data.find(issue =>
+              issue.title.includes('Broken links detected')
+            );
+
+            const body = `## 🔗 Broken Links Detected
+
+            ${errors}
+
+            ---
+
+            **Detected:** ${new Date().toISOString()}
+            **Workflow:** [${context.workflow}](${context.payload.repository.html_url}/actions/runs/${context.runId})
+
+            ## How to Fix
+
+            1. **Review the errors above** - Check which links are broken
+            2. **Fix internal links** - Use correct relative paths from the file location
+            3. **Update external links** - Find current URLs for moved pages
+            4. **Test locally:**
+               \`\`\`bash
+               make check-links
+               \`\`\`
+            5. **See detailed guide:** [docs/maintenance.md](${context.payload.repository.html_url}/blob/main/docs/maintenance.md)
+
+            ## Quick Fixes
+
+            Common path fixes from \`docs/\` directory:
+            \`\`\`bash
+            # Fix relative paths
+            sed -i 's|docs/CONTRIBUTING\\.md|../CONTRIBUTING.md|g' docs/explanation/faq.md
+            sed -i 's|docs/examples/middleware|../../examples/middleware|g' docs/explanation/comparison.md
+            \`\`\`
+
+            This issue will be automatically closed when all links are fixed.`;
+
+            if (existingIssue) {
+              // Update existing issue
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existingIssue.number,
+                body: `## 🔄 Updated Report\n\n${body}`
+              });
+            } else {
+              // Create new issue
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: '🔗 Broken links detected in documentation',
+                body: body,
+                labels: ['documentation', 'broken-links', 'maintenance']
+              });
+            }
+
+      - name: Close issue if no errors (scheduled/main only)
+        if: |
+          (github.event_name == 'schedule' || github.event_name == 'push') &&
+          steps.parse.outputs.has_errors == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Find open broken links issue
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'broken-links'
+            });
+
+            for (const issue of issues.data) {
+              if (issue.title.includes('Broken links detected')) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  body: '✅ All links are now valid! Closing this issue.\n\nVerified by [workflow run](' +
+                        context.payload.repository.html_url + '/actions/runs/' + context.runId + ')'
+                });
+
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  state: 'closed'
+                });
+              }
+            }
+
+      # Only fail on PR if there are INTERNAL link errors (not external 404s)
+      # This prevents blocking PRs due to external sites being down
+      - name: Check for internal link failures
+        if: github.event_name == 'pull_request'
+        run: |
+          if [ -f lychee-report.json ]; then
+            internal_errors=$(jq '[.fail_map | to_entries[] | select(.value[0].status == "Failed: Network error")] | length' lychee-report.json)
+
+            if [ "$internal_errors" -gt 0 ]; then
+              echo "❌ Found $internal_errors internal link errors"
+              echo "These must be fixed before merging"
+              exit 1
+            else
+              echo "✅ No internal link errors (external errors are non-blocking)"
+            fi
+          fi

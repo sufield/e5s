@@ -20,18 +20,21 @@ These approaches provide better:
 
 - **`install-tools-ubuntu-24.04.sh`** - Install development dependencies on Ubuntu
 - **`env-versions.sh`** - Display versions of tools in environment
-- **`rebuild-and-test.sh`** - Quick rebuild and test cycle
+- **`fix-broken-links.sh`** - Automatically fix common broken link patterns
 
 ### Example/Demo Scripts
 
-- **`run-example-server.sh`** - Start example server (deprecated, use `e5s deploy app install`)
-- **`run-example-client.sh`** - Start example client (deprecated, use `e5s deploy test verify`)
+- **`run-example-server.sh`** - Start example server
+- **`run-example-client.sh`** - Start example client
 
 ### Integration Testing Scripts
 
 - **`test-prerelease.sh`** - Full integration test with Minikube + SPIRE + Helm
+- **`rebuild-and-test.sh`** - Quick rebuild and test cycle
 - **`cleanup-prerelease.sh`** - Clean up test resources
 - **`run-ci-locally.sh`** - Run CI checks locally
+
+**Note:** These scripts are for quick manual testing. For automated testing and production deployments, use the approaches recommended above (Testcontainers or e5s CLI).
 
 ## Migration Path
 

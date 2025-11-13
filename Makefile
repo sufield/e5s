@@ -2,7 +2,7 @@
 	clean help examples build build-cli build-all \
 	start-stack stop-stack restart-server test-client \
 	example-highlevel-server example-highlevel-client example-minikube-server example-minikube-client \
-	lint lint-fix fmt fmt-check vet tidy verify \
+	lint lint-fix fmt fmt-check vet tidy verify check-links \
 	ci ci-local \
 	sec-deps sec-lint sec-secrets sec-test sec-all sec-install-tools \
 	release-check release-build install-tools verify-tools env-versions
@@ -45,6 +45,7 @@ TOOLS_SEC      := govulncheck gosec gitleaks golangci-lint
 #   make build-cli       - Build e5s CLI tool
 #   make build-examples  - Build all example code (ensures examples compile)
 #   make fmt             - Format code
+#   make check-links     - Check for broken links in documentation
 #   make help            - Show all available targets
 #
 # Complete Setup Flow:
@@ -285,6 +286,22 @@ verify:
 	@echo "Verifying go modules..."
 	@$(GO) mod verify
 	@echo "✓ Modules verified"
+
+## check-links: Check for broken links in documentation
+check-links:
+	@echo "Checking for broken links in Markdown files..."
+	@if command -v lychee >/dev/null 2>&1; then \
+		lychee '**/*.md' \
+			--exclude-loopback \
+			--max-concurrency 128 \
+			--timeout 20 \
+			--format detailed || (echo "❌ Broken links found - see docs/BROKEN_LINKS.md" && exit 1); \
+		echo "✓ All links are valid"; \
+	else \
+		echo "⚠️  lychee not installed. Install with: cargo install lychee"; \
+		echo "   Or see docs/maintenance.md for other installation methods"; \
+		exit 1; \
+	fi
 
 ## ci-local: Run all checks that CI runs (local version)
 ci-local:

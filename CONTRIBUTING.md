@@ -181,8 +181,6 @@ See [SECURITY.md](.github/SECURITY.md) for more information.
 
 ## Testable Examples
 
-**Important:** This project follows Go best practices for maintainable examples as described in https://go.dev/blog/example.
-
 ### How Examples Work
 
 All example code lives in the repository and is **compiled in CI** to ensure it stays valid:
@@ -241,9 +239,9 @@ Instead of copying code into docs, **reference the actual example files**:
 ```markdown
 ## Example Server
 
-See [examples/basic-server/main.go](examples/basic-server/main.go) for a complete working example.
+See [examples/basic-server/main.go](examples/basic-server/main.go) for a working example.
 
-The key sections are marked with `example-start`/`example-end` comments:
+The sections are marked with `example-start`/`example-end` comments:
 - Server setup (marker: `server-setup`)
 - Authenticated endpoint (marker: `authenticated-endpoint`)
 ```
@@ -301,7 +299,7 @@ Godoc examples are special test functions that serve as **executable documentati
 - Are compiled (and optionally executed) by `go test`
 - Follow Go's official example naming conventions
 
-See the [Go blog post on examples](https://go.dev/blog/example) for full details.
+See the [Go blog post on examples](https://go.dev/blog/examples) for full details.
 
 ### Where Godoc Examples Live
 

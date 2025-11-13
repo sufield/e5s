@@ -22,12 +22,20 @@ When:
 
 **For fast iterations**: Use these automated scripts to test your changes in ~30 seconds per iteration.
 
-**Prerequisites**: SPIRE must be running (`make start-stack`)
+**Prerequisites**: SPIRE must be running:
+
+```bash
+make start-stack
+```
+
+```bash
+eval $(minikube -p minikube docker-env)
+```
 
 ### Initial Setup (Once)
 
 ```bash
-./scripts/test-prerelease.sh
+./hack/test-prerelease.sh
 ```
 
 Creates test environment and deploys both server and client. You should see:
@@ -42,7 +50,7 @@ Hello, spiffe://example.org/ns/default/sa/default!
 vim e5s.go
 
 # 2. Test your changes
-./scripts/rebuild-and-test.sh
+./hack/rebuild-and-test.sh
 ```
 
 Rebuilds binaries, redeploys, and shows test results (~30 seconds).
@@ -50,7 +58,7 @@ Rebuilds binaries, redeploys, and shows test results (~30 seconds).
 ### Cleanup
 
 ```bash
-./scripts/cleanup-prerelease.sh
+./hack/cleanup-prerelease.sh
 ```
 
 **Note**: For understanding what these scripts do or manual step-by-step control, see the detailed guide below.
