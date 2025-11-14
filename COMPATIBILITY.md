@@ -59,7 +59,7 @@ The project requires Go 1.25.3 or higher. This is enforced in `go.mod` and verif
 
 ### Kubernetes Version
 
-The project is tested with Kubernetes 1.28+. The SPIRE CSI driver requires specific Kubernetes versions - see [SPIRE CSI Driver compatibility](https://github.com/spiffe/spire/blob/main/support/k8s/k8s-workload-registrar/README.md).
+The project is tested with Kubernetes 1.28+. The SPIRE CSI driver requires specific Kubernetes versions.
 
 ### SPIRE Version
 

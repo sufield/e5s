@@ -492,6 +492,5 @@ wait.ForLog("...").WithStartupTimeout(120 * time.Second)
 ## References
 
 - Testcontainers Go: https://golang.testcontainers.org/
-- SPIRE Testing: https://spiffe.io/docs/latest/spire/developing/
 - Go Testing: https://go.dev/doc/tutorial/add-a-test
 - e5s CLI: `e5s deploy --help`

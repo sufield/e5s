@@ -222,7 +222,7 @@ Example issues:
 - Handler-level concurrency (multiple requests processed concurrently by net/http)
 
 Investigate:
-- go-spiffe SDK behavior (check VERSIONS.md for known issues)
+- go-spiffe SDK behavior (check COMPATIBILITY.md for known issues)
 - SPIRE configuration and logs
 - Your application's background workers
 - Handler state management (note: handlers are STILL called concurrently even with StartSingleThread())
@@ -788,9 +788,7 @@ For production, always use `Start()` or `Serve()`.
 ## Additional Resources
 
 - [API Documentation](../reference/api.md) - Full e5s API reference
-- [FAQ](./faq.md) - Common questions and answers
-- [Example: Debug Server](../examples/debug/) - Working example with debug mode
-- [SPIRE Documentation](https://spiffe.io/docs/latest/spire/) - Understanding SPIRE behavior
+- [FAQ](../explanation/faq.md) - Common questions and answers
 - [go-spiffe Issues](https://github.com/spiffe/go-spiffe/issues) - SDK-level debugging
 
 ## Getting Help

@@ -285,7 +285,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
-See [examples/middleware/main.go](../examples/middleware/main.go) for complete examples.
+See [examples/middleware/main.go](../../examples/middleware/main.go) for complete examples.
 
 ### Is e5s vulnerable to Slowloris attacks?
 
@@ -589,7 +589,7 @@ func main() {
 
 ### How do I report a bug?
 
-Use the [bug report template](.github/ISSUE_TEMPLATE/bug_report.yml) on GitHub. Include:
+Use the [bug report template](../../.github/ISSUE_TEMPLATE/bug_report.yml) on GitHub. Include:
 - Go version
 - e5s version
 - SPIRE version
@@ -607,7 +607,7 @@ Open a GitHub issue with the feature request template. Include:
 
 ### Can I contribute code?
 
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines.
+See [CONTRIBUTING.md](../../CONTRIBUTING.md) for guidelines.
 - Fork the repository
 - Write tests for your changes
 - Run linters: `golangci-lint run`
@@ -619,5 +619,5 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines.
 
 ## Still Have Questions?
 
-- Open a [GitHub Discussion](https://github.com/sufield/e5s/discussions)
+- Open a [GitHub Discussion](https://github.com/sufield/e5s/discussions/)
 - File an [issue](https://github.com/sufield/e5s/issues) if you found a bug

@@ -652,8 +652,6 @@ rm -rf bin/
 - **Troubleshooting Guide**: See [../../docs/reference/troubleshooting.md](../../docs/reference/troubleshooting.md) for common issues
 - **Advanced Examples**: See [ADVANCED.md](ADVANCED.md) for advanced patterns and control
 - **e5s Library Docs**: See [main README](../../README.md) for library documentation
-- **SPIRE Documentation**: https://spiffe.io/docs/latest/spire/
-- **SPIFFE Standard**: https://github.com/spiffe/spiffe
 
 ---
 

@@ -13,7 +13,7 @@ This guide explains how to use [Falco](https://falco.org) for runtime security m
 
 ## Prerequisites
 
-See [VERSION.md](../VERSION.md) for all required component versions.
+See [COMPATIBILITY.md](../../COMPATIBILITY.md) for all required component versions.
 
 - Minikube
 - kubectl

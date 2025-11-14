@@ -25,7 +25,6 @@ Report vulnerabilities privately through GitHub's Security Advisory feature:
 If you prefer email, send vulnerability reports to:
 - **Email**: security@sufield.dev
 - **Subject**: [SECURITY] e5s vulnerability report
-- **PGP Key**: Available at https://keybase.io/sufield (optional but recommended)
 
 ### What to Include in Your Report
 Please include the following information to help us assess and address the vulnerability:
@@ -91,7 +90,7 @@ e5s includes the following security features:
 ## Contact
 
 For general security questions (not vulnerability reports), you can:
-- Open a discussion on GitHub: https://github.com/sufield/e5s/discussions
+- Open a discussion on GitHub: https://github.com/sufield/e5s/discussions/
 - Contact the maintainers via email: maintainers@sufield.dev
 
 For vulnerability reports, please use the private reporting channels listed above.

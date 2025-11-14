@@ -122,7 +122,6 @@ else
     echo ""
     info "For production setups, see:"
     echo "  - docs/SPIRE_INTEGRATION_TEST_FIX.md (detailed guide)"
-    echo "  - https://spiffe.io/docs/latest/deploying/spire_server/#registration-api"
     echo ""
     exit 1
 fi

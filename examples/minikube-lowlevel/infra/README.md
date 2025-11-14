@@ -4,7 +4,7 @@ This directory contains the complete Helm/Minikube infrastructure setup for loca
 
 ## Prerequisites
 
-See [VERSIONS.md](../../../VERSIONS.md) for all required component versions.
+See [COMPATIBILITY.md](../../../COMPATIBILITY.md) for all required component versions.
 
 - Minikube
 - kubectl
@@ -368,7 +368,6 @@ resources:
 
 ## References
 
-- [SPIRE Documentation](https://spiffe.io/docs/latest/spire/)
 - [Helm Charts](https://github.com/spiffe/helm-charts-hardened)
 - [Minikube Documentation](https://minikube.sigs.k8s.io/docs/)
 - [SPIFFE Workload API](https://github.com/spiffe/spiffe/blob/main/standards/SPIFFE_Workload_API.md)

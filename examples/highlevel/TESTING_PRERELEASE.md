@@ -1515,7 +1515,7 @@ eval $(minikube docker-env)
 docker rmi e5s-server:dev e5s-client:dev
 ```
 
-**To clean up SPIRE infrastructure**, follow the cleanup instructions in [SPIRE_SETUP.md](SPIRE_SETUP.md).
+**To clean up SPIRE infrastructure**, run `make stop-stack` from the examples/highlevel directory.
 
 ---
 
@@ -1588,7 +1588,6 @@ This means test code is imported into the library. Keep test code separate from 
 ## Resources
 
 - **End User Tutorial**: See [TUTORIAL.md](TUTORIAL.md) for the published library tutorial
-- **SPIRE Setup**: See [SPIRE_SETUP.md](SPIRE_SETUP.md) for infrastructure setup
 - **Troubleshooting**: See [../../docs/reference/troubleshooting.md](../../docs/reference/troubleshooting.md) for common issues
 - **Advanced Usage**: See [ADVANCED.md](ADVANCED.md) for advanced usage
 - **Library Docs**: See [main README](../../README.md)

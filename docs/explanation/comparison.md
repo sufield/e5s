@@ -608,7 +608,7 @@ You can even use both in the same application:
 
 - [e5s API Reference](../reference/api.md)
 - [e5s Quickstart](../reference/api.md)
-- [Custom Middleware Examples](../examples/middleware/)
+- [Custom Middleware Examples](../../examples/middleware/)
 
 ## Questions?
 

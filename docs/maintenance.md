@@ -275,8 +275,8 @@ Internal Link Errors
 - `docs/examples/middleware` in docs/explanation/comparison.md
 
 External Link Errors (404)
-- https://spiffe.io/docs/latest/spire/ - ❌ Not Found
-  - Referenced in: TESTING.md, docs/how-to/debug-mtls.md
+- https://example.com/old-page - ❌ Not Found
+  - Referenced in: README.md
 
 ℹ️ External errors are non-blocking. Only internal link errors will fail the build.
 ```

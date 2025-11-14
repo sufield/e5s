@@ -117,7 +117,7 @@ See [docs/how-to/run-integration-tests.md](docs/how-to/run-integration-tests.md)
 
 ### Running Integration Tests
 
-Integration tests require a running SPIRE deployment. See the [integration tests documentation](docs/integration-tests.md) for setup instructions.
+Integration tests require a running SPIRE deployment. See [TESTING.md](TESTING.md) for setup instructions.
 
 ## Testing
 

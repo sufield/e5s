@@ -47,6 +47,5 @@ godoc -http=:6060
 
 ## See Also
 
-- **[Low-Level API Guide](low-level-api.md)** - Reference for `spire` and `spiffehttp` packages
 - **[Configuration Guide](config.md)** - Complete e5s.yaml configuration reference
 - **[Project README](../README.md)** - Quick start and examples

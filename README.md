@@ -492,7 +492,6 @@ e5s implements defense-in-depth security with multiple layers:
 - **Supply Chain**: Signed releases with Cosign/Sigstore
 
 **For detailed security information:**
-- [Security Tools & Documentation](security/) - Comprehensive security guide
 - [Report Security Issues](https://github.com/sufield/e5s/security/advisories/new) - Private vulnerability disclosure
 - [Security Policy](.github/SECURITY.md) - Vulnerability disclosure policy
 

@@ -52,8 +52,6 @@ jobs:
             --max-concurrency 128
             --timeout 20
             --accept 200,204,301,302,307,308,429
-            --exclude 'https://github.com/sufield/e5s/discussions'
-            --exclude 'https://keybase.io/sufield'
             '**/*.md'
           # Generate JSON output for parsing
           format: json

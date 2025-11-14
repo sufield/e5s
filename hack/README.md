@@ -190,4 +190,3 @@ func TestAppWithSPIRE(t *testing.T) {
 
 - Testcontainers documentation: https://golang.testcontainers.org/
 - e5s CLI documentation: `e5s deploy --help`
-- SPIRE documentation: https://spiffe.io/docs/latest/spire/

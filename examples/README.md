@@ -184,12 +184,6 @@ cat deploy/README.md
 - [../docs/how-to/](../docs/how-to/) - Task-specific guides
 - [../docs/reference/](../docs/reference/) - API reference and troubleshooting
 
-### External Resources
-
-- [SPIFFE Documentation](https://spiffe.io/docs/) - SPIFFE/SPIRE concepts
-- [Go SPIFFE SDK](https://github.com/spiffe/go-spiffe) - Low-level SDK docs
-- [SPIRE GitHub](https://github.com/spiffe/spire) - SPIRE server/agent
-
 ## Getting Help
 
 - **Troubleshooting:** See [../docs/reference/troubleshooting.md](../docs/reference/troubleshooting.md)
