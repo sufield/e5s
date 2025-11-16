@@ -28,6 +28,7 @@ Tests are organized using Go build tags to control which tests run:
 | **Container Tests** | `container` | `e5s_container_test.go` | Slow (minutes) | Docker daemon |
 
 **Default behavior** (`go test ./...`):
+
 - ✅ Runs unit tests only
 - ❌ Skips integration tests (requires `-tags=integration`)
 - ❌ Skips container tests (requires `-tags=container`)
@@ -41,6 +42,7 @@ Tests are organized using Go build tags to control which tests run:
 **Run:** `go test ./...`
 
 **Example:**
+
 ```go
 func TestConfigValidation(t *testing.T) {
     cfg := e5s.Config{
@@ -57,6 +59,7 @@ func TestConfigValidation(t *testing.T) {
 ```
 
 **Characteristics:**
+
 - ⚡ Very fast (milliseconds)
 - No external dependencies
 - High coverage of edge cases
@@ -126,6 +129,7 @@ func TestE5SWithContainers(t *testing.T) {
 ```
 
 **Characteristics:**
+
 - Moderate speed (seconds to start containers)
 - Requires Docker daemon
 - Tests real SPIRE behavior
@@ -133,6 +137,7 @@ func TestE5SWithContainers(t *testing.T) {
 - Explicit timeouts via `context.WithTimeout()`
 
 **Benefits vs Shell Scripts:**
+
 - ✅ Cross-platform (only needs Docker)
 - ✅ Clear error messages with Go stack traces
 - ✅ Runs in CI/CD without special setup
@@ -148,6 +153,7 @@ func TestE5SWithContainers(t *testing.T) {
 **Run:** See `e5s deploy --help`
 
 **Example Workflow:**
+
 ```bash
 # Create test cluster
 e5s deploy cluster create --name e5s-test --wait 60s
@@ -175,6 +181,7 @@ e5s deploy cluster delete --name e5s-test
 ```
 
 **Characteristics:**
+
 - Slow (minutes for full workflow)
 - Requires Kubernetes cluster (Kind, Minikube, etc.)
 - Production-like environment

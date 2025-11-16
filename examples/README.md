@@ -31,7 +31,6 @@ Examples demonstrating how to build mTLS applications with e5s and SPIRE.
 **Complexity**: Simple - just `e5s.Start()` and `e5s.Client()`
 
 **Learn**:
-- [TUTORIAL.md](highlevel/TUTORIAL.md) - Step-by-step guide for beginners
 - [ADVANCED.md](highlevel/ADVANCED.md) - Production patterns, timeouts, retry logic
 - [DEVELOPER_API.md](highlevel/DEVELOPER_API.md) - API reference
 
@@ -89,7 +88,7 @@ Examples demonstrating how to build mTLS applications with e5s and SPIRE.
 ### Prerequisites
 
 Most examples require:
-- **Go 1.23+** for building Go code
+- **Go 1.25+** for building Go code
 - **SPIRE Agent** running locally or in container/cluster
 
 Many examples will auto-start SPIRE for you.

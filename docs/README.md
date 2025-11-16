@@ -37,7 +37,6 @@ Understanding e5s concepts and design:
 
 Technical specifications and lookups:
 
-- [API Reference](https://pkg.go.dev/github.com/sufield/e5s) - Complete API on pkg.go.dev
 - [Low-Level API Guide](reference/api.md) - `spire` and `spiffehttp` packages
-- [Configuration Reference](reference/config.md) - Complete e5s.yaml options
+- [Configuration Reference](reference/config.md) - Covers e5s.yaml options
 - [Troubleshooting](reference/troubleshooting.md) - Error messages and solutions

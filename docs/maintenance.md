@@ -13,9 +13,7 @@ This guide covers routine maintenance tasks for keeping the e5s project healthy 
 
 ## Checking for Broken Links
 
-Broken links in documentation hurt the user experience and make the project look unmaintained. We use **lychee** to automatically scan all Markdown files for broken links.
-
-> **Current Status:** As of 2025-11-13, we have 27 broken links that need fixing. See [BROKEN_LINKS.md](BROKEN_LINKS.md) for the complete list and action plan.
+**lychee** automatically scans all Markdown files for broken links.
 
 ### Why lychee?
 
@@ -73,6 +71,7 @@ lychee '**/*.md' \
 ```
 
 **Fix:**
+
 1. Check if the file exists at that path
 2. If renamed, update all references:
    ```bash
@@ -86,12 +85,14 @@ lychee '**/*.md' \
 #### Broken External URLs
 
 **Example error:**
+
 ```
 ✗ [ERR] README.md:123:45 | Failed: 404 Not Found
   → https://example.com/old-page
 ```
 
 **Fix:**
+
 1. Find the current URL (use web.archive.org if page moved)
 2. Update the link in the Markdown file
 3. If permanently broken, remove or replace with working alternative
@@ -154,6 +155,7 @@ The script fixes:
 - Known moved files
 
 **After auto-fixing:**
+
 1. Review changes: `git diff`
 2. Test: `make check-links`
 3. Commit: `git add . && git commit -m 'fix: correct broken link paths'`
@@ -172,6 +174,7 @@ We use a **smart CI strategy** that balances preventing broken links with not bl
 | **Weekly schedule** | All links | 📝 Create/update issue | Catch external link rot |
 
 **Why this strategy?**
+
 - ✅ Prevents accidental internal link breakage
 - ✅ Doesn't block PRs when external sites are down
 - ✅ Catches external link rot through scheduled checks
@@ -179,15 +182,15 @@ We use a **smart CI strategy** that balances preventing broken links with not bl
 
 #### GitHub Actions
 
-File: `.github/workflows/links.yml` (already created)
-
 The workflow (`.github/workflows/links.yml`) automatically:
+
 - ✅ Runs on every PR touching Markdown files
 - ✅ Runs on every push to main
 - ✅ Runs weekly on Mondays at 9 AM UTC
 - ✅ Can be triggered manually
 
 **Features:**
+
 - 📊 **Generates detailed report** with categorized errors
 - 💬 **Comments on PRs** with findings (non-blocking for external links)
 - 📋 **Creates/updates GitHub issue** on main/schedule with full report
@@ -196,21 +199,6 @@ The workflow (`.github/workflows/links.yml`) automatically:
 - 🎯 **Smart failure logic**: Only fails PRs for internal link errors
 
 **View the workflow:** `.github/workflows/links.yml`
-
-#### GitLab CI
-
-Add to `.gitlab-ci.yml`:
-
-```yaml
-check-links:
-  image: lycheeverse/lychee:latest
-  stage: test
-  script:
-    - lychee --verbose --no-progress '**/*.md'
-  only:
-    - merge_requests
-    - main
-```
 
 ### Configuration File
 
@@ -282,6 +270,7 @@ External Link Errors (404)
 ```
 
 **Automatic Issue Creation:**
+
 When broken links are found on main or schedule, an issue is automatically created with:
 - Full categorized report
 - Quick fix suggestions
@@ -291,11 +280,13 @@ When broken links are found on main or schedule, an issue is automatically creat
 ### Best Practices
 
 1. **Run locally before committing**:
+
    ```bash
    make check-links
    ```
 
 2. **Use auto-fix for common issues**:
+
    ```bash
    ./hack/fix-broken-links.sh --apply
    ```

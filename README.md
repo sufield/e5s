@@ -18,7 +18,7 @@ Every service call required a shared secret.
 **Weather Server**
 
 ```go
-func (s *WeatherService) GetForecast(w http.ResponseWriter, r *http.Request) {
+func (s *WeatherServer) GetForecast(w http.ResponseWriter, r *http.Request) {
     apiKey := r.Header.Get("Authorization")
     if apiKey != "Bearer weather-client-secret" {
         http.Error(w, "unauthorized", http.StatusUnauthorized)
@@ -57,6 +57,7 @@ func main() {
 ---
 
 # The Solution
+
 ## ✅ After: Identity-Based Authentication with e5s
 
 Each service has its own **cryptographic identity** (SPIFFE ID).
@@ -113,6 +114,7 @@ func main() {
 ```
 
 **client-config.yaml:**
+
 ```yaml
 version: 1
 spire:
@@ -191,7 +193,6 @@ Use go-spiffe directly only if you need non-HTTP services or custom workflows.
 ## Documentation
 
 - **[docs/](docs/)** - Documentation Table of Contents
-- **[API Reference](https://pkg.go.dev/github.com/sufield/e5s)** - API docs on pkg.go.dev
 - **[Examples](examples/)** - Working code for all use cases
 
 ## Quick Start
@@ -377,7 +378,7 @@ import (
 )
 ```
 
-**Basic pattern:**
+**Basic Use:**
 
 1. Create SPIRE identity source: `spire.NewIdentitySource(ctx, config)`
 2. Build TLS config: `spiffehttp.NewServerTLSConfig()` or `spiffehttp.NewClientTLSConfig()`
@@ -393,7 +394,8 @@ import (
 | Shutdown | Automatic | Manual |
 | Hardcoded values | None | Ports, IDs, domains in code |
 
-**Complete examples:**
+**Examples:**
+
 - **API reference:** [docs/reference/api.md](docs/reference/api.md)
 - **Working code:** [examples/middleware/](examples/middleware/)
 - **Infrastructure setup:** [examples/minikube-lowlevel/](examples/minikube-lowlevel/)
@@ -421,11 +423,13 @@ internal/config/        # Config file loading (not exported)
 └── validate.go         # Config validation
 ```
 
-**Two-tier architecture:**
+**Two Levels:**
+
 1. **High-level** (`e5s.go`) - Config-driven, minimal code, works with any HTTP framework
 2. **Low-level** (`pkg/spiffehttp` + `pkg/spire`) - Full control over TLS, rotation, verification
 
 **Clear separation:**
+
 - `pkg/spiffehttp` - TLS configuration using go-spiffe SDK (no SPIRE dependency)
 - `pkg/spire` - SPIRE Workload API client
 - `e5s.go` - Wires everything together based on config file
@@ -492,10 +496,12 @@ e5s implements defense-in-depth security with multiple layers:
 - **Supply Chain**: Signed releases with Cosign/Sigstore
 
 **For detailed security information:**
+
 - [Report Security Issues](https://github.com/sufield/e5s/security/advisories/new) - Private vulnerability disclosure
 - [Security Policy](.github/SECURITY.md) - Vulnerability disclosure policy
 
 **Run security scans:**
+
 ```bash
 make sec-all  # Run all security checks
 ```

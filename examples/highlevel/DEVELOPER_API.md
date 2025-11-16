@@ -14,7 +14,7 @@ The tutorial walks you through every step to get mTLS working in a development e
 
 **[Advanced Examples →](ADVANCED.md)**
 
-See production patterns including environment variables, context timeouts, retry logic, circuit breakers, structured logging, and health checks.
+See production usage including environment variables, context timeouts, retry logic, circuit breakers, structured logging, and health checks.
 
 ## What's Here
 
@@ -47,16 +47,19 @@ Both server and client support these environment variables:
 Examples:
 
 Use a different config file:
+
 ```bash
 E5S_CONFIG=/etc/e5s/prod.yaml ./bin/highlevel-server
 ```
 
 Connect to a remote server:
+
 ```bash
 SERVER_ADDR=https://api.example.org:8443 ./bin/highlevel-client
 ```
 
 Combine both:
+
 ```bash
 E5S_CONFIG=./custom.yaml SERVER_ADDR=https://remote:8443 ./bin/highlevel-client
 ```
@@ -113,6 +116,7 @@ The configuration in this directory demonstrates:
 The server provides health check endpoints for Kubernetes liveness/readiness probes:
 
 Liveness probe:
+
 ```bash
 curl -k https://localhost:8443/healthz
 ok
@@ -125,6 +129,7 @@ ready
 ```
 
 These endpoints:
+
 - Are lightweight and fast for probes
 - Are excluded from noisy request logging
 - Can be moved to a separate unauthenticated port in production if needed
@@ -182,6 +187,7 @@ func main() {
 ```
 
 The server:
+
 1. Uses intelligent defaults (checks E5S_CONFIG env var, falls back to `e5s.yaml`)
 2. Connects to SPIRE Agent
 3. Starts mTLS server with automatic cert rotation
@@ -225,6 +231,7 @@ func main() {
 ```
 
 The client:
+
 1. Loads configuration from `e5s.yaml` (must be explicitly specified)
 2. Connects to SPIRE Agent
 3. Returns standard `*http.Client` with mTLS
