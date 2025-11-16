@@ -627,18 +627,3 @@ kubectl delete configmap e5s-server-config
 # Install with Helm
 helm install e5s-demo ./chart/e5s-demo -f migration-values.yaml
 ```
-
-## Additional Resources
-
-- [Helm Chart README](../../chart/e5s-demo/README.md)
-- [e5s CLI Tool Documentation](../../cmd/e5s/README.md)
-- [e5s Configuration Reference](../reference/api.md)
-- [GitHub Releases](https://github.com/sufield/e5s/releases) - Download binaries and view Docker image tags
-
-## Support
-
-For issues and questions:
-
-- Open an issue: https://github.com/sufield/e5s/issues
-- Check FAQ: [doc../explanation/faq.md](../explanation/faq.md)
-- View examples: [examples/](../../examples/)

@@ -76,9 +76,3 @@ func main() {
 - ⚠️ You need custom TLS config
 
 **Default:** Start with high-level API. Switch to low-level only when needed.
-
-## See Also
-
-- [examples/highlevel/](../../examples/highlevel/) - High-level API examples
-- [examples/middleware/](../../examples/middleware/) - Low-level API examples
-- [reference/api.md](../reference/api.md) - Low-level API reference

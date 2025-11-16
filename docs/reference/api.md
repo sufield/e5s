@@ -44,8 +44,3 @@ godoc -http=:6060
 
 # Visit http://localhost:6060/pkg/github.com/sufield/e5s/
 ```
-
-## See Also
-
-- **[Configuration Guide](config.md)** - Complete e5s.yaml configuration reference
-- **[Project README](../README.md)** - Quick start and examples

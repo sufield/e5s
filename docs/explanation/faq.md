@@ -71,8 +71,6 @@ shutdown, err := e5s.Start("config.yaml", handler)
 
 ### What's the difference between e5s and using go-spiffe SDK directly?
 
-See [comparison.md](./comparison.md) for a detailed side-by-side comparison. In summary:
-
 | Aspect | e5s | go-spiffe SDK |
 |--------|-----|---------------|
 | **Use Case** | HTTP/REST services | Any protocol (HTTP, gRPC, TCP, etc.) |
@@ -484,7 +482,7 @@ No. Certificate rotation in SPIRE/go-spiffe is zero-downtime:
 
 ### I'm currently using go-spiffe SDK. How do I migrate to e5s?
 
-See [comparison.md](./comparison.md) for the full migration guide. Quick steps:
+Quick steps:
 
 1. Extract hardcoded config values to YAML:
 ```yaml

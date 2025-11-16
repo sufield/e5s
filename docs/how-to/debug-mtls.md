@@ -785,12 +785,6 @@ Use it to answer: **"Is this bug related to e5s's HTTP server goroutine?"**
 
 For production, always use `Start()` or `Serve()`.
 
-## Additional Resources
-
-- [API Documentation](../reference/api.md) - Full e5s API reference
-- [FAQ](../explanation/faq.md) - Common questions and answers
-- [go-spiffe Issues](https://github.com/spiffe/go-spiffe/issues) - SDK-level debugging
-
 ## Getting Help
 
 If you're still stuck after trying debug mode:
