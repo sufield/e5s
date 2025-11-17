@@ -18,7 +18,7 @@ When:
 
 ---
 
-## ⚡ Quick Start (Automated Scripts)
+## ⚡ Quick Start
 
 **For fast iterations**: Use these automated scripts to test your changes in ~30 seconds per iteration.
 
@@ -32,7 +32,7 @@ make start-stack
 eval $(minikube -p minikube docker-env)
 ```
 
-### Initial Setup (Once)
+### Initial One Time Setup
 
 ```bash
 ./hack/test-prerelease.sh
@@ -61,7 +61,7 @@ Rebuilds binaries, redeploys, and shows test results (~30 seconds).
 ./hack/cleanup-prerelease.sh
 ```
 
-**Note**: For understanding what these scripts do or manual step-by-step control, see the detailed guide below.
+For understanding what these scripts do or manual step-by-step control, see the detailed guide below.
 
 ---
 

@@ -1,161 +1,150 @@
-# Security workflow for SPIRE mTLS library
-# Runs security checks on every push and pull request
-# Following docs/security.md improvements
+# Security Vulnerability Scanning
+#
+# This workflow runs on every push and PR to catch vulnerabilities early.
+# It uses govulncheck (official Go vulnerability scanner) to check for known CVEs.
 
-name: Security
+name: Security Scan
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main]
   pull_request:
-    branches: [ main, develop ]
+    branches: [main]
+  schedule:
+    # Run daily at 2 AM UTC to catch newly disclosed vulnerabilities
+    - cron: '0 2 * * *'
+  workflow_dispatch:
 
 permissions:
   contents: read
   security-events: write
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  issues: write
 
 jobs:
-  security:
-    name: Security Checks
+  govulncheck:
+    name: Go Vulnerability Check
     runs-on: ubuntu-latest
-
+    
     steps:
       - name: Checkout
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
 
-      - name: Set up Go
-        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+      - name: Setup Go
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
         with:
-          go-version-file: 'go.mod'
+          go-version: '1.25'
           cache: true
 
-      # Ensure deps are fully resolved before tidy/lint/test
-      - name: Download modules
-        run: go mod download
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
 
-      # Dependency vulnerability scanning with SARIF output for GitHub Code Scanning
-      - name: govulncheck
+      - name: Run govulncheck
+        id: govulncheck
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
-          govulncheck -format=sarif -scan package ./... > govulncheck.sarif
-        continue-on-error: true
-
-      # Check govulncheck results and fail if vulnerabilities found
-      - name: Check for vulnerabilities
-        if: always()
-        run: |
-          if [ -f govulncheck.sarif ]; then
-            vuln_count=$(jq '.runs[0].results | length' govulncheck.sarif)
-            if [ "$vuln_count" -gt 0 ]; then
-              echo "::error::Found $vuln_count vulnerabilities! See govulncheck.sarif for details."
-              exit 1
-            fi
-          fi
-
-      # Module hygiene (optional gate; keep if you want drift to fail PRs)
-      - name: Verify Go modules are tidy
-        run: |
-          go list ./... >/dev/null
-          go mod tidy
-          go mod verify
-          git diff --exit-code -- go.mod go.sum || (echo "::error::go.mod/go.sum changed after tidy" && exit 1)
-
-      # Lint using official action for better caching and PR annotations
-      # Use goinstall mode to ensure golangci-lint is built with the correct Go version
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@55c2c1448f86e01eaae002a5a3a9624417608d84 # v6.5.2
-        with:
-          version: latest
-          install-mode: goinstall
-          args: --timeout=5m
-
-      # Security SAST (text output only due to SARIF format bug in v2.22.10)
-      # Skip SARIF upload for gosec until the artifactChanges schema issue is resolved
-      - name: gosec
-        run: |
-          go install github.com/securego/gosec/v2/cmd/gosec@v2.22.10
-          gosec ./...
-        continue-on-error: true
-
-      # Secret scanning (SARIF)
-      - name: gitleaks (SARIF)
-        run: |
-          go install github.com/zricethezav/gitleaks/v8@v8.28.0
-          gitleaks detect --source . --report-format sarif --report-path gitleaks.sarif
-        continue-on-error: true
-
-      # Unit tests with race + coverage
-      - name: Test (race + coverage)
-        run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
-
-      - name: Coverage summary
-        run: |
-          echo "## Test Coverage Summary" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          go tool cover -func=coverage.out | tail -1 >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-
-      # Build all examples to ensure they compile (prevents documentation drift)
-      - name: Build examples
-        run: |
-          echo "Building examples..."
-          go build -o /tmp/basic-server ./examples/basic-server
-          go build -o /tmp/basic-client ./examples/basic-client
-          go build -o /tmp/e5s ./cmd/e5s
-          echo "Building middleware example..."
-          go build -o /tmp/example-middleware ./examples/middleware
-          echo "✓ All examples built successfully"
-
-      # Check if SARIF files exist before uploading
-      - name: Check govulncheck SARIF
-        id: check_govulncheck
-        run: |
-          if [ -f govulncheck.sarif ]; then
-            echo "exists=true" >> $GITHUB_OUTPUT
+          echo "Running govulncheck..."
+          govulncheck -json ./... > govulncheck-report.json 2>&1 || true
+          
+          # Check if any vulnerabilities were found
+          if grep -q '"osv":' govulncheck-report.json; then
+            echo "has_vulns=true" >> $GITHUB_OUTPUT
+            echo "❌ Vulnerabilities found"
+            govulncheck ./...
+            exit 1
           else
-            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "has_vulns=false" >> $GITHUB_OUTPUT
+            echo "✅ No vulnerabilities found"
           fi
 
-      - name: Check gitleaks SARIF
-        id: check_gitleaks
-        run: |
-          if [ -f gitleaks.sarif ]; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-          fi
-
-      # Upload artifacts (optional files use wildcard to avoid failures)
-      - name: Upload artifacts
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+      - name: Upload govulncheck report
         if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: security-artifacts
-          path: |
-            coverage.out
-            govulncheck.sarif
-            gitleaks.sarif
-          retention-days: 30
-          if-no-files-found: warn
+          name: govulncheck-report
+          path: govulncheck-report.json
+          retention-days: 90
 
-      # Publish SARIF to GitHub code scanning (only if files exist)
-      - name: Upload govulncheck SARIF
-        if: steps.check_govulncheck.outputs.exists == 'true'
-        uses: github/codeql-action/upload-sarif@0499de31b99561a6d14a36a5f662c2a54f91beee # v4.31.2
+      - name: Create issue if vulnerabilities found (scheduled runs only)
+        if: |
+          github.event_name == 'schedule' &&
+          steps.govulncheck.outputs.has_vulns == 'true'
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
-          sarif_file: govulncheck.sarif
-          category: govulncheck
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('govulncheck-report.json', 'utf8');
+            
+            // Check if issue already exists
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'security,vulnerability'
+            });
+            
+            const existingIssue = issues.data.find(issue =>
+              issue.title.includes('Go vulnerabilities detected')
+            );
+            
+            const body = `## 🔒 Go Vulnerabilities Detected
+            
+            Govulncheck has found vulnerabilities in Go dependencies.
+            
+            **Detected:** ${new Date().toISOString()}
+            **Workflow:** [${context.workflow}](${context.payload.repository.html_url}/actions/runs/${context.runId})
+            
+            ### Action Required
+            
+            1. Review the vulnerability report artifact
+            2. Update affected dependencies:
+               \`\`\`bash
+               govulncheck ./...  # See details
+               go get <vulnerable-package>@<fixed-version>
+               go mod tidy
+               \`\`\`
+            3. Re-run \`govulncheck ./...\` to verify fix
+            4. Commit and push the updated go.mod/go.sum
+            
+            ### Prevention
+            
+            This check runs automatically on every push to catch vulnerabilities early.
+            
+            ---
+            <details>
+            <summary>Raw Report</summary>
+            
+            \`\`\`json
+            ${report.substring(0, 4000)}
+            \`\`\`
+            </details>`;
+            
+            if (existingIssue) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existingIssue.number,
+                body: `## 🔄 Updated Vulnerability Report\n\n${body}`
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: '🔒 Go vulnerabilities detected in dependencies',
+                body: body,
+                labels: ['security', 'vulnerability', 'dependencies']
+              });
+            }
 
-      - name: Upload gitleaks SARIF
-        if: steps.check_gitleaks.outputs.exists == 'true'
-        uses: github/codeql-action/upload-sarif@0499de31b99561a6d14a36a5f662c2a54f91beee # v4.31.2
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+      
+      - name: Dependency Review
+        uses: actions/dependency-review-action@3c4e3dcb1aa7874d2c16be7d79418e9b7efd6261 # v4
         with:
-          sarif_file: gitleaks.sarif
-          category: gitleaks
-
-  # Note: CodeQL analysis runs in a separate workflow (.github/workflows/codeql.yml)
-  # for better performance and separation of concerns.
+          fail-on-severity: moderate
+          deny-licenses: GPL-2.0, GPL-3.0

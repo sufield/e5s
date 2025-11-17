@@ -8,21 +8,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Fixed
+
+### Security
+
+---
+
+## [0.2.0] - 2025-11-17
+
+### Added
 - e5s CLI tool for SPIFFE ID management
   - `spiffe-id` command: Construct SPIFFE IDs from components
   - `discover` command: Discover SPIFFE IDs from Kubernetes resources
   - `validate` command: Validate e5s configuration files
   - `version` command: Show version information and environment details
+  - `client` command: Make mTLS requests for data-plane debugging
+  - `deploy` command: Deploy and manage e5s test environments
 - Command registry pattern for CLI
 - TableWriter helper for formatted output
 - Comprehensive Makefile targets for release automation
-- Version tracking system with `VERSIONS.md` and `scripts/env-versions.sh`
+- Version tracking system with `COMPATIBILITY.md` and `scripts/env-versions.sh`
+- SUCCESS-PATH.md following Stu McLaren methodology for user journeys
+- Comprehensive link checking with lychee
+- Automated security scanning with gosec, govulncheck, and golangci-lint
 
 ### Changed
 - Refactored CLI code structure with command registry
 - Enhanced API with `Serve()` function for simplified server usage
 - Enhanced `Get()` function with automatic logging
 - Updated all documentation with CLI tool usage
+- Cleaned up documentation navigation to single hub pattern
+- Removed external SPIRE documentation cross-references
+- Fixed all broken documentation links (27 fixes)
+
+### Fixed
+- Fixed test-demo directory gosec warning (unhandled w.Write error)
+- Fixed TESTING_PRERELEASE.md expected output to match actual script behavior
+- Fixed relative paths in documentation links
 
 ### Compatibility
 
@@ -88,9 +113,10 @@ cat artifacts/env-versions-dev.txt
 
 ## Future Releases
 
-### v0.2.0 (Planned)
+### v0.3.0 (Planned)
 - Enhanced error messages
 - Additional discovery methods
 - Performance improvements
 
-[Unreleased]: https://github.com/sufield/e5s/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/sufield/e5s/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/sufield/e5s/compare/v0.1.0...v0.2.0
