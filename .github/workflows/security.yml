@@ -42,12 +42,34 @@ jobs:
         id: govulncheck
         run: |
           echo "Running govulncheck..."
-          govulncheck -json ./... > govulncheck-report.json 2>&1 || true
-          
+
+          # Run govulncheck with retries for network issues
+          MAX_RETRIES=3
+          RETRY_COUNT=0
+          SUCCESS=false
+
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$SUCCESS" = "false" ]; do
+            if govulncheck -json ./... > govulncheck-report.json 2>&1; then
+              SUCCESS=true
+            else
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+              if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+                echo "⚠️ Network error, retrying ($RETRY_COUNT/$MAX_RETRIES)..."
+                sleep 10
+              fi
+            fi
+          done
+
+          if [ "$SUCCESS" = "false" ]; then
+            echo "❌ Failed to fetch vulnerability database after $MAX_RETRIES attempts"
+            echo "has_vulns=unknown" >> $GITHUB_OUTPUT
+            exit 0  # Don't fail on network issues
+          fi
+
           # Check if any vulnerabilities were found
-          if grep -q '"osv":' govulncheck-report.json; then
+          if grep -q '"osv":' govulncheck-report.json 2>/dev/null; then
             echo "has_vulns=true" >> $GITHUB_OUTPUT
-            echo "❌ Vulnerabilities found"
+            echo "❌ Vulnerabilities found:"
             govulncheck ./...
             exit 1
           else
